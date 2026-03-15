@@ -22,28 +22,26 @@
       animation: thermal 40s ease-in-out infinite alternate;
     }
 
-    /* The background itself very slowly warms and cools */
+    /* The background shifts noticeably between warm and cool */
     @keyframes thermal {
-      0%   { background-color: #0d0b0a; }
-      33%  { background-color: #0d0d0d; }
-      66%  { background-color: #0a0b0d; }
-      100% { background-color: #0c0a0b; }
+      0%   { background-color: #150a02; }
+      50%  { background-color: #0d0d0d; }
+      100% { background-color: #02060f; }
     }
 
-    /* Barely-visible radial warmth that breathes */
+    /* Radial warmth that clearly breathes — amber glow, visible but gentle */
     body::before {
       content: '';
       position: fixed;
       inset: 0;
-      background: radial-gradient(ellipse 60% 40% at 50% 50%, rgba(255,140,60,0.04), transparent 70%);
-      animation: warmth 40s ease-in-out infinite alternate;
+      background: radial-gradient(ellipse 55% 45% at 50% 50%, rgba(255,130,40,0.18), transparent 70%);
+      animation: warmth 12s ease-in-out infinite alternate;
       pointer-events: none;
     }
 
     @keyframes warmth {
-      0%   { opacity: 0.4; transform: scale(1); }
-      50%  { opacity: 1;   transform: scale(1.3); }
-      100% { opacity: 0.2; transform: scale(0.8); }
+      0%   { opacity: 0.1; transform: scale(0.7); }
+      100% { opacity: 1;   transform: scale(1.4); }
     }
 
     main {

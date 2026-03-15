@@ -35,34 +35,34 @@
     .fog span {
       position: absolute;
       border-radius: 50%;
-      filter: blur(70px);
-      opacity: 0;
+      filter: blur(60px);
+      /* no base opacity — let keyframes own it */
     }
 
     .fog span:nth-child(1) {
-      width: 55vw;
-      height: 55vw;
-      background: radial-gradient(circle, rgba(50,80,130,0.18), transparent 70%);
-      top: -10%;
-      left: -5%;
+      width: 60vw;
+      height: 60vw;
+      background: radial-gradient(circle, rgba(50,90,180,0.45), transparent 70%);
+      top: -15%;
+      left: -10%;
       animation: drift-1 35s ease-in-out infinite alternate;
     }
 
     .fog span:nth-child(2) {
-      width: 40vw;
-      height: 40vw;
-      background: radial-gradient(circle, rgba(30,100,90,0.14), transparent 70%);
-      bottom: -5%;
-      right: -8%;
+      width: 50vw;
+      height: 50vw;
+      background: radial-gradient(circle, rgba(20,130,110,0.40), transparent 70%);
+      bottom: -10%;
+      right: -10%;
       animation: drift-2 28s ease-in-out infinite alternate-reverse;
     }
 
     .fog span:nth-child(3) {
-      width: 35vw;
-      height: 35vw;
-      background: radial-gradient(circle, rgba(80,50,120,0.12), transparent 70%);
+      width: 45vw;
+      height: 45vw;
+      background: radial-gradient(circle, rgba(100,50,160,0.35), transparent 70%);
       top: 30%;
-      left: 40%;
+      left: 35%;
       animation: drift-3 42s ease-in-out infinite alternate;
     }
 

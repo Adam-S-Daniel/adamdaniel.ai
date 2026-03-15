@@ -22,20 +22,23 @@
       padding: 8vw;
     }
 
-    /* Dot grid that slowly breathes by animating background-size */
+    /*
+      Dot grid breathes via opacity — the most reliable
+      cross-browser animation for background patterns.
+    */
     body::before {
       content: '';
       position: fixed;
       inset: 0;
-      background-image: radial-gradient(circle, rgba(160,170,220,0.18) 1px, transparent 1px);
+      background-image: radial-gradient(circle, rgba(160,170,220,0.5) 1px, transparent 1px);
       background-size: 28px 28px;
-      animation: grid-breathe 8s ease-in-out infinite alternate;
+      animation: grid-breathe 4s ease-in-out infinite alternate;
       pointer-events: none;
     }
 
     @keyframes grid-breathe {
-      0%   { background-size: 28px 28px; opacity: 0.6; }
-      100% { background-size: 34px 34px; opacity: 1; }
+      0%   { opacity: 0.08; }
+      100% { opacity: 0.55; }
     }
 
     main { position: relative; }

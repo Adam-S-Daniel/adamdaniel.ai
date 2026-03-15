@@ -25,21 +25,23 @@
     main { text-align: center; }
 
     /*
-      Only one thing moves: the letter-spacing of the name.
-      Slow, deep, meditative. Nothing else.
+      Only one thing moves: the name itself slowly expands and contracts.
+      transform: scaleX() is composited and reliable across all browsers.
     */
     .name {
       font-size: clamp(2rem, 5.5vw, 4rem);
       font-weight: 700;
-      letter-spacing: -0.04em;
+      letter-spacing: -0.02em;
       line-height: 1;
       color: #111;
-      animation: breathe 7s ease-in-out infinite alternate;
+      display: inline-block;
+      animation: breathe 6s ease-in-out infinite alternate;
+      transform-origin: center;
     }
 
     @keyframes breathe {
-      0%   { letter-spacing: -0.04em; }
-      100% { letter-spacing: 0.12em; }
+      0%   { transform: scaleX(0.82); }
+      100% { transform: scaleX(1.10); }
     }
 
     .domain {
