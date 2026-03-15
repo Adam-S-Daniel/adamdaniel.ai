@@ -12,9 +12,9 @@
 
     body {
       min-height: 100vh;
-      background: #0d0d0d;
-      color: #e0ddd8;
-      font-family: 'Garamond', 'Georgia', serif;
+      background: #04060f;
+      color: #c8d4f0;
+      font-family: 'Helvetica Neue', 'Arial', sans-serif;
       display: flex;
       flex-direction: column;
       align-items: center;
@@ -22,11 +22,11 @@
       animation: thermal 40s ease-in-out infinite alternate;
     }
 
-    /* The background shifts noticeably between warm and cool */
+    /* Cobalt pulse: shifts between near-black and a visible deep blue */
     @keyframes thermal {
-      0%   { background-color: #150a02; }
-      50%  { background-color: #0d0d0d; }
-      100% { background-color: #02060f; }
+      0%   { background-color: #04060f; }
+      50%  { background-color: #060d1f; }
+      100% { background-color: #03040c; }
     }
 
     /* Radial warmth that clearly breathes — amber glow, visible but gentle */
@@ -34,8 +34,8 @@
       content: '';
       position: fixed;
       inset: 0;
-      background: radial-gradient(ellipse 55% 45% at 50% 50%, rgba(255,130,40,0.18), transparent 70%);
-      animation: warmth 12s ease-in-out infinite alternate;
+      background: radial-gradient(ellipse 60% 50% at 50% 50%, rgba(40,90,255,0.28), transparent 70%);
+      animation: warmth 8s ease-in-out infinite alternate;
       pointer-events: none;
     }
 
@@ -52,27 +52,18 @@
 
     .name {
       font-size: clamp(2.4rem, 7vw, 5rem);
-      font-weight: 400;
-      letter-spacing: 0.04em;
+      font-weight: 600;
+      letter-spacing: -0.02em;
       line-height: 1;
-      color: #ede8e0;
-    }
-
-    .domain {
-      font-size: clamp(0.75rem, 1.8vw, 0.9rem);
-      color: #6b6560;
-      letter-spacing: 0.2em;
-      text-transform: lowercase;
-      margin-top: 1.2rem;
+      color: #d8e4ff;
     }
 
     .role {
       font-size: clamp(0.7rem, 1.6vw, 0.8rem);
-      color: #6b6560;
-      letter-spacing: 0.15em;
+      color: #2d4480;
+      letter-spacing: 0.18em;
       text-transform: uppercase;
       margin-top: 0.4rem;
-      font-style: italic;
     }
 
     .link-wrap {
@@ -80,23 +71,23 @@
     }
 
     a.linkedin {
-      color: #a09890;
+      color: #2d4480;
       text-decoration: none;
       font-size: 0.72rem;
       letter-spacing: 0.18em;
       text-transform: uppercase;
       font-family: 'SF Mono', 'Fira Code', monospace;
-      border-bottom: 1px solid #3a3530;
+      border-bottom: 1px solid #1a2a55;
       padding-bottom: 2px;
       transition: color 0.3s, border-color 0.3s;
     }
 
     a.linkedin:hover, a.linkedin:focus-visible {
-      color: #e0c090;
-      border-color: #e0c090;
+      color: #7090e8;
+      border-color: #7090e8;
     }
 
-    a.linkedin:focus-visible { outline: 2px solid #e0c090; outline-offset: 4px; border-radius: 1px; }
+    a.linkedin:focus-visible { outline: 2px solid #7090e8; outline-offset: 4px; border-radius: 1px; }
 
     footer {
       position: fixed;
@@ -114,7 +105,7 @@
     }
 
     footer nav a {
-      color: #3a3530;
+      color: #131a30;
       text-decoration: none;
       font-family: 'SF Mono', monospace;
       font-size: 0.6rem;
@@ -123,14 +114,14 @@
       transition: color 0.2s;
     }
 
-    footer nav a:hover, footer nav a:focus-visible { color: #a09890; }
-    footer nav a:focus-visible { outline: 1px solid #a09890; outline-offset: 3px; }
+    footer nav a:hover, footer nav a:focus-visible { color: #2d4480; }
+    footer nav a:focus-visible { outline: 1px solid #2d4480; outline-offset: 3px; }
   </style>
 </head>
 <body>
   <main>
     <h1 class="name">Adam Daniel</h1>
-    <p class="domain">adamdaniel.ai</p>
+
     <p class="role">Freelance AI Engineer</p>
     <div class="link-wrap">
       <a class="linkedin" href="https://www.linkedin.com/in/adam-s-daniel" target="_blank" rel="noopener noreferrer" aria-label="Adam Daniel on LinkedIn">LinkedIn</a>
