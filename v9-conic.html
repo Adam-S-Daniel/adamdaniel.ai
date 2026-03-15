@@ -1,0 +1,165 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Adam Daniel — Freelance AI Engineer</title>
+  <meta name="description" content="Adam Daniel — Freelance AI Engineer">
+  <style>
+    *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
+
+    html, body { height: 100%; }
+
+    body {
+      min-height: 100vh;
+      background: #0c0c0c;
+      color: #e0e0e0;
+      font-family: 'Helvetica Neue', 'Arial', sans-serif;
+      display: flex;
+      flex-direction: column;
+      align-items: center;
+      justify-content: center;
+      overflow: hidden;
+    }
+
+    /*
+      A large conic gradient — like a sundial or compass rose —
+      rotates imperceptibly slowly behind everything.
+      One full rotation takes 90 seconds.
+    */
+    .dial {
+      position: fixed;
+      top: 50%;
+      left: 50%;
+      width: 200vmax;
+      height: 200vmax;
+      transform: translate(-50%, -50%);
+      background: conic-gradient(
+        from 0deg,
+        transparent 0deg,
+        rgba(255,255,255,0.012) 20deg,
+        transparent 40deg,
+        rgba(255,255,255,0.008) 90deg,
+        transparent 120deg,
+        rgba(255,255,255,0.015) 150deg,
+        transparent 180deg,
+        rgba(255,255,255,0.009) 220deg,
+        transparent 260deg,
+        rgba(255,255,255,0.013) 300deg,
+        transparent 340deg,
+        transparent 360deg
+      );
+      animation: spin 90s linear infinite;
+      pointer-events: none;
+    }
+
+    @keyframes spin {
+      from { transform: translate(-50%, -50%) rotate(0deg); }
+      to   { transform: translate(-50%, -50%) rotate(360deg); }
+    }
+
+    main {
+      position: relative;
+      z-index: 1;
+      text-align: center;
+      padding: 2rem;
+    }
+
+    .name {
+      font-size: clamp(2.2rem, 6vw, 4.8rem);
+      font-weight: 400;
+      letter-spacing: 0.04em;
+      line-height: 1;
+      color: #e0e0e0;
+    }
+
+    .name em {
+      font-style: normal;
+      font-weight: 700;
+    }
+
+    .domain {
+      font-size: 0.7rem;
+      color: #444;
+      letter-spacing: 0.28em;
+      text-transform: lowercase;
+      margin-top: 1.4rem;
+    }
+
+    .role {
+      font-size: 0.65rem;
+      color: #444;
+      letter-spacing: 0.18em;
+      text-transform: uppercase;
+      margin-top: 0.35rem;
+    }
+
+    a.linkedin {
+      display: inline-block;
+      margin-top: 2.2rem;
+      color: #444;
+      text-decoration: none;
+      font-size: 0.65rem;
+      letter-spacing: 0.22em;
+      text-transform: uppercase;
+      transition: color 0.3s;
+    }
+
+    a.linkedin:hover, a.linkedin:focus-visible { color: #e0e0e0; }
+    a.linkedin:focus-visible { outline: 1px solid #888; outline-offset: 4px; border-radius: 1px; }
+
+    footer {
+      position: fixed;
+      bottom: 1.5rem;
+      left: 0; right: 0;
+      text-align: center;
+      z-index: 1;
+    }
+
+    footer nav {
+      display: flex;
+      gap: 1rem;
+      justify-content: center;
+      flex-wrap: wrap;
+      padding: 0 1rem;
+    }
+
+    footer nav a {
+      color: #222;
+      text-decoration: none;
+      font-size: 0.6rem;
+      letter-spacing: 0.12em;
+      text-transform: uppercase;
+      transition: color 0.2s;
+    }
+
+    footer nav a:hover, footer nav a:focus-visible { color: #666; }
+    footer nav a:focus-visible { outline: 1px solid #666; outline-offset: 3px; }
+  </style>
+</head>
+<body>
+  <div class="dial" aria-hidden="true"></div>
+
+  <main>
+    <h1 class="name"><em>Adam</em> Daniel</h1>
+    <p class="domain">adamdaniel.ai</p>
+    <p class="role">Freelance AI Engineer</p>
+    <a class="linkedin" href="https://www.linkedin.com/in/adam-s-daniel" target="_blank" rel="noopener noreferrer" aria-label="Adam Daniel on LinkedIn">LinkedIn</a>
+  </main>
+
+  <footer>
+    <nav aria-label="Design variations">
+      <a href="v1-thermal.html">Thermal</a>
+      <a href="v2-grid.html">Grid</a>
+      <a href="v3-shadow.html">Orbit</a>
+      <a href="v4-scan.html">Scan</a>
+      <a href="v5-interference.html">Interference</a>
+      <a href="v6-halftone.html">Halftone</a>
+      <a href="v7-aurora.html">Aurora</a>
+      <a href="v8-breathe.html">Breathe</a>
+      <a href="v9-conic.html">Conic</a>
+      <a href="v10-fog.html">Fog</a>
+    </nav>
+  </footer>
+</body>
+</html>

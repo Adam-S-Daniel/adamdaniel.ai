@@ -1,0 +1,140 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Adam Daniel — Freelance AI Engineer</title>
+  <meta name="description" content="Adam Daniel — Freelance AI Engineer">
+  <style>
+    *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
+
+    html, body { height: 100%; }
+
+    body {
+      min-height: 100vh;
+      background: #000;
+      color: #fff;
+      font-family: 'Helvetica Neue', 'Arial', sans-serif;
+      display: flex;
+      flex-direction: column;
+      align-items: center;
+      justify-content: center;
+    }
+
+    main { position: relative; text-align: center; padding: 2rem; }
+
+    /*
+      The name's text-shadow rotates slowly, simulating a light
+      source moving overhead — a 24s full orbit.
+    */
+    .name {
+      font-size: clamp(2.8rem, 8vw, 6rem);
+      font-weight: 700;
+      letter-spacing: -0.04em;
+      line-height: 1;
+      color: #ffffff;
+      animation: orbit 24s linear infinite;
+    }
+
+    @keyframes orbit {
+      0%   { text-shadow:  24px   0px 40px rgba(255,255,255,0.12); }
+      12%  { text-shadow:  17px  17px 40px rgba(255,255,255,0.12); }
+      25%  { text-shadow:   0px  24px 40px rgba(255,255,255,0.12); }
+      37%  { text-shadow: -17px  17px 40px rgba(255,255,255,0.12); }
+      50%  { text-shadow: -24px   0px 40px rgba(255,255,255,0.12); }
+      62%  { text-shadow: -17px -17px 40px rgba(255,255,255,0.12); }
+      75%  { text-shadow:   0px -24px 40px rgba(255,255,255,0.12); }
+      87%  { text-shadow:  17px -17px 40px rgba(255,255,255,0.12); }
+      100% { text-shadow:  24px   0px 40px rgba(255,255,255,0.12); }
+    }
+
+    .meta {
+      margin-top: 1.8rem;
+      display: flex;
+      flex-direction: column;
+      gap: 0.3rem;
+    }
+
+    .domain, .role {
+      font-size: clamp(0.65rem, 1.5vw, 0.78rem);
+      color: #444;
+      letter-spacing: 0.2em;
+      text-transform: uppercase;
+    }
+
+    .link-wrap { margin-top: 2rem; }
+
+    a.linkedin {
+      color: #333;
+      text-decoration: none;
+      font-size: 0.68rem;
+      letter-spacing: 0.2em;
+      text-transform: uppercase;
+      border-bottom: 1px solid #222;
+      padding-bottom: 2px;
+      transition: color 0.25s, border-color 0.25s;
+    }
+
+    a.linkedin:hover, a.linkedin:focus-visible {
+      color: #fff;
+      border-color: #fff;
+    }
+
+    a.linkedin:focus-visible { outline: 1px solid #fff; outline-offset: 4px; border-radius: 1px; }
+
+    footer {
+      position: fixed;
+      bottom: 1.5rem;
+      left: 0; right: 0;
+      text-align: center;
+    }
+
+    footer nav {
+      display: flex;
+      gap: 1rem;
+      justify-content: center;
+      flex-wrap: wrap;
+      padding: 0 1rem;
+    }
+
+    footer nav a {
+      color: #222;
+      text-decoration: none;
+      font-size: 0.6rem;
+      letter-spacing: 0.12em;
+      text-transform: uppercase;
+      transition: color 0.2s;
+    }
+
+    footer nav a:hover, footer nav a:focus-visible { color: #888; }
+    footer nav a:focus-visible { outline: 1px solid #888; outline-offset: 3px; }
+  </style>
+</head>
+<body>
+  <main>
+    <h1 class="name">Adam Daniel</h1>
+    <div class="meta">
+      <p class="domain">adamdaniel.ai</p>
+      <p class="role">Freelance AI Engineer</p>
+    </div>
+    <div class="link-wrap">
+      <a class="linkedin" href="https://www.linkedin.com/in/adam-s-daniel" target="_blank" rel="noopener noreferrer" aria-label="Adam Daniel on LinkedIn">LinkedIn</a>
+    </div>
+  </main>
+
+  <footer>
+    <nav aria-label="Design variations">
+      <a href="v1-thermal.html">Thermal</a>
+      <a href="v2-grid.html">Grid</a>
+      <a href="v3-shadow.html">Orbit</a>
+      <a href="v4-scan.html">Scan</a>
+      <a href="v5-interference.html">Interference</a>
+      <a href="v6-halftone.html">Halftone</a>
+      <a href="v7-aurora.html">Aurora</a>
+      <a href="v8-breathe.html">Breathe</a>
+      <a href="v9-conic.html">Conic</a>
+      <a href="v10-fog.html">Fog</a>
+    </nav>
+  </footer>
+</body>
+</html>
