@@ -1,0 +1,16 @@
+# sprites.dev project configuration
+# Docs: https://docs.sprites.dev
+
+name: adamdaniel-ai
+org: adam-s-daniel
+
+url:
+  auth: public   # anyone with the URL can access (CloudFront uses this as origin)
+
+service:
+  name: nginx-server
+  cmd: nginx
+  args: ["-g", "daemon off;"]
+
+# The sprite serves on port 80 (nginx) → sprites.dev wraps in HTTPS
+# CloudFront origin: https://<sprite-url>.sprites.app

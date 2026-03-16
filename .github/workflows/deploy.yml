@@ -1,0 +1,102 @@
+name: Deploy
+
+on:
+  push:
+    branches: [master, main]
+  workflow_dispatch:
+
+env:
+  SPRITE_NAME: adamdaniel-ai
+
+jobs:
+  deploy-sprite:
+    name: Deploy to sprites.dev
+    runs-on: ubuntu-latest
+
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Install sprite CLI
+        run: curl -fsSL https://sprites.dev/install.sh | bash
+        # Installs to ~/.local/bin — already on PATH in GH runners
+
+      - name: Authenticate
+        run: sprite login --token "${{ secrets.SPRITE_TOKEN }}"
+
+      - name: Create sprite (idempotent)
+        run: |
+          sprite create "$SPRITE_NAME" 2>/dev/null || echo "Sprite already exists"
+          sprite url update --auth public -s "$SPRITE_NAME"
+
+      - name: Provision nginx
+        run: |
+          sprite exec -s "$SPRITE_NAME" -- bash -c "
+            export DEBIAN_FRONTEND=noninteractive
+            apt-get update -qq
+            apt-get install -y -qq nginx
+            systemctl stop nginx 2>/dev/null || true
+            rm -f /etc/nginx/sites-enabled/default
+          "
+
+      - name: Upload site files
+        run: |
+          # Transfer index.html via base64 to avoid quoting issues
+          INDEX_B64=$(base64 -w0 index.html)
+          sprite exec -s "$SPRITE_NAME" -- bash -c "
+            mkdir -p /var/www/html
+            echo '${INDEX_B64}' | base64 -d > /var/www/html/index.html
+          "
+
+          NGINX_B64=$(base64 -w0 nginx.conf)
+          sprite exec -s "$SPRITE_NAME" -- bash -c "
+            echo '${NGINX_B64}' | base64 -d > /etc/nginx/sites-available/adamdaniel
+            ln -sf /etc/nginx/sites-available/adamdaniel /etc/nginx/sites-enabled/adamdaniel
+            nginx -t
+          "
+
+      - name: Register nginx as a persistent service
+        run: |
+          sprite exec -s "$SPRITE_NAME" -- bash -c "
+            # sprite-env services keep the process alive across sprite hibernation
+            sprite-env services delete nginx-server 2>/dev/null || true
+            sprite-env services create nginx-server \
+              --cmd nginx \
+              --args \"-g 'daemon off;'\"
+          "
+
+      - name: Print sprite URL
+        run: sprite url -s "$SPRITE_NAME"
+
+  deploy-infra:
+    name: Apply AWS infrastructure (ACM + CloudFront)
+    runs-on: ubuntu-latest
+    needs: deploy-sprite
+    environment: production   # requires manual approval + has SPRITE_URL set
+
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Configure AWS credentials
+        uses: aws-actions/configure-aws-credentials@v4
+        with:
+          aws-access-key-id:     ${{ secrets.AWS_ACCESS_KEY_ID }}
+          aws-secret-access-key: ${{ secrets.AWS_SECRET_ACCESS_KEY }}
+          aws-region: us-east-1   # ACM certs for CloudFront must be in us-east-1
+
+      - name: Setup Terraform
+        uses: hashicorp/setup-terraform@v3
+        with:
+          terraform_version: "~1.9"
+
+      - name: Terraform init
+        working-directory: infra
+        run: terraform init
+
+      - name: Terraform apply
+        working-directory: infra
+        run: |
+          terraform apply -auto-approve \
+            -var="sprite_origin_domain=${{ secrets.SPRITE_ORIGIN_DOMAIN }}"
+        # SPRITE_ORIGIN_DOMAIN = the host portion of the sprite URL, e.g.
+        # adamdaniel-ai-abc123.sprites.app
+        # Set this secret after the first sprite deploy prints the URL above.
