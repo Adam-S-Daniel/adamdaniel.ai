@@ -1,0 +1,125 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Adam Daniel — Freelance AI Engineer</title>
+  <meta name="description" content="Adam Daniel — Freelance AI Engineer">
+  <style>
+    *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
+
+    html, body { height: 100%; }
+
+    body {
+      min-height: 100vh;
+      background: #04060f;
+      color: #c8d4f0;
+      font-family: 'Helvetica Neue', 'Arial', sans-serif;
+      display: flex;
+      flex-direction: column;
+      align-items: center;
+      justify-content: center;
+      animation: thermal 40s ease-in-out infinite alternate;
+    }
+
+    /* Cobalt pulse: shifts between near-black and a visible deep blue */
+    @keyframes thermal {
+      0%   { background-color: #04060f; }
+      50%  { background-color: #060d1f; }
+      100% { background-color: #03040c; }
+    }
+
+    /* Radial warmth that clearly breathes — blue glow, visible but gentle */
+    body::before {
+      content: '';
+      position: fixed;
+      inset: 0;
+      background: radial-gradient(ellipse 60% 50% at 50% 50%, rgba(40,90,255,0.28), transparent 70%);
+      animation: warmth 8s ease-in-out infinite alternate;
+      pointer-events: none;
+    }
+
+    @keyframes warmth {
+      0%   { opacity: 0.1; transform: scale(0.7); }
+      100% { opacity: 1;   transform: scale(1.4); }
+    }
+
+    /*
+      Text thermal animation — synced to warmth (8s alternate).
+      Shifts .role and .linkedin between two WCAG AA-compliant colours:
+        dim phase  (#8ab0e8, L≈0.42): contrast ≥ 6.7:1 on any bg in the cycle
+        glow phase (#c0d4ff, L≈0.66): contrast ≥ 9.9:1 on any bg in the cycle
+      Both values exceed the 4.5:1 AA threshold for normal-size text.
+    */
+    @keyframes text-thermal {
+      0%   { color: #8ab0e8; }
+      100% { color: #c0d4ff; }
+    }
+
+    @keyframes border-thermal {
+      0%   { border-color: #8ab0e8; }
+      100% { border-color: #c0d4ff; }
+    }
+
+    main {
+      position: relative;
+      text-align: center;
+      padding: 2rem;
+    }
+
+    .name {
+      font-size: clamp(2.4rem, 7vw, 5rem);
+      font-weight: 200;
+      letter-spacing: 0.08em;
+      line-height: 1;
+      color: #d8e4ff;
+    }
+
+    .role {
+      font-size: clamp(0.7rem, 1.6vw, 0.8rem);
+      letter-spacing: 0.18em;
+      text-transform: uppercase;
+      margin-top: 0.4rem;
+      animation: text-thermal 8s ease-in-out infinite alternate;
+    }
+
+    .link-wrap {
+      margin-top: 2.5rem;
+    }
+
+    a.linkedin {
+      text-decoration: none;
+      font-size: 0.72rem;
+      letter-spacing: 0.18em;
+      text-transform: uppercase;
+      font-family: 'SF Mono', 'Fira Code', monospace;
+      border-bottom: 1px solid;
+      padding-bottom: 2px;
+      animation:
+        text-thermal   8s ease-in-out infinite alternate,
+        border-thermal 8s ease-in-out infinite alternate;
+    }
+
+    a.linkedin:hover,
+    a.linkedin:focus-visible {
+      color: #ffffff !important;
+      border-color: #ffffff !important;
+    }
+
+    a.linkedin:focus-visible {
+      outline: 2px solid #ffffff;
+      outline-offset: 4px;
+      border-radius: 1px;
+    }
+  </style>
+</head>
+<body>
+  <main>
+    <h1 class="name">Adam Daniel</h1>
+    <p class="role">Freelance AI Engineer</p>
+    <div class="link-wrap">
+      <a class="linkedin" href="https://www.linkedin.com/in/adam-s-daniel" target="_blank" rel="noopener noreferrer" aria-label="Adam Daniel on LinkedIn">LinkedIn</a>
+    </div>
+  </main>
+</body>
+</html>
