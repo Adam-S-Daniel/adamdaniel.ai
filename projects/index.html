@@ -1,0 +1,41 @@
+---
+layout: default
+title: Projects
+description: Personal projects and side projects in AI engineering.
+permalink: /projects/
+---
+<div class="container container--wide">
+  <div class="page-header">
+    <h1>Projects</h1>
+    <p class="subtitle">Personal projects &amp; side experiments</p>
+  </div>
+
+  {% if site.projects.size > 0 %}
+  <div class="projects-grid">
+    {% assign featured = site.projects | where: "featured", true %}
+    {% assign rest = site.projects | where: "featured", false %}
+    {% assign ordered_projects = featured | concat: rest %}
+    {% for project in ordered_projects %}
+    <article class="project-card">
+      {% if project.featured %}
+      <span class="featured-badge">Featured</span>
+      {% endif %}
+      <div class="project-card-inner">
+        {% if project.technology %}
+        <p class="project-tech">{{ project.technology }}</p>
+        {% endif %}
+        <h3><a href="{{ project.url | relative_url }}">{{ project.title }}</a></h3>
+        {% if project.description %}
+        <p class="project-description">{{ project.description | strip_html | truncatewords: 30 }}</p>
+        {% endif %}
+        {% if project.url_link %}
+        <a class="project-link" href="{{ project.url_link }}" target="_blank" rel="noopener noreferrer">View Project ↗</a>
+        {% endif %}
+      </div>
+    </article>
+    {% endfor %}
+  </div>
+  {% else %}
+  <p style="color: var(--text-dim);">Projects coming soon.</p>
+  {% endif %}
+</div>

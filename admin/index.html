@@ -1,0 +1,190 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>Content Manager — Adam Daniel</title>
+  <style>
+    /*
+     * Cobalt Thermal theme injected before Sveltia CMS loads.
+     * These CSS variables and selectors target the Sveltia CMS shell layer,
+     * which lives outside the shadow DOM boundary.
+     */
+
+    /* Force dark mode globally */
+    :root {
+      color-scheme: dark;
+
+      /* Sveltia CMS exposes these design tokens */
+      --primary-color: #285aff;
+      --primary-color-dark: #1a3abf;
+      --primary-color-light: rgba(40, 90, 255, 0.15);
+
+      /* Background stack */
+      --bg-page: #04060f;
+      --bg-surface: #060d1f;
+      --bg-elevated: #0a1530;
+      --bg-overlay: #111e40;
+
+      /* Text */
+      --text-primary: #d8e4ff;
+      --text-secondary: #c8d4f0;
+      --text-muted: #8ab0e8;
+
+      /* Borders */
+      --border-subtle: #1a2a5e;
+      --border-default: #2a3a7e;
+
+      /* Accent */
+      --accent: #285aff;
+      --accent-glow: rgba(40, 90, 255, 0.28);
+    }
+
+    *, *::before, *::after {
+      box-sizing: border-box;
+    }
+
+    html, body {
+      height: 100%;
+      margin: 0;
+      padding: 0;
+      background: #04060f;
+      animation: thermal 40s ease-in-out infinite alternate;
+    }
+
+    @keyframes thermal {
+      0%   { background-color: #04060f; }
+      50%  { background-color: #060d1f; }
+      100% { background-color: #03040c; }
+    }
+
+    /* Ambient glow behind the CMS frame */
+    body::before {
+      content: '';
+      position: fixed;
+      inset: 0;
+      background: radial-gradient(ellipse 70% 50% at 50% 20%, rgba(40,90,255,0.18), transparent 70%);
+      animation: warmth 8s ease-in-out infinite alternate;
+      pointer-events: none;
+      z-index: 0;
+    }
+
+    @keyframes warmth {
+      0%   { opacity: 0.05; transform: scale(0.7); }
+      100% { opacity: 0.5;  transform: scale(1.3); }
+    }
+
+    /* The Sveltia CMS app root sits above the ambient layer */
+    #nc-root,
+    sveltia-cms,
+    [id^="cms"],
+    .cms-wrapper {
+      position: relative;
+      z-index: 1;
+    }
+
+    /* ── Loading screen ──────────────────────────── */
+    #cms-loading {
+      position: fixed;
+      inset: 0;
+      display: flex;
+      flex-direction: column;
+      align-items: center;
+      justify-content: center;
+      background: #04060f;
+      z-index: 9999;
+      gap: 1.5rem;
+      transition: opacity 0.4s ease;
+      font-family: 'Helvetica Neue', Arial, sans-serif;
+    }
+
+    #cms-loading.hidden {
+      opacity: 0;
+      pointer-events: none;
+    }
+
+    .cms-loading-name {
+      font-size: 1.8rem;
+      font-weight: 200;
+      letter-spacing: 0.08em;
+      color: #d8e4ff;
+    }
+
+    .cms-loading-sub {
+      font-size: 0.7rem;
+      letter-spacing: 0.2em;
+      text-transform: uppercase;
+      font-family: 'SF Mono', 'Fira Code', monospace;
+      color: #8ab0e8;
+      animation: text-pulse 2s ease-in-out infinite;
+    }
+
+    @keyframes text-pulse {
+      0%, 100% { opacity: 0.5; }
+      50%       { opacity: 1; }
+    }
+
+    .cms-loading-bar {
+      width: 200px;
+      height: 1px;
+      background: #1a2a5e;
+      border-radius: 1px;
+      overflow: hidden;
+    }
+
+    .cms-loading-bar-fill {
+      height: 100%;
+      background: linear-gradient(90deg, transparent, #285aff, transparent);
+      animation: scan 1.8s ease-in-out infinite;
+    }
+
+    @keyframes scan {
+      0%   { transform: translateX(-100%); }
+      100% { transform: translateX(300%); }
+    }
+  </style>
+</head>
+<body>
+
+  <!-- Custom loading screen shown while Sveltia CMS initialises -->
+  <div id="cms-loading">
+    <div class="cms-loading-name">Adam Daniel</div>
+    <div class="cms-loading-bar"><div class="cms-loading-bar-fill"></div></div>
+    <div class="cms-loading-sub">Content Manager</div>
+  </div>
+
+  <!-- Sveltia CMS -->
+  <script src="https://unpkg.com/@sveltia/cms/dist/sveltia-cms.js" type="module"></script>
+
+  <script>
+    // Hide the loading overlay once Sveltia CMS fires its ready event
+    document.addEventListener('DOMContentLoaded', function () {
+      var loading = document.getElementById('cms-loading');
+
+      // Sveltia CMS dispatches a custom 'load' event on the window
+      // and renders into the body; we watch for the app root to appear.
+      var observer = new MutationObserver(function (mutations) {
+        for (var m of mutations) {
+          for (var node of m.addedNodes) {
+            if (node.nodeType === 1) {
+              loading.classList.add('hidden');
+              setTimeout(function () { loading.remove(); }, 500);
+              observer.disconnect();
+              return;
+            }
+          }
+        }
+      });
+
+      observer.observe(document.body, { childList: true });
+
+      // Fallback: remove after 6 seconds regardless
+      setTimeout(function () {
+        loading.classList.add('hidden');
+        setTimeout(function () { loading.remove(); }, 500);
+      }, 6000);
+    });
+  </script>
+
+</body>
+</html>

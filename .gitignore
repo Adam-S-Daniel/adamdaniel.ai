@@ -1,0 +1,16 @@
+_site/
+_site_demo/
+.sass-cache/
+.jekyll-cache/
+.jekyll-metadata
+vendor/
+Gemfile.lock
+*.gem
+.bundle/
+node_modules/
+*.log
+*.tmp
+__pycache__/
+*.pyc
+.pytest_cache/
+.aws-sam/
