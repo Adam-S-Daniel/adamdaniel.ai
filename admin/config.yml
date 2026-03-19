@@ -39,7 +39,7 @@ collections:
     create: true
     slug: "{{year}}-{{month}}-{{day}}-{{slug}}"
     preview_path: /blog/{{slug}}/
-    summary: "{{title}} ({{date | date('MMM D, YYYY')}})"
+    summary: "{{title}} ({{date | date('MMM D, YYYY')}}){% if publish_date %} — Scheduled{% endif %}"
     sortable_fields:
       - date
       - title
@@ -98,7 +98,16 @@ collections:
         label: Published
         widget: boolean
         default: false
-        hint: "Toggle on to make this post visible on the public site"
+        hint: "Toggle on to make this post visible on the public site. Or set a Publish Date below to auto-publish at a specific time."
+
+      - name: publish_date
+        label: Publish Date
+        widget: datetime
+        required: false
+        date_format: "YYYY-MM-DD"
+        time_format: "HH:mm"
+        format: "YYYY-MM-DD HH:mm:ss ZZ"
+        hint: "Optional. Set a future date/time to auto-publish this post (UTC). Leave blank to publish manually via the Published toggle above."
 
       - name: reading_time
         label: Reading Time (minutes)
