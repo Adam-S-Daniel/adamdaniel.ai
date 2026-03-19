@@ -1,0 +1,205 @@
+# ============================================================
+# Sveltia CMS — LOCAL DEVELOPMENT CONFIG
+# Uses decap-server proxy — no GitHub OAuth needed
+# Run:  npx decap-server   (from repo root, port 8081)
+# ============================================================
+
+local_backend: true
+
+backend:
+  name: github
+  repo: Adam-S-Daniel/adamdaniel.ai
+  branch: main
+
+site_url: http://localhost:4000
+display_url: http://localhost:4000
+
+custom_css: custom.css
+
+media_folder: assets/images/uploads
+public_folder: /assets/images/uploads
+
+collections:
+
+  - name: posts
+    label: Posts
+    label_singular: Post
+    folder: _posts
+    create: true
+    slug: "{{year}}-{{month}}-{{day}}-{{slug}}"
+    preview_path: /blog/{{slug}}/
+    summary: "{{title}} ({{date | date('MMM D, YYYY')}})"
+    sortable_fields:
+      - date
+      - title
+    view_filters:
+      - label: Published
+        field: published
+        pattern: true
+      - label: Drafts
+        field: published
+        pattern: false
+    fields:
+      - name: title
+        label: Title
+        widget: string
+        required: true
+      - name: date
+        label: Date
+        widget: datetime
+        required: true
+        date_format: "YYYY-MM-DD"
+        time_format: "HH:mm"
+        format: "YYYY-MM-DD HH:mm:ss ZZ"
+        default: "{{now}}"
+      - name: excerpt
+        label: Excerpt
+        widget: text
+        required: false
+      - name: tags
+        label: Tags
+        widget: relation
+        collection: tags
+        search_fields: [name]
+        value_field: name
+        display_fields: [name]
+        multiple: true
+        required: false
+      - name: featured_image
+        label: Featured Image
+        widget: image
+        required: false
+      - name: published
+        label: Published
+        widget: boolean
+        default: false
+      - name: reading_time
+        label: Reading Time (minutes)
+        widget: number
+        required: false
+        value_type: int
+        min: 1
+      - name: body
+        label: Body
+        widget: markdown
+        required: true
+        modes:
+          - rich_text
+          - raw
+
+  - name: tags
+    label: Tags
+    label_singular: Tag
+    folder: _tags
+    create: true
+    slug: "{{slug}}"
+    identifier_field: name
+    summary: "{{name}}"
+    fields:
+      - name: name
+        label: Name
+        widget: string
+        required: true
+      - name: description
+        label: Description
+        widget: text
+        required: false
+      - name: posts
+        label: Posts
+        widget: relation
+        collection: posts
+        search_fields: [title]
+        value_field: title
+        display_fields: [title]
+        multiple: true
+        required: false
+
+  - name: projects
+    label: Projects
+    label_singular: Project
+    folder: _projects
+    create: true
+    slug: "{{slug}}"
+    preview_path: /projects/{{slug}}/
+    summary: "{{title}}{% if featured %} ⭐{% endif %}"
+    fields:
+      - name: title
+        label: Title
+        widget: string
+        required: true
+      - name: technology
+        label: Technology / Stack
+        widget: string
+        required: false
+      - name: url_link
+        label: Project URL
+        widget: string
+        required: false
+      - name: featured
+        label: Featured
+        widget: boolean
+        default: false
+      - name: images
+        label: Images
+        widget: list
+        required: false
+        field:
+          name: image
+          label: Image
+          widget: image
+      - name: description
+        label: Description
+        widget: markdown
+        required: false
+        modes:
+          - rich_text
+          - raw
+
+  - name: pages
+    label: Pages
+    label_singular: Page
+    files:
+      - name: about
+        label: About Me
+        file: pages/about.md
+        fields:
+          - name: title
+            label: Title
+            widget: string
+            default: "About Me"
+          - name: layout
+            label: Layout
+            widget: hidden
+            default: page
+          - name: permalink
+            label: Permalink
+            widget: hidden
+            default: /pages/about/
+          - name: body
+            label: Content
+            widget: markdown
+            modes:
+              - rich_text
+              - raw
+      - name: contact
+        label: Contact
+        file: pages/contact.md
+        fields:
+          - name: title
+            label: Title
+            widget: string
+            default: "Contact"
+          - name: layout
+            label: Layout
+            widget: hidden
+            default: page
+          - name: permalink
+            label: Permalink
+            widget: hidden
+            default: /pages/contact/
+          - name: body
+            label: Content
+            widget: markdown
+            modes:
+              - rich_text
+              - raw
