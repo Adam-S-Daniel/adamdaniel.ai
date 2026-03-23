@@ -1,0 +1,101 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>Content Manager — Adam Daniel (Local Dev)</title>
+  <!-- Material Symbols Outlined — served locally so headless Chromium never needs Google Fonts -->
+  <style>
+    @font-face {
+      font-family: "Material Symbols Outlined";
+      font-style: normal;
+      font-weight: 100 700;
+      font-display: block;
+      src: url("vendor/fonts/material-symbols-outlined.woff2") format("woff2");
+    }
+    :root { color-scheme: dark; }
+    *, *::before, *::after { box-sizing: border-box; }
+    html, body { height: 100%; margin: 0; padding: 0; background: #04060f; }
+    body { animation: thermal 40s ease-in-out infinite alternate; }
+    @keyframes thermal {
+      0%   { background-color: #04060f; }
+      50%  { background-color: #060d1f; }
+      100% { background-color: #03040c; }
+    }
+    body::before {
+      content: '';
+      position: fixed; inset: 0;
+      background: radial-gradient(ellipse 70% 50% at 50% 20%, rgba(40,90,255,0.18), transparent 70%);
+      animation: warmth 8s ease-in-out infinite alternate;
+      pointer-events: none; z-index: 0;
+    }
+    @keyframes warmth {
+      0%   { opacity: 0.05; transform: scale(0.7); }
+      100% { opacity: 0.5;  transform: scale(1.3); }
+    }
+    #cms-loading {
+      position: fixed; inset: 0; display: flex; flex-direction: column;
+      align-items: center; justify-content: center; background: #04060f;
+      z-index: 9999; gap: 1.5rem; transition: opacity 0.4s ease;
+      font-family: 'Helvetica Neue', Arial, sans-serif;
+    }
+    #cms-loading.hidden { opacity: 0; pointer-events: none; }
+    .cms-loading-name { font-size: 1.8rem; font-weight: 200; letter-spacing: 0.08em; color: #d8e4ff; }
+    .cms-loading-sub {
+      font-size: 0.7rem; letter-spacing: 0.2em; text-transform: uppercase;
+      font-family: 'SF Mono', 'Fira Code', monospace; color: #8ab0e8;
+      animation: text-pulse 2s ease-in-out infinite;
+    }
+    @keyframes text-pulse { 0%, 100% { opacity: 0.5; } 50% { opacity: 1; } }
+    .cms-loading-bar { width: 200px; height: 1px; background: #1a2a5e; border-radius: 1px; overflow: hidden; }
+    .cms-loading-bar-fill {
+      height: 100%;
+      background: linear-gradient(90deg, transparent, #285aff, transparent);
+      animation: scan 1.8s ease-in-out infinite;
+    }
+    @keyframes scan { 0% { transform: translateX(-100%); } 100% { transform: translateX(300%); } }
+    .local-badge {
+      font-size: 0.6rem; letter-spacing: 0.16em; text-transform: uppercase;
+      font-family: 'SF Mono', 'Fira Code', monospace;
+      border: 1px solid #285aff; border-radius: 3px; padding: 0.25em 0.6em;
+      color: #285aff; margin-top: 0.5rem;
+    }
+  </style>
+</head>
+<body>
+  <div id="cms-loading">
+    <div class="cms-loading-name">Adam Daniel</div>
+    <div class="cms-loading-bar"><div class="cms-loading-bar-fill"></div></div>
+    <div class="cms-loading-sub">Content Manager</div>
+    <div class="local-badge">Local Backend</div>
+  </div>
+
+  <!-- Tell Sveltia CMS to use the local config file -->
+  <link rel="cms-config-url" type="text/yaml" href="config-local.yml">
+
+  <script src="vendor/sveltia-cms.js"></script>
+
+  <script>
+    document.addEventListener('DOMContentLoaded', function () {
+      var loading = document.getElementById('cms-loading');
+      var observer = new MutationObserver(function (mutations) {
+        for (var m of mutations) {
+          for (var node of m.addedNodes) {
+            if (node.nodeType === 1) {
+              loading.classList.add('hidden');
+              setTimeout(function () { loading.remove(); }, 500);
+              observer.disconnect();
+              return;
+            }
+          }
+        }
+      });
+      observer.observe(document.body, { childList: true });
+      setTimeout(function () {
+        loading.classList.add('hidden');
+        setTimeout(function () { loading.remove(); }, 500);
+      }, 8000);
+    });
+  </script>
+</body>
+</html>

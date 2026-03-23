@@ -1,0 +1,43 @@
+---
+layout: default
+title: Blog
+description: Thoughts on AI engineering, machine learning, and building intelligent systems.
+permalink: /blog/
+---
+<div class="container">
+  <div class="page-header">
+    <h1>Blog</h1>
+    <p class="subtitle">Thoughts on AI engineering &amp; building intelligent systems</p>
+  </div>
+
+  {% assign published_posts = site.posts | where: "published", true %}
+  {% if published_posts.size > 0 %}
+  <ul class="post-list">
+    {% for post in published_posts %}
+    {% assign words = post.content | number_of_words %}
+    {% assign reading_time = words | divided_by: 200 | plus: 1 %}
+    <li class="post-item">
+      <div class="post-meta">
+        <time class="post-date" datetime="{{ post.date | date_to_xmlschema }}">
+          {{ post.date | date: "%B %-d, %Y" }}
+        </time>
+        <span class="post-reading-time">{{ reading_time }} min read</span>
+        {% if post.tags %}
+        <div class="post-tags">
+          {% for tag in post.tags %}
+          <a class="tag-pill" href="{{ '/tags/' | append: tag | slugify | relative_url }}">{{ tag }}</a>
+          {% endfor %}
+        </div>
+        {% endif %}
+      </div>
+      <h2 class="post-title"><a href="{{ post.url | relative_url }}">{{ post.title }}</a></h2>
+      {% if post.excerpt %}
+      <p class="post-excerpt">{{ post.excerpt }}</p>
+      {% endif %}
+    </li>
+    {% endfor %}
+  </ul>
+  {% else %}
+  <p style="color: var(--text-dim);">No posts yet. Check back soon.</p>
+  {% endif %}
+</div>

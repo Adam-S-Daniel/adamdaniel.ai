@@ -1,0 +1,117 @@
+name: CMS Editorial Workflow
+
+# Triggered when Sveltia CMS opens or updates a PR for a draft post.
+# This workflow validates the content and sets PR labels to drive the
+# draft → review → ready pipeline.
+
+on:
+  pull_request:
+    types: [opened, synchronize, labeled]
+    branches:
+      - main
+    paths:
+      - '_posts/**'
+      - '_projects/**'
+      - '_tags/**'
+      - 'pages/**'
+
+permissions:
+  contents: read
+  pull-requests: write
+  issues: write
+
+jobs:
+  validate-content:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+        with:
+          ref: ${{ github.event.pull_request.head.sha }}
+
+      - name: Setup Ruby
+        uses: ruby/setup-ruby@v1
+        with:
+          ruby-version: '3.2'
+          bundler-cache: true
+
+      - name: Validate front matter
+        run: |
+          echo "Checking post front matter..."
+          ERRORS=0
+
+          for f in _posts/*.md; do
+            # Every post must have title, date, and published fields
+            if ! grep -q "^title:" "$f"; then
+              echo "ERROR: $f is missing 'title' field"
+              ERRORS=$((ERRORS+1))
+            fi
+            if ! grep -q "^date:" "$f"; then
+              echo "ERROR: $f is missing 'date' field"
+              ERRORS=$((ERRORS+1))
+            fi
+          done
+
+          if [ "$ERRORS" -gt 0 ]; then
+            echo "Found $ERRORS validation error(s). Please fix before merging."
+            exit 1
+          fi
+          echo "All content validated successfully."
+
+      - name: Jekyll build check
+        env:
+          JEKYLL_ENV: test
+        run: bundle exec jekyll build --quiet
+
+      - name: Apply draft label on new PR
+        if: github.event.action == 'opened'
+        uses: actions/github-script@v7
+        with:
+          script: |
+            // Ensure the 'cms/draft' label exists
+            try {
+              await github.rest.issues.createLabel({
+                owner: context.repo.owner,
+                repo:  context.repo.repo,
+                name:  'cms/draft',
+                color: '1a2a5e',
+                description: 'Content draft — not ready for publish',
+              });
+            } catch (_) {}
+
+            try {
+              await github.rest.issues.createLabel({
+                owner: context.repo.owner,
+                repo:  context.repo.repo,
+                name:  'cms/ready',
+                color: '22c27a',
+                description: 'Content approved and ready to publish',
+              });
+            } catch (_) {}
+
+            await github.rest.issues.addLabels({
+              owner: context.repo.owner,
+              repo:  context.repo.repo,
+              issue_number: context.payload.pull_request.number,
+              labels: ['cms/draft'],
+            });
+
+  auto-merge-when-ready:
+    # When a PR is labeled 'cms/ready', auto-merge it so content goes live
+    if: github.event.action == 'labeled' && github.event.label.name == 'cms/ready'
+    runs-on: ubuntu-latest
+    permissions:
+      contents: write
+      pull-requests: write
+    steps:
+      - name: Auto-merge CMS PR
+        uses: actions/github-script@v7
+        with:
+          script: |
+            await github.rest.pulls.merge({
+              owner: context.repo.owner,
+              repo:  context.repo.repo,
+              pull_number: context.payload.pull_request.number,
+              merge_method: 'squash',
+              commit_title: `publish: ${context.payload.pull_request.title}`,
+            });

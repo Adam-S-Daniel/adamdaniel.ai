@@ -1,0 +1,142 @@
+name: Deploy Preview
+
+on:
+  pull_request:
+    types: [opened, synchronize, reopened, closed]
+    branches:
+      - main
+
+permissions:
+  contents: read
+  pull-requests: write  # to post the preview URL comment
+  id-token: write
+
+jobs:
+  # ────────────────────────────────────────────────────────────
+  # Build & Deploy preview (on open / update)
+  # ────────────────────────────────────────────────────────────
+  deploy-preview:
+    if: github.event.action != 'closed'
+    runs-on: ubuntu-latest
+    env:
+      AWS_REGION: us-east-1
+      PREVIEW_BUCKET: adamdaniel-ai-previews   # create this S3 bucket once
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+        with:
+          ref: ${{ github.event.pull_request.head.sha }}
+
+      - name: Setup Ruby
+        uses: ruby/setup-ruby@v1
+        with:
+          ruby-version: '3.2'
+          bundler-cache: true
+
+      - name: Build Jekyll (preview mode)
+        env:
+          JEKYLL_ENV: preview
+        # Deploy into a PR-specific subdirectory so multiple previews can
+        # coexist in the same S3 bucket.
+        run: |
+          PR_NUMBER=${{ github.event.pull_request.number }}
+          bundle exec jekyll build \
+            --baseurl "/pr-${PR_NUMBER}" \
+            --destination ./_site_preview
+
+      - name: Configure AWS credentials
+        uses: aws-actions/configure-aws-credentials@v4
+        with:
+          aws-access-key-id:     ${{ secrets.AWS_ACCESS_KEY_ID }}
+          aws-secret-access-key: ${{ secrets.AWS_SECRET_ACCESS_KEY }}
+          aws-region:            ${{ env.AWS_REGION }}
+
+      - name: Sync to S3
+        run: |
+          PR_NUMBER=${{ github.event.pull_request.number }}
+          aws s3 sync ./_site_preview \
+            "s3://${PREVIEW_BUCKET}/pr-${PR_NUMBER}/" \
+            --delete \
+            --cache-control "no-cache, must-revalidate"
+
+      - name: Post preview URL comment
+        uses: actions/github-script@v7
+        with:
+          script: |
+            const pr = context.payload.pull_request.number;
+            const region = process.env.AWS_REGION;
+            const bucket = process.env.PREVIEW_BUCKET;
+            const url = `http://${bucket}.s3-website-${region}.amazonaws.com/pr-${pr}/`;
+
+            // Find existing preview comment (to update rather than spam)
+            const { data: comments } = await github.rest.issues.listComments({
+              owner: context.repo.owner,
+              repo:  context.repo.repo,
+              issue_number: pr,
+            });
+
+            const BOT_MARKER = '<!-- adamdaniel-preview-bot -->';
+            const existing = comments.find(c => c.body.includes(BOT_MARKER));
+
+            const body = `${BOT_MARKER}
+            ## 🔵 Preview Deployed
+
+            | | |
+            |---|---|
+            | **Preview URL** | [${url}](${url}) |
+            | **Commit** | \`${{ github.event.pull_request.head.sha }}\` |
+            | **Branch** | \`${{ github.head_ref }}\` |
+
+            *Preview updates automatically on every push to this PR.*`;
+
+            if (existing) {
+              await github.rest.issues.updateComment({
+                owner: context.repo.owner,
+                repo:  context.repo.repo,
+                comment_id: existing.id,
+                body,
+              });
+            } else {
+              await github.rest.issues.createComment({
+                owner: context.repo.owner,
+                repo:  context.repo.repo,
+                issue_number: pr,
+                body,
+              });
+            }
+
+  # ────────────────────────────────────────────────────────────
+  # Teardown preview (on close / merge)
+  # ────────────────────────────────────────────────────────────
+  teardown-preview:
+    if: github.event.action == 'closed'
+    runs-on: ubuntu-latest
+    env:
+      AWS_REGION: us-east-1
+      PREVIEW_BUCKET: adamdaniel-ai-previews
+
+    steps:
+      - name: Configure AWS credentials
+        uses: aws-actions/configure-aws-credentials@v4
+        with:
+          aws-access-key-id:     ${{ secrets.AWS_ACCESS_KEY_ID }}
+          aws-secret-access-key: ${{ secrets.AWS_SECRET_ACCESS_KEY }}
+          aws-region:            ${{ env.AWS_REGION }}
+
+      - name: Delete preview from S3
+        run: |
+          PR_NUMBER=${{ github.event.pull_request.number }}
+          aws s3 rm "s3://${PREVIEW_BUCKET}/pr-${PR_NUMBER}/" --recursive
+
+      - name: Post teardown comment
+        uses: actions/github-script@v7
+        with:
+          script: |
+            const pr = context.payload.pull_request.number;
+            await github.rest.issues.createComment({
+              owner: context.repo.owner,
+              repo:  context.repo.repo,
+              issue_number: pr,
+              body: '<!-- adamdaniel-preview-bot -->\n🗑️ Preview environment cleaned up.',
+            });

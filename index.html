@@ -1,125 +1,84 @@
-<!DOCTYPE html>
-<html lang="en">
-<head>
-  <meta charset="UTF-8">
-  <meta name="viewport" content="width=device-width, initial-scale=1.0">
-  <title>Adam Daniel — Freelance AI Engineer</title>
-  <meta name="description" content="Adam Daniel — Freelance AI Engineer">
-  <style>
-    *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
-
-    html, body { height: 100%; }
-
-    body {
-      min-height: 100vh;
-      background: #04060f;
-      color: #c8d4f0;
-      font-family: 'Helvetica Neue', 'Arial', sans-serif;
-      display: flex;
-      flex-direction: column;
-      align-items: center;
-      justify-content: center;
-      animation: thermal 40s ease-in-out infinite alternate;
-    }
-
-    /* Cobalt pulse: shifts between near-black and a visible deep blue */
-    @keyframes thermal {
-      0%   { background-color: #04060f; }
-      50%  { background-color: #060d1f; }
-      100% { background-color: #03040c; }
-    }
-
-    /* Radial warmth that clearly breathes — blue glow, visible but gentle */
-    body::before {
-      content: '';
-      position: fixed;
-      inset: 0;
-      background: radial-gradient(ellipse 60% 50% at 50% 50%, rgba(40,90,255,0.28), transparent 70%);
-      animation: warmth 8s ease-in-out infinite alternate;
-      pointer-events: none;
-    }
-
-    @keyframes warmth {
-      0%   { opacity: 0.1; transform: scale(0.7); }
-      100% { opacity: 1;   transform: scale(1.4); }
-    }
-
-    /*
-      Text thermal animation — synced to warmth (8s alternate).
-      Shifts .role and .linkedin between two WCAG AA-compliant colours:
-        dim phase  (#8ab0e8, L≈0.42): contrast ≥ 6.7:1 on any bg in the cycle
-        glow phase (#c0d4ff, L≈0.66): contrast ≥ 9.9:1 on any bg in the cycle
-      Both values exceed the 4.5:1 AA threshold for normal-size text.
-    */
-    @keyframes text-thermal {
-      0%   { color: #8ab0e8; }
-      100% { color: #c0d4ff; }
-    }
-
-    @keyframes border-thermal {
-      0%   { border-color: #8ab0e8; }
-      100% { border-color: #c0d4ff; }
-    }
-
-    main {
-      position: relative;
-      text-align: center;
-      padding: 2rem;
-    }
-
-    .name {
-      font-size: clamp(2.4rem, 7vw, 5rem);
-      font-weight: 200;
-      letter-spacing: 0.08em;
-      line-height: 1;
-      color: #d8e4ff;
-    }
-
-    .role {
-      font-size: clamp(0.7rem, 1.6vw, 0.8rem);
-      letter-spacing: 0.18em;
-      text-transform: uppercase;
-      margin-top: 0.4rem;
-      animation: text-thermal 8s ease-in-out infinite alternate;
-    }
-
-    .link-wrap {
-      margin-top: 2.5rem;
-    }
-
-    a.linkedin {
-      text-decoration: none;
-      font-size: 0.72rem;
-      letter-spacing: 0.18em;
-      text-transform: uppercase;
-      font-family: 'SF Mono', 'Fira Code', monospace;
-      border-bottom: 1px solid;
-      padding-bottom: 2px;
-      animation:
-        text-thermal   8s ease-in-out infinite alternate,
-        border-thermal 8s ease-in-out infinite alternate;
-    }
-
-    a.linkedin:hover,
-    a.linkedin:focus-visible {
-      color: #ffffff !important;
-      border-color: #ffffff !important;
-    }
-
-    a.linkedin:focus-visible {
-      outline: 2px solid #ffffff;
-      outline-offset: 4px;
-      border-radius: 1px;
-    }
-  </style>
-</head>
-<body>
-  <main>
-    <h1 class="name">Adam Daniel</h1>
-    <p class="role">Freelance AI Engineer</p>
-    <div class="link-wrap">
-      <a class="linkedin" href="https://www.linkedin.com/in/adam-s-daniel" target="_blank" rel="noopener noreferrer" aria-label="Adam Daniel on LinkedIn">LinkedIn</a>
+---
+layout: default
+title: Home
+---
+<main style="padding:0; flex:1;">
+  <section class="hero" aria-label="Introduction">
+    <h1 class="hero-name">Adam Daniel</h1>
+    <p class="hero-role">Freelance AI Engineer</p>
+    <div class="hero-links">
+      <a class="hero-link" href="{{ '/blog/' | relative_url }}">Blog</a>
+      <a class="hero-link" href="{{ '/projects/' | relative_url }}">Projects</a>
+      <a class="hero-link" href="https://www.linkedin.com/in/adam-s-daniel" target="_blank" rel="noopener noreferrer" aria-label="Adam Daniel on LinkedIn">LinkedIn</a>
     </div>
-  </main>
-</body>
-</html>
+  </section>
+
+  {% assign featured_posts = site.posts | where: "published", true | limit: 3 %}
+  {% if featured_posts.size > 0 %}
+  <section style="padding: 4rem 0; border-top: 1px solid var(--border);">
+    <div class="container">
+      <div class="page-header" style="border:none; padding:0; margin-bottom:2rem;">
+        <h2>Latest Posts</h2>
+      </div>
+      <ul class="post-list">
+        {% for post in featured_posts %}
+        {% assign words = post.content | number_of_words %}
+        {% assign reading_time = words | divided_by: 200 | plus: 1 %}
+        <li class="post-item">
+          <div class="post-meta">
+            <time class="post-date" datetime="{{ post.date | date_to_xmlschema }}">
+              {{ post.date | date: "%B %-d, %Y" }}
+            </time>
+            <span class="post-reading-time">{{ reading_time }} min read</span>
+            {% if post.tags %}
+            <div class="post-tags">
+              {% for tag in post.tags limit:3 %}
+              <a class="tag-pill" href="{{ '/tags/' | append: tag | slugify | relative_url }}">{{ tag }}</a>
+              {% endfor %}
+            </div>
+            {% endif %}
+          </div>
+          <h3 class="post-title"><a href="{{ post.url | relative_url }}">{{ post.title }}</a></h3>
+          {% if post.excerpt %}
+          <p class="post-excerpt">{{ post.excerpt }}</p>
+          {% endif %}
+        </li>
+        {% endfor %}
+      </ul>
+      <div class="mt-4">
+        <a class="project-link" href="{{ '/blog/' | relative_url }}">All Posts →</a>
+      </div>
+    </div>
+  </section>
+  {% endif %}
+
+  {% assign featured_projects = site.projects | where: "featured", true | limit: 3 %}
+  {% if featured_projects.size > 0 %}
+  <section style="padding: 4rem 0; border-top: 1px solid var(--border);">
+    <div class="container container--wide">
+      <div class="page-header" style="border:none; padding:0; margin-bottom:2rem;">
+        <h2>Featured Projects</h2>
+      </div>
+      <div class="projects-grid">
+        {% for project in featured_projects %}
+        <article class="project-card">
+          <span class="featured-badge">Featured</span>
+          <div class="project-card-inner">
+            {% if project.technology %}
+            <p class="project-tech">{{ project.technology }}</p>
+            {% endif %}
+            <h3><a href="{{ project.url | relative_url }}">{{ project.title }}</a></h3>
+            {% if project.description %}
+            <p class="project-description">{{ project.description | strip_html | truncatewords: 30 }}</p>
+            {% endif %}
+            {% if project.url_link %}
+            <a class="project-link" href="{{ project.url_link }}" target="_blank" rel="noopener noreferrer">View ↗</a>
+            {% endif %}
+          </div>
+        </article>
+        {% endfor %}
+      </div>
+    </div>
+  </section>
+  {% endif %}
+</main>

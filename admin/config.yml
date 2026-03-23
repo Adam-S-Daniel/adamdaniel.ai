@@ -1,0 +1,275 @@
+# ============================================================
+# Sveltia CMS Configuration — adamdaniel.ai
+# ============================================================
+
+backend:
+  name: github
+  repo: Adam-S-Daniel/adamdaniel.ai
+  branch: main
+  # OAuth proxy endpoint — replace with your deployed Lambda URL:
+  # base_url: https://YOUR_API_ID.execute-api.us-east-1.amazonaws.com
+  # auth_endpoint: prod/auth
+
+# Uncomment to enable the editorial workflow (draft → review → ready → publish)
+# This creates branches for each draft and opens pull requests for review.
+# publish_mode: editorial_workflow
+
+# Site configuration
+site_url: https://adamdaniel.ai
+display_url: https://adamdaniel.ai
+logo_url: https://adamdaniel.ai/assets/images/logo.svg
+
+# Custom CSS — applies the cobalt thermal theme to the CMS shell
+custom_css: custom.css
+
+# Media library
+media_folder: assets/images/uploads
+public_folder: /assets/images/uploads
+
+# ============================================================
+# Collections
+# ============================================================
+collections:
+
+  # ── Posts ─────────────────────────────────────────────────
+  - name: posts
+    label: Posts
+    label_singular: Post
+    folder: _posts
+    create: true
+    slug: "{{year}}-{{month}}-{{day}}-{{slug}}"
+    preview_path: /blog/{{slug}}/
+    summary: "{{title}} ({{date | date('MMM D, YYYY')}})"
+    sortable_fields:
+      - date
+      - title
+    view_filters:
+      - label: Published
+        field: published
+        pattern: true
+      - label: Drafts
+        field: published
+        pattern: false
+    fields:
+      - name: title
+        label: Title
+        widget: string
+        required: true
+        hint: "The post headline — make it compelling"
+
+      - name: date
+        label: Date
+        widget: datetime
+        required: true
+        date_format: "YYYY-MM-DD"
+        time_format: "HH:mm"
+        format: "YYYY-MM-DD HH:mm:ss ZZ"
+        default: "{{now}}"
+
+      - name: excerpt
+        label: Excerpt
+        widget: text
+        required: false
+        hint: "A short summary shown in post listings and meta tags (≤ 160 chars recommended)"
+
+      - name: tags
+        label: Tags
+        widget: relation
+        collection: tags
+        search_fields:
+          - name
+        value_field: name
+        display_fields:
+          - name
+        multiple: true
+        required: false
+        hint: "Select one or more tags. Add new tags in the Tags collection first."
+
+      - name: featured_image
+        label: Featured Image
+        widget: image
+        required: false
+        hint: "Displayed as the post hero image and in social sharing cards"
+        media_library:
+          config:
+            multiple: false
+
+      - name: published
+        label: Published
+        widget: boolean
+        default: false
+        hint: "Toggle on to make this post visible on the public site"
+
+      - name: reading_time
+        label: Reading Time (minutes)
+        widget: number
+        required: false
+        value_type: int
+        min: 1
+        hint: "Auto-calculated at build time from word count — you can leave this blank"
+
+      - name: body
+        label: Body
+        widget: markdown
+        required: true
+        hint: "Full post content. Supports Markdown, images, code blocks, and embeds."
+        modes:
+          - rich_text
+          - raw
+
+  # ── Tags ──────────────────────────────────────────────────
+  - name: tags
+    label: Tags
+    label_singular: Tag
+    folder: _tags
+    create: true
+    slug: "{{slug}}"
+    identifier_field: name
+    summary: "{{name}}"
+    fields:
+      - name: name
+        label: Name
+        widget: string
+        required: true
+        hint: "Tag label shown on posts (e.g. 'Machine Learning', 'Python')"
+
+      - name: description
+        label: Description
+        widget: text
+        required: false
+        hint: "Optional short description shown on the tag archive page"
+
+      - name: posts
+        label: Posts
+        widget: relation
+        collection: posts
+        search_fields:
+          - title
+        value_field: title
+        display_fields:
+          - title
+        multiple: true
+        required: false
+        hint: "Posts with this tag (informational — tags are set on each post)"
+
+  # ── Projects ──────────────────────────────────────────────
+  - name: projects
+    label: Projects
+    label_singular: Project
+    folder: _projects
+    create: true
+    slug: "{{slug}}"
+    preview_path: /projects/{{slug}}/
+    summary: "{{title}}{% if featured %} ⭐{% endif %}"
+    sortable_fields:
+      - title
+    view_filters:
+      - label: Featured
+        field: featured
+        pattern: true
+    fields:
+      - name: title
+        label: Title
+        widget: string
+        required: true
+
+      - name: technology
+        label: Technology / Stack
+        widget: string
+        required: false
+        hint: "e.g. 'Python · LangChain · FastAPI' — shown as the accent label"
+
+      - name: url_link
+        label: Project URL
+        widget: string
+        required: false
+        hint: "Live URL or GitHub repo link"
+        pattern:
+          - "^(https?://.*)?$"
+          - "Must be a valid URL starting with http:// or https://"
+
+      - name: featured
+        label: Featured
+        widget: boolean
+        default: false
+        hint: "Featured projects appear on the homepage"
+
+      - name: images
+        label: Images
+        widget: list
+        required: false
+        hint: "Upload screenshots or demo images"
+        field:
+          name: image
+          label: Image
+          widget: image
+
+      - name: description
+        label: Description
+        widget: markdown
+        required: false
+        hint: "Full project description — supports Markdown"
+        modes:
+          - rich_text
+          - raw
+
+  # ── Pages (file collection) ────────────────────────────────
+  - name: pages
+    label: Pages
+    label_singular: Page
+    files:
+      - name: about
+        label: About Me
+        file: pages/about.md
+        preview_path: /pages/about/
+        fields:
+          - name: title
+            label: Title
+            widget: string
+            default: "About Me"
+
+          - name: layout
+            label: Layout
+            widget: hidden
+            default: page
+
+          - name: permalink
+            label: Permalink
+            widget: hidden
+            default: /pages/about/
+
+          - name: body
+            label: Content
+            widget: markdown
+            hint: "Your About Me page content"
+            modes:
+              - rich_text
+              - raw
+
+      - name: contact
+        label: Contact
+        file: pages/contact.md
+        preview_path: /pages/contact/
+        fields:
+          - name: title
+            label: Title
+            widget: string
+            default: "Contact"
+
+          - name: layout
+            label: Layout
+            widget: hidden
+            default: page
+
+          - name: permalink
+            label: Permalink
+            widget: hidden
+            default: /pages/contact/
+
+          - name: body
+            label: Content
+            widget: markdown
+            hint: "Your Contact page content"
+            modes:
+              - rich_text
+              - raw

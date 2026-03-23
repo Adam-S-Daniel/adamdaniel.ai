@@ -1,0 +1,81 @@
+name: Deploy to Production
+
+on:
+  push:
+    branches:
+      - main
+  # Allow manual trigger from the Actions UI
+  workflow_dispatch:
+
+# Sets permissions of the GITHUB_TOKEN to allow deployment to GitHub Pages
+permissions:
+  contents: read
+  pages: write
+  id-token: write
+
+# Allow only one concurrent deployment, skipping runs queued between the run
+# in-progress and latest queued.  We do NOT cancel in-progress runs, so that
+# a production deploy is never interrupted mid-flight.
+concurrency:
+  group: "pages"
+  cancel-in-progress: false
+
+jobs:
+  # ────────────────────────────────────────────────────────────
+  # Build
+  # ────────────────────────────────────────────────────────────
+  build:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+        with:
+          fetch-depth: 0   # needed for last-modified dates in Jekyll
+
+      - name: Setup Ruby
+        uses: ruby/setup-ruby@v1
+        with:
+          ruby-version: '3.2'
+          bundler-cache: true   # runs `bundle install` and caches gems
+
+      - name: Setup Pages
+        id: pages
+        uses: actions/configure-pages@v4
+
+      - name: Calculate reading times
+        run: |
+          # Auto-calculate reading_time for every post that has `reading_time`
+          # left blank (or 0).  We write the value into a _data file consumed
+          # by the Liquid templates, keeping the source Markdown unmodified.
+          mkdir -p _data
+          echo "# Auto-generated — do not edit" > _data/reading_times.yml
+          for f in _posts/*.md; do
+            slug=$(basename "$f" .md)
+            words=$(cat "$f" | sed '/^---/,/^---/d' | wc -w)
+            mins=$(( (words / 200) + 1 ))
+            echo "${slug}: ${mins}" >> _data/reading_times.yml
+          done
+
+      - name: Build Jekyll site
+        env:
+          JEKYLL_ENV: production
+        run: bundle exec jekyll build --baseurl "${{ steps.pages.outputs.base_path }}"
+
+      - name: Upload artifact
+        uses: actions/upload-pages-artifact@v3
+        with:
+          path: ./_site
+
+  # ────────────────────────────────────────────────────────────
+  # Deploy
+  # ────────────────────────────────────────────────────────────
+  deploy:
+    environment:
+      name: github-pages
+      url: ${{ steps.deployment.outputs.page_url }}
+    runs-on: ubuntu-latest
+    needs: build
+    steps:
+      - name: Deploy to GitHub Pages
+        id: deployment
+        uses: actions/deploy-pages@v4

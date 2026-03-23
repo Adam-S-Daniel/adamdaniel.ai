@@ -1,0 +1,30 @@
+---
+layout: default
+---
+<div class="container">
+  <div class="page-header">
+    <h1>{{ page.name }}</h1>
+    <p class="subtitle">Tag</p>
+  </div>
+
+  {% assign tagged_posts = site.posts | where_exp: "post", "post.tags contains page.name" %}
+  {% if tagged_posts.size > 0 %}
+  <ul class="post-list">
+    {% for post in tagged_posts %}
+    <li class="post-item">
+      <div class="post-meta">
+        <time class="post-date" datetime="{{ post.date | date_to_xmlschema }}">
+          {{ post.date | date: "%B %-d, %Y" }}
+        </time>
+      </div>
+      <h2 class="post-title"><a href="{{ post.url | relative_url }}">{{ post.title }}</a></h2>
+      {% if post.excerpt %}
+      <p class="post-excerpt">{{ post.excerpt }}</p>
+      {% endif %}
+    </li>
+    {% endfor %}
+  </ul>
+  {% else %}
+  <p style="color: var(--text-dim);">No posts yet with this tag.</p>
+  {% endif %}
+</div>

@@ -1,0 +1,365 @@
+/*
+ * Sveltia CMS — Cobalt Thermal Theme
+ * Matches the adamdaniel.ai visual identity: deep navy/cobalt, minimal,
+ * with a subtle breathing glow animation.
+ *
+ * Sveltia CMS renders its root in the <body> as custom elements.
+ * CSS variables declared here flow into the component tree and
+ * override the default light-mode palette.
+ */
+
+/* ── Design token overrides ─────────────────────── */
+:root {
+  color-scheme: dark;
+
+  /* Primary accent — cobalt blue */
+  --primary-color:             #285aff;
+  --primary-color-dark:        #1a3abf;
+  --primary-color-darker:      #0f25a0;
+  --primary-color-light:       rgba(40, 90, 255, 0.15);
+  --primary-color-lighter:     rgba(40, 90, 255, 0.08);
+
+  /* Background layers */
+  --background-color-1:        #04060f;
+  --background-color-2:        #060d1f;
+  --background-color-3:        #0a1530;
+  --background-color-4:        #111e40;
+
+  /* Text */
+  --text-color:                #d8e4ff;
+  --text-color-secondary:      #c8d4f0;
+  --text-color-tertiary:       #8ab0e8;
+  --text-color-inverted:       #04060f;
+
+  /* Borders */
+  --border-color:              #1a2a5e;
+  --border-color-hover:        #2a3a7e;
+  --border-color-active:       #285aff;
+
+  /* Status colours — keep accessible */
+  --success-color:             #22c27a;
+  --warning-color:             #f5a623;
+  --error-color:               #ff4d6d;
+
+  /* Shadows */
+  --shadow-color:              rgba(0, 0, 20, 0.7);
+  --shadow-sm:                 0 1px 4px var(--shadow-color);
+  --shadow-md:                 0 4px 16px var(--shadow-color);
+  --shadow-lg:                 0 8px 32px var(--shadow-color);
+
+  /* Misc */
+  --font-family:               'Helvetica Neue', 'Arial', sans-serif;
+  --font-family-mono:          'SF Mono', 'Fira Code', 'Consolas', monospace;
+  --border-radius-sm:          3px;
+  --border-radius-md:          6px;
+  --border-radius-lg:          10px;
+  --transition-duration:       0.18s;
+}
+
+/* ── Global resets for the CMS shell ────────────── */
+body {
+  background-color: #04060f !important;
+  color: #d8e4ff !important;
+  font-family: 'Helvetica Neue', Arial, sans-serif !important;
+}
+
+/* Scrollbar — thin cobalt track */
+* {
+  scrollbar-width: thin;
+  scrollbar-color: #1a2a5e #04060f;
+}
+
+*::-webkit-scrollbar {
+  width: 6px;
+  height: 6px;
+}
+
+*::-webkit-scrollbar-track {
+  background: #04060f;
+}
+
+*::-webkit-scrollbar-thumb {
+  background: #1a2a5e;
+  border-radius: 3px;
+}
+
+*::-webkit-scrollbar-thumb:hover {
+  background: #285aff;
+}
+
+/* ── Sveltia CMS shell elements ─────────────────── */
+
+/* App chrome */
+#nc-root,
+.nc-app-wrapper,
+[class*="AppWrapper"] {
+  background: #04060f !important;
+}
+
+/* Sidebar / collection panel */
+[class*="CollectionList"],
+[class*="Sidebar"],
+[class*="SideBar"],
+aside {
+  background: #060d1f !important;
+  border-right-color: #1a2a5e !important;
+}
+
+/* Entry list panel */
+[class*="EntryList"],
+[class*="Collection"] {
+  background: #04060f !important;
+}
+
+/* Editor pane */
+[class*="EditorContainer"],
+[class*="EditorPane"],
+[class*="EntryEditor"] {
+  background: #04060f !important;
+}
+
+/* Toolbar / header bar */
+[class*="Toolbar"],
+[class*="AppHeader"],
+header[class*="app"] {
+  background: rgba(4, 6, 15, 0.92) !important;
+  border-bottom-color: #1a2a5e !important;
+  backdrop-filter: blur(12px) !important;
+  -webkit-backdrop-filter: blur(12px) !important;
+}
+
+/* Buttons — primary */
+button[class*="primary"],
+[class*="Button"][class*="primary"],
+[class*="Btn"][class*="primary"] {
+  background: #285aff !important;
+  border-color: #285aff !important;
+  color: #ffffff !important;
+  border-radius: 4px !important;
+}
+
+button[class*="primary"]:hover,
+[class*="Button"][class*="primary"]:hover {
+  background: #1a3abf !important;
+  border-color: #1a3abf !important;
+}
+
+/* Buttons — secondary / ghost */
+button[class*="secondary"],
+[class*="Button"]:not([class*="primary"]) {
+  background: transparent !important;
+  border-color: #1a2a5e !important;
+  color: #8ab0e8 !important;
+  border-radius: 4px !important;
+}
+
+button[class*="secondary"]:hover,
+[class*="Button"]:not([class*="primary"]):hover {
+  border-color: #285aff !important;
+  color: #d8e4ff !important;
+}
+
+/* Form inputs */
+input[type="text"],
+input[type="email"],
+input[type="url"],
+input[type="number"],
+input[type="search"],
+textarea,
+select,
+[class*="TextInput"],
+[class*="input"] {
+  background: #0a1530 !important;
+  border-color: #1a2a5e !important;
+  color: #d8e4ff !important;
+  border-radius: 4px !important;
+}
+
+input:focus,
+textarea:focus,
+select:focus,
+[class*="input"]:focus-within {
+  border-color: #285aff !important;
+  outline: none !important;
+  box-shadow: 0 0 0 2px rgba(40, 90, 255, 0.2) !important;
+}
+
+/* Labels / field labels */
+label,
+[class*="FieldLabel"],
+[class*="Label"] {
+  color: #8ab0e8 !important;
+  font-size: 0.72rem !important;
+  letter-spacing: 0.14em !important;
+  text-transform: uppercase !important;
+  font-family: 'SF Mono', 'Fira Code', monospace !important;
+}
+
+/* Rich text / markdown editor */
+[class*="markdown"],
+[class*="rich-text"],
+[class*="Editor"] .ProseMirror,
+.cm-editor {
+  background: #0a1530 !important;
+  color: #d8e4ff !important;
+  border-color: #1a2a5e !important;
+  border-radius: 6px !important;
+}
+
+.ProseMirror:focus,
+.cm-focused {
+  outline: none !important;
+  border-color: #285aff !important;
+  box-shadow: 0 0 0 2px rgba(40, 90, 255, 0.15) !important;
+}
+
+/* Code highlighting in markdown editor */
+.cm-editor .cm-keyword   { color: #7bb3ff !important; }
+.cm-editor .cm-string    { color: #98e4a0 !important; }
+.cm-editor .cm-comment   { color: #4a6a9e !important; font-style: italic; }
+.cm-editor .cm-number    { color: #ffc97a !important; }
+.cm-editor .cm-variable  { color: #d8e4ff !important; }
+
+/* Card / list items */
+[class*="EntryCard"],
+[class*="Card"],
+[class*="ListItem"] {
+  background: #060d1f !important;
+  border-color: #1a2a5e !important;
+  border-radius: 6px !important;
+  color: #d8e4ff !important;
+}
+
+[class*="EntryCard"]:hover,
+[class*="Card"]:hover,
+[class*="ListItem"]:hover {
+  border-color: #285aff !important;
+  box-shadow: 0 0 0 1px rgba(40, 90, 255, 0.2), 0 4px 16px rgba(0, 0, 20, 0.6) !important;
+}
+
+/* Active / selected state */
+[class*="active"],
+[aria-selected="true"],
+[aria-current="page"] {
+  background: rgba(40, 90, 255, 0.12) !important;
+  color: #d8e4ff !important;
+}
+
+/* Toggle / boolean widget */
+[class*="Toggle"],
+[class*="Switch"] {
+  --toggle-off:  #1a2a5e;
+  --toggle-on:   #285aff;
+}
+
+/* Date / time picker */
+[class*="DateTime"],
+[class*="DatePicker"],
+[class*="TimePicker"] {
+  background: #0a1530 !important;
+  border-color: #1a2a5e !important;
+  color: #d8e4ff !important;
+}
+
+/* Dropdown / select menus */
+[class*="Menu"],
+[class*="Dropdown"],
+[role="listbox"],
+[role="menu"] {
+  background: #0a1530 !important;
+  border-color: #1a2a5e !important;
+  box-shadow: 0 8px 32px rgba(0, 0, 20, 0.8) !important;
+  border-radius: 6px !important;
+}
+
+[class*="MenuItem"],
+[role="option"],
+[role="menuitem"] {
+  color: #c8d4f0 !important;
+}
+
+[class*="MenuItem"]:hover,
+[role="option"]:hover,
+[role="menuitem"]:hover,
+[role="option"][aria-selected="true"] {
+  background: rgba(40, 90, 255, 0.12) !important;
+  color: #d8e4ff !important;
+}
+
+/* Modal / dialog */
+[class*="Modal"],
+[class*="Dialog"],
+[role="dialog"] {
+  background: #060d1f !important;
+  border-color: #1a2a5e !important;
+  box-shadow: 0 16px 64px rgba(0, 0, 20, 0.9) !important;
+  border-radius: 8px !important;
+}
+
+[class*="Overlay"],
+[class*="Backdrop"] {
+  background: rgba(4, 6, 15, 0.85) !important;
+  backdrop-filter: blur(4px) !important;
+}
+
+/* Notification / alert toasts */
+[class*="Toast"],
+[class*="Notification"],
+[class*="Alert"] {
+  background: #0a1530 !important;
+  border-color: #1a2a5e !important;
+  color: #d8e4ff !important;
+}
+
+/* Image / media library */
+[class*="MediaLibrary"],
+[class*="media-library"] {
+  background: #060d1f !important;
+}
+
+[class*="MediaCard"],
+[class*="media-card"] {
+  background: #0a1530 !important;
+  border-color: #1a2a5e !important;
+  border-radius: 6px !important;
+}
+
+/* Login screen */
+[class*="login"],
+[class*="Login"],
+[class*="auth"],
+[class*="Auth"] {
+  background: #04060f !important;
+}
+
+/* Relation / search dropdown */
+[class*="relation"],
+[class*="Relation"],
+[class*="ComboBox"] {
+  background: #0a1530 !important;
+  border-color: #1a2a5e !important;
+  color: #d8e4ff !important;
+}
+
+/* ── Typography fine-tuning ─────────────────────── */
+
+h1, h2, h3, h4, h5, h6 {
+  color: #d8e4ff !important;
+  font-weight: 300 !important;
+  letter-spacing: 0.02em;
+}
+
+/* ── Sveltia CMS top navigation brand ──────────── */
+
+/* Pulse animation on the primary action elements */
+@keyframes cobalt-glow {
+  0%   { box-shadow: 0 0 0 0 rgba(40, 90, 255, 0); }
+  50%  { box-shadow: 0 0 12px 2px rgba(40, 90, 255, 0.25); }
+  100% { box-shadow: 0 0 0 0 rgba(40, 90, 255, 0); }
+}
+
+/* Animate the save / publish button once to hint at its location */
+button[class*="primary"][class*="save"],
+button[class*="publish"] {
+  animation: cobalt-glow 2s ease-in-out 1s 3;
+}
