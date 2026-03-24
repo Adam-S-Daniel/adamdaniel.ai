@@ -148,7 +148,6 @@ Resources:
           TargetOriginId: s3-website
           ViewerProtocolPolicy: redirect-to-https
           CachePolicyId: 4135ea2d-6df8-44a3-9df3-4b5a84be39ad  # CachingDisabled
-          OriginRequestPolicyId: 88a5eaf4-2f7a-4d58-af98-44b801811998  # CORS-S3Origin
           AllowedMethods: [GET, HEAD, OPTIONS]
           CachedMethods: [GET, HEAD]
           Compress: true
