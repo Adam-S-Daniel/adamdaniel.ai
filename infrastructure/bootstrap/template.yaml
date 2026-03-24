@@ -5,11 +5,13 @@ Description: >
 
   Creates:
     1. S3 bucket for CloudFormation/SAM deployment artifacts
-    2. S3 bucket for PR preview deployments (static website hosting)
-    3. ACM certificate + CloudFront distribution for preview.adamdaniel.ai
-    4. Route53 DNS records for the preview subdomain
-    5. GitHub OIDC identity provider in AWS IAM
-    6. IAM role for GitHub Actions (assumed via OIDC — no long-lived keys)
+    2. ACM certificate + CloudFront distribution for preview.adamdaniel.ai
+    3. Route53 DNS records for the preview subdomain
+    4. GitHub OIDC identity provider in AWS IAM
+    5. IAM role for GitHub Actions (assumed via OIDC — no long-lived keys)
+
+  Prerequisite: S3 bucket for PR previews (see PreviewBucketName parameter)
+  must already exist with static website hosting enabled.
 
   Run once per AWS account:
     bash infrastructure/bootstrap/deploy.sh
@@ -85,35 +87,11 @@ Resources:
               DaysAfterInitiation: 7
 
   # ── S3 bucket for PR preview deployments ────────────────────────────────────
-  PreviewBucket:
-    DeletionPolicy: Retain
-    Type: AWS::S3::Bucket
-    Properties:
-      BucketName: !Ref PreviewBucketName
-      WebsiteConfiguration:
-        IndexDocument: index.html
-        ErrorDocument: 404.html
-      LifecycleConfiguration:
-        Rules:
-          - Id: ExpireOldPreviews
-            Status: Enabled
-            ExpirationInDays: 30
-            AbortIncompleteMultipartUpload:
-              DaysAfterInitiation: 7
-
-  PreviewBucketPolicy:
-    DeletionPolicy: Retain
-    Type: AWS::S3::BucketPolicy
-    Properties:
-      Bucket: !Ref PreviewBucket
-      PolicyDocument:
-        Version: "2012-10-17"
-        Statement:
-          - Sid: PublicReadForWebsite
-            Effect: Allow
-            Principal: "*"
-            Action: s3:GetObject
-            Resource: !Sub "arn:aws:s3:::${PreviewBucketName}/*"
+  #
+  # The preview bucket (adamdaniel-ai-previews) is created and configured
+  # outside this stack — see README for setup. This stack only manages the
+  # CloudFront distribution that fronts it.
+  #
 
   # ── ACM certificate for preview subdomain ──────────────────────────────────
   #
