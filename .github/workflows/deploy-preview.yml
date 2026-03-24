@@ -78,16 +78,18 @@ jobs:
             const BOT_MARKER = '<!-- adamdaniel-preview-bot -->';
             const existing = comments.find(c => c.body.includes(BOT_MARKER));
 
-            const body = `${BOT_MARKER}
-            ## 🔵 Preview Deployed
-
-            | | |
-            |---|---|
-            | **Preview URL** | [${url}](${url}) |
-            | **Commit** | \`${{ github.event.pull_request.head.sha }}\` |
-            | **Branch** | \`${{ github.head_ref }}\` |
-
-            *Preview updates automatically on every push to this PR.*`;
+            const body = [
+              BOT_MARKER,
+              '## 🔵 Preview Deployed',
+              '',
+              '| | |',
+              '|---|---|',
+              `| **Preview URL** | [${url}](${url}) |`,
+              `| **Commit** | \`${{ github.event.pull_request.head.sha }}\` |`,
+              `| **Branch** | \`${{ github.head_ref }}\` |`,
+              '',
+              '*Preview updates automatically on every push to this PR.*',
+            ].join('\n');
 
             if (existing) {
               await github.rest.issues.updateComment({
