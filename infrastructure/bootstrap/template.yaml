@@ -42,8 +42,9 @@ Parameters:
     Description: "Custom domain for PR preview deployments (served via CloudFront + HTTPS)"
 
   HostedZoneId:
-    Type: AWS::Route53::HostedZone::Id
-    Description: "Route53 hosted zone ID for adamdaniel.ai"
+    Type: String
+    AllowedPattern: "^Z[A-Z0-9]+$"
+    Description: "Route53 hosted zone ID for adamdaniel.ai (e.g. Z02339993KRS1LII3B24S)"
 
   CreateOIDCProvider:
     Type: String
