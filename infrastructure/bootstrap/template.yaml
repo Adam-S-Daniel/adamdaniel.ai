@@ -1,0 +1,316 @@
+AWSTemplateFormatVersion: '2010-09-09'
+
+Description: >
+  One-time bootstrap stack for adamdaniel.ai CI/CD infrastructure.
+
+  Creates:
+    1. S3 bucket for CloudFormation/SAM deployment artifacts
+    2. GitHub OIDC identity provider in AWS IAM
+    3. IAM role for GitHub Actions (assumed via OIDC — no long-lived keys)
+
+  Run once per AWS account:
+    bash infrastructure/bootstrap/deploy.sh
+
+Parameters:
+
+  GitHubOrg:
+    Type: String
+    Default: Adam-S-Daniel
+    Description: "GitHub organization or user that owns the repository"
+
+  GitHubRepo:
+    Type: String
+    Default: adamdaniel.ai
+    Description: "GitHub repository name"
+
+  ArtifactBucketName:
+    Type: String
+    Default: adamdaniel-ai-cfn-artifacts
+    Description: "S3 bucket name for CloudFormation/SAM deployment artifacts"
+
+  PreviewBucketName:
+    Type: String
+    Default: adamdaniel-ai-previews
+    Description: "S3 bucket name for PR preview deployments (must already exist or be created separately)"
+
+  CreateOIDCProvider:
+    Type: String
+    Default: "true"
+    AllowedValues: ["true", "false"]
+    Description: >
+      Set to 'false' if a GitHub OIDC provider already exists in this account
+      (e.g., created by another stack). Only one provider per URL is allowed.
+
+Conditions:
+  ShouldCreateOIDCProvider: !Equals [!Ref CreateOIDCProvider, "true"]
+
+Resources:
+
+  # ── S3 bucket for CloudFormation / SAM artifacts ──────────────────────────
+  CfnArtifactsBucket:
+    Type: AWS::S3::Bucket
+    Properties:
+      BucketName: !Ref ArtifactBucketName
+      VersioningConfiguration:
+        Status: Enabled
+      BucketEncryption:
+        ServerSideEncryptionConfiguration:
+          - ServerSideEncryptionByDefault:
+              SSEAlgorithm: AES256
+      PublicAccessBlockConfiguration:
+        BlockPublicAcls: true
+        BlockPublicPolicy: true
+        IgnorePublicAcls: true
+        RestrictPublicBuckets: true
+      LifecycleConfiguration:
+        Rules:
+          - Id: ExpireOldVersions
+            Status: Enabled
+            NoncurrentVersionExpiration:
+              NoncurrentDays: 30
+            AbortIncompleteMultipartUpload:
+              DaysAfterInitiation: 7
+
+  # ── GitHub OIDC identity provider ─────────────────────────────────────────
+  #
+  # Allows GitHub Actions to assume IAM roles without long-lived credentials.
+  # AWS validates the full certificate chain for GitHub's OIDC provider, so the
+  # thumbprint value is not security-critical — but the property is required.
+  #
+  GitHubOIDCProvider:
+    Type: AWS::IAM::OIDCProvider
+    Condition: ShouldCreateOIDCProvider
+    Properties:
+      Url: https://token.actions.githubusercontent.com
+      ClientIdList:
+        - sts.amazonaws.com
+      ThumbprintList:
+        - 6938fd4d98bab03faadb97b34396831e3780aea1
+
+  # ── IAM role for GitHub Actions ───────────────────────────────────────────
+  #
+  # Trust policy: only workflows in Adam-S-Daniel/adamdaniel.ai can assume this
+  # role, and only when GitHub's OIDC token audience is sts.amazonaws.com.
+  #
+  # Permissions: scoped to adamdaniel-ai-* prefixed resources wherever possible.
+  #
+  GitHubActionsRole:
+    Type: AWS::IAM::Role
+    Properties:
+      RoleName: adamdaniel-ai-github-actions
+      AssumeRolePolicyDocument:
+        Version: "2012-10-17"
+        Statement:
+          - Effect: Allow
+            Principal:
+              Federated: !If
+                - ShouldCreateOIDCProvider
+                - !GetAtt GitHubOIDCProvider.Arn
+                - !Sub "arn:aws:iam::${AWS::AccountId}:oidc-provider/token.actions.githubusercontent.com"
+            Action: sts:AssumeRoleWithWebIdentity
+            Condition:
+              StringEquals:
+                "token.actions.githubusercontent.com:aud": sts.amazonaws.com
+              StringLike:
+                "token.actions.githubusercontent.com:sub": !Sub "repo:${GitHubOrg}/${GitHubRepo}:*"
+      Policies:
+
+        # ── S3: artifacts bucket + preview bucket ──────────────────────────
+        - PolicyName: S3Access
+          PolicyDocument:
+            Version: "2012-10-17"
+            Statement:
+              - Effect: Allow
+                Action:
+                  - s3:GetObject
+                  - s3:PutObject
+                  - s3:DeleteObject
+                  - s3:ListBucket
+                  - s3:GetBucketLocation
+                  - s3:GetBucketVersioning
+                Resource:
+                  - !Sub "arn:aws:s3:::${ArtifactBucketName}"
+                  - !Sub "arn:aws:s3:::${ArtifactBucketName}/*"
+                  - !Sub "arn:aws:s3:::${PreviewBucketName}"
+                  - !Sub "arn:aws:s3:::${PreviewBucketName}/*"
+
+        # ── CloudFormation: manage stacks with adamdaniel-ai- prefix ───────
+        - PolicyName: CloudFormationAccess
+          PolicyDocument:
+            Version: "2012-10-17"
+            Statement:
+              - Effect: Allow
+                Action:
+                  - cloudformation:CreateStack
+                  - cloudformation:UpdateStack
+                  - cloudformation:DeleteStack
+                  - cloudformation:DescribeStacks
+                  - cloudformation:DescribeStackEvents
+                  - cloudformation:DescribeStackResources
+                  - cloudformation:GetTemplate
+                  - cloudformation:GetTemplateSummary
+                  - cloudformation:ListStackResources
+                  - cloudformation:CreateChangeSet
+                  - cloudformation:DescribeChangeSet
+                  - cloudformation:ExecuteChangeSet
+                  - cloudformation:DeleteChangeSet
+                  - cloudformation:ListChangeSets
+                  - cloudformation:TagResource
+                Resource:
+                  - !Sub "arn:aws:cloudformation:*:${AWS::AccountId}:stack/adamdaniel-ai-*/*"
+              - Effect: Allow
+                Action:
+                  - cloudformation:CreateChangeSet
+                Resource:
+                  - "arn:aws:cloudformation:*:aws:transform/*"
+
+        # ── CloudFront: manage distributions ───────────────────────────────
+        - PolicyName: CloudFrontAccess
+          PolicyDocument:
+            Version: "2012-10-17"
+            Statement:
+              - Effect: Allow
+                Action:
+                  - cloudfront:CreateDistribution
+                  - cloudfront:UpdateDistribution
+                  - cloudfront:GetDistribution
+                  - cloudfront:GetDistributionConfig
+                  - cloudfront:ListDistributions
+                  - cloudfront:DeleteDistribution
+                  - cloudfront:TagResource
+                  - cloudfront:CreateInvalidation
+                  - cloudfront:GetInvalidation
+                  - cloudfront:ListInvalidations
+                  - cloudfront:CreateOriginAccessControl
+                  - cloudfront:GetOriginAccessControl
+                  - cloudfront:UpdateOriginAccessControl
+                  - cloudfront:DeleteOriginAccessControl
+                  - cloudfront:ListOriginAccessControls
+                Resource: "*"
+
+        # ── ACM: manage certificates (must be us-east-1 for CloudFront) ────
+        - PolicyName: ACMAccess
+          PolicyDocument:
+            Version: "2012-10-17"
+            Statement:
+              - Effect: Allow
+                Action:
+                  - acm:RequestCertificate
+                  - acm:DescribeCertificate
+                  - acm:ListCertificates
+                  - acm:DeleteCertificate
+                  - acm:AddTagsToCertificate
+                  - acm:ListTagsForCertificate
+                Resource: "*"
+
+        # ── Route53: manage DNS records ────────────────────────────────────
+        - PolicyName: Route53Access
+          PolicyDocument:
+            Version: "2012-10-17"
+            Statement:
+              - Effect: Allow
+                Action:
+                  - route53:ChangeResourceRecordSets
+                  - route53:GetHostedZone
+                  - route53:ListResourceRecordSets
+                  - route53:GetChange
+                  - route53:ListHostedZones
+                Resource:
+                  - "arn:aws:route53:::hostedzone/*"
+                  - "arn:aws:route53:::change/*"
+
+        # ── IAM: manage roles created by SAM for Lambda execution ──────────
+        - PolicyName: IAMAccess
+          PolicyDocument:
+            Version: "2012-10-17"
+            Statement:
+              - Effect: Allow
+                Action:
+                  - iam:CreateRole
+                  - iam:DeleteRole
+                  - iam:GetRole
+                  - iam:PassRole
+                  - iam:AttachRolePolicy
+                  - iam:DetachRolePolicy
+                  - iam:PutRolePolicy
+                  - iam:DeleteRolePolicy
+                  - iam:GetRolePolicy
+                  - iam:TagRole
+                  - iam:UntagRole
+                Resource:
+                  - !Sub "arn:aws:iam::${AWS::AccountId}:role/adamdaniel-ai-*"
+
+        # ── Lambda: manage functions ───────────────────────────────────────
+        - PolicyName: LambdaAccess
+          PolicyDocument:
+            Version: "2012-10-17"
+            Statement:
+              - Effect: Allow
+                Action:
+                  - lambda:CreateFunction
+                  - lambda:UpdateFunctionCode
+                  - lambda:UpdateFunctionConfiguration
+                  - lambda:DeleteFunction
+                  - lambda:GetFunction
+                  - lambda:GetFunctionConfiguration
+                  - lambda:ListFunctions
+                  - lambda:AddPermission
+                  - lambda:RemovePermission
+                  - lambda:TagResource
+                  - lambda:InvokeFunction
+                Resource:
+                  - !Sub "arn:aws:lambda:*:${AWS::AccountId}:function:adamdaniel-ai-*"
+
+        # ── API Gateway: manage HTTP APIs ──────────────────────────────────
+        - PolicyName: APIGatewayAccess
+          PolicyDocument:
+            Version: "2012-10-17"
+            Statement:
+              - Effect: Allow
+                Action:
+                  - apigateway:GET
+                  - apigateway:POST
+                  - apigateway:PUT
+                  - apigateway:PATCH
+                  - apigateway:DELETE
+                  - apigateway:TagResource
+                Resource:
+                  - !Sub "arn:aws:apigateway:*::/apis/*"
+                  - !Sub "arn:aws:apigateway:*::/apis"
+                  - !Sub "arn:aws:apigateway:*::/tags/*"
+
+        # ── CloudWatch Logs: manage log groups ─────────────────────────────
+        - PolicyName: CloudWatchLogsAccess
+          PolicyDocument:
+            Version: "2012-10-17"
+            Statement:
+              - Effect: Allow
+                Action:
+                  - logs:CreateLogGroup
+                  - logs:DeleteLogGroup
+                  - logs:PutRetentionPolicy
+                  - logs:DescribeLogGroups
+                  - logs:TagResource
+                Resource:
+                  - !Sub "arn:aws:logs:*:${AWS::AccountId}:log-group:/aws/lambda/adamdaniel-ai-*"
+
+Outputs:
+
+  RoleArn:
+    Description: >
+      IAM role ARN for GitHub Actions. Add this as a GitHub Actions secret
+      named AWS_ROLE_ARN.
+    Value: !GetAtt GitHubActionsRole.Arn
+    Export:
+      Name: !Sub "${AWS::StackName}-RoleArn"
+
+  ArtifactsBucketName:
+    Description: "S3 bucket for CloudFormation/SAM deployment artifacts"
+    Value: !Ref CfnArtifactsBucket
+
+  OIDCProviderArn:
+    Description: "GitHub OIDC identity provider ARN"
+    Value: !If
+      - ShouldCreateOIDCProvider
+      - !GetAtt GitHubOIDCProvider.Arn
+      - "N/A (provider not created by this stack)"
