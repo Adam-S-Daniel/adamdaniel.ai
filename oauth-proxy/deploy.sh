@@ -26,7 +26,7 @@ set -euo pipefail
 
 STACK_NAME="adamdaniel-ai-oauth-proxy"
 AWS_REGION="${AWS_REGION:-us-east-1}"
-SAM_S3_BUCKET="${SAM_S3_BUCKET:-}"   # optional: pre-existing bucket for SAM artifacts
+SAM_S3_BUCKET="${SAM_S3_BUCKET:-adamdaniel-ai-cfn-artifacts}"
 ALLOWED_ORIGINS="${ALLOWED_ORIGINS:-https://adamdaniel.ai}"
 GITHUB_SCOPE="${GITHUB_SCOPE:-repo,user}"
 
