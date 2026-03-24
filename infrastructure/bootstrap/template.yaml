@@ -99,6 +99,7 @@ Resources:
   #
   PreviewCertificate:
     Type: AWS::CertificateManager::Certificate
+    DeletionPolicy: Retain
     Properties:
       DomainName: !Ref PreviewDomainName
       ValidationMethod: DNS
