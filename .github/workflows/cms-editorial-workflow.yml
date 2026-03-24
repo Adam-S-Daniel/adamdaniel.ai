@@ -97,8 +97,10 @@ jobs:
             });
 
   auto-merge-when-ready:
-    # When a PR is labeled 'cms/ready', auto-merge it so content goes live
+    # When a PR is labeled 'cms/ready', auto-merge it so content goes live.
+    # Requires validate-content to pass first — prevents merging broken content.
     if: github.event.action == 'labeled' && github.event.label.name == 'cms/ready'
+    needs: validate-content
     runs-on: ubuntu-latest
     permissions:
       contents: write
