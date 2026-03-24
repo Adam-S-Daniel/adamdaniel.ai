@@ -5,8 +5,9 @@ Description: >
 
   Creates:
     1. S3 bucket for CloudFormation/SAM deployment artifacts
-    2. GitHub OIDC identity provider in AWS IAM
-    3. IAM role for GitHub Actions (assumed via OIDC — no long-lived keys)
+    2. S3 bucket for PR preview deployments (static website hosting)
+    3. GitHub OIDC identity provider in AWS IAM
+    4. IAM role for GitHub Actions (assumed via OIDC — no long-lived keys)
 
   Run once per AWS account:
     bash infrastructure/bootstrap/deploy.sh
@@ -31,7 +32,7 @@ Parameters:
   PreviewBucketName:
     Type: String
     Default: adamdaniel-ai-previews
-    Description: "S3 bucket name for PR preview deployments (must already exist or be created separately)"
+    Description: "S3 bucket name for PR preview deployments (static website hosting)"
 
   CreateOIDCProvider:
     Type: String
@@ -70,6 +71,35 @@ Resources:
               NoncurrentDays: 30
             AbortIncompleteMultipartUpload:
               DaysAfterInitiation: 7
+
+  # ── S3 bucket for PR preview deployments ────────────────────────────────────
+  PreviewBucket:
+    Type: AWS::S3::Bucket
+    Properties:
+      BucketName: !Ref PreviewBucketName
+      WebsiteConfiguration:
+        IndexDocument: index.html
+        ErrorDocument: 404.html
+      LifecycleConfiguration:
+        Rules:
+          - Id: ExpireOldPreviews
+            Status: Enabled
+            ExpirationInDays: 30
+            AbortIncompleteMultipartUpload:
+              DaysAfterInitiation: 7
+
+  PreviewBucketPolicy:
+    Type: AWS::S3::BucketPolicy
+    Properties:
+      Bucket: !Ref PreviewBucket
+      PolicyDocument:
+        Version: "2012-10-17"
+        Statement:
+          - Sid: PublicReadForWebsite
+            Effect: Allow
+            Principal: "*"
+            Action: s3:GetObject
+            Resource: !Sub "arn:aws:s3:::${PreviewBucketName}/*"
 
   # ── GitHub OIDC identity provider ─────────────────────────────────────────
   #
@@ -307,6 +337,10 @@ Outputs:
   ArtifactsBucketName:
     Description: "S3 bucket for CloudFormation/SAM deployment artifacts"
     Value: !Ref CfnArtifactsBucket
+
+  PreviewBucketWebsiteURL:
+    Description: "URL for PR preview deployments"
+    Value: !GetAtt PreviewBucket.WebsiteURL
 
   OIDCProviderArn:
     Description: "GitHub OIDC identity provider ARN"
