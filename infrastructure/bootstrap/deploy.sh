@@ -26,6 +26,7 @@ set -euo pipefail
 STACK_NAME="adamdaniel-ai-bootstrap"
 AWS_REGION="${AWS_REGION:-us-east-1}"
 CREATE_OIDC_PROVIDER="${CREATE_OIDC_PROVIDER:-true}"
+HOSTED_ZONE_ID="${HOSTED_ZONE_ID:-}"
 
 # ── Colour output ──────────────────────────────────────────────────────────
 BLUE='\033[0;34m'
@@ -49,6 +50,17 @@ cd "$SCRIPT_DIR"
 info "Deploying stack: ${STACK_NAME} to ${AWS_REGION}"
 info "Create OIDC provider: ${CREATE_OIDC_PROVIDER}"
 
+# ── Auto-detect Route53 hosted zone if not specified ───────────────────────
+if [[ -z "$HOSTED_ZONE_ID" ]]; then
+  info "Looking up Route53 hosted zone for adamdaniel.ai…"
+  HOSTED_ZONE_ID=$(aws route53 list-hosted-zones-by-name \
+    --dns-name "adamdaniel.ai" \
+    --query 'HostedZones[?Name==`adamdaniel.ai.`].Id' \
+    --output text | sed 's|/hostedzone/||')
+  [[ -z "$HOSTED_ZONE_ID" ]] && error "No Route53 hosted zone found for adamdaniel.ai. Set HOSTED_ZONE_ID manually."
+  info "Found hosted zone: ${HOSTED_ZONE_ID}"
+fi
+
 # ── Deploy ─────────────────────────────────────────────────────────────────
 aws cloudformation deploy \
   --template-file template.yaml \
@@ -57,7 +69,8 @@ aws cloudformation deploy \
   --capabilities  CAPABILITY_NAMED_IAM \
   --no-fail-on-empty-changeset \
   --parameter-overrides \
-    "CreateOIDCProvider=${CREATE_OIDC_PROVIDER}"
+    "CreateOIDCProvider=${CREATE_OIDC_PROVIDER}" \
+    "HostedZoneId=${HOSTED_ZONE_ID}"
 
 # ── Fetch outputs ──────────────────────────────────────────────────────────
 info "Fetching stack outputs…"
@@ -85,6 +98,24 @@ for o in outputs:
         break
 ")
 
+CF_DISTRIBUTION_ID=$(echo "$OUTPUTS" | python3 -c "
+import json, sys
+outputs = json.load(sys.stdin)
+for o in outputs:
+    if o['OutputKey'] == 'PreviewDistributionId':
+        print(o['OutputValue'])
+        break
+")
+
+PREVIEW_URL=$(echo "$OUTPUTS" | python3 -c "
+import json, sys
+outputs = json.load(sys.stdin)
+for o in outputs:
+    if o['OutputKey'] == 'PreviewURL':
+        print(o['OutputValue'])
+        break
+")
+
 # ── Summary ────────────────────────────────────────────────────────────────
 echo ""
 success "Bootstrap complete!"
@@ -93,24 +124,27 @@ echo "  ┌───────────────────────
 echo "  │  Stack outputs                                                  │"
 echo "  ├─────────────────────────────────────────────────────────────────┤"
 echo "  │                                                                 │"
-echo -e "  │  Role ARN:        ${YELLOW}${ROLE_ARN}${NC}"
-echo -e "  │  Artifacts bucket: ${YELLOW}${BUCKET_NAME}${NC}"
+echo -e "  │  Role ARN:          ${YELLOW}${ROLE_ARN}${NC}"
+echo -e "  │  Artifacts bucket:  ${YELLOW}${BUCKET_NAME}${NC}"
+echo -e "  │  CloudFront ID:     ${YELLOW}${CF_DISTRIBUTION_ID}${NC}"
+echo -e "  │  Preview URL:       ${YELLOW}${PREVIEW_URL}${NC}"
 echo "  │                                                                 │"
 echo "  ├─────────────────────────────────────────────────────────────────┤"
 echo "  │  Next steps                                                     │"
 echo "  ├─────────────────────────────────────────────────────────────────┤"
 echo "  │                                                                 │"
-echo "  │  1. Add the Role ARN as a GitHub Actions secret:                │"
+echo "  │  1. Add these GitHub Actions secrets:                           │"
 echo "  │     Repo → Settings → Secrets → Actions → New secret            │"
+echo "  │                                                                 │"
 echo -e "  │     Name:  ${YELLOW}AWS_ROLE_ARN${NC}"
 echo -e "  │     Value: ${YELLOW}${ROLE_ARN}${NC}"
+echo "  │                                                                 │"
+echo -e "  │     Name:  ${YELLOW}PREVIEW_CLOUDFRONT_ID${NC}"
+echo -e "  │     Value: ${YELLOW}${CF_DISTRIBUTION_ID}${NC}"
 echo "  │                                                                 │"
 echo "  │  2. Remove old access key secrets (after verifying OIDC works): │"
 echo -e "  │     Delete: ${YELLOW}AWS_ACCESS_KEY_ID${NC}"
 echo -e "  │     Delete: ${YELLOW}AWS_SECRET_ACCESS_KEY${NC}"
-echo "  │                                                                 │"
-echo "  │  3. Deactivate/delete the old IAM user access keys in the       │"
-echo "  │     AWS IAM console.                                            │"
 echo "  │                                                                 │"
 echo "  └─────────────────────────────────────────────────────────────────┘"
 echo ""

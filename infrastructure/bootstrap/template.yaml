@@ -5,8 +5,13 @@ Description: >
 
   Creates:
     1. S3 bucket for CloudFormation/SAM deployment artifacts
-    2. GitHub OIDC identity provider in AWS IAM
-    3. IAM role for GitHub Actions (assumed via OIDC — no long-lived keys)
+    2. ACM certificate + CloudFront distribution for preview.adamdaniel.ai
+    3. Route53 DNS records for the preview subdomain
+    4. GitHub OIDC identity provider in AWS IAM
+    5. IAM role for GitHub Actions (assumed via OIDC — no long-lived keys)
+
+  Prerequisite: S3 bucket for PR previews (see PreviewBucketName parameter)
+  must already exist with static website hosting enabled.
 
   Run once per AWS account:
     bash infrastructure/bootstrap/deploy.sh
@@ -31,7 +36,17 @@ Parameters:
   PreviewBucketName:
     Type: String
     Default: adamdaniel-ai-previews
-    Description: "S3 bucket name for PR preview deployments (must already exist or be created separately)"
+    Description: "S3 bucket name for PR preview deployments (static website hosting)"
+
+  PreviewDomainName:
+    Type: String
+    Default: preview.adamdaniel.ai
+    Description: "Custom domain for PR preview deployments (served via CloudFront + HTTPS)"
+
+  HostedZoneId:
+    Type: String
+    AllowedPattern: "^Z[A-Z0-9]+$"
+    Description: "Route53 hosted zone ID for adamdaniel.ai (e.g. Z02339993KRS1LII3B24S)"
 
   CreateOIDCProvider:
     Type: String
@@ -70,6 +85,72 @@ Resources:
               NoncurrentDays: 30
             AbortIncompleteMultipartUpload:
               DaysAfterInitiation: 7
+
+  # ── S3 bucket for PR preview deployments ────────────────────────────────────
+  #
+  # The preview bucket (adamdaniel-ai-previews) is created and configured
+  # outside this stack — see README for setup. This stack only manages the
+  # CloudFront distribution that fronts it.
+  #
+
+  # ── ACM certificate for preview subdomain ──────────────────────────────────
+  #
+  # Must be in us-east-1 for CloudFront. DNS validation via Route53.
+  #
+  PreviewCertificate:
+    Type: AWS::CertificateManager::Certificate
+    DeletionPolicy: Retain
+    Properties:
+      DomainName: !Ref PreviewDomainName
+      ValidationMethod: DNS
+      DomainValidationOptions:
+        - DomainName: !Ref PreviewDomainName
+          HostedZoneId: !Ref HostedZoneId
+
+  # ── CloudFront distribution for preview.adamdaniel.ai ─────────────────────
+  #
+  # Uses the S3 website endpoint as a custom origin (not OAC) so that S3
+  # website hosting features (index documents per directory) work correctly.
+  #
+  PreviewDistribution:
+    Type: AWS::CloudFront::Distribution
+    DependsOn: PreviewCertificate
+    Properties:
+      DistributionConfig:
+        Enabled: true
+        Comment: !Sub "PR previews for ${GitHubOrg}/${GitHubRepo}"
+        Aliases:
+          - !Ref PreviewDomainName
+        ViewerCertificate:
+          AcmCertificateArn: !Ref PreviewCertificate
+          SslSupportMethod: sni-only
+          MinimumProtocolVersion: TLSv1.2_2021
+        DefaultCacheBehavior:
+          TargetOriginId: s3-website
+          ViewerProtocolPolicy: redirect-to-https
+          CachePolicyId: 4135ea2d-6df8-44a3-9df3-4b5a84be39ad  # CachingDisabled
+          AllowedMethods: [GET, HEAD, OPTIONS]
+          CachedMethods: [GET, HEAD]
+          Compress: true
+        Origins:
+          - Id: s3-website
+            DomainName: !Sub "${PreviewBucketName}.s3-website-${AWS::Region}.amazonaws.com"
+            CustomOriginConfig:
+              OriginProtocolPolicy: http-only
+              HTTPPort: 80
+        DefaultRootObject: index.html
+        HttpVersion: http2and3
+
+  # ── Route53 alias record for preview.adamdaniel.ai ───────────────────────
+  PreviewDnsRecord:
+    Type: AWS::Route53::RecordSet
+    Properties:
+      HostedZoneId: !Ref HostedZoneId
+      Name: !Ref PreviewDomainName
+      Type: A
+      AliasTarget:
+        DNSName: !GetAtt PreviewDistribution.DomainName
+        HostedZoneId: Z2FDTNDATAQYW2  # CloudFront's fixed hosted zone ID
 
   # ── GitHub OIDC identity provider ─────────────────────────────────────────
   #
@@ -307,6 +388,18 @@ Outputs:
   ArtifactsBucketName:
     Description: "S3 bucket for CloudFormation/SAM deployment artifacts"
     Value: !Ref CfnArtifactsBucket
+
+  PreviewURL:
+    Description: "HTTPS URL for PR preview deployments"
+    Value: !Sub "https://${PreviewDomainName}"
+
+  PreviewDistributionId:
+    Description: "CloudFront distribution ID for preview cache invalidation"
+    Value: !Ref PreviewDistribution
+
+  PreviewDistributionDomain:
+    Description: "CloudFront domain name for the preview distribution"
+    Value: !GetAtt PreviewDistribution.DomainName
 
   OIDCProviderArn:
     Description: "GitHub OIDC identity provider ARN"
