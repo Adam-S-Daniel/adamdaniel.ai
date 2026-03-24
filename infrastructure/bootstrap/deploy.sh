@@ -61,6 +61,62 @@ if [[ -z "$HOSTED_ZONE_ID" ]]; then
   info "Found hosted zone: ${HOSTED_ZONE_ID}"
 fi
 
+# ── Import existing resources if needed ────────────────────────────────────
+#
+# The S3 preview bucket may have been created outside CloudFormation.
+# If it exists but isn't managed by the stack, import it first.
+#
+MANAGED_RESOURCES=$(aws cloudformation list-stack-resources \
+  --stack-name "$STACK_NAME" \
+  --region "$AWS_REGION" \
+  --query 'StackResourceSummaries[].LogicalResourceId' \
+  --output text 2>/dev/null || echo "")
+
+PREVIEW_BUCKET_NAME="adamdaniel-ai-previews"
+
+if ! echo "$MANAGED_RESOURCES" | grep -q "PreviewBucket"; then
+  # Check if the bucket exists outside the stack
+  if aws s3api head-bucket --bucket "$PREVIEW_BUCKET_NAME" 2>/dev/null; then
+    info "Importing existing S3 bucket '${PREVIEW_BUCKET_NAME}' into the stack…"
+
+    IMPORT_CHANGESET="import-preview-bucket-$(date +%s)"
+
+    aws cloudformation create-change-set \
+      --stack-name    "$STACK_NAME" \
+      --region        "$AWS_REGION" \
+      --change-set-name "$IMPORT_CHANGESET" \
+      --change-set-type IMPORT \
+      --template-body "file://template.yaml" \
+      --capabilities  CAPABILITY_NAMED_IAM \
+      --parameters \
+        "ParameterKey=CreateOIDCProvider,ParameterValue=${CREATE_OIDC_PROVIDER}" \
+        "ParameterKey=HostedZoneId,ParameterValue=${HOSTED_ZONE_ID}" \
+      --resources-to-import "[
+        {\"ResourceType\":\"AWS::S3::Bucket\",\"LogicalResourceId\":\"PreviewBucket\",\"ResourceIdentifier\":{\"BucketName\":\"${PREVIEW_BUCKET_NAME}\"}},
+        {\"ResourceType\":\"AWS::S3::BucketPolicy\",\"LogicalResourceId\":\"PreviewBucketPolicy\",\"ResourceIdentifier\":{\"Bucket\":\"${PREVIEW_BUCKET_NAME}\"}}
+      ]"
+
+    info "Waiting for import changeset to be ready…"
+    aws cloudformation wait change-set-create-complete \
+      --stack-name    "$STACK_NAME" \
+      --region        "$AWS_REGION" \
+      --change-set-name "$IMPORT_CHANGESET"
+
+    info "Executing import changeset…"
+    aws cloudformation execute-change-set \
+      --stack-name    "$STACK_NAME" \
+      --region        "$AWS_REGION" \
+      --change-set-name "$IMPORT_CHANGESET"
+
+    info "Waiting for import to complete…"
+    aws cloudformation wait stack-import-complete \
+      --stack-name "$STACK_NAME" \
+      --region "$AWS_REGION"
+
+    success "Import complete."
+  fi
+fi
+
 # ── Deploy ─────────────────────────────────────────────────────────────────
 aws cloudformation deploy \
   --template-file template.yaml \

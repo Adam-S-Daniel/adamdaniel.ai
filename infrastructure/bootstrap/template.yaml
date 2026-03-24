@@ -86,6 +86,7 @@ Resources:
 
   # ── S3 bucket for PR preview deployments ────────────────────────────────────
   PreviewBucket:
+    DeletionPolicy: Retain
     Type: AWS::S3::Bucket
     Properties:
       BucketName: !Ref PreviewBucketName
@@ -101,6 +102,7 @@ Resources:
               DaysAfterInitiation: 7
 
   PreviewBucketPolicy:
+    DeletionPolicy: Retain
     Type: AWS::S3::BucketPolicy
     Properties:
       Bucket: !Ref PreviewBucket
