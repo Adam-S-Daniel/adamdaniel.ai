@@ -21,6 +21,8 @@ jobs:
     env:
       AWS_REGION: us-east-1
       PREVIEW_BUCKET: adamdaniel-ai-previews
+      PREVIEW_DOMAIN: preview.adamdaniel.ai
+      CLOUDFRONT_DISTRIBUTION_ID: ${{ secrets.PREVIEW_CLOUDFRONT_ID }}
 
     steps:
       - name: Checkout
@@ -59,14 +61,28 @@ jobs:
             --delete \
             --cache-control "no-cache, must-revalidate"
 
+      - name: Invalidate CloudFront cache
+        if: env.CLOUDFRONT_DISTRIBUTION_ID != ''
+        run: |
+          PR_NUMBER=${{ github.event.pull_request.number }}
+          aws cloudfront create-invalidation \
+            --distribution-id "$CLOUDFRONT_DISTRIBUTION_ID" \
+            --paths "/pr-${PR_NUMBER}/*"
+
       - name: Post preview URL comment
         uses: actions/github-script@v7
         with:
           script: |
             const pr = context.payload.pull_request.number;
-            const region = process.env.AWS_REGION;
+            const domain = process.env.PREVIEW_DOMAIN;
+            const cfId = process.env.CLOUDFRONT_DISTRIBUTION_ID;
             const bucket = process.env.PREVIEW_BUCKET;
-            const url = `http://${bucket}.s3-website-${region}.amazonaws.com/pr-${pr}/`;
+            const region = process.env.AWS_REGION;
+
+            // Use HTTPS custom domain if CloudFront is configured, else S3 website
+            const url = cfId
+              ? `https://${domain}/pr-${pr}/`
+              : `http://${bucket}.s3-website-${region}.amazonaws.com/pr-${pr}/`;
 
             // Find existing preview comment (to update rather than spam)
             const { data: comments } = await github.rest.issues.listComments({
@@ -116,6 +132,7 @@ jobs:
     env:
       AWS_REGION: us-east-1
       PREVIEW_BUCKET: adamdaniel-ai-previews
+      CLOUDFRONT_DISTRIBUTION_ID: ${{ secrets.PREVIEW_CLOUDFRONT_ID }}
 
     steps:
       - name: Configure AWS credentials
@@ -128,6 +145,14 @@ jobs:
         run: |
           PR_NUMBER=${{ github.event.pull_request.number }}
           aws s3 rm "s3://${PREVIEW_BUCKET}/pr-${PR_NUMBER}/" --recursive
+
+      - name: Invalidate CloudFront cache
+        if: env.CLOUDFRONT_DISTRIBUTION_ID != ''
+        run: |
+          PR_NUMBER=${{ github.event.pull_request.number }}
+          aws cloudfront create-invalidation \
+            --distribution-id "$CLOUDFRONT_DISTRIBUTION_ID" \
+            --paths "/pr-${PR_NUMBER}/*"
 
       - name: Post teardown comment
         uses: actions/github-script@v7
