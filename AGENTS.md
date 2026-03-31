@@ -5,7 +5,7 @@ Personal website and blog for Adam Daniel (Freelance AI Engineer). Jekyll static
 ## Architecture
 
 ```
-Production:   adamdaniel.ai           → GitHub Pages (Jekyll)
+Production:   adamdaniel.ai           → CloudFront → S3
 Preview:      preview.adamdaniel.ai   → CloudFront → S3
 CMS:          adamdaniel.ai/admin/    → Sveltia CMS → GitHub OAuth → Lambda
 ```
@@ -29,10 +29,9 @@ cd oauth-proxy && python -m pytest test_lambda.py -v
 
 | Secret | Source | Used by |
 |---|---|---|
-| `AWS_ROLE_ARN` | bootstrap stack output | deploy-preview.yml |
+| `AWS_ROLE_ARN` | bootstrap stack output | deploy-production.yml, deploy-preview.yml |
+| `PRODUCTION_CLOUDFRONT_ID` | bootstrap stack output | deploy-production.yml |
 | `PREVIEW_CLOUDFRONT_ID` | bootstrap stack output | deploy-preview.yml |
-
-No secrets needed for production deploy (GitHub Pages uses GITHUB_TOKEN).
 
 ## AWS resources (us-east-1)
 
@@ -40,8 +39,11 @@ No secrets needed for production deploy (GitHub Pages uses GITHUB_TOKEN).
 |---|---|
 | CloudFormation stack | `adamdaniel-ai-bootstrap` |
 | S3 artifacts bucket | `adamdaniel-ai-cfn-artifacts` |
+| S3 production bucket | `adamdaniel-ai-production` (external, not CFN-managed) |
 | S3 preview bucket | `adamdaniel-ai-previews` (external, not CFN-managed) |
-| CloudFront distribution | `E2OBHKV0LC6CJ2` |
+| CloudFront (production) | see bootstrap stack output `ProductionDistributionId` |
+| CloudFront (preview) | see bootstrap stack output `PreviewDistributionId` |
+| Production URL | `https://adamdaniel.ai` |
 | Preview URL | `https://preview.adamdaniel.ai` |
 | IAM role | `adamdaniel-ai-github-actions` |
 | OAuth proxy stack | `adamdaniel-ai-oauth-proxy` |
@@ -63,16 +65,18 @@ No secrets needed for production deploy (GitHub Pages uses GITHUB_TOKEN).
 
 **Trigger:** push to `main`, or manual `workflow_dispatch`
 
-**Jobs:** `build` → `deploy`
+**Jobs:** `deploy`
 
 1. Checkout full git history (needed for Jekyll last-modified dates)
 2. Calculate `reading_time` for every post (word count ÷ 200 + 1) → `_data/reading_times.yml`
 3. `bundle exec jekyll build` with `JEKYLL_ENV=production`
-4. Upload artifact → `actions/deploy-pages` → live at `adamdaniel.ai`
+4. AWS OIDC auth via `AWS_ROLE_ARN`
+5. `aws s3 sync` → `s3://adamdaniel-ai-production/` with `--delete` and `Cache-Control: public, max-age=86400`
+6. CloudFront cache invalidation at `/*`
 
-**Concurrency:** `group: pages`, `cancel-in-progress: false` — queued deploys wait, never interrupt a live deploy.
+**Concurrency:** `group: production`, `cancel-in-progress: false` — queued deploys wait, never interrupt a live deploy.
 
-**Secrets needed:** none (uses built-in `GITHUB_TOKEN` for Pages).
+**Secrets needed:** `AWS_ROLE_ARN`, `PRODUCTION_CLOUDFRONT_ID`
 
 ---
 
