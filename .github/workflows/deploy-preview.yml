@@ -20,16 +20,18 @@ jobs:
     runs-on: ubuntu-latest
     env:
       AWS_REGION: us-east-1
-      PREVIEW_BUCKET: adamdaniel-ai-previews   # create this S3 bucket once
+      PREVIEW_BUCKET: adamdaniel-ai-previews
+      PREVIEW_DOMAIN: preview.adamdaniel.ai
+      CLOUDFRONT_DISTRIBUTION_ID: ${{ secrets.PREVIEW_CLOUDFRONT_ID }}
 
     steps:
       - name: Checkout
-        uses: actions/checkout@v4
+        uses: actions/checkout@34e114876b0b11c390a56381ad16ebd13914f8d5  # v4.3.1
         with:
           ref: ${{ github.event.pull_request.head.sha }}
 
       - name: Setup Ruby
-        uses: ruby/setup-ruby@v1
+        uses: ruby/setup-ruby@319994f95fa847cf3fb3cd3dbe89f6dcde9f178f  # v1.295.0
         with:
           ruby-version: '3.2'
           bundler-cache: true
@@ -46,11 +48,10 @@ jobs:
             --destination ./_site_preview
 
       - name: Configure AWS credentials
-        uses: aws-actions/configure-aws-credentials@v4
+        uses: aws-actions/configure-aws-credentials@7474bc4690e29a8392af63c5b98e7449536d5c3a  # v4.3.1
         with:
-          aws-access-key-id:     ${{ secrets.AWS_ACCESS_KEY_ID }}
-          aws-secret-access-key: ${{ secrets.AWS_SECRET_ACCESS_KEY }}
-          aws-region:            ${{ env.AWS_REGION }}
+          role-to-assume: ${{ secrets.AWS_ROLE_ARN }}
+          aws-region:     ${{ env.AWS_REGION }}
 
       - name: Sync to S3
         run: |
@@ -60,14 +61,28 @@ jobs:
             --delete \
             --cache-control "no-cache, must-revalidate"
 
+      - name: Invalidate CloudFront cache
+        if: env.CLOUDFRONT_DISTRIBUTION_ID != ''
+        run: |
+          PR_NUMBER=${{ github.event.pull_request.number }}
+          aws cloudfront create-invalidation \
+            --distribution-id "$CLOUDFRONT_DISTRIBUTION_ID" \
+            --paths "/pr-${PR_NUMBER}/*"
+
       - name: Post preview URL comment
-        uses: actions/github-script@v7
+        uses: actions/github-script@f28e40c7f34bde8b3046d885e986cb6290c5673b  # v7.1.0
         with:
           script: |
             const pr = context.payload.pull_request.number;
-            const region = process.env.AWS_REGION;
+            const domain = process.env.PREVIEW_DOMAIN;
+            const cfId = process.env.CLOUDFRONT_DISTRIBUTION_ID;
             const bucket = process.env.PREVIEW_BUCKET;
-            const url = `http://${bucket}.s3-website-${region}.amazonaws.com/pr-${pr}/`;
+            const region = process.env.AWS_REGION;
+
+            // Use HTTPS custom domain if CloudFront is configured, else S3 website
+            const url = cfId
+              ? `https://${domain}/pr-${pr}/`
+              : `http://${bucket}.s3-website-${region}.amazonaws.com/pr-${pr}/`;
 
             // Find existing preview comment (to update rather than spam)
             const { data: comments } = await github.rest.issues.listComments({
@@ -79,16 +94,18 @@ jobs:
             const BOT_MARKER = '<!-- adamdaniel-preview-bot -->';
             const existing = comments.find(c => c.body.includes(BOT_MARKER));
 
-            const body = `${BOT_MARKER}
-            ## 🔵 Preview Deployed
-
-            | | |
-            |---|---|
-            | **Preview URL** | [${url}](${url}) |
-            | **Commit** | \`${{ github.event.pull_request.head.sha }}\` |
-            | **Branch** | \`${{ github.head_ref }}\` |
-
-            *Preview updates automatically on every push to this PR.*`;
+            const body = [
+              BOT_MARKER,
+              '## 🔵 Preview Deployed',
+              '',
+              '| | |',
+              '|---|---|',
+              `| **Preview URL** | [${url}](${url}) |`,
+              `| **Commit** | \`${{ github.event.pull_request.head.sha }}\` |`,
+              `| **Branch** | \`${{ github.head_ref }}\` |`,
+              '',
+              '*Preview updates automatically on every push to this PR.*',
+            ].join('\n');
 
             if (existing) {
               await github.rest.issues.updateComment({
@@ -115,28 +132,56 @@ jobs:
     env:
       AWS_REGION: us-east-1
       PREVIEW_BUCKET: adamdaniel-ai-previews
+      CLOUDFRONT_DISTRIBUTION_ID: ${{ secrets.PREVIEW_CLOUDFRONT_ID }}
 
     steps:
       - name: Configure AWS credentials
-        uses: aws-actions/configure-aws-credentials@v4
+        uses: aws-actions/configure-aws-credentials@7474bc4690e29a8392af63c5b98e7449536d5c3a  # v4.3.1
         with:
-          aws-access-key-id:     ${{ secrets.AWS_ACCESS_KEY_ID }}
-          aws-secret-access-key: ${{ secrets.AWS_SECRET_ACCESS_KEY }}
-          aws-region:            ${{ env.AWS_REGION }}
+          role-to-assume: ${{ secrets.AWS_ROLE_ARN }}
+          aws-region:     ${{ env.AWS_REGION }}
 
       - name: Delete preview from S3
         run: |
           PR_NUMBER=${{ github.event.pull_request.number }}
           aws s3 rm "s3://${PREVIEW_BUCKET}/pr-${PR_NUMBER}/" --recursive
 
+      - name: Invalidate CloudFront cache
+        if: env.CLOUDFRONT_DISTRIBUTION_ID != ''
+        run: |
+          PR_NUMBER=${{ github.event.pull_request.number }}
+          aws cloudfront create-invalidation \
+            --distribution-id "$CLOUDFRONT_DISTRIBUTION_ID" \
+            --paths "/pr-${PR_NUMBER}/*"
+
       - name: Post teardown comment
-        uses: actions/github-script@v7
+        uses: actions/github-script@f28e40c7f34bde8b3046d885e986cb6290c5673b  # v7.1.0
         with:
           script: |
             const pr = context.payload.pull_request.number;
-            await github.rest.issues.createComment({
+            const BOT_MARKER = '<!-- adamdaniel-preview-bot -->';
+            const body = `${BOT_MARKER}\n🗑️ Preview environment cleaned up.`;
+
+            // Update the existing preview comment rather than posting a new one
+            const { data: comments } = await github.rest.issues.listComments({
               owner: context.repo.owner,
               repo:  context.repo.repo,
               issue_number: pr,
-              body: '<!-- adamdaniel-preview-bot -->\n🗑️ Preview environment cleaned up.',
             });
+            const existing = comments.find(c => c.body.includes(BOT_MARKER));
+
+            if (existing) {
+              await github.rest.issues.updateComment({
+                owner: context.repo.owner,
+                repo:  context.repo.repo,
+                comment_id: existing.id,
+                body,
+              });
+            } else {
+              await github.rest.issues.createComment({
+                owner: context.repo.owner,
+                repo:  context.repo.repo,
+                issue_number: pr,
+                body,
+              });
+            }

@@ -1,14 +1,14 @@
 # ============================================================
-# Sveltia CMS Configuration — adamdaniel.ai
+# Sveltia CMS Configuration
 # ============================================================
 
 backend:
   name: github
   repo: Adam-S-Daniel/adamdaniel.ai
   branch: main
-  # OAuth proxy endpoint — replace with your deployed Lambda URL:
-  # base_url: https://YOUR_API_ID.execute-api.us-east-1.amazonaws.com
-  # auth_endpoint: prod/auth
+  # OAuth proxy endpoint
+  base_url: https://sq8d4876v8.execute-api.us-east-1.amazonaws.com
+  auth_endpoint: prod/auth
 
 # Uncomment to enable the editorial workflow (draft → review → ready → publish)
 # This creates branches for each draft and opens pull requests for review.

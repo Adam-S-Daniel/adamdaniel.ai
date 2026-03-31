@@ -14,6 +14,32 @@ adamdaniel.ai
 └── GitHub Actions       (production deploy + PR preview environments)
 ```
 
+## AWS Bootstrap (One-Time Setup)
+
+Before GitHub Actions can deploy previews or infrastructure, bootstrap the AWS
+account with an OIDC identity provider, IAM role, and artifacts bucket.
+
+**Prerequisites:** AWS CLI v2 with credentials configured, Route53 hosted zone
+for `adamdaniel.ai`.
+
+```bash
+# Deploy the bootstrap CloudFormation stack
+bash infrastructure/bootstrap/deploy.sh
+
+# If a GitHub OIDC provider already exists in this account:
+CREATE_OIDC_PROVIDER=false bash infrastructure/bootstrap/deploy.sh
+```
+
+Then add the stack outputs as GitHub Actions secrets (repo → Settings → Secrets → Actions):
+- `AWS_ROLE_ARN` — the IAM role ARN for OIDC auth
+- `PREVIEW_CLOUDFRONT_ID` — the CloudFront distribution ID for preview cache invalidation
+
+After verifying OIDC works, remove the old `AWS_ACCESS_KEY_ID` and
+`AWS_SECRET_ACCESS_KEY` secrets and deactivate the IAM user keys.
+
+See `infrastructure/bootstrap/template.yaml` for full details on what is
+provisioned.
+
 ## Content Model
 
 | Collection | Type | Key Fields |
@@ -80,12 +106,15 @@ Tests: `cd oauth-proxy && python -m pytest test_lambda.py -v`
 
 ### Preview Environments
 
-PR previews are deployed to S3:
-- Bucket: `adamdaniel-ai-previews`
-- URL pattern: `http://adamdaniel-ai-previews.s3-website-us-east-1.amazonaws.com/pr-{N}/`
+PR previews are deployed to S3 and served via CloudFront with HTTPS:
+- URL pattern: `https://preview.adamdaniel.ai/pr-{N}/`
+- Bucket: `adamdaniel-ai-previews` (S3 website hosting origin)
+- CDN: CloudFront distribution with ACM certificate
 - Teardown: auto-deleted when the PR is closed/merged
 
-Required secrets: `AWS_ACCESS_KEY_ID`, `AWS_SECRET_ACCESS_KEY`
+Required secrets:
+- `AWS_ROLE_ARN` (see [AWS Bootstrap](#aws-bootstrap-one-time-setup))
+- `PREVIEW_CLOUDFRONT_ID` — CloudFront distribution ID (output from bootstrap stack)
 
 ## Local Development
 

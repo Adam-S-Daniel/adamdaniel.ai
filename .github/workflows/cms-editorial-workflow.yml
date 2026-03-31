@@ -25,12 +25,12 @@ jobs:
     runs-on: ubuntu-latest
     steps:
       - name: Checkout
-        uses: actions/checkout@v4
+        uses: actions/checkout@34e114876b0b11c390a56381ad16ebd13914f8d5  # v4.3.1
         with:
           ref: ${{ github.event.pull_request.head.sha }}
 
       - name: Setup Ruby
-        uses: ruby/setup-ruby@v1
+        uses: ruby/setup-ruby@319994f95fa847cf3fb3cd3dbe89f6dcde9f178f  # v1.295.0
         with:
           ruby-version: '3.2'
           bundler-cache: true
@@ -65,7 +65,7 @@ jobs:
 
       - name: Apply draft label on new PR
         if: github.event.action == 'opened'
-        uses: actions/github-script@v7
+        uses: actions/github-script@f28e40c7f34bde8b3046d885e986cb6290c5673b  # v7.1.0
         with:
           script: |
             // Ensure the 'cms/draft' label exists
@@ -97,15 +97,17 @@ jobs:
             });
 
   auto-merge-when-ready:
-    # When a PR is labeled 'cms/ready', auto-merge it so content goes live
+    # When a PR is labeled 'cms/ready', auto-merge it so content goes live.
+    # Requires validate-content to pass first — prevents merging broken content.
     if: github.event.action == 'labeled' && github.event.label.name == 'cms/ready'
+    needs: validate-content
     runs-on: ubuntu-latest
     permissions:
       contents: write
       pull-requests: write
     steps:
       - name: Auto-merge CMS PR
-        uses: actions/github-script@v7
+        uses: actions/github-script@f28e40c7f34bde8b3046d885e986cb6290c5673b  # v7.1.0
         with:
           script: |
             await github.rest.pulls.merge({
