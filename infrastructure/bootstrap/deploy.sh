@@ -116,6 +116,24 @@ for o in outputs:
         break
 ")
 
+PROD_CF_DISTRIBUTION_ID=$(echo "$OUTPUTS" | python3 -c "
+import json, sys
+outputs = json.load(sys.stdin)
+for o in outputs:
+    if o['OutputKey'] == 'ProductionDistributionId':
+        print(o['OutputValue'])
+        break
+")
+
+PROD_URL=$(echo "$OUTPUTS" | python3 -c "
+import json, sys
+outputs = json.load(sys.stdin)
+for o in outputs:
+    if o['OutputKey'] == 'ProductionURL':
+        print(o['OutputValue'])
+        break
+")
+
 # ── Summary ────────────────────────────────────────────────────────────────
 echo ""
 success "Bootstrap complete!"
@@ -124,10 +142,12 @@ echo "  ┌───────────────────────
 echo "  │  Stack outputs                                                  │"
 echo "  ├─────────────────────────────────────────────────────────────────┤"
 echo "  │                                                                 │"
-echo -e "  │  Role ARN:          ${YELLOW}${ROLE_ARN}${NC}"
-echo -e "  │  Artifacts bucket:  ${YELLOW}${BUCKET_NAME}${NC}"
-echo -e "  │  CloudFront ID:     ${YELLOW}${CF_DISTRIBUTION_ID}${NC}"
-echo -e "  │  Preview URL:       ${YELLOW}${PREVIEW_URL}${NC}"
+echo -e "  │  Role ARN:            ${YELLOW}${ROLE_ARN}${NC}"
+echo -e "  │  Artifacts bucket:    ${YELLOW}${BUCKET_NAME}${NC}"
+echo -e "  │  Preview CF ID:       ${YELLOW}${CF_DISTRIBUTION_ID}${NC}"
+echo -e "  │  Preview URL:         ${YELLOW}${PREVIEW_URL}${NC}"
+echo -e "  │  Production CF ID:    ${YELLOW}${PROD_CF_DISTRIBUTION_ID}${NC}"
+echo -e "  │  Production URL:      ${YELLOW}${PROD_URL}${NC}"
 echo "  │                                                                 │"
 echo "  ├─────────────────────────────────────────────────────────────────┤"
 echo "  │  Next steps                                                     │"
@@ -141,6 +161,9 @@ echo -e "  │     Value: ${YELLOW}${ROLE_ARN}${NC}"
 echo "  │                                                                 │"
 echo -e "  │     Name:  ${YELLOW}PREVIEW_CLOUDFRONT_ID${NC}"
 echo -e "  │     Value: ${YELLOW}${CF_DISTRIBUTION_ID}${NC}"
+echo "  │                                                                 │"
+echo -e "  │     Name:  ${YELLOW}PRODUCTION_CLOUDFRONT_ID${NC}"
+echo -e "  │     Value: ${YELLOW}${PROD_CF_DISTRIBUTION_ID}${NC}"
 echo "  │                                                                 │"
 echo "  │  2. Remove old access key secrets (after verifying OIDC works): │"
 echo -e "  │     Delete: ${YELLOW}AWS_ACCESS_KEY_ID${NC}"
