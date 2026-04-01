@@ -55,3 +55,7 @@ exclude:
   - oauth-proxy
   - "*.sh"
   - vendor
+  - package.json
+  - package-lock.json
+  - playwright.config.js
+  - e2e
