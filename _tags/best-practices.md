@@ -1,4 +1,4 @@
 ---
 name: Best Practices
-description: Hard-won lessons and engineering patterns for building reliable AI systems.
+description: Ut enim ad minim veniam, quis nostrud exercitation ullamco laboris nisi.
 ---

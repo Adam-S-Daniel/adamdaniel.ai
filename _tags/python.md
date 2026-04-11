@@ -1,4 +1,4 @@
 ---
 name: Python
-description: Python tips, patterns, and ecosystem deep-dives.
+description: Excepteur sint occaecat cupidatat non proident, sunt in culpa qui officia.
 ---

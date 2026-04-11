@@ -6,7 +6,7 @@ featured: false
 images: []
 ---
 
-A thin wrapper around the Anthropic API that makes structured output — forcing Claude to return data matching a Pydantic schema — a one-liner. No more brittle JSON parsing, no more `try/except json.loads`.
+Lorem ipsum dolor sit amet, consectetur adipiscing elit. Sed do eiusmod tempor incididunt ut labore et dolore magna aliqua. Ut enim ad minim veniam, quis nostrud exercitation ullamco laboris nisi ut aliquip ex ea commodo consequat.
 
 ## Example
 
@@ -14,17 +14,17 @@ A thin wrapper around the Anthropic API that makes structured output — forcing
 from structured_claude import extract
 from pydantic import BaseModel
 
-class Invoice(BaseModel):
-    vendor: str
-    amount: float
-    currency: str
-    due_date: str
-    line_items: list[str]
+class LoremIpsum(BaseModel):
+    dolor: str
+    sit_amet: float
+    consectetur: str
+    adipiscing: str
+    elit: list[str]
 
-invoice = extract(Invoice, "Please process this invoice: ...")
-# Returns: Invoice(vendor='Acme Corp', amount=1250.00, ...)
+result = extract(LoremIpsum, "Lorem ipsum dolor sit amet...")
+# Returns: LoremIpsum(dolor='Sed do', sit_amet=42.0, ...)
 ```
 
-## Under the Hood
+## Pellentesque Habitant
 
-Uses Claude's tool-use API with `tool_choice={"type":"tool"}` to guarantee structured responses, with automatic retry on validation failures and a configurable max-retries budget.
+Morbi tristique senectus et netus et malesuada fames ac turpis egestas. Vestibulum tortor quam, feugiat vitae, ultricies eget, tempor sit amet, ante. Donec eu libero sit amet quam egestas semper.

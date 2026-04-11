@@ -1,7 +1,7 @@
 ---
 title: "Building Production AI Agents with LangGraph"
 date: 2025-01-15 09:00:00 +0000
-excerpt: "LangGraph changes how we build stateful, multi-step AI agents. Here's what I've learned shipping agents to production — the patterns that work, and the pitfalls that don't."
+excerpt: "Lorem ipsum dolor sit amet, consectetur adipiscing elit. Sed do eiusmod tempor incididunt ut labore et dolore magna aliqua."
 tags:
   - AI Engineering
   - Python
@@ -11,61 +11,61 @@ published: true
 reading_time: 8
 ---
 
-After shipping several production AI agents, I keep coming back to the same hard-won lessons. LangGraph makes the *structure* of an agent explicit — and that explicitness is what makes the difference between a demo that impresses and a system that holds up in production.
+Lorem ipsum dolor sit amet, consectetur adipiscing elit. Sed do eiusmod tempor incididunt ut labore et dolore magna aliqua. Ut enim ad minim veniam, quis nostrud exercitation ullamco laboris nisi ut aliquip ex ea commodo consequat. Duis aute irure dolor in reprehenderit in voluptate velit esse cillum dolore eu fugiat nulla pariatur.
 
-## Why Graphs, Not Chains
+## Vestibulum Ante Ipsum
 
-The original LangChain model — a linear chain of calls — works great for simple pipelines. You read a document, summarise it, format the output. Done. But real-world agents need to branch, loop, backtrack, and sometimes hand off to humans. A graph is the honest data structure for that problem.
+Excepteur sint occaecat cupidatat non proident, sunt in culpa qui officia deserunt mollit anim id est laborum. Curabitur pretium tincidunt lacus. Nulla gravida orci a odio. Nullam varius, turpis et commodo pharetra, est eros bibendum elit, nec luctus magna felis sollicitudin mauris.
 
 ```python
 from langgraph.graph import StateGraph, END
 from typing import TypedDict, List
 
-class AgentState(TypedDict):
-    messages: List[dict]
-    tool_results: List[dict]
-    should_continue: bool
+class LoremState(TypedDict):
+    ipsum: List[dict]
+    dolor: List[dict]
+    sit_amet: bool
 
-graph = StateGraph(AgentState)
-graph.add_node("agent", call_model)
-graph.add_node("tools", execute_tools)
+graph = StateGraph(LoremState)
+graph.add_node("lorem", call_ipsum)
+graph.add_node("dolor", execute_sit)
 graph.add_conditional_edges(
-    "agent",
+    "lorem",
     should_continue,
-    {"continue": "tools", "end": END}
+    {"continue": "dolor", "end": END}
 )
 ```
 
-The key insight: **state is first-class**. Every node receives the full state and returns a partial update. No hidden context, no side effects you can't trace.
+Integer in mauris eu nibh euismod gravida. Duis ac tellus et risus vulputate vehicula. Donec lobortis risus a elit. Etiam tempor. Ut ullamcorper, ligula ut dictum pharetra, nisi nunc fringilla magna, in commodo elit erat nec turpis.
 
-## The Patterns That Actually Work
+## Praesent Dapibus Neque
 
-### 1. Human-in-the-loop checkpoints
+### 1. Pellentesque habitant morbi
 
-Don't try to make agents fully autonomous for high-stakes decisions. Add interruption points:
+Praesent dapibus, neque id cursus faucibus, tortor neque egestas augue, eu vulputate magna eros eu erat. Aliquam erat volutpat. Nam dui mi, tincidunt quis, accumsan porttitor, facilisis luctus, metus.
 
 ```python
-graph.add_node("human_review", interrupt_before_action)
-graph.compile(interrupt_before=["human_review"])
+graph.add_node("review", interrupt_before_action)
+graph.compile(interrupt_before=["review"])
 ```
 
-### 2. Structured tool outputs
+### 2. Phasellus ultrices nulla
 
-Unstructured strings are the enemy of reliability. Every tool should return a typed Pydantic model:
+Phasellus ultrices nulla quis nibh. Quisque a lectus. Donec consectetuer ligula vulputate sem tristique cursus. Nam nulla quam, gravida non, commodo a, sodales sit amet, nisi.
 
 ```python
-class SearchResult(BaseModel):
+class LoremResult(BaseModel):
     query: str
     results: List[str]
     confidence: float
 
-async def web_search(query: str) -> SearchResult:
+async def ipsum_search(query: str) -> LoremResult:
     # ...
 ```
 
-### 3. Persistent state across sessions
+### 3. Pellentesque fermentum dolor
 
-LangGraph's checkpointer lets you resume a graph from any point. This is essential for long-running workflows:
+Pellentesque fermentum dolor. Aliquam quam lectus, facilisis auctor, ultrices ut, elementum vulputate, nunc. Sed adipiscing ornare risus. Morbi est est, blandit sit amet, sagittis vel, euismod vel, velit.
 
 ```python
 from langgraph.checkpoint.sqlite import SqliteSaver
@@ -74,14 +74,12 @@ memory = SqliteSaver.from_conn_string(":memory:")
 app = graph.compile(checkpointer=memory)
 ```
 
-## What I'd Tell Myself 6 Months Ago
+## Maecenas Aliquet
 
-Start with the state schema. Define it carefully, type it strictly, and resist adding fields "just in case". Every field is surface area for bugs.
+Maecenas aliquet mollis lectus. Vivamus consectetuer risus et tortor. Lorem ipsum dolor sit amet, consectetur adipiscing elit. Integer nec odio. Praesent libero. Sed cursus ante dapibus diam.
 
-Test your error paths *first*. The happy path is easy. What happens when the LLM returns malformed JSON? When a tool times out? When the user sends a blank message?
-
-Observability is not optional. Wire up LangSmith (or an OpenTelemetry-compatible alternative) before you ship anything. Flying blind in production is how demos become incidents.
+Nunc nulla. Fusce risus nisl, viverra et, tempor et, pretium in, sapien. Donec venenatis vulputate lorem. Morbi nec metus. Phasellus blandit leo ut odio. Maecenas ullamcorper, dui et placerat feugiat, eros pede varius nisi, condimentum viverra felis nunc et lorem.
 
 ---
 
-The full example code for this post is on [GitHub](https://github.com/Adam-S-Daniel).
+Sed dignissim lacinia nunc. Curabitur tortor. Pellentesque nibh. Aenean quam.
