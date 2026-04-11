@@ -1,5 +1,5 @@
 ---
-title: "RAG Evaluation Toolkit"
+title: "Aenean Dignissim Pellentesque"
 technology: "Python · Ragas · LangSmith · Pydantic"
 url_link: "https://github.com/Adam-S-Daniel"
 featured: true

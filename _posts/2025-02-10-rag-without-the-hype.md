@@ -1,5 +1,5 @@
 ---
-title: "RAG Without the Hype: What Actually Improves Retrieval Quality"
+title: "Suspendisse Potenti: Curabitur Sodales Ligula"
 date: 2025-02-10 09:00:00 +0000
 excerpt: "Lorem ipsum dolor sit amet, consectetur adipiscing elit. Pellentesque habitant morbi tristique senectus et netus et malesuada fames ac turpis egestas."
 tags:

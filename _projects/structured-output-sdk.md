@@ -1,5 +1,5 @@
 ---
-title: "Structured Output SDK"
+title: "Donec Nec Justo Eget Felis"
 technology: "Python · Anthropic API · Pydantic"
 url_link: "https://github.com/Adam-S-Daniel"
 featured: false
