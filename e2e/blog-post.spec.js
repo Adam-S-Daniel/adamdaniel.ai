@@ -1,4 +1,4 @@
-const { test, expect } = require("@playwright/test");
+const { test, expect } = require("./base");
 
 test.describe("Blog post page", () => {
   test("displays the post title exactly once", async ({ page }) => {
