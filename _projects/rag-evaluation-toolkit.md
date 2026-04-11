@@ -6,14 +6,14 @@ featured: true
 images: []
 ---
 
-An opinionated evaluation harness for RAG pipelines. Runs automated quality checks against a golden dataset and surfaces retrieval and generation metrics in a single dashboard — because you can't improve what you don't measure.
+Lorem ipsum dolor sit amet, consectetur adipiscing elit. Vivamus luctus urna sed urna ultricies ac tempor dui sagittis. In condimentum facilisis porta. Sed nec diam eu diam mattis viverra. Nulla at nulla justo, eget luctus tortor.
 
 ## Metrics
 
-- **Recall@k** — how often the correct document appears in retrieved results
-- **Answer faithfulness** — does the answer hallucinate beyond the retrieved context?
-- **Answer relevance** — does it actually address the question?
-- **Chunk quality** — signal-to-noise ratio in retrieved chunks
+- **Recall@k** — nulla facilisi, duis aliquet egestas purus in blandit
+- **Fusce ac turpis** — quis ligula lacinia aliquet, mauris ipsum nulla metus
+- **Vestibulum lacinia** — arcu eget nulla, class aptent taciti sociosqu
+- **Donec lobortis** — risus a elit, etiam tempor ut ullamcorper
 
 ## Usage
 
@@ -26,4 +26,4 @@ rag-eval run \
   --output ./report.html
 ```
 
-The HTML report shows per-question breakdowns, aggregate scores, and a regression diff against the previous run — so you can tell immediately whether a retrieval change helped or hurt.
+Curabitur vulputate, ligula lacinia scelerisque tempor, lacus lacus ornare ante, ac egestas est urna sit amet arcu. Class aptent taciti sociosqu ad litora torquent per conubia nostra, per inceptos himenaeos.

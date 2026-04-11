@@ -1,9 +1,9 @@
 ---
 title: "Test Post: CMS Workflow"
 date: 2024-01-15
-excerpt: "A test post to verify the CMS editorial workflow — validate-content gates auto-merge."
+excerpt: "Lorem ipsum dolor sit amet, consectetur adipiscing elit."
 tags: []
 published: true
 ---
 
-This post verifies that the CMS editorial workflow correctly requires `validate-content` to pass before `auto-merge-when-ready` can run.
+Lorem ipsum dolor sit amet, consectetur adipiscing elit. Sed do eiusmod tempor incididunt ut labore et dolore magna aliqua. Ut enim ad minim veniam, quis nostrud exercitation ullamco laboris nisi ut aliquip ex ea commodo consequat.

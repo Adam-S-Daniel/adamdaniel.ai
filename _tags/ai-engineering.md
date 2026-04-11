@@ -1,4 +1,4 @@
 ---
 name: AI Engineering
-description: Practical articles on building and shipping AI-powered systems in production.
+description: Lorem ipsum dolor sit amet, consectetur adipiscing elit sed do eiusmod.
 ---

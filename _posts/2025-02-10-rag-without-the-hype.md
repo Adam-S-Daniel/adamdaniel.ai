@@ -1,7 +1,7 @@
 ---
 title: "RAG Without the Hype: What Actually Improves Retrieval Quality"
 date: 2025-02-10 09:00:00 +0000
-excerpt: "Retrieval-augmented generation is oversold and underengineered. Here's the practical guide to building RAG systems that give useful answers instead of confident hallucinations."
+excerpt: "Lorem ipsum dolor sit amet, consectetur adipiscing elit. Pellentesque habitant morbi tristique senectus et netus et malesuada fames ac turpis egestas."
 tags:
   - AI Engineering
   - RAG
@@ -10,21 +10,21 @@ published: true
 reading_time: 6
 ---
 
-Everyone is building RAG. Most of it doesn't work very well. The benchmark numbers look impressive; the production behaviour does not.
+Lorem ipsum dolor sit amet, consectetur adipiscing elit. Vivamus luctus urna sed urna ultricies ac tempor dui sagittis. In condimentum facilisis porta. Sed nec diam eu diam mattis viverra.
 
-Here's the uncomfortable truth: the retrieval half of RAG is mostly an information retrieval problem from the 1970s, and most teams treat it as an afterthought because the LLM half feels more exciting.
+Nulla at nulla justo, eget luctus tortor. Nulla facilisi. Duis aliquet egestas purus in blandit. Curabitur vulputate, ligula lacinia scelerisque tempor, lacus lacus ornare ante, ac egestas est urna sit amet arcu.
 
-## The Real Bottleneck
+## Suspendisse Potenti
 
-Your retrieval quality sets a hard ceiling on your generation quality. You can use the best model in the world — if the retrieved chunks are noisy or irrelevant, the answer will be too.
+Class aptent taciti sociosqu ad litora torquent per conubia nostra, per inceptos himenaeos. Curabitur sodales ligula in libero. Sed dignissim lacinia nunc.
 
-The biggest gains I've seen come from:
+Praesent dapibus, neque id cursus faucibus, tortor neque egestas augue:
 
-1. **Chunk strategy** — most systems chunk by fixed token count. Don't. Chunk by semantic unit (paragraph, section, function). The meaning of a sentence depends on its context.
+1. **Nulla gravida** — orci a odio. Nullam varius, turpis et commodo pharetra, est eros bibendum elit, nec luctus magna felis sollicitudin mauris.
 
-2. **Metadata filtering** — before even running vector search, filter by date, author, document type. Hybrid search (keyword + vector) consistently outperforms pure semantic search on real corpora.
+2. **Pellentesque fermentum** — dolor. Aliquam quam lectus, facilisis auctor, ultrices ut, elementum vulputate, nunc.
 
-3. **Reranking** — run a cross-encoder reranker over the top-k candidates. It's cheap and lifts precision dramatically.
+3. **Morbi est est** — blandit sit amet, sagittis vel, euismod vel, velit. Quisque ullamcorper placerat ipsum.
 
 ```python
 from sentence_transformers import CrossEncoder
@@ -38,18 +38,18 @@ def rerank(query: str, docs: list[str], top_k: int = 3) -> list[str]:
     return [doc for doc, _ in ranked[:top_k]]
 ```
 
-## Evaluation Is Non-Negotiable
+## Curabitur Tortor
 
-You can't improve what you don't measure. Build a small golden dataset (50–100 question/answer pairs from your domain) and track:
+Curabitur tortor. Pellentesque nibh. Aenean quam. In scelerisque sem at dolor. Maecenas mattis. Sed convallis tristique sem. Proin ut ligula vel nunc egestas porttitor.
 
-- **Recall@k** — was the right document in the top k results?
-- **Answer faithfulness** — does the generated answer stick to the retrieved context, or does the model hallucinate?
-- **Answer relevance** — does the answer actually address the question?
+- **Recall@k** — morbi lectus risus, iaculis vel, suscipit quis, luctus non, massa.
+- **Fusce ac turpis** — quis ligula lacinia aliquet. Mauris ipsum. Nulla metus metus.
+- **Vestibulum lacinia** — arcu eget nulla. Class aptent taciti sociosqu ad litora torquent.
 
-[Ragas](https://github.com/explodinggradients/ragas) is the fastest way to get these metrics without writing everything from scratch.
+Sed adipiscing ornare risus. Morbi est est, blandit sit amet, sagittis vel, euismod vel, velit.
 
-## The One Change That Helps Most
+## Donec Lobortis
 
-If you only make one improvement: **add a query rewriting step**. User queries are messy. A brief rephrasing pass — "given this query, write 3 variants optimised for document retrieval" — meaningfully improves recall across every corpus I've tested it on.
+Donec lobortis risus a elit. Etiam tempor. Ut ullamcorper, ligula ut dictum pharetra, nisi nunc fringilla magna, in commodo elit erat nec turpis. Ut pharetra augue nec augue. Nam elit magna, hendrerit sit amet, tincidunt ac, viverra sed, nulla.
 
-The cost is one extra LLM call. The benefit is worth it.
+Donec porta diam eu massa. Quisque diam lorem, interdum vitae, dapibus ac, scelerisque vitae, pede.

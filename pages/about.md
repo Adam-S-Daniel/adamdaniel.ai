@@ -4,33 +4,33 @@ layout: page
 permalink: /pages/about/
 ---
 
-I'm Adam Daniel, a freelance AI engineer based in London. I help companies design and ship intelligent systems — from RAG pipelines and production LLM agents to evaluation frameworks and AI-powered internal tooling.
+Lorem ipsum dolor sit amet, consectetur adipiscing elit. Sed do eiusmod tempor incididunt ut labore et dolore magna aliqua. Ut enim ad minim veniam, quis nostrud exercitation ullamco laboris nisi ut aliquip ex ea commodo consequat.
 
-## What I Do
+## Duis Aute Irure
 
-I work with teams that have identified high-value AI opportunities but need a specialist to bring them to production. That might mean:
+Duis aute irure dolor in reprehenderit in voluptate velit esse cillum dolore eu fugiat nulla pariatur. Excepteur sint occaecat cupidatat non proident:
 
-- Designing a retrieval-augmented generation system that actually works on your data
-- Building a stateful, multi-step agent that handles real-world edge cases
-- Auditing and improving an existing AI system that isn't hitting the quality bar
-- Running structured evaluations so you can iterate confidently
+- Curabitur pretium tincidunt lacus, nulla gravida orci a odio
+- Nullam varius turpis et commodo pharetra, est eros bibendum elit
+- Pellentesque fermentum dolor, aliquam quam lectus facilisis auctor
+- Maecenas aliquet mollis lectus vivamus consectetuer risus
 
-I'm hands-on throughout — from architecture to deployment. I write production Python, not slides.
+Sed dignissim lacinia nunc. Curabitur tortor. Pellentesque nibh. Aenean quam.
 
-## Background
+## Praesent Dapibus
 
-I came to AI engineering from a software engineering background, which means I care as much about reliability, observability, and maintainability as I do about model quality. The best AI feature is one that ships and keeps working.
+Praesent dapibus, neque id cursus faucibus, tortor neque egestas augue, eu vulputate magna eros eu erat. Aliquam erat volutpat. Nam dui mi, tincidunt quis, accumsan porttitor, facilisis luctus, metus.
 
-I've worked across fintech, legaltech, and enterprise SaaS. I'm used to operating in regulated environments where explainability and audit trails matter.
+Phasellus ultrices nulla quis nibh. Quisque a lectus. Donec consectetuer ligula vulputate sem tristique cursus. Nam nulla quam, gravida non, commodo a, sodales sit amet, nisi.
 
-## Tools & Technologies
+## Nulla Facilisi
 
-**Core stack**: Python, LangGraph, LangChain, FastAPI, Pydantic
-**LLM providers**: Anthropic (Claude), OpenAI, local models via Ollama
-**Retrieval**: pgvector, Chroma, Pinecone, Weaviate
-**Cloud**: AWS (Lambda, ECS, S3, Bedrock), GCP
-**Observability**: LangSmith, OpenTelemetry, Datadog
+**Lorem**: ipsum, dolor, sit, amet, consectetur
+**Adipiscing**: elit, sed, do, eiusmod, tempor
+**Incididunt**: ut, labore, et, dolore, magna
+**Aliqua**: ut, enim, ad, minim, veniam
+**Nostrud**: exercitation, ullamco, laboris
 
-## Let's Talk
+## Morbi Lectus
 
-If you have an AI project you'd like to discuss, the best way to reach me is via [LinkedIn](https://www.linkedin.com/in/adam-s-daniel) or the [contact form](/pages/contact/).
+Morbi lectus risus, iaculis vel, suscipit quis, luctus non, massa. Fusce ac turpis quis ligula lacinia aliquet. Mauris ipsum. Nulla metus metus, ullamcorper vel, tincidunt sed, euismod in, nibh.

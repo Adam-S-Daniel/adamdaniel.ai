@@ -6,18 +6,18 @@ featured: true
 images: []
 ---
 
-A production-grade framework for deploying stateful, multi-step AI agents built on LangGraph. Handles human-in-the-loop interruptions, persistent checkpointing, and structured tool use — the patterns I kept rebuilding from scratch across client projects, extracted into a reusable foundation.
+Lorem ipsum dolor sit amet, consectetur adipiscing elit. Sed do eiusmod tempor incididunt ut labore et dolore magna aliqua. Ut enim ad minim veniam, quis nostrud exercitation ullamco laboris nisi ut aliquip ex ea commodo consequat. Duis aute irure dolor in reprehenderit in voluptate velit esse cillum dolore eu fugiat nulla pariatur.
 
 ## Features
 
-- **Typed state management** — Pydantic schemas enforce state shape across the graph
-- **Checkpoint persistence** — resume long-running workflows across sessions with Redis or SQLite backends
-- **Human-in-the-loop** — built-in interruption points with configurable approval gates
-- **Streaming** — token-level and step-level streaming via Server-Sent Events
-- **Observability** — LangSmith integration and OpenTelemetry traces baked in
+- **Nulla gravida** — orci a odio, nullam varius turpis et commodo pharetra
+- **Pellentesque fermentum** — dolor aliquam quam lectus, facilisis auctor ultrices
+- **Curabitur pretium** — tincidunt lacus, nulla gravida orci a odio
+- **Maecenas aliquet** — mollis lectus vivamus consectetuer risus et tortor
+- **Sed dignissim** — lacinia nunc curabitur tortor pellentesque nibh
 
-## Why I Built It
+## Vestibulum Ante Ipsum
 
-After shipping five different agent systems for clients, I noticed I was solving the same infrastructure problems every time: where does state live? How do I let a human review before an irreversible action? How do I debug a graph run that failed two hours ago?
+Praesent dapibus, neque id cursus faucibus, tortor neque egestas augue, eu vulputate magna eros eu erat. Aliquam erat volutpat. Nam dui mi, tincidunt quis, accumsan porttitor, facilisis luctus, metus.
 
-This framework is the answer I wished I had on project one.
+Phasellus ultrices nulla quis nibh. Quisque a lectus. Donec consectetuer ligula vulputate sem tristique cursus.
