@@ -130,8 +130,11 @@ npx playwright test e2e/visual-regression.spec.js --update-snapshots --project c
 `scripts/generate-showcase.js` reads all snapshot PNGs, displays each in a labeled Playwright browser page for 3 seconds, and records the session as `recordings/visual-regression-showcase.webm`.
 
 ```bash
-# Full workflow: update baselines then generate showcase
+# Full workflow: save before, update baselines, generate before/after showcase
+cp -r e2e/visual-regression.spec.js-snapshots{,-before}
 npx playwright test e2e/visual-regression.spec.js --update-snapshots
 node scripts/generate-showcase.js
 # Commit updated snapshots + recordings/visual-regression-showcase.webm
 ```
+
+If no `-before` directory exists (first run, no prior baselines), the showcase shows current snapshots only. The `-before` directory is auto-cleaned after the video is written.

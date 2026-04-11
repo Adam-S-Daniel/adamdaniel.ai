@@ -214,11 +214,12 @@ Every test run captures screenshots (`screenshot: "on"`) and retains video on fa
 After any change that could affect visual output, regenerate the showcase video and commit it alongside the change:
 
 ```bash
+cp -r e2e/visual-regression.spec.js-snapshots{,-before}   # save old baselines
 npx playwright test e2e/visual-regression.spec.js --update-snapshots
-node scripts/generate-showcase.js
+node scripts/generate-showcase.js                           # produces before/after video
 ```
 
-`scripts/generate-showcase.js` reads all snapshot PNGs, displays each in a labeled browser page for 3 seconds, and records the session as `recordings/visual-regression-showcase.webm`. This provides a quick visual summary of all regression baselines across the matrix.
+`scripts/generate-showcase.js` displays each snapshot as a before/after side-by-side pair (3.5s per slide) and records the session as `recordings/visual-regression-showcase.webm`. If no `-before` directory exists (first run), it shows current baselines only. The `-before` directory is auto-cleaned after the video is written.
 
 ## Preview environment flow
 
