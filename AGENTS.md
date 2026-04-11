@@ -23,6 +23,9 @@ bash oauth-proxy/deploy.sh                  # deploy OAuth proxy (needs env vars
 
 # Tests
 cd oauth-proxy && python -m pytest test_lambda.py -v
+npx playwright test                               # full browser matrix (8 projects)
+npx playwright test --project chromium-desktop     # single project
+npx playwright test e2e/glow-banding.spec.js       # single test file
 ```
 
 ## GitHub Actions secrets
@@ -138,6 +141,74 @@ CMS creates PR (branch: cms/draft-{timestamp})
   → validate-content re-runs → if passes → auto-merge → deploy-production triggers
 ```
 
+### `e2e-tests.yml`
+
+**Trigger:** push to `main`, or pull request targeting `main`
+
+**Jobs:** `e2e`
+
+1. Checkout, setup Ruby 3.2 + Node 20
+2. `npm ci` → install test dependencies
+3. `npx playwright install chromium firefox webkit --with-deps`
+4. `npx playwright test` — runs all tests across the full browser matrix
+5. Upload `test-results/` artifact (7-day retention)
+
+Tests run with `fullyParallel: true` — all 8 projects execute concurrently.
+
+---
+
+## E2E testing
+
+Every e2e test runs across a matrix of browsers, viewports, text sizes, and color settings. The matrix is defined in `playwright.config.js` as Playwright projects.
+
+### Browser matrix (8 projects)
+
+| Project | Browser | Viewport | Special |
+|---|---|---|---|
+| `chromium-desktop` | Chromium | 1920×1080 | — |
+| `chromium-laptop` | Chromium | 1366×768 | — |
+| `chromium-mobile` | Chromium | 375×667 | — |
+| `firefox-desktop` | Firefox | 1920×1080 | — |
+| `webkit-tablet` | WebKit | 768×1024 | — |
+| `chromium-large-text` | Chromium | 1920×1080 | Root font 20px |
+| `chromium-light` | Chromium | 1920×1080 | `colorScheme: light` |
+| `chromium-forced-colors` | Chromium | 1920×1080 | `forcedColors: active` |
+
+### Custom fixture (`e2e/base.js`)
+
+Tests import `{ test, expect }` from `./base` instead of `@playwright/test`. The fixture adds:
+
+- **`rootFontSize`** option — when set (e.g. `"20px"`), injects an init script that sets `document.documentElement.style.fontSize` before page load, simulating users with a larger browser default font.
+
+### Writing tests
+
+1. Import from `./base`: `const { test, expect } = require("./base");`
+2. Tests automatically run across all 8 projects — no per-test matrix setup needed.
+3. To skip a test for specific conditions (e.g. forced-colors strips gradients):
+   ```js
+   const isForcedColors = await page.evaluate(() =>
+     window.matchMedia("(forced-colors: active)").matches,
+   );
+   test.skip(isForcedColors, "Gradient not rendered in forced-colors mode");
+   ```
+
+### Parallelism
+
+`fullyParallel: true` in the config means all tests across all projects run concurrently up to the worker count. Playwright auto-detects available CPU cores. The `webServer` builds Jekyll once and is shared across all workers.
+
+### Screenshots and video
+
+Every test run captures screenshots (`screenshot: "on"`) and retains video on failure (`video: "retain-on-failure"`). These are stored in `test-results/` and uploaded as CI artifacts for post-run review.
+
+### Visual regression
+
+`e2e/visual-regression.spec.js` uses `toHaveScreenshot()` to compare golden-image baselines committed in `e2e/visual-regression.spec.js-snapshots/`. This runs across all matrix projects and catches unintended visual changes asynchronously in CI — no pre-commit hook needed.
+
+- **Threshold:** 1% pixel diff allowed (`maxDiffPixelRatio: 0.01`)
+- **CI reporter:** HTML report with visual diffs uploaded as artifact
+- **Update baselines:** `npx playwright test e2e/visual-regression.spec.js --update-snapshots`
+- **First run for new projects:** missing baselines cause failure; generate with `--update-snapshots`
+
 ## Preview environment flow
 
 1. PR opened → Jekyll builds with `--baseurl /pr-{N}` → sync to `s3://adamdaniel-ai-previews/pr-{N}/`
@@ -149,3 +220,4 @@ CMS creates PR (branch: cms/draft-{timestamp})
 
 - `.agents/skills/aws-bootstrap/` — bootstrap stack deployment and troubleshooting
 - `.agents/skills/preview-environments/` — preview pipeline, CloudFront, S3 debugging
+- `.agents/skills/browser-testing/` — e2e test matrix, fixtures, cross-browser testing

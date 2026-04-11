@@ -1,4 +1,4 @@
-const { test, expect } = require("@playwright/test");
+const { test, expect } = require("./base");
 const { PNG } = require("pngjs");
 
 test.describe("Glow effect quality", () => {
@@ -6,6 +6,12 @@ test.describe("Glow effect quality", () => {
     page,
   }) => {
     await page.goto("/");
+
+    // Forced-colors mode strips decorative backgrounds — no gradient to sample.
+    const isForcedColors = await page.evaluate(() =>
+      window.matchMedia("(forced-colors: active)").matches,
+    );
+    test.skip(isForcedColors, "Gradient not rendered in forced-colors mode");
 
     // Hide page content so only background glow is visible for pixel analysis.
     // Freeze all animations at peak glow (end of the 8s warmth cycle = max opacity).
