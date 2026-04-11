@@ -209,6 +209,17 @@ Every test run captures screenshots (`screenshot: "on"`) and retains video on fa
 - **Update baselines:** `npx playwright test e2e/visual-regression.spec.js --update-snapshots`
 - **First run for new projects:** missing baselines cause failure; generate with `--update-snapshots`
 
+### Visual showcase
+
+After any change that could affect visual output, regenerate the showcase video and commit it alongside the change:
+
+```bash
+npx playwright test e2e/visual-regression.spec.js --update-snapshots
+node scripts/generate-showcase.js
+```
+
+`scripts/generate-showcase.js` reads all snapshot PNGs, displays each in a labeled browser page for 3 seconds, and records the session as `recordings/visual-regression-showcase.webm`. This provides a quick visual summary of all regression baselines across the matrix.
+
 ## Preview environment flow
 
 1. PR opened → Jekyll builds with `--baseurl /pr-{N}` → sync to `s3://adamdaniel-ai-previews/pr-{N}/`

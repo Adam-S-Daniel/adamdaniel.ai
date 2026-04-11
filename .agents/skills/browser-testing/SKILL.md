@@ -122,3 +122,16 @@ npx playwright test e2e/visual-regression.spec.js --update-snapshots --project c
 **First run for a new browser project:** baselines don't exist yet and the test fails. Run `--update-snapshots` to generate them, then commit.
 
 **Pixel-level analysis:** `glow-banding.spec.js` uses a different approach — direct pixel sampling with `pngjs` for quantitative gradient smoothness checks, independent of golden images.
+
+## Visual showcase
+
+**Standing rule:** after any change that could affect visual output (CSS, layouts, templates, images), regenerate the showcase before committing.
+
+`scripts/generate-showcase.js` reads all snapshot PNGs, displays each in a labeled Playwright browser page for 3 seconds, and records the session as `recordings/visual-regression-showcase.webm`.
+
+```bash
+# Full workflow: update baselines then generate showcase
+npx playwright test e2e/visual-regression.spec.js --update-snapshots
+node scripts/generate-showcase.js
+# Commit updated snapshots + recordings/visual-regression-showcase.webm
+```
