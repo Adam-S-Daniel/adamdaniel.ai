@@ -7,21 +7,13 @@ const POSTS_DIR = path.join(REPO_ROOT, "_posts");
 
 // The CMS computes the "View on Live Site" URL from this template. Both admin
 // configs must keep it in sync with Jekyll's `permalink: /blog/:slug/` — if it
-// drifts (e.g. includes the date prefix), the button 404s. The field is named
-// `permalink_slug` (not `slug`) to dodge a Sveltia/Decap collision where a
-// field literally named `slug` is shadowed by the built-in `{{slug}}` tag.
+// drifts (e.g. includes the date prefix), the button 404s.
 //
-// Note on coverage: this spec verifies the URL the *template would produce*
-// is actually reachable in Jekyll, but it reproduces the slugify logic in
-// JavaScript rather than executing Sveltia's template engine. So template-
-// engine quirks (e.g. the `{{fields.slug}}` shadowing collision that
-// motivated `_plugins/permalink_slug.rb`) won't show up here. Sveltia is a
-// browser-only SPA that uses the File System Access API for its local
-// backend (showDirectoryPicker requires a user gesture and isn't currently
-// automatable from Playwright — see microsoft/playwright#18267), so live
-// admin coverage stays a manual smoke test against `preview.adamdaniel.ai`.
+// This spec reproduces the slugify logic in JavaScript to check every post is
+// reachable at its computed URL; e2e/admin-cms.spec.js drives the real Sveltia
+// CMS to cover the template engine itself.
 const POSTS_PREVIEW_PATH =
-  `preview_path: "/blog/{{fields.permalink_slug | default('{{fields.title}}') | slugify}}/"`;
+  `preview_path: "/blog/{{fields.slug | default('{{fields.title}}') | slugify}}/"`;
 
 function slugify(s) {
   return s
@@ -66,7 +58,7 @@ test.describe("CMS preview URL round-trip", () => {
   });
 
   for (const { file, fm } of publishedPosts) {
-    const previewSlug = slugify(fm.permalink_slug || fm.title);
+    const previewSlug = slugify(fm.slug || fm.title);
     test(`${file} is served at the preview URL /blog/${previewSlug}/`, async ({
       page,
     }) => {

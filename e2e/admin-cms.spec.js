@@ -4,10 +4,10 @@ const { test, expect } = require("./base");
 
 // Drives the real Sveltia CMS editor against a hand-rolled
 // FileSystemDirectoryHandle mock so we can exercise Sveltia's template
-// engine — the layer the CMS preview_path bug (see _plugins/permalink_slug.rb)
-// actually lived at. A pure JavaScript reproduction of the template logic
-// (see e2e/cms-preview-url.spec.js) can't catch a Sveltia-specific quirk
-// like `{{fields.slug}}` shadowing.
+// engine — the layer the CMS preview_path bug actually lives at. A pure
+// JavaScript reproduction of the template logic (see
+// e2e/cms-preview-url.spec.js) can't catch a Sveltia-specific quirk in
+// how `{{fields.X}}` resolves against loaded entry content.
 //
 // The mock sidesteps `window.showDirectoryPicker`, which in Chromium
 // requires a real user gesture and isn't automatable from Playwright

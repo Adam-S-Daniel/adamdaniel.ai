@@ -1,6 +1,6 @@
 ---
 title: "Pellentesque Habitant Morbi Tristique"
-permalink_slug: structured-outputs-are-a-superpower
+slug: structured-outputs-are-a-superpower
 date: 2025-03-01 09:00:00 +0000
 excerpt: "Lorem ipsum dolor sit amet, consectetur adipiscing elit. Fusce risus nisl, viverra et, tempor et, pretium in, sapien."
 tags:

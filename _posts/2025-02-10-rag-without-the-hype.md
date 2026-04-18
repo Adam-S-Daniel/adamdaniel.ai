@@ -1,6 +1,6 @@
 ---
 title: "Suspendisse Potenti: Curabitur Sodales Ligula"
-permalink_slug: rag-without-the-hype
+slug: rag-without-the-hype
 date: 2025-02-10 09:00:00 +0000
 excerpt: "Lorem ipsum dolor sit amet, consectetur adipiscing elit. Pellentesque habitant morbi tristique senectus et netus et malesuada fames ac turpis egestas."
 tags:
