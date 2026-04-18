@@ -220,12 +220,13 @@ test.describe("CMS admin: View on Live Site", () => {
       .getByRole("button", { name: /work with local repository/i })
       .click();
 
-    // Wait for the entry editor to render by looking for the renamed slug
-    // field — its presence confirms the file content was parsed.
+    // Wait for the entry editor to render. The View on Live Site button in
+    // the primary toolbar appears once the entry has hydrated.
+    const viewLiveSiteBtn = page.getByRole("button", {
+      name: /view on live site/i,
+    });
     try {
-      await expect(page.getByLabel(/url slug/i)).toBeVisible({
-        timeout: 60_000,
-      });
+      await expect(viewLiveSiteBtn).toBeVisible({ timeout: 60_000 });
     } catch (err) {
       console.log(
         "=== Captured console output ===\n" + consoleLogs.join("\n"),
@@ -233,15 +234,7 @@ test.describe("CMS admin: View on Live Site", () => {
       throw err;
     }
 
-    // The View on Live Site action lives under the per-locale content-options
-    // menu. Open it, then click the item.
-    await page
-      .getByRole("button", { name: /content options/i })
-      .first()
-      .click();
-    await page
-      .getByRole("menuitem", { name: /view on live site/i })
-      .click();
+    await viewLiveSiteBtn.click();
 
     const openedURLs = await page.evaluate(() => window.openedURLs);
     expect(openedURLs).toHaveLength(1);
