@@ -98,6 +98,11 @@ test.describe("CMS admin: View on Live Site", () => {
           async getFileHandle(name, opts = {}) {
             const child = byName.get(name);
             if (child?.kind === "file") return makeFileHandle(child);
+            if (child?.kind === "directory") {
+              const err = new Error(`${name} is a directory, not a file`);
+              err.name = "TypeMismatchError";
+              throw err;
+            }
             if (opts.create) {
               const created = { kind: "file", name, content: "" };
               byName.set(name, created);
@@ -111,6 +116,11 @@ test.describe("CMS admin: View on Live Site", () => {
           async getDirectoryHandle(name, opts = {}) {
             const child = byName.get(name);
             if (child?.kind === "directory") return makeDirHandle(child);
+            if (child?.kind === "file") {
+              const err = new Error(`${name} is a file, not a directory`);
+              err.name = "TypeMismatchError";
+              throw err;
+            }
             if (opts.create) {
               const created = { kind: "directory", name, children: [] };
               byName.set(name, created);
