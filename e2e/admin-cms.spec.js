@@ -63,6 +63,14 @@ test.describe("CMS admin: View on Live Site", () => {
       "Admin spec runs once on chromium-desktop — Sveltia is heavy to load",
     );
 
+    const consoleLogs = [];
+    page.on("console", (msg) =>
+      consoleLogs.push(`[${msg.type()}] ${msg.text()}`),
+    );
+    page.on("pageerror", (err) =>
+      consoleLogs.push(`[pageerror] ${err.name}: ${err.message}\n${err.stack}`),
+    );
+
     await page.addInitScript((fixtures) => {
       // Capture window.open calls — the View on Live Site menu item navigates
       // via window.open() rather than a real <a href>.
@@ -184,7 +192,16 @@ test.describe("CMS admin: View on Live Site", () => {
 
     // Wait for the entry editor to render by looking for the renamed slug
     // field — its presence confirms the file content was parsed.
-    await expect(page.getByLabel(/url slug/i)).toBeVisible({ timeout: 60_000 });
+    try {
+      await expect(page.getByLabel(/url slug/i)).toBeVisible({
+        timeout: 60_000,
+      });
+    } catch (err) {
+      console.log(
+        "=== Captured console output ===\n" + consoleLogs.join("\n"),
+      );
+      throw err;
+    }
 
     // The View on Live Site action lives under the per-locale content-options
     // menu. Open it, then click the item.
