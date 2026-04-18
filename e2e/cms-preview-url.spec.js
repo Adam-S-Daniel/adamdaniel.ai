@@ -10,6 +10,16 @@ const POSTS_DIR = path.join(REPO_ROOT, "_posts");
 // drifts (e.g. includes the date prefix), the button 404s. The field is named
 // `permalink_slug` (not `slug`) to dodge a Sveltia/Decap collision where a
 // field literally named `slug` is shadowed by the built-in `{{slug}}` tag.
+//
+// Note on coverage: this spec verifies the URL the *template would produce*
+// is actually reachable in Jekyll, but it reproduces the slugify logic in
+// JavaScript rather than executing Sveltia's template engine. So template-
+// engine quirks (e.g. the `{{fields.slug}}` shadowing collision that
+// motivated `_plugins/permalink_slug.rb`) won't show up here. Sveltia is a
+// browser-only SPA that uses the File System Access API for its local
+// backend (showDirectoryPicker requires a user gesture and isn't currently
+// automatable from Playwright — see microsoft/playwright#18267), so live
+// admin coverage stays a manual smoke test against `preview.adamdaniel.ai`.
 const POSTS_PREVIEW_PATH =
   `preview_path: "/blog/{{fields.permalink_slug | default('{{fields.title}}') | slugify}}/"`;
 
