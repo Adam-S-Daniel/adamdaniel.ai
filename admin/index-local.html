@@ -73,7 +73,12 @@
   <!-- Tell Sveltia CMS to use the local config file -->
   <link rel="cms-config-url" type="text/yaml" href="config-local.yml">
 
-  <script src="vendor/sveltia-cms.js"></script>
+  <!--
+    Loaded from unpkg (rather than the gitignored vendor/ copy) so this page
+    works in a fresh clone and in CI without a separate vendor step. Pinned to
+    the same version as `admin/index.html`'s implicit @latest for parity.
+  -->
+  <script src="https://unpkg.com/@sveltia/cms/dist/sveltia-cms.js" type="module"></script>
 
   <script>
     document.addEventListener('DOMContentLoaded', function () {

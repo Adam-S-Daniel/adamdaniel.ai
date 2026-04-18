@@ -8,12 +8,21 @@ const MOBILE = { width: 375, height: 667 };
 module.exports = defineConfig({
   testDir: "./e2e",
   fullyParallel: true,
-  webServer: {
-    command:
-      "bundle exec jekyll build --quiet && npx serve _site -l 4000 --no-clipboard",
-    port: 4000,
-    reuseExistingServer: !process.env.CI,
-  },
+  webServer: [
+    {
+      command:
+        "bundle exec jekyll build --quiet && npx serve _site -l 4000 --no-clipboard",
+      port: 4000,
+      reuseExistingServer: !process.env.CI,
+    },
+    {
+      // Local backend for the Sveltia CMS — used by e2e/admin-cms.spec.js to
+      // load real entries from _posts/ without the GitHub OAuth round-trip.
+      command: "npx decap-server",
+      port: 8081,
+      reuseExistingServer: !process.env.CI,
+    },
+  ],
   use: {
     baseURL: "http://localhost:4000",
     screenshot: "on",
