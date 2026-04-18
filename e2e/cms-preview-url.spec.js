@@ -21,7 +21,7 @@ const POSTS_DIR = path.join(REPO_ROOT, "_posts");
 // automatable from Playwright — see microsoft/playwright#18267), so live
 // admin coverage stays a manual smoke test against `preview.adamdaniel.ai`.
 const POSTS_PREVIEW_PATH =
-  `preview_path: "/blog/{{fields.permalink_slug | default('{{fields.title}}') | slugify}}/"`;
+  `preview_path: "/blog/{{fields.slug | default('{{fields.title}}') | slugify}}/"`;
 
 function slugify(s) {
   return s
@@ -66,7 +66,7 @@ test.describe("CMS preview URL round-trip", () => {
   });
 
   for (const { file, fm } of publishedPosts) {
-    const previewSlug = slugify(fm.permalink_slug || fm.title);
+    const previewSlug = slugify(fm.slug || fm.title);
     test(`${file} is served at the preview URL /blog/${previewSlug}/`, async ({
       page,
     }) => {
