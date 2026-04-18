@@ -32,13 +32,20 @@ public_folder: /assets/images/uploads
 collections:
 
   # ── Posts ─────────────────────────────────────────────────
+  #
+  # Jekyll's `_posts/` collection requires filenames of the form
+  # YYYY-MM-DD-<slug>.md. The live URL uses only the slug portion
+  # (see `permalink: /blog/:slug/` in _config.yml) — so `preview_path`
+  # must reference the same slug without the date prefix, otherwise
+  # the "View on Live Site" button 404s.
+  #
   - name: posts
     label: Posts
     label_singular: Post
     folder: _posts
     create: true
-    slug: "{{year}}-{{month}}-{{day}}-{{slug}}"
-    preview_path: /blog/{{slug}}/
+    slug: "{{year}}-{{month}}-{{day}}-{{fields.slug | default('{{fields.title}}') | slugify}}"
+    preview_path: "/blog/{{fields.slug | default('{{fields.title}}') | slugify}}/"
     summary: "{{title}} ({{date | date('MMM D, YYYY')}}){% if publish_date %} — Scheduled{% endif %}"
     sortable_fields:
       - date
@@ -56,6 +63,12 @@ collections:
         widget: string
         required: true
         hint: "The post headline — make it compelling"
+
+      - name: slug
+        label: URL Slug
+        widget: string
+        required: false
+        hint: "URL path segment (leave blank to auto-generate from title). Must match any existing published URL to avoid breaking inbound links."
 
       - name: date
         label: Date

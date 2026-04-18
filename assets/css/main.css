@@ -602,6 +602,37 @@ main {
              border-thermal 8s ease-in-out infinite alternate;
 }
 
+/* ── Page not found ─────────────────────────────── */
+
+.page-not-found {
+  text-align: center;
+  padding-top: 2rem;
+  border-bottom: none;
+}
+
+.page-not-found__code {
+  font-family: var(--mono);
+  font-size: clamp(4rem, 14vw, 8rem);
+  font-weight: 200;
+  letter-spacing: 0.08em;
+  color: var(--accent);
+  line-height: 1;
+  margin: 0;
+  animation: text-thermal 8s ease-in-out infinite alternate;
+}
+
+.page-not-found__message {
+  font-size: 0.95rem;
+  letter-spacing: 0.02em;
+  color: var(--text-dim);
+  margin-top: 1rem;
+}
+
+.page-not-found__actions {
+  text-align: center;
+  margin-top: 2rem;
+}
+
 /* ── Utility ────────────────────────────────────── */
 
 .sr-only {
