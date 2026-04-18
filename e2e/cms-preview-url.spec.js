@@ -7,9 +7,11 @@ const POSTS_DIR = path.join(REPO_ROOT, "_posts");
 
 // The CMS computes the "View on Live Site" URL from this template. Both admin
 // configs must keep it in sync with Jekyll's `permalink: /blog/:slug/` — if it
-// drifts (e.g. includes the date prefix), the button 404s.
+// drifts (e.g. includes the date prefix), the button 404s. The field is named
+// `permalink_slug` (not `slug`) to dodge a Sveltia/Decap collision where a
+// field literally named `slug` is shadowed by the built-in `{{slug}}` tag.
 const POSTS_PREVIEW_PATH =
-  `preview_path: "/blog/{{fields.slug | default('{{fields.title}}') | slugify}}/"`;
+  `preview_path: "/blog/{{fields.permalink_slug | default('{{fields.title}}') | slugify}}/"`;
 
 function slugify(s) {
   return s
@@ -54,7 +56,7 @@ test.describe("CMS preview URL round-trip", () => {
   });
 
   for (const { file, fm } of publishedPosts) {
-    const previewSlug = slugify(fm.slug || fm.title);
+    const previewSlug = slugify(fm.permalink_slug || fm.title);
     test(`${file} is served at the preview URL /blog/${previewSlug}/`, async ({
       page,
     }) => {

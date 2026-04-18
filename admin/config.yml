@@ -39,13 +39,20 @@ collections:
   # must reference the same slug without the date prefix, otherwise
   # the "View on Live Site" button 404s.
   #
+  # The custom URL field is named `permalink_slug` (not `slug`) because a
+  # field literally named `slug` is shadowed by Sveltia/Decap's built-in
+  # `{{slug}}` template tag — `{{fields.slug}}` then silently resolves to
+  # undefined and falls back to the title. The Jekyll plugin
+  # `_plugins/permalink_slug.rb` mirrors this field into the standard
+  # `slug:` data key so `permalink: /blog/:slug/` keeps working.
+  #
   - name: posts
     label: Posts
     label_singular: Post
     folder: _posts
     create: true
-    slug: "{{year}}-{{month}}-{{day}}-{{fields.slug | default('{{fields.title}}') | slugify}}"
-    preview_path: "/blog/{{fields.slug | default('{{fields.title}}') | slugify}}/"
+    slug: "{{year}}-{{month}}-{{day}}-{{fields.permalink_slug | default('{{fields.title}}') | slugify}}"
+    preview_path: "/blog/{{fields.permalink_slug | default('{{fields.title}}') | slugify}}/"
     summary: "{{title}} ({{date | date('MMM D, YYYY')}}){% if publish_date %} — Scheduled{% endif %}"
     sortable_fields:
       - date
@@ -64,7 +71,7 @@ collections:
         required: true
         hint: "The post headline — make it compelling"
 
-      - name: slug
+      - name: permalink_slug
         label: URL Slug
         widget: string
         required: false
