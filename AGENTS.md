@@ -184,13 +184,17 @@ Tests import `{ test, expect }` from `./base` instead of `@playwright/test`. The
 
 1. Import from `./base`: `const { test, expect } = require("./base");`
 2. Tests automatically run across all 8 projects — no per-test matrix setup needed.
-3. To skip a test for specific conditions (e.g. forced-colors strips gradients):
+3. To skip a test for specific projects, read the project config via `testInfo`:
    ```js
-   const isForcedColors = await page.evaluate(() =>
-     window.matchMedia("(forced-colors: active)").matches,
-   );
-   test.skip(isForcedColors, "Gradient not rendered in forced-colors mode");
+   test("my test", async ({ page }, testInfo) => {
+     test.skip(
+       testInfo.project.use.forcedColors === "active",
+       "Gradient rendering differs in forced-colors mode",
+     );
+     // ...
+   });
    ```
+   Don't use `matchMedia()` for this — it's unreliable under Playwright's media emulation.
 
 ### Parallelism
 
