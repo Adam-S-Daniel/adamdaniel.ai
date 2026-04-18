@@ -80,6 +80,36 @@ test.describe("CMS admin: View on Live Site", () => {
         return null;
       };
 
+      // Sveltia caches the picked root directory handle in IndexedDB so a
+      // reload skips the picker. Real FileSystemDirectoryHandles have
+      // built-in structured-clone support; our plain-object mock does not,
+      // so `store.put` throws DataCloneError and crashes sign-in. Swallow
+      // that one error type and return a fake-success IDBRequest so
+      // Sveltia's IndexedDB wrapper resolves and the flow continues.
+      const origPut = IDBObjectStore.prototype.put;
+      IDBObjectStore.prototype.put = function (value, ...rest) {
+        try {
+          return origPut.call(this, value, ...rest);
+        } catch (err) {
+          if (err.name !== "DataCloneError") throw err;
+          const req = {
+            readyState: "done",
+            result: 1,
+            error: null,
+            source: this,
+            transaction: this.transaction,
+            onsuccess: null,
+            onerror: null,
+          };
+          queueMicrotask(() => {
+            if (typeof req.onsuccess === "function") {
+              req.onsuccess(new Event("success"));
+            }
+          });
+          return req;
+        }
+      };
+
       /**
        * Build a tiny FileSystemDirectoryHandle / FileSystemFileHandle mock
        * backed by the fixtures tree. Implements the subset Sveltia's local
