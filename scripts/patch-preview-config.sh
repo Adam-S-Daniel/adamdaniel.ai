@@ -37,5 +37,7 @@ sed -i -E "s|^display_url:.*|display_url: ${PREVIEW_FULL}|" "$CONFIG"
 sed -i -E "s|^(  branch:).*|\\1 ${BRANCH}|" "$CONFIG"
 
 # 4. preview_path: prefix every collection's URL path with /pr-N so the
-#    final URL lands inside the preview deploy's subpath.
-sed -i -E "s|(preview_path:[[:space:]]*\"?)/|\\1/pr-${PR_NUMBER}/|g" "$CONFIG"
+#    final URL lands inside the preview deploy's subpath. Uses perl so the
+#    pattern can skip paths already prefixed with /pr-${PR_NUMBER}/ —
+#    re-running the script must be a no-op.
+perl -i -pe "s|(preview_path:\s*\"?)/(?!pr-${PR_NUMBER}/)|\$1/pr-${PR_NUMBER}/|g" "$CONFIG"
