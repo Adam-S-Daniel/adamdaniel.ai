@@ -47,6 +47,19 @@ jobs:
             --baseurl "/pr-${PR_NUMBER}" \
             --destination ./_site_preview
 
+      - name: Patch CMS config for preview URL
+        # admin/config.yml is checked in with production URLs; override for
+        # this preview so "View on Live Site" points at the same deploy the
+        # editor is currently looking at, not prod.
+        run: |
+          PR_NUMBER=${{ github.event.pull_request.number }}
+          PREVIEW_URL="https://${PREVIEW_DOMAIN}/pr-${PR_NUMBER}"
+          CONFIG=./_site_preview/admin/config.yml
+          sed -i -E "s|^site_url:.*|site_url: ${PREVIEW_URL}|" "$CONFIG"
+          sed -i -E "s|^display_url:.*|display_url: ${PREVIEW_URL}|" "$CONFIG"
+          echo "--- Patched admin/config.yml URL block ---"
+          grep -E "^(site_url|display_url):" "$CONFIG"
+
       - name: Configure AWS credentials
         uses: aws-actions/configure-aws-credentials@7474bc4690e29a8392af63c5b98e7449536d5c3a  # v4.3.1
         with:
