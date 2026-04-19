@@ -41,17 +41,28 @@ All e2e tests run across 8 Playwright projects covering browsers, viewports, tex
 
 ## Skipping tests for specific conditions
 
-Some tests don't apply to all projects. Use runtime detection:
+Some tests don't apply to all projects. Read the project config via `testInfo`:
 
 ```js
-// Forced-colors strips decorative backgrounds
-const isForcedColors = await page.evaluate(() =>
-  window.matchMedia("(forced-colors: active)").matches,
-);
-test.skip(isForcedColors, "Gradient not rendered in forced-colors mode");
+test("my test", async ({ page }, testInfo) => {
+  test.skip(
+    testInfo.project.use.forcedColors === "active",
+    "Gradient rendering differs in forced-colors mode",
+  );
+  // ...
+});
 ```
 
-Prefer media-query detection over checking `testInfo.project.name` — it's more robust.
+Don't use `matchMedia()` for this — it's unreliable under Playwright's media emulation. A viewer-side check can return `false` on a project configured with `forcedColors: "active"`, and the test will run (and flake) where it should have skipped.
+
+For heavy specs that only need single-project coverage (e.g. loading the real CMS), skip by project name:
+
+```js
+test.skip(
+  testInfo.project.name !== "chromium-desktop",
+  "Heavy setup — one project is enough",
+);
+```
 
 ## Custom fixture: rootFontSize
 
@@ -122,6 +133,27 @@ npx playwright test e2e/visual-regression.spec.js --update-snapshots --project c
 **First run for a new browser project:** baselines don't exist yet and the test fails. Run `--update-snapshots` to generate them, then commit.
 
 **Pixel-level analysis:** `glow-banding.spec.js` uses a different approach — direct pixel sampling with `pngjs` for quantitative gradient smoothness checks, independent of golden images.
+
+## Non-browser specs that still live in e2e/
+
+Some specs run under Playwright's runner purely for its discovery + parallelism, not because they need a browser:
+
+| Spec | What it exercises |
+|---|---|
+| `e2e/preview-config-patch.spec.js` | `scripts/patch-preview-config.sh` — copies `admin/config.yml` into a temp dir, runs the script, asserts the patched output |
+| `e2e/cloudfront-preview-router.spec.js` | Extracts the inline CloudFront Function from `infrastructure/bootstrap/template.yaml`, evals it in Node, asserts the host → S3-prefix routing table |
+
+They ignore the `page` fixture and don't need Jekyll to be running — treat them as unit tests that happen to share the test harness.
+
+## Driving Sveltia CMS in an e2e spec
+
+`e2e/admin-cms.spec.js` loads the real Sveltia CMS editor against a hand-rolled `FileSystemDirectoryHandle` mock. Sveltia's local backend calls `showDirectoryPicker()`, which needs a real user gesture in Chromium; stubbing the picker lets us exercise Sveltia's actual template engine (what the "View on Live Site" button runs when it computes a preview URL). Key pieces:
+
+- `window.showDirectoryPicker` returns a mock directory handle backed by a tree loaded from `_posts/` + `_tags/` + `_projects/` + `pages/`.
+- `IDBObjectStore.prototype.put` is wrapped to swallow `DataCloneError` — the mock has function properties and isn't structured-cloneable.
+- `window.open` is stubbed so the menu item's `window.open(previewURL)` call is captured instead of opening a popup.
+
+Restricted to `chromium-desktop` because Sveltia is heavy to boot.
 
 ## Visual showcase
 
