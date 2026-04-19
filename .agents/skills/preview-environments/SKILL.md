@@ -6,17 +6,30 @@ compatibility: Requires AWS CLI v2 and gh CLI for debugging tasks.
 
 # Preview Environments
 
-Each PR gets a preview at `https://preview.adamdaniel.ai/pr-{N}/`.
+Each PR gets a preview at `https://preview-pr{N}.adamdaniel.ai/`. URL
+paths on the preview subdomain match production exactly — e.g. a post
+at `/blog/foo/` is reachable at both
+`https://adamdaniel.ai/blog/foo/` and
+`https://preview-pr21.adamdaniel.ai/blog/foo/`.
 
 ## Architecture
 
 ```
 PR push
   → deploy-preview.yml
-  → Jekyll build (--baseurl /pr-{N})
+  → Jekyll build (no --baseurl; root-relative URLs)
+  → patch-preview-config.sh → repoint admin/config.yml for this PR
   → aws s3 sync → s3://adamdaniel-ai-previews/pr-{N}/
   → CloudFront invalidation /pr-{N}/*
-  → Bot comment updated: https://preview.adamdaniel.ai/pr-{N}/
+  → Bot comment updated: https://preview-pr{N}.adamdaniel.ai/
+
+Request-time (every visitor hit)
+  → Browser → preview-pr21.adamdaniel.ai/blog/foo/
+  → Route53 wildcard *.adamdaniel.ai → Preview CloudFront
+  → CloudFront Function (viewer-request): host → S3-prefix
+    req.uri = '/pr-21/blog/foo/'
+  → CloudFront cache keyed by /pr-21/blog/foo/
+  → (on miss) S3 website endpoint serves /pr-21/blog/foo/index.html
 
 PR close/merge
   → teardown-preview.yml
@@ -31,7 +44,8 @@ PR close/merge
 |---|---|
 | S3 bucket | `adamdaniel-ai-previews` (static website hosting, public read) |
 | CloudFront ID | `E2OBHKV0LC6CJ2` |
-| Preview domain | `preview.adamdaniel.ai` |
+| Preview domain pattern | `preview-pr{N}.adamdaniel.ai` (matched by `*.adamdaniel.ai` wildcard) |
+| CloudFront Function | `${STACK}-preview-router` — host → S3 prefix rewrite at viewer-request |
 | AWS region | `us-east-1` |
 
 ## Workflow file: `.github/workflows/deploy-preview.yml`
@@ -44,17 +58,21 @@ PR close/merge
 - `AWS_ROLE_ARN` — OIDC role for AWS auth (no long-lived keys)
 - `PREVIEW_CLOUDFRONT_ID` — CloudFront distribution ID (`E2OBHKV0LC6CJ2`)
 
-If `PREVIEW_CLOUDFRONT_ID` is unset, the workflow gracefully falls back to the S3 website URL (HTTP only — won't work with Sveltia CMS).
+If `PREVIEW_CLOUDFRONT_ID` is unset, the workflow falls back to the S3 website URL at `/pr-{N}/` (HTTP only — won't work with Sveltia CMS).
 
-## Jekyll baseurl
+## Jekyll build
 
-The build uses `--baseurl "/pr-{N}"` so all asset paths are prefixed. The site is built into `./_site_preview/` then synced to the S3 prefix `pr-{N}/`. This lets multiple PRs coexist in the same bucket.
+Preview builds run with **no** `--baseurl`. Each PR serves from its
+own subdomain root, so pages use root-relative URLs identical to
+production. The site is built into `./_site_preview/` then synced to
+the S3 prefix `pr-{N}/`. The CloudFront Function handles the
+prefix-to-subdomain mapping transparently at request time.
 
 ## CloudFront cache behaviour
 
 - Cache policy: `CachingDisabled` (4135ea2d-...) — previews always serve fresh content
-- Invalidations run on every push and on teardown
-- CloudFront origin: S3 website endpoint (`adamdaniel-ai-previews.s3-website-us-east-1.amazonaws.com`) via `http-only` custom origin
+- Invalidations run on every push and on teardown, against `/pr-{N}/*` — the post-rewrite URI is what CloudFront caches by
+- Origin: S3 website endpoint (`adamdaniel-ai-previews.s3-website-us-east-1.amazonaws.com`) via `http-only` custom origin
 
 ## Bot comment
 
@@ -87,7 +105,7 @@ aws cloudfront get-distribution --id E2OBHKV0LC6CJ2 \
 
 **Manually sync a build to S3:**
 ```bash
-bundle exec jekyll build --baseurl "/pr-<N>" --destination ./_site_preview
+bundle exec jekyll build --destination ./_site_preview
 aws s3 sync ./_site_preview s3://adamdaniel-ai-previews/pr-<N>/ \
   --delete --cache-control "no-cache, must-revalidate"
 ```
@@ -100,8 +118,11 @@ The `PREVIEW_CLOUDFRONT_ID` secret was not set when the workflow ran. Add the se
 **Sveltia CMS won't load from the preview URL:**
 Sveltia CMS requires HTTPS or localhost. The preview domain must be served via CloudFront (HTTPS). If the S3 fallback URL appears, check the secret is set.
 
-**Preview loads but assets 404:**
-Jekyll `--baseurl` mismatch. Ensure the baseurl matches the S3 prefix exactly: `/pr-{N}` (no trailing slash).
+**"View on Live Site" in the CMS editor sends editors to prod:**
+`patch-preview-config.sh` rewrites `admin/config.yml` during the preview build so Sveltia's `site_url`/`display_url` point at the PR's subdomain and the GitHub backend reads from the PR's head branch. If this step is missing, Sveltia will open production URLs with the slugified title rather than the PR's draft content.
+
+**preview-pr{N}.adamdaniel.ai resolves but returns 404 or XML:**
+Either the CloudFront Function isn't attached to the distribution's viewer-request behaviour, or the wildcard Route53 record / wildcard ACM cert is missing. Re-run `infrastructure/bootstrap/deploy.sh`.
 
 **Old preview content still showing:**
 CloudFront cache not yet invalidated, or the invalidation is in progress. Wait ~30s or manually invalidate (see above).

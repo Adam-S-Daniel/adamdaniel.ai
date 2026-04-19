@@ -107,7 +107,7 @@ Tests: `cd oauth-proxy && python -m pytest test_lambda.py -v`
 ### Preview Environments
 
 PR previews are deployed to S3 and served via CloudFront with HTTPS:
-- URL pattern: `https://preview.adamdaniel.ai/pr-{N}/`
+- URL pattern: `https://preview-pr{N}.adamdaniel.ai/`
 - Bucket: `adamdaniel-ai-previews` (S3 website hosting origin)
 - CDN: CloudFront distribution with ACM certificate
 - Teardown: auto-deleted when the PR is closed/merged
