@@ -70,7 +70,8 @@ aws cloudformation deploy \
   --no-fail-on-empty-changeset \
   --parameter-overrides \
     "CreateOIDCProvider=${CREATE_OIDC_PROVIDER}" \
-    "HostedZoneId=${HOSTED_ZONE_ID}"
+    "HostedZoneId=${HOSTED_ZONE_ID}" \
+    "PreviewDomainName=*.adamdaniel.ai"
 
 # ── Fetch outputs ──────────────────────────────────────────────────────────
 info "Fetching stack outputs…"
