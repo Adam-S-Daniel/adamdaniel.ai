@@ -5,10 +5,16 @@ Personal website and blog for Adam Daniel (Freelance AI Engineer). Jekyll static
 ## Architecture
 
 ```
-Production:   adamdaniel.ai           → CloudFront → S3
-Preview:      preview.adamdaniel.ai   → CloudFront → S3
-CMS:          adamdaniel.ai/admin/    → Sveltia CMS → GitHub OAuth → Lambda
+Production:   adamdaniel.ai                     → CloudFront → S3
+Preview:      preview-pr${N}.adamdaniel.ai      → CloudFront → S3 (/pr-${N}/)
+CMS:          adamdaniel.ai/admin/              → Sveltia CMS → GitHub OAuth → Lambda
 ```
+
+Each PR gets its own subdomain under `*.adamdaniel.ai`. A single
+preview CloudFront distribution serves the whole preview bucket; a
+viewer-request CloudFront Function maps `Host: preview-pr${N}...` to
+the S3 object-key prefix `/pr-${N}/`. Pages on preview and prod share
+the same root-relative URL structure (no `/pr-N/` in any visible URL).
 
 ## Key commands
 
@@ -47,7 +53,7 @@ npx playwright test e2e/glow-banding.spec.js       # single test file
 | CloudFront (production) | see bootstrap stack output `ProductionDistributionId` |
 | CloudFront (preview) | see bootstrap stack output `PreviewDistributionId` |
 | Production URL | `https://adamdaniel.ai` |
-| Preview URL | `https://preview.adamdaniel.ai` |
+| Preview URL | `https://preview-pr${N}.adamdaniel.ai` |
 | IAM role | `adamdaniel-ai-github-actions` |
 | OAuth proxy stack | `adamdaniel-ai-oauth-proxy` |
 
@@ -91,14 +97,15 @@ npx playwright test e2e/glow-banding.spec.js       # single test file
 
 #### Job: `deploy-preview` (when action ≠ `closed`)
 
-1. Build Jekyll with `--baseurl "/pr-{N}"` → `./_site_preview/`
-2. AWS OIDC auth via `AWS_ROLE_ARN`
-3. `aws s3 sync` → `s3://adamdaniel-ai-previews/pr-{N}/` with `no-cache` headers
-4. CloudFront invalidation at `/pr-{N}/*` (skipped if `PREVIEW_CLOUDFRONT_ID` not set)
-5. Post/update PR comment using `<!-- adamdaniel-preview-bot -->` marker to avoid duplicates
+1. Build Jekyll with no `--baseurl` → `./_site_preview/` (URLs are root-relative; the subdomain already isolates each PR)
+2. Run `scripts/patch-preview-config.sh` on `_site_preview/admin/config.yml` to point Sveltia at the preview subdomain and the PR's head branch
+3. AWS OIDC auth via `AWS_ROLE_ARN`
+4. `aws s3 sync` → `s3://adamdaniel-ai-previews/pr-{N}/` with `no-cache` headers (S3 layout unchanged; CloudFront Function maps host → prefix)
+5. CloudFront invalidation at `/pr-{N}/*` (skipped if `PREVIEW_CLOUDFRONT_ID` not set)
+6. Post/update PR comment using `<!-- adamdaniel-preview-bot -->` marker to avoid duplicates
 
 URL shown in comment:
-- With `PREVIEW_CLOUDFRONT_ID`: `https://preview.adamdaniel.ai/pr-{N}/`
+- With `PREVIEW_CLOUDFRONT_ID`: `https://preview-pr{N}.adamdaniel.ai/`
 - Without: `http://adamdaniel-ai-previews.s3-website-us-east-1.amazonaws.com/pr-{N}/` (HTTP fallback — Sveltia CMS won't work over this)
 
 #### Job: `teardown-preview` (when action == `closed`)
@@ -135,7 +142,7 @@ This ordering ensures broken content cannot merge to production even if `cms/rea
 ```
 CMS creates PR (branch: cms/draft-{timestamp})
   → validate-content runs → adds cms/draft label
-  → preview deployed at preview.adamdaniel.ai/pr-{N}/
+  → preview deployed at preview-pr{N}.adamdaniel.ai
   → editor reviews preview
   → editor (or admin) changes label: cms/draft → cms/ready
   → validate-content re-runs → if passes → auto-merge → deploy-production triggers
@@ -227,9 +234,9 @@ node scripts/generate-showcase.js                           # produces before/af
 
 ## Preview environment flow
 
-1. PR opened → Jekyll builds with `--baseurl /pr-{N}` → sync to `s3://adamdaniel-ai-previews/pr-{N}/`
-2. CloudFront cache invalidated at `/pr-{N}/*`
-3. Bot posts `https://preview.adamdaniel.ai/pr-{N}/` as PR comment
+1. PR opened → Jekyll builds at root (no baseurl) → sync to `s3://adamdaniel-ai-previews/pr-{N}/`
+2. CloudFront cache invalidated at `/pr-{N}/*` (what the viewer-request Function rewrites requests to)
+3. Bot posts `https://preview-pr{N}.adamdaniel.ai/` as PR comment
 4. PR closed → S3 files deleted, CloudFront invalidated, existing comment updated to "cleaned up"
 
 ## Skills

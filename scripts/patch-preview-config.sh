@@ -1,8 +1,7 @@
 #!/usr/bin/env bash
 #
 # Patch admin/config.yml (in-place) so a preview deploy's CMS points at the
-# right host, branch, and paths. See deploy-preview.yml for why each field
-# has to change.
+# right host and branch. See deploy-preview.yml for why each field changes.
 #
 # Usage: patch-preview-config.sh <config_file> <pr_number> <branch> <preview_host>
 set -euo pipefail
@@ -13,31 +12,28 @@ if [[ $# -ne 4 ]]; then
 fi
 
 CONFIG="$1"
+# shellcheck disable=SC2034  # reserved for future use
 PR_NUMBER="$2"
 BRANCH="$3"
 PREVIEW_HOST="$4"
 
-PREVIEW_ORIGIN="https://${PREVIEW_HOST}"
-PREVIEW_FULL="${PREVIEW_ORIGIN}/pr-${PR_NUMBER}"
+PREVIEW_URL="https://${PREVIEW_HOST}"
 
-# 1. site_url: Sveltia only keeps .origin() from this — path would be
-#    stripped — so we set just the origin here and stuff the /pr-N prefix
-#    into preview_path below.
-sed -i -E "s|^site_url:.*|site_url: ${PREVIEW_ORIGIN}|" "$CONFIG"
+# 1. site_url: Sveltia keeps only .origin() from this, so the host must be
+#    the full subdomain. No path component needed — each PR lives at the
+#    root of its own subdomain, so preview and prod share URL paths.
+sed -i -E "s|^site_url:.*|site_url: ${PREVIEW_URL}|" "$CONFIG"
 
-# 2. display_url: used by the "Open Production Site" button only; full URL
-#    is what we want so the button links to the preview, not prod.
-sed -i -E "s|^display_url:.*|display_url: ${PREVIEW_FULL}|" "$CONFIG"
+# 2. display_url: used by the "Open Production Site" button only. Points
+#    at the same preview so the button doesn't fling editors at prod.
+sed -i -E "s|^display_url:.*|display_url: ${PREVIEW_URL}|" "$CONFIG"
 
 # 3. backend.branch: Sveltia's GitHub backend fetches posts from whichever
-#    branch is listed here, not whatever branch the preview was built from.
-#    Without repointing this, Sveltia reads stale `main` copies and URL
-#    templates silently fall back to slugified titles for posts whose slug
-#    frontmatter was only added on the PR branch.
+#    branch is listed here, not whichever branch the preview was *built*
+#    from. Without repointing, Sveltia reads stale `main` copies and the
+#    editor sees last-merged content instead of this PR's.
 sed -i -E "s|^(  branch:).*|\\1 ${BRANCH}|" "$CONFIG"
 
-# 4. preview_path: prefix every collection's URL path with /pr-N so the
-#    final URL lands inside the preview deploy's subpath. Uses perl so the
-#    pattern can skip paths already prefixed with /pr-${PR_NUMBER}/ —
-#    re-running the script must be a no-op.
-perl -i -pe "s|(preview_path:\s*\"?)/(?!pr-${PR_NUMBER}/)|\$1/pr-${PR_NUMBER}/|g" "$CONFIG"
+# preview_path is intentionally left alone: pages on the subdomain live
+# at the same paths as on prod (/blog/:slug/), so the checked-in template
+# is already correct for previews.

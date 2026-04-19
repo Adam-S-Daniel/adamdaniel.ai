@@ -21,7 +21,7 @@ jobs:
     env:
       AWS_REGION: us-east-1
       PREVIEW_BUCKET: adamdaniel-ai-previews
-      PREVIEW_DOMAIN: preview.adamdaniel.ai
+      APEX_DOMAIN: adamdaniel.ai
       CLOUDFRONT_DISTRIBUTION_ID: ${{ secrets.PREVIEW_CLOUDFRONT_ID }}
 
     steps:
@@ -39,13 +39,13 @@ jobs:
       - name: Build Jekyll (preview mode)
         env:
           JEKYLL_ENV: preview
-        # Deploy into a PR-specific subdirectory so multiple previews can
-        # coexist in the same S3 bucket.
+        # Build with no --baseurl: each PR serves from its own subdomain
+        # (preview-prN.adamdaniel.ai), so pages use root-relative URLs
+        # identical to production. S3 still stores the bucket at pr-N/
+        # prefix; the CloudFront Function on the preview distribution
+        # maps host → S3 prefix transparently.
         run: |
-          PR_NUMBER=${{ github.event.pull_request.number }}
-          bundle exec jekyll build \
-            --baseurl "/pr-${PR_NUMBER}" \
-            --destination ./_site_preview
+          bundle exec jekyll build --destination ./_site_preview
 
       - name: Patch CMS config for preview deployment
         # admin/config.yml is checked into git with production values. See
@@ -55,12 +55,13 @@ jobs:
           PR_NUMBER=${{ github.event.pull_request.number }}
           BRANCH='${{ github.event.pull_request.head.ref }}'
           CONFIG=./_site_preview/admin/config.yml
+          PREVIEW_HOST="preview-pr${PR_NUMBER}.${APEX_DOMAIN}"
 
           ./scripts/patch-preview-config.sh \
             "$CONFIG" \
             "$PR_NUMBER" \
             "$BRANCH" \
-            "$PREVIEW_DOMAIN"
+            "$PREVIEW_HOST"
 
           echo "--- Patched admin/config.yml ---"
           grep -E "^(site_url|display_url):|^  branch:|preview_path:" "$CONFIG"
@@ -92,14 +93,17 @@ jobs:
         with:
           script: |
             const pr = context.payload.pull_request.number;
-            const domain = process.env.PREVIEW_DOMAIN;
+            const apex = process.env.APEX_DOMAIN;
             const cfId = process.env.CLOUDFRONT_DISTRIBUTION_ID;
             const bucket = process.env.PREVIEW_BUCKET;
             const region = process.env.AWS_REGION;
 
-            // Use HTTPS custom domain if CloudFront is configured, else S3 website
+            // Subdomain-per-PR when CloudFront is set up (wildcard cert +
+            // Function handles host → S3 prefix). Fall back to the raw S3
+            // website endpoint (with /pr-N/ path) for accounts that haven't
+            // provisioned the preview distribution yet.
             const url = cfId
-              ? `https://${domain}/pr-${pr}/`
+              ? `https://preview-pr${pr}.${apex}/`
               : `http://${bucket}.s3-website-${region}.amazonaws.com/pr-${pr}/`;
 
             // Find existing preview comment (to update rather than spam)

@@ -5,9 +5,10 @@ Description: >
 
   Creates:
     1. S3 bucket for CloudFormation/SAM deployment artifacts
-    2. ACM certificate + CloudFront distribution for preview.adamdaniel.ai
+    2. ACM wildcard certificate *.adamdaniel.ai + CloudFront distribution
+       serving every preview-prN.adamdaniel.ai subdomain off one bucket
     3. ACM certificate + CloudFront distribution for adamdaniel.ai (production)
-    4. Route53 DNS records for preview and production domains
+    4. Route53 DNS records for preview wildcard and production domains
     5. GitHub OIDC identity provider in AWS IAM
     6. IAM role for GitHub Actions (assumed via OIDC — no long-lived keys)
 
@@ -41,8 +42,11 @@ Parameters:
 
   PreviewDomainName:
     Type: String
-    Default: preview.adamdaniel.ai
-    Description: "Custom domain for PR preview deployments (served via CloudFront + HTTPS)"
+    Default: '*.adamdaniel.ai'
+    Description: >
+      Wildcard DNS + cert alias for PR previews. Each PR deploys to
+      preview-pr${N}.adamdaniel.ai (matched by the wildcard) and a
+      CloudFront Function maps the hostname to the S3 object-key prefix.
 
   ProductionBucketName:
     Type: String
@@ -104,9 +108,17 @@ Resources:
   # CloudFront distribution that fronts it.
   #
 
-  # ── ACM certificate for preview subdomain ──────────────────────────────────
+  # ── ACM wildcard certificate for preview subdomains ──────────────────────
   #
-  # Must be in us-east-1 for CloudFront. DNS validation via Route53.
+  # Must be in us-east-1 for CloudFront. DNS validation via Route53. Covers
+  # preview-pr1.adamdaniel.ai, preview-pr2.adamdaniel.ai, and any future
+  # single-label subdomain — a single cert for the whole preview fleet.
+  # Doesn't cover the apex adamdaniel.ai, which keeps its own prod cert.
+  #
+  # Note: CloudFront allows *.adamdaniel.ai on this distribution to coexist
+  # with the production distribution's specific adamdaniel.ai +
+  # www.adamdaniel.ai aliases. Requests for those specific hosts win over
+  # the wildcard.
   #
   PreviewCertificate:
     Type: AWS::CertificateManager::Certificate
@@ -117,7 +129,39 @@ Resources:
         - DomainName: !Ref PreviewDomainName
           HostedZoneId: !Ref HostedZoneId
 
-  # ── CloudFront distribution for preview.adamdaniel.ai ─────────────────────
+  # ── CloudFront Function: host → S3 object-key prefix ─────────────────────
+  #
+  # Runs at viewer-request on every request to the preview distribution.
+  # Extracts the PR number from preview-prN.adamdaniel.ai and prepends
+  # /pr-N to the URI before CloudFront looks up the object in S3. The
+  # browser-facing URL stays clean (no /pr-N/ prefix), and the S3 object
+  # key matches what deploy-preview.yml syncs.
+  #
+  # Hosts that don't match the pattern fall through unchanged — useful for
+  # anyone browsing directly to adamdaniel.ai (which is caught by the prod
+  # distribution anyway) or to preview.adamdaniel.ai.
+  #
+  PreviewRouterFunction:
+    Type: AWS::CloudFront::Function
+    Properties:
+      Name: !Sub "${AWS::StackName}-preview-router"
+      AutoPublish: true
+      FunctionConfig:
+        Comment: "preview-prN.adamdaniel.ai → /pr-N/<uri> for S3 origin"
+        Runtime: cloudfront-js-2.0
+      FunctionCode: |
+        function handler(event) {
+          var request = event.request;
+          var host = request.headers.host && request.headers.host.value;
+          if (!host) return request;
+          var m = host.match(/^preview-pr(\d+)\.adamdaniel\.ai$/);
+          if (m) {
+            request.uri = '/pr-' + m[1] + request.uri;
+          }
+          return request;
+        }
+
+  # ── CloudFront distribution for preview-pr*.adamdaniel.ai ────────────────
   #
   # Uses the S3 website endpoint as a custom origin (not OAC) so that S3
   # website hosting features (index documents per directory) work correctly.
@@ -142,6 +186,9 @@ Resources:
           AllowedMethods: [GET, HEAD, OPTIONS]
           CachedMethods: [GET, HEAD]
           Compress: true
+          FunctionAssociations:
+            - EventType: viewer-request
+              FunctionARN: !GetAtt PreviewRouterFunction.FunctionARN
         Origins:
           - Id: s3-website
             DomainName: !Sub "${PreviewBucketName}.s3-website-${AWS::Region}.amazonaws.com"
@@ -151,7 +198,13 @@ Resources:
         DefaultRootObject: index.html
         HttpVersion: http2and3
 
-  # ── Route53 alias record for preview.adamdaniel.ai ───────────────────────
+  # ── Route53 wildcard alias for *.adamdaniel.ai → preview distribution ───
+  #
+  # The wildcard matches every single-label subdomain not explicitly
+  # claimed by another record in this zone. `adamdaniel.ai` (apex) and
+  # `www.adamdaniel.ai` have their own specific records pointing at the
+  # production distribution, so they take precedence over the wildcard.
+  #
   PreviewDnsRecord:
     Type: AWS::Route53::RecordSet
     Properties:
@@ -485,8 +538,10 @@ Outputs:
     Value: !Ref CfnArtifactsBucket
 
   PreviewURL:
-    Description: "HTTPS URL for PR preview deployments"
-    Value: !Sub "https://${PreviewDomainName}"
+    Description: >
+      HTTPS URL template for PR preview deployments. Substitute the PR
+      number into `preview-pr${N}` to reach a specific preview.
+    Value: "https://preview-pr<N>.adamdaniel.ai"
 
   PreviewDistributionId:
     Description: "CloudFront distribution ID for preview cache invalidation"
