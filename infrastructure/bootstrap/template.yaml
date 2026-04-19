@@ -103,10 +103,76 @@ Resources:
 
   # ── S3 bucket for PR preview deployments ────────────────────────────────────
   #
-  # The preview bucket (adamdaniel-ai-previews) is created and configured
-  # outside this stack — see README for setup. This stack only manages the
-  # CloudFront distribution that fronts it.
+  # Imported into the stack. DeletionPolicy: Retain keeps this bucket alive
+  # even if the logical resource is removed from the template — we lost the
+  # earlier ProductionBucket + ProductionBucketPolicy that way and the
+  # production site went down with them (see commit history).
   #
+  PreviewBucket:
+    Type: AWS::S3::Bucket
+    DeletionPolicy: Retain
+    UpdateReplacePolicy: Retain
+    Properties:
+      BucketName: !Ref PreviewBucketName
+      PublicAccessBlockConfiguration:
+        BlockPublicAcls: false
+        BlockPublicPolicy: false
+        IgnorePublicAcls: false
+        RestrictPublicBuckets: false
+      WebsiteConfiguration:
+        IndexDocument: index.html
+        ErrorDocument: 404.html
+
+  PreviewBucketPolicy:
+    Type: AWS::S3::BucketPolicy
+    DeletionPolicy: Retain
+    Properties:
+      Bucket: !Ref PreviewBucket
+      PolicyDocument:
+        Version: "2012-10-17"
+        Statement:
+          - Sid: PublicReadForWebsite
+            Effect: Allow
+            Principal: "*"
+            Action: s3:GetObject
+            Resource: !Sub "arn:aws:s3:::${PreviewBucketName}/*"
+
+  # ── S3 bucket for production site ──────────────────────────────────────────
+  #
+  # Imported into the stack (one-time via `create-change-set --change-set-type
+  # IMPORT` — deploy.sh doesn't do imports). DeletionPolicy: Retain keeps the
+  # bucket alive even if the resource is later removed from the template, so
+  # production can't silently lose its website config + policy the way it did
+  # when earlier versions of this stack removed them.
+  #
+  ProductionBucket:
+    Type: AWS::S3::Bucket
+    DeletionPolicy: Retain
+    UpdateReplacePolicy: Retain
+    Properties:
+      BucketName: !Ref ProductionBucketName
+      PublicAccessBlockConfiguration:
+        BlockPublicAcls: false
+        BlockPublicPolicy: false
+        IgnorePublicAcls: false
+        RestrictPublicBuckets: false
+      WebsiteConfiguration:
+        IndexDocument: index.html
+        ErrorDocument: 404.html
+
+  ProductionBucketPolicy:
+    Type: AWS::S3::BucketPolicy
+    DeletionPolicy: Retain
+    Properties:
+      Bucket: !Ref ProductionBucket
+      PolicyDocument:
+        Version: "2012-10-17"
+        Statement:
+          - Sid: PublicReadForWebsite
+            Effect: Allow
+            Principal: "*"
+            Action: s3:GetObject
+            Resource: !Sub "arn:aws:s3:::${ProductionBucketName}/*"
 
   # ── ACM wildcard certificate for preview subdomains ──────────────────────
   #
