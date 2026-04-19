@@ -80,6 +80,10 @@
   -->
   <script src="https://unpkg.com/@sveltia/cms/dist/sveltia-cms.js" type="module"></script>
 
+  <!-- Live Preview bridge: broadcasts entry data on every save to any
+       open /preview/ tab. Loads after Sveltia so `window.CMS` exists. -->
+  <script src="preview-bridge.js" defer></script>
+
   <script>
     document.addEventListener('DOMContentLoaded', function () {
       var loading = document.getElementById('cms-loading');
