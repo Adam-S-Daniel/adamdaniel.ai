@@ -1,5 +1,5 @@
 ---
-title: Pellentesque Habitant Morbi Tristique
+title: Pellentesque Habitant Morbi Tristiquess
 slug: pellentesquess
 date: 2025-03-01 09:00:00 +0000
 excerpt: Ken Lorem ipsum dolor sit amet, consectetur adipiscing elit. Fusce risus nisl, viverra et, tempor et, pretium in, sapien.
