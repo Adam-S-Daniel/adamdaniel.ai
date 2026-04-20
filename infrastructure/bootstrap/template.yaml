@@ -227,6 +227,55 @@ Resources:
           return request;
         }
 
+  # ── CloudFront Function: strip /pr-N/ from response Location headers ────
+  #
+  # Runs at viewer-response on the same distribution as the request-side
+  # PreviewRouterFunction. The router rewrites the request URI by prepending
+  # /pr-N before sending it to S3, but S3 doesn't know about the rewrite —
+  # so when it 302s a no-trailing-slash directory request (e.g. /admin →
+  # /admin/) it includes its own internal path, surfacing /pr-N/admin/ in
+  # the Location header. The browser would then navigate to
+  # https://preview-prN.adamdaniel.ai/pr-N/admin/, which has no /pr-N/ in
+  # the visible URL space and 404s.
+  #
+  # This function strips the matching /pr-N/ prefix from Location on
+  # responses to a preview-prN.adamdaniel.ai host, restoring the clean
+  # public path. Only same-PR prefixes are stripped: a /pr-99/ leak on a
+  # pr-23 host is left visible so it fails loudly rather than silently
+  # routing somewhere unexpected. Absolute-URL Locations and non-3xx
+  # responses are no-ops.
+  #
+  PreviewLocationFixerFunction:
+    Type: AWS::CloudFront::Function
+    Properties:
+      Name: !Sub "${AWS::StackName}-preview-location-fixer"
+      AutoPublish: true
+      FunctionConfig:
+        Comment: "Strip /pr-N/ from Location headers on preview-prN responses"
+        Runtime: cloudfront-js-2.0
+      FunctionCode: |
+        function handler(event) {
+          var response = event.response;
+          var status = Number(response.statusCode);
+          if (status < 300 || status >= 400) return response;
+
+          var loc = response.headers && response.headers.location;
+          if (!loc || !loc.value) return response;
+
+          var host = event.request.headers.host && event.request.headers.host.value;
+          if (!host) return response;
+          var hm = host.match(/^preview-pr(\d+)\.adamdaniel\.ai$/);
+          if (!hm) return response;
+
+          var pr = hm[1];
+          var prefix = '/pr-' + pr;
+          if (loc.value === prefix || loc.value.indexOf(prefix + '/') === 0) {
+            var stripped = loc.value.slice(prefix.length);
+            loc.value = stripped.length === 0 ? '/' : stripped;
+          }
+          return response;
+        }
+
   # ── CloudFront distribution for preview-pr*.adamdaniel.ai ────────────────
   #
   # Uses the S3 website endpoint as a custom origin (not OAC) so that S3
@@ -255,6 +304,8 @@ Resources:
           FunctionAssociations:
             - EventType: viewer-request
               FunctionARN: !GetAtt PreviewRouterFunction.FunctionARN
+            - EventType: viewer-response
+              FunctionARN: !GetAtt PreviewLocationFixerFunction.FunctionARN
         Origins:
           - Id: s3-website
             DomainName: !Sub "${PreviewBucketName}.s3-website-${AWS::Region}.amazonaws.com"
