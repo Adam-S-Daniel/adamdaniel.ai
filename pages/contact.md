@@ -2,6 +2,7 @@
 title: Contact
 layout: page
 permalink: /pages/contact/
+published: false  # Set to true (or delete this line) to restore the Contact page.
 ---
 
 Lorem ipsum dolor sit amet, **consectetur adipiscing elit**.
