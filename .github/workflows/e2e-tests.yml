@@ -30,6 +30,16 @@ jobs:
           node-version: '20'
           cache: 'npm'
 
+      - name: Run Jekyll plugin unit tests
+        # Plain-Ruby tests under _plugins_test/ — fast (sub-second each),
+        # no extra gems. Keeps plugin behaviour covered even when no
+        # Playwright spec exercises the same code path.
+        run: |
+          for t in _plugins_test/*_test.rb; do
+            echo "==> $t"
+            bundle exec ruby "$t"
+          done
+
       - name: Install npm dependencies
         run: npm ci
 
