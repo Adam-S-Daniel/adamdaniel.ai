@@ -8,7 +8,9 @@ title: Home
     <p class="hero-role">Freelance AI Engineer</p>
     <div class="hero-links">
       <a class="hero-link" href="{{ '/blog/' | relative_url }}">Blog</a>
+      {% comment %} Disabled — uncomment to restore the Projects hero link.
       <a class="hero-link" href="{{ '/projects/' | relative_url }}">Projects</a>
+      {% endcomment %}
       <a class="hero-link" href="https://www.linkedin.com/in/adam-s-daniel" target="_blank" rel="noopener noreferrer" aria-label="Adam Daniel on LinkedIn">LinkedIn</a>
     </div>
   </section>
@@ -52,6 +54,7 @@ title: Home
   </section>
   {% endif %}
 
+  {% comment %} Disabled — remove this comment wrapper to restore the Featured Projects homepage section.
   {% assign featured_projects = site.projects | where: "featured", true | limit: 3 %}
   {% if featured_projects.size > 0 %}
   <section style="padding: 4rem 0; border-top: 1px solid var(--border);">
@@ -81,4 +84,5 @@ title: Home
     </div>
   </section>
   {% endif %}
+  {% endcomment %}
 </main>

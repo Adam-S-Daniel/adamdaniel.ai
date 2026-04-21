@@ -2,6 +2,7 @@
 title: About Me
 layout: page
 permalink: /pages/about/
+published: false  # Set to true (or delete this line) to restore the About page.
 ---
 
 Lorem ipsum dolor sit amet, consectetur adipiscing elit. Sed do eiusmod tempor incididunt ut labore et dolore magna aliqua. Ut enim ad minim veniam, quis nostrud exercitation ullamco laboris nisi ut aliquip ex ea commodo consequat.
