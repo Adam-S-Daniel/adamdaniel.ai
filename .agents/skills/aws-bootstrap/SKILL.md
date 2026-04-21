@@ -14,7 +14,7 @@ Provisions all one-time AWS prerequisites for adamdaniel.ai CI/CD.
 |---|---|---|
 | S3 bucket | `adamdaniel-ai-cfn-artifacts` | SAM/CFN deployment artifacts |
 | ACM certificate | `*.adamdaniel.ai` (wildcard) | DNS-validated; covers every `preview-pr{N}.adamdaniel.ai` |
-| CloudFront distribution | `E2OBHKV0LC6CJ2` | Fronts S3 preview bucket; viewer-request Function maps host → `/pr-{N}/` S3 prefix |
+| CloudFront distribution | `E2OBHKV0LC6CJ2` | Fronts S3 preview bucket; viewer-request Function maps host → `/pr-{N}/` S3 prefix, viewer-response Function strips the same prefix from `Location` headers so S3 trailing-slash redirects don't leak it |
 | Route53 A record | `*.adamdaniel.ai` | Wildcard alias to preview CloudFront |
 | OIDC provider | `token.actions.githubusercontent.com` | Conditional — skip if exists |
 | IAM role | `adamdaniel-ai-github-actions` | Assumed by GitHub Actions via OIDC |

@@ -30,6 +30,10 @@ Request-time (every visitor hit)
     req.uri = '/pr-21/blog/foo/'
   → CloudFront cache keyed by /pr-21/blog/foo/
   → (on miss) S3 website endpoint serves /pr-21/blog/foo/index.html
+  → CloudFront Function (viewer-response): strip `/pr-21/` from
+    any Location header so S3's trailing-slash redirects
+    (e.g. /admin → /pr-21/admin/) hide the internal prefix from the
+    browser, which only knows about the clean public URL space.
 
 PR close/merge
   → teardown-preview.yml
@@ -45,7 +49,8 @@ PR close/merge
 | S3 bucket | `adamdaniel-ai-previews` (static website hosting, public read) |
 | CloudFront ID | `E2OBHKV0LC6CJ2` |
 | Preview domain pattern | `preview-pr{N}.adamdaniel.ai` (matched by `*.adamdaniel.ai` wildcard) |
-| CloudFront Function | `${STACK}-preview-router` — host → S3 prefix rewrite at viewer-request |
+| CloudFront Function (request) | `${STACK}-preview-router` — host → S3 prefix rewrite at viewer-request |
+| CloudFront Function (response) | `${STACK}-preview-location-fixer` — strips `/pr-N/` from `Location` headers at viewer-response |
 | AWS region | `us-east-1` |
 
 ## Workflow file: `.github/workflows/deploy-preview.yml`
@@ -123,6 +128,9 @@ Sveltia CMS requires HTTPS or localhost. The preview domain must be served via C
 
 **preview-pr{N}.adamdaniel.ai resolves but returns 404 or XML:**
 Either the CloudFront Function isn't attached to the distribution's viewer-request behaviour, or the wildcard Route53 record / wildcard ACM cert is missing. Re-run `infrastructure/bootstrap/deploy.sh`.
+
+**No-trailing-slash URL 404s (e.g. `/admin` instead of `/admin/`):**
+S3 302s directory requests to `…/admin/`, but without the response-side function the `Location` header leaks the internal `/pr-{N}/` prefix and the browser navigates into a nonexistent URL space. The `${STACK}-preview-location-fixer` Function at viewer-response strips that prefix; if it's missing, re-run `infrastructure/bootstrap/deploy.sh`. Verify with `curl -I https://preview-pr{N}.adamdaniel.ai/admin` — `Location` should be `/admin/`, not `/pr-{N}/admin/`.
 
 **Old preview content still showing:**
 CloudFront cache not yet invalidated, or the invalidation is in progress. Wait ~30s or manually invalidate (see above).
