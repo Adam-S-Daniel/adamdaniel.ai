@@ -1,0 +1,144 @@
+const fs = require("node:fs");
+const path = require("node:path");
+const { test, expect } = require("./base");
+
+// Pulls the inline FunctionCode of the PreviewLocationFixerFunction out of
+// the CloudFormation template and asserts it strips the S3-internal /pr-N/
+// prefix from response Location headers, so that S3's trailing-slash
+// redirect (e.g. /admin → /pr-23/admin/) doesn't leak to the browser.
+//
+// Without this fixer, hitting https://preview-prN.adamdaniel.ai/admin
+// (no trailing slash) gets a 302 to /pr-N/admin/ which then 404s.
+
+const TEMPLATE_PATH = path.join(
+  __dirname,
+  "..",
+  "infrastructure/bootstrap/template.yaml",
+);
+
+function loadHandler(functionName) {
+  const template = fs.readFileSync(TEMPLATE_PATH, "utf8");
+  const lines = template.split("\n");
+
+  // Find the function resource declaration and walk forward to the
+  // FunctionCode: | block scalar; capture only lines whose indentation
+  // exceeds the block's introducer so we stop at the next sibling key.
+  const startIdx = lines.findIndex((l) =>
+    new RegExp(`^\\s*${functionName}:\\s*$`).test(l),
+  );
+  if (startIdx < 0) {
+    throw new Error(`Could not locate resource ${functionName} in template`);
+  }
+  const codeIdx = lines.findIndex(
+    (l, i) => i > startIdx && /^\s*FunctionCode:\s*\|\s*$/.test(l),
+  );
+  if (codeIdx < 0) {
+    throw new Error(`No FunctionCode block under ${functionName}`);
+  }
+  // Block scalar lines are more indented than the introducer.
+  const introIndent = lines[codeIdx].match(/^(\s*)/)[1].length;
+  const body = [];
+  for (let i = codeIdx + 1; i < lines.length; i++) {
+    const indent = lines[i].match(/^(\s*)/)[1].length;
+    if (lines[i].length === 0) {
+      body.push("");
+      continue;
+    }
+    if (indent <= introIndent) break;
+    body.push(lines[i]);
+  }
+  // Dedent by the block's first non-empty line.
+  const firstNonEmpty = body.find((l) => l.length > 0) || "";
+  const blockIndent = firstNonEmpty.match(/^(\s*)/)[1].length;
+  const src = body.map((l) => l.slice(blockIndent)).join("\n");
+
+  // eslint-disable-next-line no-new-func
+  return new Function(`${src}\nreturn handler;`)();
+}
+
+function response(host, status, location) {
+  const headers = {};
+  if (location !== undefined) headers.location = { value: location };
+  return {
+    request: {
+      headers: host ? { host: { value: host } } : {},
+    },
+    response: {
+      statusCode: status,
+      headers,
+    },
+  };
+}
+
+test.describe("CloudFront preview-location-fixer function", () => {
+  const handler = loadHandler("PreviewLocationFixerFunction");
+
+  test("strips /pr-23/ from a 302 Location on a preview-pr23 response", () => {
+    const evt = response("preview-pr23.adamdaniel.ai", 302, "/pr-23/admin/");
+    handler(evt);
+    expect(evt.response.headers.location.value).toBe("/admin/");
+  });
+
+  test("strips multi-digit /pr-N/ prefixes", () => {
+    const evt = response(
+      "preview-pr12345.adamdaniel.ai",
+      301,
+      "/pr-12345/blog/foo/",
+    );
+    handler(evt);
+    expect(evt.response.headers.location.value).toBe("/blog/foo/");
+  });
+
+  test("rewrites the bare /pr-N to / so the root index doesn't 404", () => {
+    const evt = response("preview-pr7.adamdaniel.ai", 302, "/pr-7/");
+    handler(evt);
+    expect(evt.response.headers.location.value).toBe("/");
+  });
+
+  test("does not strip a /pr-N/ that doesn't match the host's PR number", () => {
+    // S3 only ever 302's within its own bucket prefix, but defend in depth:
+    // a /pr-99/ leak on the pr-23 host is suspicious — leave it alone so the
+    // browser visibly fails rather than silently being routed somewhere odd.
+    const evt = response("preview-pr23.adamdaniel.ai", 302, "/pr-99/admin/");
+    handler(evt);
+    expect(evt.response.headers.location.value).toBe("/pr-99/admin/");
+  });
+
+  test("leaves absolute URLs (e.g. cross-origin redirects) untouched", () => {
+    const evt = response(
+      "preview-pr23.adamdaniel.ai",
+      302,
+      "https://example.com/somewhere",
+    );
+    handler(evt);
+    expect(evt.response.headers.location.value).toBe(
+      "https://example.com/somewhere",
+    );
+  });
+
+  test("no-op on non-redirect responses", () => {
+    const evt = response("preview-pr23.adamdaniel.ai", 200);
+    handler(evt);
+    expect(evt.response.headers.location).toBeUndefined();
+  });
+
+  test("no-op on apex/unrelated hosts", () => {
+    const evt = response("adamdaniel.ai", 302, "/pr-1/foo/");
+    handler(evt);
+    expect(evt.response.headers.location.value).toBe("/pr-1/foo/");
+  });
+
+  test("no-op when no Location header is present even on a 3xx", () => {
+    const evt = response("preview-pr23.adamdaniel.ai", 304);
+    expect(() => handler(evt)).not.toThrow();
+    expect(evt.response.headers.location).toBeUndefined();
+  });
+
+  test("no-op when host header is missing", () => {
+    const evt = response(undefined, 302, "/pr-23/admin/");
+    expect(() => handler(evt)).not.toThrow();
+    // No host means no PR context, so the prefix isn't recognised and the
+    // header passes through unchanged.
+    expect(evt.response.headers.location.value).toBe("/pr-23/admin/");
+  });
+});

@@ -13,8 +13,11 @@ CMS:          adamdaniel.ai/admin/              → Sveltia CMS → GitHub OAuth
 Each PR gets its own subdomain under `*.adamdaniel.ai`. A single
 preview CloudFront distribution serves the whole preview bucket; a
 viewer-request CloudFront Function maps `Host: preview-pr${N}...` to
-the S3 object-key prefix `/pr-${N}/`. Pages on preview and prod share
-the same root-relative URL structure (no `/pr-N/` in any visible URL).
+the S3 object-key prefix `/pr-${N}/`, and a sibling viewer-response
+Function strips the same prefix from `Location` headers so S3's
+trailing-slash redirects (e.g. `/admin` → `/admin/`) don't leak the
+internal key space. Pages on preview and prod share the same
+root-relative URL structure (no `/pr-N/` in any visible URL).
 
 ## Key commands
 

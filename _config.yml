@@ -14,7 +14,7 @@ permalink: /blog/:slug/
 # Collections
 collections:
   projects:
-    output: true
+    output: false  # Set to true to restore individual /projects/<slug>/ pages.
     permalink: /projects/:slug/
   tags:
     output: true
