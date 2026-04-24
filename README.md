@@ -2,13 +2,13 @@
 
 Personal website and blog for Adam Daniel — Freelance AI Engineer.
 
-Built with Jekyll + Sveltia CMS, deployed to GitHub Pages with an AWS Lambda OAuth proxy.
+Built with Jekyll + Sveltia CMS, deployed to S3 + CloudFront with an AWS Lambda OAuth proxy.
 
 ## Architecture
 
 ```
 adamdaniel.ai
-├── Jekyll site          (GitHub Pages, custom domain)
+├── Jekyll site          (S3 + CloudFront, custom domain)
 ├── Sveltia CMS          (/admin/ — headless CMS backed by this repo)
 ├── AWS OAuth Proxy      (Lambda + API Gateway HTTP API — ~$0/month)
 └── GitHub Actions       (production deploy + PR preview environments)
@@ -100,16 +100,17 @@ Tests: `cd oauth-proxy && python -m pytest test_lambda.py -v`
 
 | Workflow | Trigger | What it does |
 |---|---|---|
-| `deploy-production.yml` | Push to `main` | Builds Jekyll, deploys to GitHub Pages |
-| `deploy-preview.yml` | PR open/update | Builds Jekyll, deploys to S3 preview bucket, posts URL comment |
+| `deploy-production.yml` | Push to `main` | Builds Jekyll, syncs to S3, invalidates CloudFront |
+| `deploy-preview.yml` | PR open/update | Builds Jekyll, syncs to preview S3 prefix, posts URL comment |
 | `cms-editorial-workflow.yml` | PR from CMS | Validates front matter, applies `cms/draft` label; auto-merges on `cms/ready` |
 
 ### Preview Environments
 
 PR previews are deployed to S3 and served via CloudFront with HTTPS:
-- URL pattern: `https://preview-pr{N}.adamdaniel.ai/`
-- Bucket: `adamdaniel-ai-previews` (S3 website hosting origin)
-- CDN: CloudFront distribution with ACM certificate
+- URL pattern: `https://preview-pr{N}.adamdaniel.ai/` (paths identical to prod)
+- Bucket: `adamdaniel-ai-previews` (one prefix per PR: `/pr-{N}/`)
+- CDN: single CloudFront distribution with wildcard ACM cert
+- Host-to-prefix mapping: a viewer-request CloudFront Function prepends `/pr-{N}` on every request; a viewer-response Function strips the same prefix from `Location` headers so S3's trailing-slash redirects (`/admin` → `/admin/`) don't leak the internal key space
 - Teardown: auto-deleted when the PR is closed/merged
 
 Required secrets:
