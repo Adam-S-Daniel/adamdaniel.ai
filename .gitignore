@@ -17,5 +17,6 @@ __pycache__/
 .claude/settings.local.json
 test-results/
 playwright-report/
+screenshots/regression/
 bin/
 e2e/visual-regression.spec.js-snapshots-before/
