@@ -142,6 +142,34 @@
       0%   { transform: translateX(-100%); }
       100% { transform: translateX(300%); }
     }
+
+    #reviews-link {
+      position: fixed;
+      bottom: 1.5rem;
+      right: 1.5rem;
+      z-index: 10000;
+      display: flex;
+      align-items: center;
+      gap: 0.5rem;
+      padding: 0.6rem 1rem;
+      background: #0a1530;
+      border: 1px solid #1a2a5e;
+      border-radius: 8px;
+      color: #c8d4f0;
+      font-family: 'Helvetica Neue', Arial, sans-serif;
+      font-size: 0.8rem;
+      text-decoration: none;
+      transition: border-color 0.2s, background 0.2s;
+    }
+    #reviews-link:hover {
+      border-color: #285aff;
+      background: #111e40;
+    }
+    #reviews-link svg {
+      width: 16px;
+      height: 16px;
+      fill: currentColor;
+    }
   </style>
 </head>
 <body>
@@ -152,6 +180,11 @@
     <div class="cms-loading-bar"><div class="cms-loading-bar-fill"></div></div>
     <div class="cms-loading-sub">Content Manager</div>
   </div>
+
+  <a id="reviews-link" href="/admin/reviews/" title="Visual regression reviews">
+    <svg viewBox="0 0 24 24"><path d="M18 4l2 4h-3l-2-4h-2l2 4h-3l-2-4H8l2 4H7L5 4H4c-1.1 0-2 .9-2 2v12c0 1.1.9 2 2 2h16c1.1 0 2-.9 2-2V4h-4z"/></svg>
+    Reviews
+  </a>
 
   <!-- Sveltia CMS -->
   <script src="https://unpkg.com/@sveltia/cms/dist/sveltia-cms.js" type="module"></script>

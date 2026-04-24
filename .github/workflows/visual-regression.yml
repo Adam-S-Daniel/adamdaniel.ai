@@ -1,0 +1,171 @@
+name: Visual Regression
+
+on:
+  pull_request:
+    types: [opened, synchronize, reopened]
+    branches:
+      - main
+
+permissions:
+  contents: read
+  pull-requests: write
+  id-token: write
+
+concurrency:
+  group: "visual-regression-pr-${{ github.event.pull_request.number }}"
+  cancel-in-progress: true
+
+jobs:
+  generate:
+    runs-on: ubuntu-latest
+    env:
+      AWS_REGION: us-east-1
+      PREVIEW_BUCKET: adamdaniel-ai-previews
+      APEX_DOMAIN: adamdaniel.ai
+      CLOUDFRONT_DISTRIBUTION_ID: ${{ secrets.PREVIEW_CLOUDFRONT_ID }}
+      PR_NUMBER: ${{ github.event.pull_request.number }}
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@34e114876b0b11c390a56381ad16ebd13914f8d5  # v4.3.1
+        with:
+          fetch-depth: 0
+
+      - name: Fetch main branch
+        run: git fetch origin main
+
+      - name: Setup Ruby
+        uses: ruby/setup-ruby@319994f95fa847cf3fb3cd3dbe89f6dcde9f178f  # v1.295.0
+        with:
+          ruby-version: '3.2'
+          bundler-cache: true
+
+      - name: Setup Node
+        uses: actions/setup-node@49933ea5288caeca8642d1e84afbd3f7d6820020  # v4.4.0
+        with:
+          node-version: '20'
+          cache: 'npm'
+
+      - name: Install npm dependencies
+        run: npm ci
+
+      - name: Install Playwright browsers
+        run: npx playwright install chromium --with-deps
+
+      - name: Install ffmpeg
+        run: sudo apt-get update -qq && sudo apt-get install -y -qq ffmpeg
+
+      - name: Detect changed pages
+        run: node e2e/detect-changed-pages.js > /tmp/page-changes.json
+
+      - name: Show page changes
+        run: cat /tmp/page-changes.json
+
+      - name: Build Jekyll site
+        run: bundle exec jekyll build --quiet
+
+      - name: Run regression video screenshots
+        continue-on-error: true
+        env:
+          PAGE_CHANGES_PATH: /tmp/page-changes.json
+        run: npx playwright test --config=playwright.regression.config.js
+
+      - name: Generate comparison video
+        run: bash e2e/generate-video.sh /tmp/page-changes.json
+
+      - name: Configure AWS credentials
+        uses: aws-actions/configure-aws-credentials@7474bc4690e29a8392af63c5b98e7449536d5c3a  # v4.3.1
+        with:
+          role-to-assume: ${{ secrets.AWS_ROLE_ARN }}
+          aws-region: ${{ env.AWS_REGION }}
+
+      - name: Upload video to S3
+        run: |
+          aws s3 cp screenshots/regression/comparison.mp4 \
+            "s3://${PREVIEW_BUCKET}/pr-${PR_NUMBER}/regression.mp4" \
+            --cache-control "no-cache, must-revalidate" \
+            --content-type "video/mp4"
+
+      - name: Invalidate CloudFront cache for video
+        if: env.CLOUDFRONT_DISTRIBUTION_ID != ''
+        run: |
+          aws cloudfront create-invalidation \
+            --distribution-id "$CLOUDFRONT_DISTRIBUTION_ID" \
+            --paths "/pr-${PR_NUMBER}/regression.mp4"
+
+      - name: Post regression video comment
+        uses: actions/github-script@f28e40c7f34bde8b3046d885e986cb6290c5673b  # v7.1.0
+        with:
+          script: |
+            const fs = require('fs');
+            const pr = context.payload.pull_request.number;
+            const changes = JSON.parse(fs.readFileSync('/tmp/page-changes.json', 'utf-8'));
+            const apex = process.env.APEX_DOMAIN;
+            const cfId = process.env.CLOUDFRONT_DISTRIBUTION_ID;
+
+            const videoUrl = cfId
+              ? `https://preview-pr${pr}.${apex}/regression.mp4`
+              : `https://${apex}/admin/reviews/`;
+            const previewUrl = cfId
+              ? `https://preview-pr${pr}.${apex}/`
+              : '#';
+            const dashboardUrl = `https://${apex}/admin/reviews/`;
+
+            const { data: comments } = await github.rest.issues.listComments({
+              owner: context.repo.owner,
+              repo: context.repo.repo,
+              issue_number: pr,
+            });
+
+            const BOT_MARKER = '<!-- adamdaniel-regression-bot -->';
+            const existing = comments.find(c => c.body.includes(BOT_MARKER));
+
+            const body = [
+              BOT_MARKER,
+              '## Visual Regression Video',
+              '',
+              '| | |',
+              '|---|---|',
+              `| **Video** | [regression.mp4](${videoUrl}) |`,
+              `| **Preview** | [preview-pr${pr}.${apex}](${previewUrl}) |`,
+              `| **Commit** | \`${context.payload.pull_request.head.sha.slice(0, 7)}\` |`,
+              `| **Changed** | ${changes.changed.length} page(s) |`,
+              `| **New** | ${changes.new.length} page(s) |`,
+              `| **Unchanged** | ${changes.unchanged.length} page(s) |`,
+              '',
+              `> **Review required.** Watch the regression video and [approve in the dashboard](${dashboardUrl}) or via GitHub Actions.`,
+              '',
+              '*Video regenerates automatically on every push to this PR.*',
+            ].join('\n');
+
+            if (existing) {
+              await github.rest.issues.updateComment({
+                owner: context.repo.owner,
+                repo: context.repo.repo,
+                comment_id: existing.id,
+                body,
+              });
+            } else {
+              await github.rest.issues.createComment({
+                owner: context.repo.owner,
+                repo: context.repo.repo,
+                issue_number: pr,
+                body,
+              });
+            }
+
+      - name: Upload video artifact
+        if: ${{ !cancelled() }}
+        uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02  # v4.6.2
+        with:
+          name: regression-video
+          path: screenshots/regression/comparison.mp4
+          retention-days: 14
+
+  approve-regression:
+    needs: generate
+    runs-on: ubuntu-latest
+    environment: regression-review
+    steps:
+      - name: Approval confirmed
+        run: echo "Visual regression approved"

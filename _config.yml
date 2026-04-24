@@ -58,4 +58,5 @@ exclude:
   - package.json
   - package-lock.json
   - playwright.config.js
+  - playwright.regression.config.js
   - e2e
