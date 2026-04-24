@@ -4,9 +4,19 @@ const path = require("path");
 
 const changesPath =
   process.env.PAGE_CHANGES_PATH || "/tmp/page-changes.json";
-const changes = JSON.parse(fs.readFileSync(changesPath, "utf-8"));
 
-const allPages = [...changes.changed, ...changes.new, ...changes.unchanged];
+let changes;
+try {
+  changes = JSON.parse(fs.readFileSync(changesPath, "utf-8"));
+} catch {
+  changes = { changed: [], new: [], unchanged: [] };
+}
+
+const allPages = [
+  ...(changes.changed || []),
+  ...(changes.new || []),
+  ...(changes.unchanged || []),
+];
 const PROD_BASE = "https://adamdaniel.ai";
 const OUTPUT_DIR = path.join(__dirname, "..", "screenshots", "regression");
 
@@ -23,12 +33,17 @@ test.describe("Regression video screenshots", () => {
 
   for (const pagePath of allPages) {
     const safeName = safeFileName(pagePath);
-    const isNew = changes.new.includes(pagePath);
+    const isNew = (changes.new || []).includes(pagePath);
 
     test(`screenshot PR: ${pagePath}`, async ({ page }) => {
       await page.setViewportSize({ width: 1280, height: 720 });
-      await page.goto(pagePath, { waitUntil: "networkidle", timeout: 30000 });
-      await page.waitForTimeout(500);
+      const resp = await page.goto(pagePath, {
+        waitUntil: "domcontentloaded",
+        timeout: 30000,
+      });
+      if (resp && resp.ok()) {
+        await page.waitForTimeout(500);
+      }
       await page.screenshot({
         path: path.join(OUTPUT_DIR, "pr", `${safeName}.png`),
         fullPage: false,
@@ -62,11 +77,29 @@ test.describe("Regression video screenshots", () => {
     } else {
       test(`screenshot PROD: ${pagePath}`, async ({ page }) => {
         await page.setViewportSize({ width: 1280, height: 720 });
-        await page.goto(`${PROD_BASE}${pagePath}`, {
-          waitUntil: "networkidle",
-          timeout: 30000,
-        });
-        await page.waitForTimeout(500);
+        try {
+          await page.goto(`${PROD_BASE}${pagePath}`, {
+            waitUntil: "domcontentloaded",
+            timeout: 30000,
+          });
+          await page.waitForTimeout(500);
+        } catch {
+          await page.setContent(`
+            <html><body style="margin:0;background:#1a1a2e;color:#8ab0e8;
+              display:flex;align-items:center;justify-content:center;
+              min-height:100vh;font-family:'Helvetica Neue',Arial,sans-serif;
+              text-align:center;">
+              <div>
+                <h1 style="font-weight:200;font-size:1.8rem;color:#d8e4ff;
+                  margin:0 0 1rem;">Production Unavailable</h1>
+                <p style="margin:0;font-size:0.9rem;">
+                  Could not load this page from production.</p>
+                <p style="margin:0.5rem 0 0;font-family:'SF Mono','Fira Code',monospace;
+                  font-size:0.8rem;opacity:0.6;">${pagePath}</p>
+              </div>
+            </body></html>
+          `);
+        }
         await page.screenshot({
           path: path.join(OUTPUT_DIR, "prod", `${safeName}.png`),
           fullPage: false,

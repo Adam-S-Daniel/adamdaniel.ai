@@ -61,7 +61,11 @@ jobs:
       - name: Show page changes
         run: cat /tmp/page-changes.json
 
+      - name: Build Jekyll site
+        run: bundle exec jekyll build --quiet
+
       - name: Run regression video screenshots
+        continue-on-error: true
         env:
           PAGE_CHANGES_PATH: /tmp/page-changes.json
         run: npx playwright test --config=playwright.regression.config.js

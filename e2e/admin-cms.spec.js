@@ -35,6 +35,10 @@ function loadTree(dir) {
   return { kind: "directory", name, children };
 }
 
+function loadTreeIfExists(dir) {
+  return fs.existsSync(dir) ? loadTree(dir) : null;
+}
+
 const FIXTURES = {
   kind: "directory",
   name: "repo",
@@ -42,11 +46,11 @@ const FIXTURES = {
     // Sveltia's local backend sanity-checks the root by looking for `.git`
     // (file or directory). A stub file is enough.
     { kind: "file", name: ".git", content: "gitdir: ignored" },
-    loadTree(path.join(REPO_ROOT, "_posts")),
-    loadTree(path.join(REPO_ROOT, "_tags")),
-    loadTree(path.join(REPO_ROOT, "_projects")),
-    loadTree(path.join(REPO_ROOT, "pages")),
-  ],
+    loadTreeIfExists(path.join(REPO_ROOT, "_posts")),
+    loadTreeIfExists(path.join(REPO_ROOT, "_tags")),
+    loadTreeIfExists(path.join(REPO_ROOT, "_projects")),
+    loadTreeIfExists(path.join(REPO_ROOT, "pages")),
+  ].filter(Boolean),
 };
 
 /**

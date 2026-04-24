@@ -14,28 +14,23 @@ PR_NUMBER="${PR_NUMBER:-0}"
 FONT="/usr/share/fonts/truetype/dejavu/DejaVuSans-Bold.ttf"
 FONT_REGULAR="/usr/share/fonts/truetype/dejavu/DejaVuSans.ttf"
 
-ORDERED_PAGES=$(node -e "
-  const c = require('${CHANGES_FILE}');
+# Parse all pages into a flat list using a single node invocation
+node -e "
+  const fs = require('fs');
+  const c = JSON.parse(fs.readFileSync(process.argv[1], 'utf-8'));
   const all = [
-    ...c.changed.map(p => ({ path: p, type: 'CHANGED' })),
-    ...c.new.map(p => ({ path: p, type: 'NEW' })),
-    ...c.unchanged.map(p => ({ path: p, type: 'UNCHANGED' })),
+    ...(c.changed || []).map(p => p + '\tCHANGED'),
+    ...(c.new || []).map(p => p + '\tNEW'),
+    ...(c.unchanged || []).map(p => p + '\tUNCHANGED'),
   ];
-  all.forEach(p => console.log(JSON.stringify(p)));
-")
+  all.forEach(line => console.log(line));
+" "$CHANGES_FILE" > "${TEMP_DIR}/pages.tsv"
 
 SEGMENT_INDEX=0
 > "${TEMP_DIR}/concat.txt"
 
-while IFS= read -r line; do
-  PAGE_PATH=$(echo "$line" | node -e "
-    const d = JSON.parse(require('fs').readFileSync('/dev/stdin','utf8'));
-    process.stdout.write(d.path);
-  ")
-  CHANGE_TYPE=$(echo "$line" | node -e "
-    const d = JSON.parse(require('fs').readFileSync('/dev/stdin','utf8'));
-    process.stdout.write(d.type);
-  ")
+while IFS=$'\t' read -r PAGE_PATH CHANGE_TYPE; do
+  [ -z "$PAGE_PATH" ] && continue
 
   SAFE_NAME=$(echo "$PAGE_PATH" | sed 's|/|_|g; s|^_||; s|_$||')
   [ -z "$SAFE_NAME" ] && SAFE_NAME="index"
@@ -52,7 +47,11 @@ while IFS= read -r line; do
     CHANGED)   BADGE_COLOR="yellow" ;;
     NEW)       BADGE_COLOR="#22c27a" ;;
     UNCHANGED) BADGE_COLOR="#8ab0e8" ;;
+    *)         BADGE_COLOR="#8ab0e8" ;;
   esac
+
+  # Escape special chars for ffmpeg drawtext: colons, backslashes, quotes
+  PAGE_LABEL=$(echo "$PAGE_PATH" | sed "s/\\\\/\\\\\\\\/g; s/:/\\\\:/g; s/'/\\\\'/g")
 
   ffmpeg -y -loglevel warning \
     -loop 1 -t 3 -i "$PROD_IMG" \
@@ -66,19 +65,19 @@ while IFS= read -r line; do
         drawtext=text='PRODUCTION':fontsize=18:fontcolor=white:x=30:y=20:fontfile=${FONT},
         drawtext=text='PR \#${PR_NUMBER}':fontsize=18:fontcolor=white:x=670:y=20:fontfile=${FONT},
         drawtext=text='${CHANGE_TYPE}':fontsize=16:fontcolor=${BADGE_COLOR}:x=(w-text_w)/2:y=20:fontfile=${FONT},
-        drawtext=text='${PAGE_PATH}':fontsize=13:fontcolor=#8ab0e8:x=(w-text_w)/2:y=h-30:fontfile=${FONT_REGULAR}
+        drawtext=text='${PAGE_LABEL}':fontsize=13:fontcolor=#8ab0e8:x=(w-text_w)/2:y=h-30:fontfile=${FONT_REGULAR}
     " \
     -c:v libx264 -pix_fmt yuv420p -r 1 "$SEGMENT_FILE"
 
   echo "file '${SEGMENT_FILE}'" >> "${TEMP_DIR}/concat.txt"
   SEGMENT_INDEX=$((SEGMENT_INDEX + 1))
-done <<< "$ORDERED_PAGES"
+done < "${TEMP_DIR}/pages.tsv"
 
 if [ -s "${TEMP_DIR}/concat.txt" ]; then
   ffmpeg -y -loglevel warning \
     -f concat -safe 0 -i "${TEMP_DIR}/concat.txt" \
     -c:v libx264 -pix_fmt yuv420p "$OUTPUT"
-  echo "Video generated: $OUTPUT"
+  echo "Video generated: $OUTPUT (${SEGMENT_INDEX} pages)"
 else
   ffmpeg -y -loglevel warning \
     -f lavfi -i "color=c=#04060f:s=1280x720:d=3" \
