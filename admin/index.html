@@ -156,6 +156,10 @@
   <!-- Sveltia CMS -->
   <script src="https://unpkg.com/@sveltia/cms/dist/sveltia-cms.js" type="module"></script>
 
+  <!-- Live Preview bridge: broadcasts entry data on every save to any
+       open /preview/ tab. Loads after Sveltia so `window.CMS` exists. -->
+  <script src="preview-bridge.js" defer></script>
+
   <script>
     // Hide the loading overlay once Sveltia CMS fires its ready event
     document.addEventListener('DOMContentLoaded', function () {

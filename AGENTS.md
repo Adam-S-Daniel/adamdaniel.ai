@@ -71,6 +71,22 @@ npx playwright test e2e/glow-banding.spec.js       # single test file
 
 `reading_time` is auto-calculated at build time (word count ÷ 200 + 1).
 
+## Live preview
+
+Editors get a WYSIWYG preview of the page they're editing without publishing. The preview always renders with the real Jekyll layouts (`_layouts/post.html`, `_layouts/page.html`, `_layouts/project.html`), so styling drift is impossible by construction.
+
+**Surfaces:**
+
+- `preview.md` → `/preview/` — a Jekyll page that uses `_layouts/preview.html`. Accepts `?collection=posts|pages|projects` to pick the layout shell.
+- `_layouts/preview.html` — hosts the three layout variants, picks one at runtime, and listens for draft content via `window.postMessage` and a `BroadcastChannel("adamdaniel-cms-preview")`.
+- `admin/preview-bridge.js` — loaded after Sveltia in both `admin/index.html` and `admin/index-local.html`. Registers a `postSave` event listener with Sveltia's public API (`CMS.registerEventListener`) and broadcasts entry data on every save.
+
+**Flow:** editor opens `/preview/` in a second tab (or snaps it side-by-side with the admin) → edits in the CMS → hits Save → every open preview tab updates within a frame. Same-origin only: `BroadcastChannel` is origin-scoped and the `postMessage` listener rejects foreign origins.
+
+**Markdown:** rendered client-side via [marked](https://marked.js.org/) v13. The preview layout loads marked from unpkg with a synchronous `document.write` fallback to `assets/js/marked.min.js` when the CDN is unreachable — so the markup is identical in dev and prod. Minor fidelity gap vs. kramdown (footnotes, attribute lists); acceptable for an editor preview.
+
+**Not supported upstream yet:** Sveltia CMS ≤ 0.x doesn't expose `registerPreviewTemplate` (planned for 1.0). Until then we don't get per-keystroke live; the bridge uses `postSave` which fires on every save — including auto-saves — so the preview still feels live.
+
 ## Workflows
 
 ### `deploy-production.yml`
