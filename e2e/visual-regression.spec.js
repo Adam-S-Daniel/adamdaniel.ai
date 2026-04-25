@@ -28,14 +28,29 @@ test.describe("Visual regression", () => {
     await expect(page).toHaveScreenshot("blog-post.png");
   });
 
-  test("tags index", async ({ page }) => {
+  // Baselines for firefox-desktop and webkit-tablet need to be generated
+  // from a host with those browsers available — the dev sandbox these
+  // were authored in only has chromium. Skip until a maintainer runs
+  // `--update-snapshots` on a fully-equipped runner.
+  const NEW_TAG_BASELINE_PROJECTS = (testInfo) =>
+    !["firefox-desktop", "webkit-tablet"].includes(testInfo.project.name);
+
+  test("tags index", async ({ page }, testInfo) => {
+    test.skip(
+      !NEW_TAG_BASELINE_PROJECTS(testInfo),
+      "missing baseline for this project (regenerate via --update-snapshots)",
+    );
     await page.goto("/tags/");
     await page.addStyleTag({ content: FREEZE_ANIMATIONS });
     await page.waitForTimeout(200);
     await expect(page).toHaveScreenshot("tags-index.png");
   });
 
-  test("tag archive", async ({ page }) => {
+  test("tag archive", async ({ page }, testInfo) => {
+    test.skip(
+      !NEW_TAG_BASELINE_PROJECTS(testInfo),
+      "missing baseline for this project (regenerate via --update-snapshots)",
+    );
     await page.goto("/tags/python/");
     await page.addStyleTag({ content: FREEZE_ANIMATIONS });
     await page.waitForTimeout(200);
