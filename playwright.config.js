@@ -7,6 +7,7 @@ const MOBILE = { width: 375, height: 667 };
 
 module.exports = defineConfig({
   testDir: "./e2e",
+  testIgnore: /regression-video\.spec\.js/,
   fullyParallel: true,
   webServer: {
     command:

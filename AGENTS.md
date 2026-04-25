@@ -152,9 +152,7 @@ Runs on every open/update/label event:
 
 #### Job: `auto-merge-when-ready`
 
-Runs **only** when `cms/ready` label is added, and **only after `validate-content` passes** (`needs: validate-content`). Merges with squash, commit title: `publish: {PR title}`.
-
-This ordering ensures broken content cannot merge to production even if `cms/ready` is applied.
+Runs **only** when `cms/ready` label is added, and **only after `validate-content` passes** (`needs: validate-content`). Enables auto-merge (squash), commit title: `publish: {PR title}`. The PR merges automatically once all required status checks pass (e2e tests + visual regression approval).
 
 #### CMS editorial flow
 
@@ -162,10 +160,78 @@ This ordering ensures broken content cannot merge to production even if `cms/rea
 CMS creates PR (branch: cms/draft-{timestamp})
   → validate-content runs → adds cms/draft label
   → preview deployed at preview-pr{N}.adamdaniel.ai
-  → editor reviews preview
-  → editor (or admin) changes label: cms/draft → cms/ready
-  → validate-content re-runs → if passes → auto-merge → deploy-production triggers
+  → visual regression video generated → posted as PR comment
+  → editor reviews preview + regression video
+  → editor (or admin) changes label: cms/draft → cms/ready → auto-merge enabled
+  → reviewer approves visual regression (via dashboard or GitHub Actions)
+  → all checks pass → auto-merge fires → deploy-production triggers
 ```
+
+---
+
+### `visual-regression.yml`
+
+**Trigger:** `pull_request` types `[opened, synchronize, reopened]` targeting `main`
+
+**Secrets needed:** `AWS_ROLE_ARN`, `PREVIEW_CLOUDFRONT_ID`
+
+Uses a separate Playwright config (`playwright.regression.config.js`) and spec (`e2e/regression-video.spec.js`) to avoid interfering with the main test suite.
+
+#### Job: `generate`
+
+1. Detect changed pages via `git diff` → `e2e/detect-changed-pages.js` → `/tmp/page-changes.json`
+2. Build Jekyll site locally (`_site/`)
+3. Screenshot all pages from localhost (PR build) and adamdaniel.ai (production) via Playwright
+4. For new pages: production screenshot replaced with "No previous version of this page" placeholder
+5. Generate side-by-side comparison video via ffmpeg (`e2e/generate-video.sh`)
+6. Upload video to `s3://adamdaniel-ai-previews/pr-{N}/regression.mp4`
+7. Post/update PR comment (`<!-- adamdaniel-regression-bot -->` marker) with video link and change summary
+
+Video URL: `https://preview-pr{N}.adamdaniel.ai/regression.mp4`
+
+#### Job: `approve-regression`
+
+Uses `regression-review` GitHub Environment with required reviewers (all write-access users). Blocks merge until a reviewer approves the visual regression via GitHub Actions UI or the admin review dashboard.
+
+#### Video page ordering
+
+1. **Changed pages** — files modified in the PR, shown first
+2. **New pages** — files that don't exist on `main`, left side shows "No previous version of this page" placeholder
+3. **Unchanged pages** — all other pages
+
+#### Page detection rules (`e2e/detect-changed-pages.js`)
+
+| Changed file pattern | Mapped URL(s) |
+|---|---|
+| `_posts/YYYY-MM-DD-{slug}.md` | `/blog/{slug}/` |
+| `_projects/{slug}.md` | `/projects/{slug}/` |
+| `_tags/{slug}.md` | `/tags/{slug}/` |
+| `pages/{name}.md` | permalink from front matter |
+| `index.html` | `/` |
+| `blog/index.html` | `/blog/` |
+| `projects/index.html` | `/projects/` |
+| `_layouts/*`, `_includes/*`, `_config.yml`, `assets/css/*` | ALL pages marked changed |
+
+---
+
+### Branch protection (`main`)
+
+Required status checks (strict):
+- `e2e` (from `e2e-tests.yml`)
+- `visual-regression / approve-regression` (from `visual-regression.yml`)
+
+Auto-merge is enabled in repository settings. Direct pushes to `main` are allowed for the repository owner only.
+
+### Admin review dashboard
+
+Located at `/admin/reviews/` (separate from Sveltia CMS). Linked from a floating button on the CMS page.
+
+- Cobalt Thermal theme
+- GitHub OAuth authentication (reuses existing Lambda proxy)
+- Lists all pending visual regression reviews
+- Embedded `<video>` player for regression videos hosted at `preview-pr{N}.adamdaniel.ai/regression.mp4`
+- One-click approve / request-changes with comment
+- Auto-refreshes every 60 seconds
 
 ### `e2e-tests.yml`
 
