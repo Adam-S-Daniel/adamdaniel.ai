@@ -1,0 +1,31 @@
+---
+layout: default
+title: Tags
+description: Browse posts by topic.
+permalink: /tags/
+---
+<div class="container">
+  <div class="page-header">
+    <h1>Tags</h1>
+    <p class="subtitle">Browse posts by topic</p>
+  </div>
+
+  {% assign tags = site.all_tags %}
+  {% if tags and tags.size > 0 %}
+  <ul class="tag-list">
+    {% for tag in tags %}
+    <li class="tag-list-item">
+      <a class="tag-list-link" href="{{ tag.url | relative_url }}">
+        <span class="tag-list-name">{{ tag.name }}</span>
+        <span class="tag-list-count" aria-label="{{ tag.count }} posts">{{ tag.count }}</span>
+      </a>
+      {% if tag.description %}
+      <p class="tag-list-description">{{ tag.description }}</p>
+      {% endif %}
+    </li>
+    {% endfor %}
+  </ul>
+  {% else %}
+  <p style="color: var(--text-dim);">No tags yet.</p>
+  {% endif %}
+</div>

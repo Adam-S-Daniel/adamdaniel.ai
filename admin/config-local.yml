@@ -118,15 +118,6 @@ collections:
         label: Description
         widget: text
         required: false
-      - name: posts
-        label: Posts
-        widget: relation
-        collection: posts
-        search_fields: [title]
-        value_field: title
-        display_fields: [title]
-        multiple: true
-        required: false
 
   - name: projects
     label: Projects

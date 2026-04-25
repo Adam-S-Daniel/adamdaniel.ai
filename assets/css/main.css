@@ -420,6 +420,75 @@ main {
   line-height: 1.7;
 }
 
+/* ── Tag list / Tag cloud ───────────────────────── */
+
+.tag-cloud {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.6rem;
+}
+
+.tag-cloud .tag-pill {
+  font-size: 0.72rem;
+  padding: 0.3em 0.8em;
+}
+
+.tag-cloud-count {
+  color: var(--text-dim);
+  margin-left: 0.3em;
+}
+
+.tag-list {
+  list-style: none;
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(220px, 1fr));
+  gap: 1rem;
+}
+
+.tag-list-item {
+  border: 1px solid var(--border);
+  border-radius: var(--radius-lg);
+  padding: 1rem 1.2rem;
+  transition: border-color var(--transition);
+}
+
+.tag-list-item:hover {
+  border-color: var(--border-bright);
+}
+
+.tag-list-link {
+  display: flex;
+  align-items: baseline;
+  justify-content: space-between;
+  gap: 0.8rem;
+  border: none;
+  color: var(--text-primary);
+}
+
+.tag-list-link:hover {
+  border: none;
+  color: var(--text-bright);
+}
+
+.tag-list-name {
+  font-size: 0.95rem;
+  letter-spacing: 0.04em;
+}
+
+.tag-list-count {
+  font-size: 0.7rem;
+  letter-spacing: 0.14em;
+  font-family: var(--mono);
+  color: var(--text-dim);
+}
+
+.tag-list-description {
+  margin-top: 0.5rem;
+  font-size: 0.78rem;
+  color: var(--text-dim);
+  line-height: 1.5;
+}
+
 /* ── Single Post ────────────────────────────────── */
 
 .post-header {
