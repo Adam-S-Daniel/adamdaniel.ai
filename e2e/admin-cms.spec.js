@@ -21,8 +21,12 @@ const REPO_ROOT = path.join(__dirname, "..");
  * Load a directory recursively into a plain JSON tree. Files include
  * their text content; directories include their children. Mirrors just
  * the subset the Sveltia admin needs to enumerate on boot.
+ *
+ * Returns undefined when dir doesn't exist so callers can .filter(Boolean)
+ * without crashing when a collection directory has been intentionally removed.
  */
 function loadTree(dir) {
+  if (!fs.existsSync(dir)) return undefined;
   const stat = fs.statSync(dir);
   const name = path.basename(dir);
   if (stat.isFile()) {
@@ -31,12 +35,9 @@ function loadTree(dir) {
   const children = fs
     .readdirSync(dir)
     .filter((n) => !n.startsWith(".") && n !== "node_modules")
-    .map((n) => loadTree(path.join(dir, n)));
+    .map((n) => loadTree(path.join(dir, n)))
+    .filter(Boolean);
   return { kind: "directory", name, children };
-}
-
-function loadTreeIfExists(dir) {
-  return fs.existsSync(dir) ? loadTree(dir) : null;
 }
 
 const FIXTURES = {
@@ -46,10 +47,10 @@ const FIXTURES = {
     // Sveltia's local backend sanity-checks the root by looking for `.git`
     // (file or directory). A stub file is enough.
     { kind: "file", name: ".git", content: "gitdir: ignored" },
-    loadTreeIfExists(path.join(REPO_ROOT, "_posts")),
-    loadTreeIfExists(path.join(REPO_ROOT, "_tags")),
-    loadTreeIfExists(path.join(REPO_ROOT, "_projects")),
-    loadTreeIfExists(path.join(REPO_ROOT, "pages")),
+    loadTree(path.join(REPO_ROOT, "_posts")),
+    loadTree(path.join(REPO_ROOT, "_tags")),
+    loadTree(path.join(REPO_ROOT, "_projects")),
+    loadTree(path.join(REPO_ROOT, "pages")),
   ].filter(Boolean),
 };
 
