@@ -22,7 +22,7 @@ test.describe("Visual regression", () => {
   });
 
   test("blog post", async ({ page }) => {
-    await page.goto("/blog/test-abc/");
+    await page.goto("/blog/replacement-test-post-1/");
     await page.addStyleTag({ content: FREEZE_ANIMATIONS });
     await page.waitForTimeout(200);
     await expect(page).toHaveScreenshot("blog-post.png");
