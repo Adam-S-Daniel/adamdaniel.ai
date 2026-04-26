@@ -67,10 +67,17 @@ test.describe("/admin/ Tags collection", () => {
       })
       .toMatch(/\/collections\/tags\/entries\/crud-test-tag/);
 
-    // Now Delete Entry (aria-label `delete_entry` → "Delete Entry") is
-    // rendered top-level on this 1920×1080 viewport. The overflow menu
-    // version is reserved for small screens.
-    const deleteBtn = page.getByRole("button", { name: /Delete Entry/i });
+    // Delete Entry: aria-label="Delete Entry" + visible text "Delete".
+    // Either accessible-name resolution (Playwright reads the
+    // computed accessible name; Sveltia's Button component uses both
+    // a `label` slot and an aria-label) — try aria-label first, then
+    // fall back to the visible text. Either should land us on the
+    // confirmation dialog.
+    const deleteByAria = page.getByRole("button", { name: /Delete Entry/i });
+    const deleteByText = page
+      .getByRole("button", { name: /^Delete$/i })
+      .filter({ hasNot: page.locator("[role=dialog] *") });
+    const deleteBtn = deleteByAria.or(deleteByText).first();
     await expect(deleteBtn).toBeVisible({ timeout: 30_000 });
     await deleteBtn.click();
 
