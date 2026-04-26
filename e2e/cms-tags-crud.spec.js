@@ -48,7 +48,9 @@ test.describe("/admin/ Tags collection: create / edit / delete", () => {
     await descField.fill("Original description");
 
     // Sveltia's toolbar button accessible name is "Save".
-    await page.getByRole("button", { name: /^Save$/ }).click();
+    // Allow "Save", "Save changes", "Save & Publish", etc. — Sveltia
+    // varies the toolbar label between create and edit modes.
+    await page.getByRole("button", { name: /^Save/i }).first().click();
 
     // After save, the new tag should appear in the fixture tree as
     // _tags/<slug>.md. Slug template in config is {{slug}} which
@@ -90,7 +92,9 @@ test.describe("/admin/ Tags collection: create / edit / delete", () => {
     const descFieldEdit = page.getByRole("textbox", { name: /Description/i });
     await expect(descFieldEdit).toBeVisible({ timeout: 30_000 });
     await descFieldEdit.fill("Updated description with more detail.");
-    await page.getByRole("button", { name: /^Save$/ }).click();
+    // Allow "Save", "Save changes", "Save & Publish", etc. — Sveltia
+    // varies the toolbar label between create and edit modes.
+    await page.getByRole("button", { name: /^Save/i }).first().click();
 
     await expect
       .poll(
@@ -109,7 +113,7 @@ test.describe("/admin/ Tags collection: create / edit / delete", () => {
     // Sveltia's delete affordance lives behind a "More actions" /
     // overflow menu on the entry toolbar. Try the explicit Delete
     // button first; fall back to opening the overflow.
-    const deleteBtn = page.getByRole("button", { name: /^Delete$/ });
+    const deleteBtn = page.getByRole("button", { name: /^Delete/i });
     if (await deleteBtn.isVisible().catch(() => false)) {
       await deleteBtn.click();
     } else {
@@ -121,7 +125,7 @@ test.describe("/admin/ Tags collection: create / edit / delete", () => {
     // Confirmation dialog: a button labelled "Delete" inside a dialog.
     await page
       .getByRole("dialog")
-      .getByRole("button", { name: /^Delete$/ })
+      .getByRole("button", { name: /^Delete/i })
       .click();
 
     await expect
