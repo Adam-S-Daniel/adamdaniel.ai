@@ -37,6 +37,11 @@ jobs:
 
       - name: Validate front matter
         run: |
+          # `nullglob` makes `_posts/*.md` expand to an empty list rather
+          # than the literal pattern when there are no posts (otherwise
+          # grep tries to read `_posts/*.md` as a filename and the loop
+          # falsely flags it as a missing-title post).
+          shopt -s nullglob
           echo "Checking post front matter..."
           ERRORS=0
 

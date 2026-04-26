@@ -1,7 +1,7 @@
 const { test, expect } = require("./base");
 
-const POST_URL = "/blog/test-cms-workflow/";
-const POST_TITLE = "Proin Ut Ligula Vel Nunc";
+const POST_URL = "/blog/replacement-test-post-1/";
+const POST_TITLE = "Replacement test post 1";
 
 test.describe("Blog post page", () => {
   test("displays the post title exactly once", async ({ page }) => {

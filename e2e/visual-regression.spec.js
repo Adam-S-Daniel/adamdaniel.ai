@@ -22,9 +22,23 @@ test.describe("Visual regression", () => {
   });
 
   test("blog post", async ({ page }) => {
-    await page.goto("/blog/test-abc/");
+    await page.goto("/blog/replacement-test-post-1/");
     await page.addStyleTag({ content: FREEZE_ANIMATIONS });
     await page.waitForTimeout(200);
     await expect(page).toHaveScreenshot("blog-post.png");
+  });
+
+  test("tags index", async ({ page }) => {
+    await page.goto("/tags/");
+    await page.addStyleTag({ content: FREEZE_ANIMATIONS });
+    await page.waitForTimeout(200);
+    await expect(page).toHaveScreenshot("tags-index.png");
+  });
+
+  test("tag archive", async ({ page }) => {
+    await page.goto("/tags/python/");
+    await page.addStyleTag({ content: FREEZE_ANIMATIONS });
+    await page.waitForTimeout(200);
+    await expect(page).toHaveScreenshot("tag-archive.png");
   });
 });

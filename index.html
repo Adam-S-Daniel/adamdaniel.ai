@@ -54,6 +54,25 @@ title: Home
   </section>
   {% endif %}
 
+  {% assign all_tags = site.all_tags %}
+  {% if all_tags and all_tags.size > 0 %}
+  <section class="tag-cloud-section" style="padding: 4rem 0; border-top: 1px solid var(--border);">
+    <div class="container">
+      <div class="page-header" style="border:none; padding:0; margin-bottom:1.5rem;">
+        <h2>Tags</h2>
+      </div>
+      <div class="tag-cloud">
+        {% for tag in all_tags %}
+        <a class="tag-pill" href="{{ tag.url | relative_url }}">{{ tag.name }}<span class="tag-cloud-count" aria-hidden="true"> · {{ tag.count }}</span></a>
+        {% endfor %}
+      </div>
+      <div class="mt-3">
+        <a class="project-link" href="{{ '/tags/' | relative_url }}">All Tags →</a>
+      </div>
+    </div>
+  </section>
+  {% endif %}
+
   {% comment %} Disabled — remove this comment wrapper to restore the Featured Projects homepage section.
   {% assign featured_projects = site.projects | where: "featured", true | limit: 3 %}
   {% if featured_projects.size > 0 %}

@@ -161,19 +161,6 @@ collections:
         required: false
         hint: "Optional short description shown on the tag archive page"
 
-      - name: posts
-        label: Posts
-        widget: relation
-        collection: posts
-        search_fields:
-          - title
-        value_field: title
-        display_fields:
-          - title
-        multiple: true
-        required: false
-        hint: "Posts with this tag (informational — tags are set on each post)"
-
   # ── Projects ──────────────────────────────────────────────
   - name: projects
     label: Projects
