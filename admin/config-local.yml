@@ -16,7 +16,7 @@ display_url: http://localhost:4000
 
 custom_css: custom.css
 
-media_folder: assets/images/uploads
+media_folder: "assets/images/uploads/{{year}}/{{month}}"
 public_folder: /assets/images/uploads
 
 collections:
@@ -63,13 +63,9 @@ collections:
         required: false
       - name: tags
         label: Tags
-        widget: relation
-        collection: tags
-        search_fields: [name]
-        value_field: name
-        display_fields: [name]
-        multiple: true
+        widget: list
         required: false
+        hint: "Type a tag and press Enter. New tags get an auto-generated archive page (the auto_tag_pages plugin) — no need to create them up front. Add a matching entry in the Tags collection if you want to give the tag a description."
       - name: featured_image
         label: Featured Image
         widget: image
@@ -78,7 +74,7 @@ collections:
         label: Published
         widget: boolean
         default: false
-        hint: "Toggle on to make this post visible on the public site. Or set a Publish Date below to auto-publish at a specific time."
+        hint: "ON = goes live on the next deploy. Leave OFF to schedule a future publish via the Publish Date below — the scheduled-posts workflow flips this toggle on when the date arrives."
       - name: publish_date
         label: Publish Date
         widget: datetime
@@ -86,17 +82,12 @@ collections:
         date_format: "YYYY-MM-DD"
         time_format: "HH:mm"
         format: "YYYY-MM-DD HH:mm:ss ZZ"
-        hint: "Optional. Set a future date/time to auto-publish this post (UTC). Leave blank to publish manually via the Published toggle above."
-      - name: reading_time
-        label: Reading Time (minutes)
-        widget: number
-        required: false
-        value_type: int
-        min: 1
+        hint: "Optional. Future date/time (UTC) to auto-publish this post. Only honoured when Published above is OFF — if Published is ON, the post goes live immediately and this field is ignored."
       - name: body
         label: Body
         widget: markdown
         required: true
+        hint: "Full post content. For a real-layout preview that updates on every Save, open /preview/?collection=posts in a second tab."
         modes:
           - rich_text
           - raw
