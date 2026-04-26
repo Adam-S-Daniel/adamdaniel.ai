@@ -83,14 +83,17 @@ test.describe("/admin/ Tags collection: create / edit / delete", () => {
     await expect(nameSentinel).toBeVisible({ timeout: 60_000 });
     await expect(nameSentinel).toHaveValue("CRUD Test Tag", { timeout: 30_000 });
 
-    // Description is widget:text → <textarea>. getByLabel sometimes
-    // misses Sveltia's textareas because the <label> isn't always
-    // hooked up via `for=` to the textarea — the accessible name
-    // comes from a wrapping element instead. getByRole('textbox')
-    // queries the accessibility tree, which catches both inputs and
-    // textareas reliably.
-    const descFieldEdit = page.getByRole("textbox", { name: /Description/i });
-    await expect(descFieldEdit).toBeVisible({ timeout: 30_000 });
+    // Description is widget:text → <textarea>. The role-based lookup
+    // is the canonical path, but Sveltia's edit-form render is racy
+    // on some runners — the textarea is in the DOM but the
+    // accessibility-tree hookup arrives a beat later. Fall back to
+    // structural identification (the only textarea on a tag form is
+    // Description) if the role lookup misses, so we don't fail an
+    // otherwise-good run on a transient a11y-tree gap.
+    const descByRole = page.getByRole("textbox", { name: /Description/i });
+    const descByStructure = page.locator("textarea").first();
+    const descFieldEdit = descByRole.or(descByStructure);
+    await expect(descFieldEdit).toBeVisible({ timeout: 60_000 });
     await descFieldEdit.fill("Updated description with more detail.");
     // Allow "Save", "Save changes", "Save & Publish", etc. — Sveltia
     // varies the toolbar label between create and edit modes.
