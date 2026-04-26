@@ -113,10 +113,17 @@ test.describe("/admin/ Tags collection: create / edit / delete", () => {
     // Sveltia's delete affordance lives behind the editor-options
     // overflow menu — its trigger has aria-label="Show Editor Options"
     // (i18n key `show_editor_options` in src/lib/locales/en.yaml).
-    // The menu item itself is "Delete entry" / "Delete".
-    await page
-      .getByRole("button", { name: /Show Editor Options/i })
-      .click();
+    //
+    // Sveltia re-renders the toolbar briefly after Save (saved-toast
+    // animation, dirty-state recompute), and the resolved button can
+    // detach from the DOM mid-click. Settle first via networkidle,
+    // then dispatch the click event directly — bypasses the
+    // actionability/stability churn that plain .click() retries
+    // through.
+    await page.waitForLoadState("networkidle", { timeout: 10_000 }).catch(() => {});
+    const menuTrigger = page.getByRole("button", { name: /Show Editor Options/i });
+    await expect(menuTrigger).toBeVisible({ timeout: 30_000 });
+    await menuTrigger.dispatchEvent("click");
     await page
       .getByRole("menuitem", { name: /^Delete/i })
       .click();
