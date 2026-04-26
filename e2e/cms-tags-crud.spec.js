@@ -55,12 +55,21 @@ test.describe("/admin/ Tags collection", () => {
     expect(saved.content).toMatch(/name:\s*['"]?CRUD Test Tag['"]?/);
     expect(saved.content).toMatch(/description:\s*['"]?Original description/);
 
-    // With closeOnSave=false, Sveltia stays on the entry-edit form.
-    // On a desktop viewport (1920×1080 here) the Delete affordance
-    // is a top-level toolbar button with aria-label="Delete Entry"
-    // (i18n key `delete_entry`). The Show-Editor-Options overflow
-    // only carries Delete on small viewports, so go straight to the
-    // top-level button.
+    // With closeOnSave=false, after Save Sveltia calls goto(.../entries/<slug>)
+    // and resets the draft (createDraft with originalEntry=savedEntry).
+    // That sequence flips $entryDraft.isNew → false, which is the gate
+    // for the top-level Duplicate/Delete toolbar buttons. Wait for the
+    // URL hash to settle on /entries/<slug> first — that's the
+    // observable signal that the post-save reset has happened.
+    await expect
+      .poll(() => page.evaluate(() => window.location.hash), {
+        timeout: 30_000,
+      })
+      .toMatch(/\/collections\/tags\/entries\/crud-test-tag/);
+
+    // Now Delete Entry (aria-label `delete_entry` → "Delete Entry") is
+    // rendered top-level on this 1920×1080 viewport. The overflow menu
+    // version is reserved for small screens.
     const deleteBtn = page.getByRole("button", { name: /Delete Entry/i });
     await expect(deleteBtn).toBeVisible({ timeout: 30_000 });
     await deleteBtn.click();
