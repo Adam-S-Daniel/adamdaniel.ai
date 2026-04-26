@@ -199,7 +199,9 @@ Diffs JSON URL: `https://preview-pr{N}.adamdaniel.ai/regression.json` (consumed 
 
 #### Job: `approve-regression`
 
-Uses `regression-review` GitHub Environment with required reviewers (all write-access users). Blocks merge until a reviewer approves the visual regression via GitHub Actions UI or the admin review dashboard.
+Uses `regression-review` GitHub Environment with required reviewers (all write-access users). Blocks merge until a reviewer approves the visual regression via GitHub Actions UI or the admin review dashboard. The `Waiting` state on this job comes from `environment: regression-review` (`visual-regression.yml`) plus the required-reviewers list configured in **repo Settings → Environments → regression-review**.
+
+**Billing:** Time spent in the `Waiting` state does **not** count toward Actions minutes — GitHub does not allocate a runner while waiting for a deployment review. Billing only resumes when a reviewer approves and the runner picks the job back up. The job itself is a one-line `echo` so post-approval billing is rounding-error.
 
 #### Video page ordering
 

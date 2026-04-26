@@ -110,18 +110,16 @@ test.describe("/admin/ Tags collection: create / edit / delete", () => {
     expect(saved.content).not.toMatch(/Original description/);
 
     // ── Delete ─────────────────────────────────────────────────────
-    // Sveltia's delete affordance lives behind a "More actions" /
-    // overflow menu on the entry toolbar. Try the explicit Delete
-    // button first; fall back to opening the overflow.
-    const deleteBtn = page.getByRole("button", { name: /^Delete/i });
-    if (await deleteBtn.isVisible().catch(() => false)) {
-      await deleteBtn.click();
-    } else {
-      await page
-        .getByRole("button", { name: /More actions|Show more/ })
-        .click();
-      await page.getByRole("menuitem", { name: /Delete/ }).click();
-    }
+    // Sveltia's delete affordance lives behind the editor-options
+    // overflow menu — its trigger has aria-label="Show Editor Options"
+    // (i18n key `show_editor_options` in src/lib/locales/en.yaml).
+    // The menu item itself is "Delete entry" / "Delete".
+    await page
+      .getByRole("button", { name: /Show Editor Options/i })
+      .click();
+    await page
+      .getByRole("menuitem", { name: /^Delete/i })
+      .click();
     // Confirmation dialog: a button labelled "Delete" inside a dialog.
     await page
       .getByRole("dialog")

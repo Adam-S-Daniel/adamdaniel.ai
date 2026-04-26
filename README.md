@@ -103,7 +103,7 @@ Tests: `cd oauth-proxy && python -m pytest test_lambda.py -v`
 | `deploy-production.yml` | Push to `main` | Builds Jekyll, syncs to S3, invalidates CloudFront |
 | `deploy-preview.yml` | PR open/update | Builds Jekyll, syncs to preview S3 prefix, posts URL comment |
 | `cms-editorial-workflow.yml` | PR from CMS | Validates front matter, applies `cms/draft` label; auto-merges on `cms/ready` |
-| `visual-regression.yml` | PR open/update | Screenshots every page on the PR vs prod, computes the per-page pixel diff (`screenshots/regression/diffs.json`), generates a 1920×1080 side-by-side video with a prominent VISUALLY DIFFERENT / IDENTICAL / NEW indicator per page, posts both stats to the PR, and gates merge on a human review at `/admin/reviews/` |
+| `visual-regression.yml` | PR open/update | Screenshots every page on the PR vs prod, computes the per-page pixel diff (`screenshots/regression/diffs.json`), generates a 1920×1080 side-by-side video with a prominent VISUALLY DIFFERENT / IDENTICAL / NEW indicator per page, posts both stats to the PR, and gates merge on a human review at `/admin/reviews/`. **The `Waiting` state on the `approve-regression` job is GitHub Environment gating** — the job declares `environment: regression-review` and the environment has required reviewers configured in repo Settings → Environments. Time spent waiting for that approval **does not count toward Actions minutes** — no runner is allocated while the job is queued for review. |
 | `e2e-tests.yml` | PR + push to main | Runs Playwright. On PRs, `e2e/select-specs.js` picks only the specs the diff can affect (full matrix on push to main). |
 
 ### Preview Environments
