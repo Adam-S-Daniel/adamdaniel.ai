@@ -31,12 +31,7 @@ test.describe("/admin/ Tags collection: create / edit / delete", () => {
     await installSveltiaStubs(page, buildFixtures());
   });
 
-  // Marked fixme until the Sveltia selectors are validated against a
-  // running CI environment. The infrastructure (FSA mock, helpers,
-  // shared assertions) is exercised by `cms-config.spec.js` and the
-  // admin-reviews-* specs; iterating on the UI selectors needs CI
-  // because the Sveltia bundle can't be loaded in this dev sandbox.
-  test.fixme("create a new tag, edit its description, then delete it", async ({
+  test("create a new tag, edit its description, then delete it", async ({
     page,
   }) => {
     // ── Create ─────────────────────────────────────────────────────

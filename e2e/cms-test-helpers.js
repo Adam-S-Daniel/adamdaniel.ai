@@ -103,7 +103,14 @@ async function installSveltiaStubs(page, fixtures) {
     };
 
     // ── FileSystemFileHandle / FileSystemDirectoryHandle mock ─────
-    function makeFileHandle(node) {
+    //
+    // File handles know their parent directory node (`parent`) so
+    // `move(newName)` can rewire the parent's children list — this is
+    // how Sveltia commits a save: write to `.sveltia-tmp-<uuid>`,
+    // close, then move() to the final filename. Without move() in
+    // the mock, the temp file lingers and the final file never
+    // appears.
+    function makeFileHandle(node, parent) {
       return {
         kind: "file",
         name: node.name,
@@ -115,9 +122,6 @@ async function installSveltiaStubs(page, fixtures) {
           return new File([content], node.name, { type: "text/plain" });
         },
         async createWritable() {
-          // The buffer Sveltia writes is collected here and atomically
-          // replaces the node's content on close. Sveltia uses both the
-          // streaming and one-shot write APIs, so support both.
           const chunks = [];
           return {
             async write(data) {
@@ -132,7 +136,6 @@ async function installSveltiaStubs(page, fixtures) {
             async truncate(size) { /* atomic replacement, no-op */ void size; },
             async seek() { /* no-op */ },
             async close() {
-              // Concatenate chunks: text + Blob/ArrayBuffer.
               if (chunks.every((c) => typeof c === "string")) {
                 node.content = chunks.join("");
                 return;
@@ -150,19 +153,53 @@ async function installSveltiaStubs(page, fixtures) {
             async abort() { /* no-op */ },
           };
         },
+        // FileSystemFileHandle.move(newName) — rename within the
+        // current parent directory. (W3C draft; Sveltia uses this for
+        // atomic saves: write to a temp file then move() to the final
+        // name.)
+        // Two-arg form move(destDir, newName) supported too, though
+        // Sveltia's local backend currently only uses the one-arg form.
+        async move(...args) {
+          if (!parent) throw new Error("move() needs a parent directory");
+          let destNode = parent;
+          let newName = node.name;
+          if (args.length === 1) {
+            newName = args[0];
+          } else if (args.length === 2) {
+            // First arg is a directory handle — find its underlying node.
+            const destHandle = args[0];
+            destNode = destHandle?.__node || parent;
+            newName = args[1];
+          }
+          if (!newName || typeof newName !== "string") {
+            throw new Error("move() requires a target name");
+          }
+          // Remove old name from current parent.
+          parent.children = parent.children.filter((c) => c !== node);
+          // Replace any existing entry at the target name in dest.
+          destNode.children = destNode.children.filter((c) => c.name !== newName);
+          // Re-insert with new name (may also be the new parent).
+          node.name = newName;
+          destNode.children.push(node);
+          parent = destNode; // reflect the new parent for subsequent ops
+          this.name = newName;
+        },
         async queryPermission() { return "granted"; },
         async requestPermission() { return "granted"; },
       };
     }
 
     function makeDirHandle(node) {
-      const byName = new Map(node.children.map((c) => [c.name, c]));
+      // Live lookups against node.children — not a snapshot Map —
+      // since move() rewires children at runtime.
+      const find = (name) => node.children.find((c) => c.name === name);
       const handle = {
         kind: "directory",
         name: node.name,
+        __node: node, // exposed so move(destDirHandle, name) can re-target
         async getFileHandle(name, opts = {}) {
-          const child = byName.get(name);
-          if (child?.kind === "file") return makeFileHandle(child);
+          const child = find(name);
+          if (child?.kind === "file") return makeFileHandle(child, node);
           if (child?.kind === "directory") {
             const err = new Error(`${name} is a directory, not a file`);
             err.name = "TypeMismatchError";
@@ -170,16 +207,15 @@ async function installSveltiaStubs(page, fixtures) {
           }
           if (opts.create) {
             const created = { kind: "file", name, content: "" };
-            byName.set(name, created);
             node.children.push(created);
-            return makeFileHandle(created);
+            return makeFileHandle(created, node);
           }
           const err = new Error(`No file named ${name}`);
           err.name = "NotFoundError";
           throw err;
         },
         async getDirectoryHandle(name, opts = {}) {
-          const child = byName.get(name);
+          const child = find(name);
           if (child?.kind === "directory") return makeDirHandle(child);
           if (child?.kind === "file") {
             const err = new Error(`${name} is a file, not a directory`);
@@ -188,7 +224,6 @@ async function installSveltiaStubs(page, fixtures) {
           }
           if (opts.create) {
             const created = { kind: "directory", name, children: [] };
-            byName.set(name, created);
             node.children.push(created);
             return makeDirHandle(created);
           }
@@ -201,7 +236,7 @@ async function installSveltiaStubs(page, fixtures) {
             yield [
               child.name,
               child.kind === "file"
-                ? makeFileHandle(child)
+                ? makeFileHandle(child, node)
                 : makeDirHandle(child),
             ];
           }
@@ -211,7 +246,6 @@ async function installSveltiaStubs(page, fixtures) {
         async queryPermission() { return "granted"; },
         async requestPermission() { return "granted"; },
         async removeEntry(name) {
-          byName.delete(name);
           node.children = node.children.filter((c) => c.name !== name);
         },
         async resolve() { return []; },
