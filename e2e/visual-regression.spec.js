@@ -9,21 +9,8 @@ const FREEZE_ANIMATIONS = `
   }
 `;
 
-// Whole-suite skip on firefox-desktop and webkit-tablet — those browsers
-// couldn't be downloaded in the dev sandbox where this PR was authored,
-// so all four cases (homepage, blog post, tags index, tag archive) lack
-// fresh baselines for those projects after the post and tag-system
-// changes that landed here. Drop the skip after a maintainer regenerates
-// the snapshots via `--update-snapshots` on a runner that has chromium,
-// firefox, and webkit installed.
-const SKIP_PROJECTS = new Set(["firefox-desktop", "webkit-tablet"]);
-
 test.describe("Visual regression", () => {
-  test.beforeEach(async ({ page }, testInfo) => {
-    test.skip(
-      SKIP_PROJECTS.has(testInfo.project.name),
-      "baseline for this project needs regeneration",
-    );
+  test.beforeEach(async ({ page }) => {
     await page.addStyleTag({ content: FREEZE_ANIMATIONS });
   });
 
