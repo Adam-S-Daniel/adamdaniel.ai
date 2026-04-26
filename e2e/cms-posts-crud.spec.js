@@ -46,6 +46,53 @@ test.describe("/admin/ Posts collection: create / edit / delete + featured image
     await installSveltiaStubs(page, buildFixtures());
   });
 
+  test("create a post persists to _posts/ with the right shape", async ({
+    page,
+  }) => {
+    await page.goto("/admin/index-local.html#/collections/posts/new");
+    await signInLocal(page);
+
+    const titleField = page.getByLabel(/^Title$/);
+    await expect(titleField).toBeVisible({ timeout: 60_000 });
+    await titleField.fill("CRUD Test Post");
+
+    // Body in raw mode — the rich-text contenteditable is racy.
+    const rawTab = page.getByRole("tab", { name: /^Raw$/ });
+    if (await rawTab.isVisible().catch(() => false)) await rawTab.click();
+    const bodyArea = page
+      .locator('textarea[name*="body"], textarea[aria-label*="Body"]')
+      .first();
+    await bodyArea.fill("# CRUD Test\n\nA post body.");
+
+    await page.getByRole("button", { name: /^Save/i }).first().click();
+
+    // Filename has a YYYY-MM-DD prefix from the date field, so match
+    // by suffix to stay tz-agnostic.
+    const matchFile = async () => {
+      const all = await listFixtureDir(page, "_posts");
+      return all.find((n) => /-crud-test-post\.md$/.test(n)) || null;
+    };
+    let fileName;
+    await expect
+      .poll(
+        async () => {
+          fileName = await matchFile();
+          return fileName;
+        },
+        { timeout: 30_000 },
+      )
+      .toBeTruthy();
+
+    const saved = await readFixtureFile(page, "_posts", fileName);
+    expect(saved.content).toMatch(/^---/);
+    expect(saved.content).toMatch(/title:\s*['"]?CRUD Test Post/);
+    expect(saved.content).toMatch(/A post body\./);
+
+    await expect
+      .poll(() => page.evaluate(() => window.location.hash), { timeout: 30_000 })
+      .toMatch(/\/collections\/posts\/entries\//);
+  });
+
   test.fixme("create post, attach featured image, edit body, then delete", async ({
     page,
   }) => {

@@ -37,19 +37,34 @@ function loadTree(dir) {
 /**
  * Build a fixture tree containing the project's content collections plus a
  * `.git` stub Sveltia uses to sanity-check the repo root.
+ *
+ * Every collection directory referenced by `admin/config-local.yml`
+ * (`_posts`, `_tags`, `_projects`, `pages`) is guaranteed to exist —
+ * if the on-disk directory is missing we substitute an empty
+ * directory so Sveltia can list the collection without erroring.
  */
 function buildFixtures() {
+  const ensureDir = (segment) =>
+    loadTree(path.join(REPO_ROOT, segment)) || {
+      kind: "directory",
+      name: segment,
+      children: [],
+    };
   return {
     kind: "directory",
     name: "repo",
     children: [
       { kind: "file", name: ".git", content: "gitdir: ignored" },
-      loadTree(path.join(REPO_ROOT, "_posts")),
-      loadTree(path.join(REPO_ROOT, "_tags")),
-      loadTree(path.join(REPO_ROOT, "_projects")),
-      loadTree(path.join(REPO_ROOT, "pages")),
-      loadTree(path.join(REPO_ROOT, "assets")),
-    ].filter(Boolean),
+      ensureDir("_posts"),
+      ensureDir("_tags"),
+      ensureDir("_projects"),
+      ensureDir("pages"),
+      loadTree(path.join(REPO_ROOT, "assets")) || {
+        kind: "directory",
+        name: "assets",
+        children: [],
+      },
+    ],
   };
 }
 
@@ -273,6 +288,62 @@ async function installSveltiaStubs(page, fixtures) {
     window.__rootDirHandle = makeDirHandle(fx);
     window.__rootFixtures = fx;
     window.showDirectoryPicker = async () => window.__rootDirHandle;
+
+    // ── Test-only DOM introspection probe ─────────────────────────
+    // We can't reach Sveltia's Svelte stores directly (the bundle
+    // is compiled and the modules aren't exposed on window), so the
+    // probe scrapes the rendered toolbar instead: the user-visible
+    // surface that's actually gated by `!isSmallScreen && !disabled
+    // && !collectionFile && !isNew` (toolbar.svelte:109). Pair the
+    // result with viewport / matchMedia / URL state to triangulate
+    // which gating condition is sticking when an affordance fails
+    // to render. Returns plain JSON — safe for `page.evaluate`.
+    window.__cmsInspect = function () {
+      const within = (el, root) => {
+        for (let n = el; n; n = n.parentElement) if (n === root) return true;
+        return false;
+      };
+      const isVisible = (el) => {
+        if (!el) return false;
+        const cs = getComputedStyle(el);
+        if (cs.display === "none" || cs.visibility === "hidden") return false;
+        if (el.getAttribute("aria-hidden") === "true") return false;
+        const rect = el.getBoundingClientRect();
+        return rect.width > 0 && rect.height > 0;
+      };
+      const accessibleName = (el) =>
+        el.getAttribute("aria-label") ||
+        (el.textContent || "").trim().slice(0, 80) ||
+        el.getAttribute("title") ||
+        "";
+      const toolbars = Array.from(
+        document.querySelectorAll('[role="toolbar"], header, .toolbar'),
+      );
+      const buttonRecord = (b) => ({
+        name: accessibleName(b),
+        ariaLabel: b.getAttribute("aria-label") || null,
+        text: (b.textContent || "").trim().slice(0, 80),
+        visible: isVisible(b),
+        disabled: b.disabled || b.getAttribute("aria-disabled") === "true",
+        inToolbar: toolbars.some((t) => within(b, t)),
+      });
+      const buttons = Array.from(document.querySelectorAll("button")).map(
+        buttonRecord,
+      );
+      return {
+        url: window.location.hash || window.location.pathname,
+        viewport: {
+          width: window.innerWidth,
+          height: window.innerHeight,
+        },
+        matchMedia: {
+          smallScreen: window.matchMedia("(width < 768px)").matches,
+        },
+        toolbarButtons: buttons.filter((b) => b.inToolbar),
+        allButtons: buttons,
+        dialogOpen: !!document.querySelector('[role="dialog"]'),
+      };
+    };
   }, fixtures);
 }
 
@@ -309,6 +380,53 @@ async function listFixtureDir(page, ...segments) {
   return result?.names || [];
 }
 
+/**
+ * Snapshot Sveltia's UI state from outside the bundle: viewport,
+ * matchMedia for the `(width < 768px)` small-screen breakpoint, the
+ * current URL hash, and every <button> in the page (with its
+ * accessible name, visibility, and whether it's inside a toolbar).
+ *
+ * Use this as a deterministic alternative to "hope the Delete
+ * button rendered" — call after a save / route change and assert
+ * on the toolbar contents directly. Also handy as a `console.log`
+ * payload in CI when a flake reproduces.
+ */
+async function getCmsState(page) {
+  return page.evaluate(() => window.__cmsInspect());
+}
+
+/**
+ * Wait until the CMS toolbar contains a button whose accessible
+ * name matches `pattern`. Polls `__cmsInspect` so the wait is
+ * resilient to Svelte re-renders that detach and re-attach
+ * elements between subscription updates.
+ */
+async function waitForToolbarButton(page, pattern, { timeout = 30_000 } = {}) {
+  const re = pattern instanceof RegExp ? pattern : new RegExp(pattern, "i");
+  const deadline = Date.now() + timeout;
+  while (Date.now() < deadline) {
+    const state = await getCmsState(page);
+    const found = state.toolbarButtons.find(
+      (b) => b.visible && (re.test(b.name) || re.test(b.ariaLabel || "")),
+    );
+    if (found) return found;
+    await page.waitForTimeout(150);
+  }
+  const state = await getCmsState(page);
+  throw new Error(
+    `Toolbar button matching ${re} never appeared. Last state: ${JSON.stringify(
+      {
+        url: state.url,
+        viewport: state.viewport,
+        matchMedia: state.matchMedia,
+        toolbarButtons: state.toolbarButtons,
+      },
+      null,
+      2,
+    )}`,
+  );
+}
+
 module.exports = {
   REPO_ROOT,
   buildFixtures,
@@ -318,4 +436,6 @@ module.exports = {
   signInLocal,
   readFixtureFile,
   listFixtureDir,
+  getCmsState,
+  waitForToolbarButton,
 };

@@ -50,6 +50,40 @@ test.describe("/admin/ Projects collection: create / edit / delete + image galle
     await installSveltiaStubs(page, buildFixtures());
   });
 
+  test("create a project persists to _projects/ with the right shape", async ({
+    page,
+  }) => {
+    await page.goto("/admin/index-local.html#/collections/projects/new");
+    await signInLocal(page);
+
+    const titleField = page.getByLabel(/^Title$/);
+    await expect(titleField).toBeVisible({ timeout: 60_000 });
+    await titleField.fill("CRUD Test Project");
+
+    const techField = page.getByLabel(/Technology/);
+    if (await techField.isVisible().catch(() => false)) {
+      await techField.fill("Playwright · Node · Sveltia");
+    }
+
+    await page.getByRole("button", { name: /^Save/i }).first().click();
+
+    await expect
+      .poll(() => listFixtureDir(page, "_projects"), { timeout: 30_000 })
+      .toContain("crud-test-project.md");
+
+    const saved = await readFixtureFile(
+      page,
+      "_projects",
+      "crud-test-project.md",
+    );
+    expect(saved.content).toMatch(/^---/);
+    expect(saved.content).toMatch(/title:\s*['"]?CRUD Test Project/);
+
+    await expect
+      .poll(() => page.evaluate(() => window.location.hash), { timeout: 30_000 })
+      .toMatch(/\/collections\/projects\/entries\/crud-test-project/);
+  });
+
   test.fixme("create a project with two gallery images, remove one, then delete the project", async ({
     page,
   }) => {

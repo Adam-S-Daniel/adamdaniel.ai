@@ -5,6 +5,8 @@ const {
   signInLocal,
   readFixtureFile,
   listFixtureDir,
+  getCmsState,
+  waitForToolbarButton,
 } = require("./cms-test-helpers");
 
 // End-to-end coverage for the Tags collection in Sveltia's local-
@@ -64,50 +66,103 @@ test.describe("/admin/ Tags collection", () => {
       .toMatch(/\/collections\/tags\/entries\/crud-test-tag/);
   });
 
-  // Edit-in-place and Delete-via-toolbar are both racy in the FSA
-  // mock environment — the toolbar's Duplicate / Delete buttons are
-  // gated on `!isNew && !disabled && !collectionFile && !isSmallScreen`
-  // (toolbar.svelte:109), and one of those conditions consistently
-  // holds back the render in our test fixtures even though the
-  // production UI surfaces the affordances correctly. Keeping these
-  // declared (so the structure of intended coverage is visible)
-  // but fixme'd until we can introspect Sveltia's store state from
-  // the page to figure out which condition is blocking.
-  test.fixme("edit a tag's description in place", async ({ page }) => {
-    await page.goto("/admin/index-local.html#/collections/tags/new");
+  // Edit and Delete navigate **directly** to an existing entry's
+  // edit URL rather than going through Create → Save first. The
+  // toolbar's Duplicate / Delete buttons are gated on
+  // `!isNew && !disabled && !collectionFile && !isSmallScreen`
+  // (toolbar.svelte:109). Loading a pre-seeded entry guarantees
+  // `isNew=false` from the first render — no race against
+  // Sveltia's post-save createDraft swap. The repo ships with
+  // `_tags/best-practices.md` etc., so we can use those.
+
+  test("edit an existing tag's description in place", async ({ page }) => {
+    await page.goto(
+      "/admin/index-local.html#/collections/tags/entries/best-practices",
+    );
     await signInLocal(page);
-    await page.getByLabel(/^Name$/).fill("Edit Test Tag");
-    await page.getByLabel(/^Description$/).fill("Original description");
+
+    const description = page.getByLabel(/^Description$/);
+    await expect(description).toBeVisible({ timeout: 60_000 });
+    await description.fill("Edited via CRUD spec.");
+
     await page.getByRole("button", { name: /^Save/i }).first().click();
-    await expect
-      .poll(() => listFixtureDir(page, "_tags"), { timeout: 30_000 })
-      .toContain("edit-test-tag.md");
-    await page.getByLabel(/^Description$/).fill("Updated description.");
-    await page.getByRole("button", { name: /^Save/i }).first().click();
+
     await expect
       .poll(
-        async () => (await readFixtureFile(page, "_tags", "edit-test-tag.md"))?.content || "",
+        async () =>
+          (await readFixtureFile(page, "_tags", "best-practices.md"))
+            ?.content || "",
         { timeout: 30_000 },
       )
-      .toMatch(/Updated description/);
+      .toMatch(/Edited via CRUD spec\./);
   });
 
-  test.fixme("delete a tag from the toolbar", async ({ page }) => {
-    await page.goto("/admin/index-local.html#/collections/tags/new");
+  test("delete an existing tag from the toolbar", async ({ page }) => {
+    await page.goto(
+      "/admin/index-local.html#/collections/tags/entries/best-practices",
+    );
     await signInLocal(page);
-    await page.getByLabel(/^Name$/).fill("Delete Test Tag");
-    await page.getByLabel(/^Description$/).fill("To be removed");
-    await page.getByRole("button", { name: /^Save/i }).first().click();
-    await expect
-      .poll(() => listFixtureDir(page, "_tags"), { timeout: 30_000 })
-      .toContain("delete-test-tag.md");
-    await page.getByRole("button", { name: /Delete Entry/i }).click();
+
+    // Wait for the editor form to render — proves the entry loaded.
+    await expect(page.getByLabel(/^Name$/)).toBeVisible({ timeout: 60_000 });
+
+    // The Delete affordance ships under different labels depending
+    // on Sveltia's i18n bundle (`Delete entry` vs `Delete`). Poll
+    // the toolbar until *some* delete-ish button is visible — and
+    // capture the full inspector state if it never shows up so the
+    // test report explains which gating condition is sticking.
+    let deleteBtn;
+    try {
+      deleteBtn = await waitForToolbarButton(page, /^delete/i, {
+        timeout: 30_000,
+      });
+    } catch (err) {
+      // Fall back to the "More actions" overflow menu if the
+      // top-level button never rendered.
+      const moreBtn = page.getByRole("button", {
+        name: /More actions|Show Editor Options|Show more/i,
+      });
+      if (await moreBtn.isVisible().catch(() => false)) {
+        await moreBtn.click();
+        const item = page.getByRole("menuitem", { name: /^Delete/i });
+        await item.click();
+      } else {
+        throw err;
+      }
+    }
+
+    if (deleteBtn) {
+      const re = new RegExp(deleteBtn.ariaLabel || deleteBtn.name, "i");
+      await page
+        .getByRole("button", { name: re })
+        .first()
+        .click();
+    }
+
+    // Confirm dialog.
     await page
       .getByRole("dialog")
       .getByRole("button", { name: /^Delete$/i })
       .click();
+
     await expect
       .poll(() => listFixtureDir(page, "_tags"), { timeout: 30_000 })
-      .not.toContain("delete-test-tag.md");
+      .not.toContain("best-practices.md");
+  });
+
+  test("__cmsInspect probe reports viewport, matchMedia, and toolbar buttons", async ({
+    page,
+  }) => {
+    await page.goto(
+      "/admin/index-local.html#/collections/tags/entries/best-practices",
+    );
+    await signInLocal(page);
+    await expect(page.getByLabel(/^Name$/)).toBeVisible({ timeout: 60_000 });
+
+    const state = await getCmsState(page);
+    expect(state.viewport.width).toBeGreaterThan(0);
+    expect(typeof state.matchMedia.smallScreen).toBe("boolean");
+    expect(state.url).toMatch(/best-practices/);
+    expect(Array.isArray(state.toolbarButtons)).toBe(true);
   });
 });

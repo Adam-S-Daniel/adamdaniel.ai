@@ -26,6 +26,46 @@ test.describe("/admin/ Pages collection: create / edit / delete", () => {
     await installSveltiaStubs(page, buildFixtures());
   });
 
+  test("create a page persists to pages/ with the right shape", async ({
+    page,
+  }) => {
+    await page.goto("/admin/index-local.html#/collections/pages/new");
+    await signInLocal(page);
+
+    const titleField = page.getByLabel(/^Title$/);
+    await expect(titleField).toBeVisible({ timeout: 60_000 });
+    await titleField.fill("CRUD Test Page");
+
+    // Permalink defaults to "/pages/" — append a slug so it satisfies
+    // the `^/.*/$` pattern. Editors do this by hand the same way.
+    const permalinkField = page.getByLabel(/^Permalink$/);
+    await permalinkField.fill("/pages/crud-test/");
+
+    const rawTab = page.getByRole("tab", { name: /^Raw$/ });
+    if (await rawTab.isVisible().catch(() => false)) await rawTab.click();
+    const bodyArea = page
+      .locator('textarea[name*="body"], textarea[aria-label*="Content"]')
+      .first();
+    await bodyArea.fill("# Hello\n\nFresh page body.");
+
+    await page.getByRole("button", { name: /^Save/i }).first().click();
+
+    // Slug derives from title via `slug: "{{slug}}"` → "crud-test-page".
+    await expect
+      .poll(() => listFixtureDir(page, "pages"), { timeout: 30_000 })
+      .toContain("crud-test-page.md");
+
+    const saved = await readFixtureFile(page, "pages", "crud-test-page.md");
+    expect(saved.content).toMatch(/^---/);
+    expect(saved.content).toMatch(/title:\s*['"]?CRUD Test Page/);
+    expect(saved.content).toMatch(/permalink:\s*['"]?\/pages\/crud-test\//);
+    expect(saved.content).toMatch(/Fresh page body/);
+
+    await expect
+      .poll(() => page.evaluate(() => window.location.hash), { timeout: 30_000 })
+      .toMatch(/\/collections\/pages\/entries\/crud-test-page/);
+  });
+
   test.fixme("create a new page, edit body, then delete", async ({ page }) => {
     await page.goto("/admin/index-local.html#/collections/pages/new");
     await signInLocal(page);
