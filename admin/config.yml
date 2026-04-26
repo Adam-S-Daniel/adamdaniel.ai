@@ -218,59 +218,47 @@ collections:
   - name: pages
     label: Pages
     label_singular: Page
-    files:
-      - name: about
-        label: About Me
-        file: pages/about.md
-        preview_path: /pages/about/
-        fields:
-          - name: title
-            label: Title
-            widget: string
-            default: "About Me"
+    folder: pages
+    create: true
+    delete: true
+    slug: "{{slug}}"
+    preview_path: "/pages/{{slug}}/"
+    summary: "{{title}}"
+    sortable_fields:
+      - title
+    fields:
+      - name: title
+        label: Title
+        widget: string
+        required: true
+        hint: "The page heading — also used as the browser tab title"
 
-          - name: layout
-            label: Layout
-            widget: hidden
-            default: page
+      - name: layout
+        label: Layout
+        widget: hidden
+        default: page
 
-          - name: permalink
-            label: Permalink
-            widget: hidden
-            default: /pages/about/
+      - name: permalink
+        label: Permalink
+        widget: string
+        required: true
+        default: "/pages/"
+        hint: "The URL path the page lives at. Convention is /pages/<slug>/, but you can use any path. Must start and end with a slash."
+        pattern:
+          - "^/.*/$"
+          - "Must start and end with a slash, e.g. /pages/about/"
 
-          - name: body
-            label: Content
-            widget: markdown
-            hint: "Your About Me page content"
-            modes:
-              - rich_text
-              - raw
+      - name: published
+        label: Published
+        widget: boolean
+        default: false
+        hint: "ON = page goes live on the next deploy. Leave OFF to keep it as a draft."
 
-      - name: contact
-        label: Contact
-        file: pages/contact.md
-        preview_path: /pages/contact/
-        fields:
-          - name: title
-            label: Title
-            widget: string
-            default: "Contact"
-
-          - name: layout
-            label: Layout
-            widget: hidden
-            default: page
-
-          - name: permalink
-            label: Permalink
-            widget: hidden
-            default: /pages/contact/
-
-          - name: body
-            label: Content
-            widget: markdown
-            hint: "Your Contact page content"
-            modes:
-              - rich_text
-              - raw
+      - name: body
+        label: Content
+        widget: markdown
+        required: true
+        hint: "Page content. For a real-layout preview that updates on every Save, open /preview/?collection=pages in a second tab."
+        modes:
+          - rich_text
+          - raw

@@ -154,48 +154,39 @@ collections:
   - name: pages
     label: Pages
     label_singular: Page
-    files:
-      - name: about
-        label: About Me
-        file: pages/about.md
-        fields:
-          - name: title
-            label: Title
-            widget: string
-            default: "About Me"
-          - name: layout
-            label: Layout
-            widget: hidden
-            default: page
-          - name: permalink
-            label: Permalink
-            widget: hidden
-            default: /pages/about/
-          - name: body
-            label: Content
-            widget: markdown
-            modes:
-              - rich_text
-              - raw
-      - name: contact
-        label: Contact
-        file: pages/contact.md
-        fields:
-          - name: title
-            label: Title
-            widget: string
-            default: "Contact"
-          - name: layout
-            label: Layout
-            widget: hidden
-            default: page
-          - name: permalink
-            label: Permalink
-            widget: hidden
-            default: /pages/contact/
-          - name: body
-            label: Content
-            widget: markdown
-            modes:
-              - rich_text
-              - raw
+    folder: pages
+    create: true
+    delete: true
+    slug: "{{slug}}"
+    preview_path: "/pages/{{slug}}/"
+    summary: "{{title}}"
+    sortable_fields:
+      - title
+    fields:
+      - name: title
+        label: Title
+        widget: string
+        required: true
+      - name: layout
+        label: Layout
+        widget: hidden
+        default: page
+      - name: permalink
+        label: Permalink
+        widget: string
+        required: true
+        default: "/pages/"
+        pattern:
+          - "^/.*/$"
+          - "Must start and end with a slash"
+      - name: published
+        label: Published
+        widget: boolean
+        default: false
+      - name: body
+        label: Content
+        widget: markdown
+        required: true
+        modes:
+          - rich_text
+          - raw
