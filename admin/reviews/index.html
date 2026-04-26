@@ -268,14 +268,40 @@
       const popup = window.open(OAUTH_URL, 'github-auth',
         `width=${w},height=${h},left=${left},top=${top}`);
 
+      // Decap / Sveltia / Netlify CMS handshake. The OAuth proxy popup
+      // (oauth-proxy/lambda.py) won't release the token until it sees the
+      // opener echo back its "authorizing:<provider>" message. Skipping the
+      // reply leaves the popup spinning on "Completing authorisation…"
+      // forever, which is what the original `e.data?.token` listener did.
       window.addEventListener('message', function handler(e) {
-        const token = e.data?.token || e.data?.data?.token;
-        if (token) {
-          setToken(token);
-          window.removeEventListener('message', handler);
-          if (popup && !popup.closed) popup.close();
-          init();
+        const data = e.data;
+        if (typeof data !== 'string') return;
+
+        if (data === 'authorizing:github') {
+          if (popup && !popup.closed) popup.postMessage(data, e.origin);
+          return;
         }
+
+        const m = data.match(/^authorization:github:(success|error):(.*)$/s);
+        if (!m) return;
+
+        window.removeEventListener('message', handler);
+
+        if (m[1] === 'error') {
+          showToast('Authorization failed', 5000);
+          if (popup && !popup.closed) popup.close();
+          return;
+        }
+
+        let token;
+        try { token = JSON.parse(m[2]).token; }
+        catch { showToast('Authorization response was malformed', 5000); return; }
+
+        if (!token) { showToast('Authorization succeeded but no token returned', 5000); return; }
+
+        setToken(token);
+        if (popup && !popup.closed) popup.close();
+        init();
       });
     });
 
