@@ -63,11 +63,26 @@ test.describe("/admin/ Tags collection: create / edit / delete", () => {
     expect(saved.content).toMatch(/description:\s*['"]?Original description/);
 
     // ── Edit ───────────────────────────────────────────────────────
-    await page.goto(
-      "/admin/index-local.html#/collections/tags/entries/crud-test-tag",
-    );
-    const descFieldEdit = page.getByLabel(/^Description$/);
-    await expect(descFieldEdit).toBeVisible({ timeout: 30_000 });
+    // Sveltia auto-navigates after Save and may already be at the
+    // edit route, in which case page.goto(samehash) is a no-op and
+    // the form doesn't repaint. Force a hashchange via direct hash
+    // assignment + manual event dispatch, then wait for the Name
+    // sentinel to be populated with the saved value before asserting
+    // anything else.
+    await page.evaluate(() => {
+      window.location.hash = "#/collections/tags/entries/crud-test-tag";
+      window.dispatchEvent(new HashChangeEvent("hashchange", {
+        oldURL: window.location.href,
+        newURL: window.location.href,
+      }));
+    });
+
+    const nameSentinel = page.getByLabel(/^Name/);
+    await expect(nameSentinel).toBeVisible({ timeout: 60_000 });
+    await expect(nameSentinel).toHaveValue("CRUD Test Tag", { timeout: 30_000 });
+
+    const descFieldEdit = page.getByLabel(/^Description/);
+    await expect(descFieldEdit).toBeVisible({ timeout: 10_000 });
     await descFieldEdit.fill("Updated description with more detail.");
     await page.getByRole("button", { name: /^Save$/ }).click();
 
