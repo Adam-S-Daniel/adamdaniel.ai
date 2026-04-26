@@ -74,6 +74,22 @@ function parseFrontMatter(src) {
  */
 async function installSveltiaStubs(page, fixtures) {
   await page.addInitScript((fx) => {
+    // ── Pre-seed Sveltia user prefs ───────────────────────────────
+    // Match admin/index.html's behaviour so the test harness sees
+    // the same post-save flow real editors do (closeOnSave=false →
+    // Save stays on the entry-edit form). Without this the Edit
+    // step's Description/menu lookups race against Sveltia routing
+    // back to the collection list.
+    try {
+      const KEY = "sveltia-cms.prefs";
+      const raw = localStorage.getItem(KEY);
+      const prefs = raw ? JSON.parse(raw) : {};
+      if (typeof prefs.closeOnSave === "undefined") {
+        prefs.closeOnSave = false;
+        localStorage.setItem(KEY, JSON.stringify(prefs));
+      }
+    } catch (_) { /* localStorage disabled — keep Sveltia's defaults */ }
+
     // ── Capture window.open URLs for the View on Live Site button ──
     window.openedURLs = [];
     window.open = (url) => {

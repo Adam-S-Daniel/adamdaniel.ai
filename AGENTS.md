@@ -71,6 +71,8 @@ npx playwright test e2e/glow-banding.spec.js       # single test file
 
 Every folder collection in `admin/config*.yml` ships with **explicit** `create: true` AND `delete: true`. Sveltia hides the toolbar create/delete affordances when either flag isn't set, even though Decap historically defaults them on. `files:` collections never expose create/delete in Sveltia regardless of flags — confirmed in `src/lib/components/contents/contents-page.svelte` (the SecondaryToolbar is gated on `_type === 'entry'`) and `src/lib/components/contents/list/file-list.svelte` (the FileList row only navigates).
 
+`admin/index.html` and `admin/index-local.html` pre-seed `localStorage["sveltia-cms.prefs"]` with `closeOnSave: false` before the bundle loads. Sveltia's default is `closeOnSave: true` (route back to the collection list after every Save), which is jarring when iterating on a single entry. The pre-seed only sets the default for first-time visitors; editors can still override via Sveltia's preferences UI.
+
 `reading_time` is computed at build time (word count ÷ 200 + 1) — there is no editor-facing field.
 
 Editor-facing walkthrough: [`docs/CONTENT_GUIDE.md`](docs/CONTENT_GUIDE.md).

@@ -109,7 +109,12 @@ The body field's hint reminds you of these URLs while you write.
 
 ## 5. Save → review → publish
 
-Hit **Save**. The editorial workflow is enabled, so:
+Hit **Save**. With this site's defaults, Sveltia **stays on the entry
+you're editing** instead of routing back to the collection list, so
+you can iterate without losing your place. (You can flip this in
+Sveltia's own preferences if you'd rather it close on save.)
+
+The editorial workflow is enabled, so each Save:
 
 1. **A pull request is opened** on its own branch — your changes are *not*
    pushed straight to production.
