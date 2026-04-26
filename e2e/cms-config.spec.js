@@ -120,4 +120,73 @@ test.describe("Sveltia CMS config invariants", () => {
     // and cms/ready labels, /admin/reviews/) is built around.
     expect(yml).toMatch(/^publish_mode:\s*editorial_workflow\b/m);
   });
+
+  // ── Editor capability invariants ─────────────────────────────────────
+  //
+  // These lock in *what an editor can do* per collection — create new
+  // entries, delete existing ones, attach images, etc. — without going
+  // through Sveltia's UI. If a future config edit removes a capability
+  // by accident, these tests fail fast.
+
+  for (const configPath of CONFIGS) {
+    const label = path.relative(REPO_ROOT, configPath);
+
+    test(`${label}: each content collection allows create + delete`, () => {
+      const yml = readConfig(configPath);
+      // Tags / Posts / Projects / Pages must all be folder collections
+      // with create:true (and delete:true where supported) so editors
+      // can manage them entirely from the CMS UI.
+      for (const name of ["posts", "tags", "projects", "pages"]) {
+        const chunk = findCollection(yml, name);
+        expect(chunk, `${name} collection must exist`).not.toBeNull();
+        expect(chunk).toMatch(/^\s{4}folder:\s*\S+/m);
+        expect(chunk).toMatch(/^\s{4}create:\s*true/m);
+      }
+      // Pages used to be a `files:` collection (no create / delete).
+      // Now folder-based — verify create + delete are both on.
+      const pages = findCollection(yml, "pages");
+      expect(pages).toMatch(/^\s{4}delete:\s*true/m);
+    });
+
+    test(`${label}: posts collection exposes title, date, body, tags, featured_image`, () => {
+      const yml = readConfig(configPath);
+      const posts = findCollection(yml, "posts");
+      for (const f of ["title", "date", "body", "tags", "featured_image", "published"]) {
+        expect(findField(posts, f), `posts.${f} field must exist`).not.toBeNull();
+      }
+      const featured = findField(posts, "featured_image");
+      expect(featured).toMatch(/widget:\s*image/);
+    });
+
+    test(`${label}: projects collection exposes a multi-image gallery`, () => {
+      const yml = readConfig(configPath);
+      const projects = findCollection(yml, "projects");
+      const images = findField(projects, "images");
+      expect(images, "projects.images field must exist").not.toBeNull();
+      // List widget with a nested image field — the standard Decap/
+      // Sveltia recipe for "an ordered, repeatable image gallery"
+      // (drag-to-reorder, individual remove).
+      expect(images).toMatch(/widget:\s*list/);
+      expect(images).toMatch(/widget:\s*image/);
+    });
+
+    test(`${label}: tags collection exposes name + description`, () => {
+      const yml = readConfig(configPath);
+      const tags = findCollection(yml, "tags");
+      expect(findField(tags, "name"), "tags.name must exist").not.toBeNull();
+      expect(findField(tags, "description"), "tags.description must exist").not.toBeNull();
+    });
+
+    test(`${label}: pages collection exposes title, body, permalink, published`, () => {
+      const yml = readConfig(configPath);
+      const pages = findCollection(yml, "pages");
+      for (const f of ["title", "body", "permalink", "published"]) {
+        expect(findField(pages, f), `pages.${f} must exist`).not.toBeNull();
+      }
+      // Permalink is now a string (editor-visible) rather than hidden,
+      // since editors creating new pages need to set it.
+      const permalink = findField(pages, "permalink");
+      expect(permalink).toMatch(/widget:\s*string/);
+    });
+  }
 });
