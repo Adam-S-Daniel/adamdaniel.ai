@@ -52,11 +52,10 @@ jobs:
 
       - name: Select relevant e2e specs
         id: select
-        env:
-          BASE_REF: ${{ github.event.pull_request.base.sha || 'origin/main' }}
-        # On push to main we run everything (the diff is the entire
-        # commit and the selector can't reason about that usefully).
-        # On PRs we run the diff-aware subset.
+        # On push to main we run everything (the diff would be the
+        # entire merged commit and the selector can't reason about
+        # that usefully). On PRs we run the diff-aware subset against
+        # the base branch tip.
         run: |
           if [ "${{ github.event_name }}" = "push" ]; then
             echo "scope=all" >> "$GITHUB_OUTPUT"
@@ -64,8 +63,16 @@ jobs:
             echo "Running full matrix on push-to-main"
             exit 0
           fi
-          git fetch origin main --depth=200 || true
-          node e2e/select-specs.js --base "$BASE_REF" > /tmp/select.json
+          git fetch origin main --depth=500 || true
+          # Fall back gracefully if the selector or git diff fails — a
+          # broken selector should never block the PR. Run full matrix.
+          if ! node e2e/select-specs.js --base origin/main > /tmp/select.json 2>/tmp/select.err; then
+            echo "Selector failed:"
+            cat /tmp/select.err || true
+            echo "scope=all" >> "$GITHUB_OUTPUT"
+            echo "files=" >> "$GITHUB_OUTPUT"
+            exit 0
+          fi
           cat /tmp/select.json
           SCOPE=$(node -e "console.log(JSON.parse(require('fs').readFileSync('/tmp/select.json')).scope)")
           FILES=$(node -e "const j=JSON.parse(require('fs').readFileSync('/tmp/select.json'));console.log((j.files||[]).join(' '))")

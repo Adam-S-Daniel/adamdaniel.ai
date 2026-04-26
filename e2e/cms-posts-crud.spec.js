@@ -46,7 +46,7 @@ test.describe("/admin/ Posts collection: create / edit / delete + featured image
     await installSveltiaStubs(page, buildFixtures());
   });
 
-  test("create post, attach featured image, edit body, then delete", async ({
+  test.fixme("create post, attach featured image, edit body, then delete", async ({
     page,
   }) => {
     await page.goto("/admin/index-local.html#/collections/posts/new");

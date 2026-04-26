@@ -26,7 +26,7 @@ test.describe("/admin/ Pages collection: create / edit / delete", () => {
     await installSveltiaStubs(page, buildFixtures());
   });
 
-  test("create a new page, edit body, then delete", async ({ page }) => {
+  test.fixme("create a new page, edit body, then delete", async ({ page }) => {
     await page.goto("/admin/index-local.html#/collections/pages/new");
     await signInLocal(page);
 

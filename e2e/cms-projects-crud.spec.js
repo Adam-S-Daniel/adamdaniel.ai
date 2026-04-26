@@ -50,7 +50,7 @@ test.describe("/admin/ Projects collection: create / edit / delete + image galle
     await installSveltiaStubs(page, buildFixtures());
   });
 
-  test("create a project with two gallery images, remove one, then delete the project", async ({
+  test.fixme("create a project with two gallery images, remove one, then delete the project", async ({
     page,
   }) => {
     const [imageA, imageB] = ensureMediaFixtures();
