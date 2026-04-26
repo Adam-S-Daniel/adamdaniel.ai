@@ -77,12 +77,18 @@ test.describe("/admin/ Tags collection: create / edit / delete", () => {
       }));
     });
 
-    const nameSentinel = page.getByLabel(/^Name/);
+    const nameSentinel = page.getByRole("textbox", { name: /^Name/i });
     await expect(nameSentinel).toBeVisible({ timeout: 60_000 });
     await expect(nameSentinel).toHaveValue("CRUD Test Tag", { timeout: 30_000 });
 
-    const descFieldEdit = page.getByLabel(/^Description/);
-    await expect(descFieldEdit).toBeVisible({ timeout: 10_000 });
+    // Description is widget:text → <textarea>. getByLabel sometimes
+    // misses Sveltia's textareas because the <label> isn't always
+    // hooked up via `for=` to the textarea — the accessible name
+    // comes from a wrapping element instead. getByRole('textbox')
+    // queries the accessibility tree, which catches both inputs and
+    // textareas reliably.
+    const descFieldEdit = page.getByRole("textbox", { name: /Description/i });
+    await expect(descFieldEdit).toBeVisible({ timeout: 30_000 });
     await descFieldEdit.fill("Updated description with more detail.");
     await page.getByRole("button", { name: /^Save$/ }).click();
 
