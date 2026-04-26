@@ -51,10 +51,12 @@ test.describe("/admin/reviews/ OAuth handshake", () => {
 
       window.__simulatePopupMessage = function (data) {
         // The browser would deliver this via MessageEvent on the opener.
+        // We can't set `source` to a plain object — Chromium rejects it —
+        // and the dashboard's handler uses the closure-captured popup
+        // reference rather than e.source, so omitting it is faithful.
         const event = new MessageEvent("message", {
           data,
           origin: "https://sq8d4876v8.execute-api.us-east-1.amazonaws.com",
-          source: window.__popup,
         });
         window.dispatchEvent(event);
       };
@@ -95,9 +97,10 @@ test.describe("/admin/reviews/ OAuth handshake", () => {
     // <provider>:success:<JSON>") and persist it.
     const token = "ghp_test_token_abc123";
     const payload = JSON.stringify({ token, provider: "github" });
-    await page.evaluate((data) => window.__simulatePopupMessage(data), [
+    await page.evaluate(
+      (data) => window.__simulatePopupMessage(data),
       `authorization:github:success:${payload}`,
-    ]);
+    );
 
     await expect
       .poll(() => page.evaluate(() => localStorage.getItem("gh_reviews_token")))
