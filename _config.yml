@@ -60,3 +60,4 @@ exclude:
   - playwright.config.js
   - playwright.regression.config.js
   - e2e
+  - docs

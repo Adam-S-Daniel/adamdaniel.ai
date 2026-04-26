@@ -62,14 +62,20 @@ npx playwright test e2e/glow-banding.spec.js       # single test file
 
 ## Content model
 
-| Collection | Folder | Key fields |
-|---|---|---|
-| Posts | `_posts/` | title, date, tags, excerpt, featured_image, published, reading_time |
-| Tags | `_tags/` | name, description |
-| Projects | `_projects/` | title, technology, url_link, featured, images |
-| Pages | `pages/` | about.md, contact.md |
+| Collection | Folder | Type | Key fields |
+|---|---|---|---|
+| Posts | `_posts/` | folder | title, date, tags, excerpt, featured_image, published, publish_date |
+| Tags | `_tags/` | folder | name, description |
+| Projects | `_projects/` | folder | title, technology, url_link, featured, images (gallery) |
+| Pages | `pages/` | folder | title, body, permalink, published (was `files:` until PR #33) |
 
-`reading_time` is auto-calculated at build time (word count ÷ 200 + 1).
+Every folder collection in `admin/config*.yml` ships with **explicit** `create: true` AND `delete: true`. Sveltia hides the toolbar create/delete affordances when either flag isn't set, even though Decap historically defaults them on. `files:` collections never expose create/delete in Sveltia regardless of flags — confirmed in `src/lib/components/contents/contents-page.svelte` (the SecondaryToolbar is gated on `_type === 'entry'`) and `src/lib/components/contents/list/file-list.svelte` (the FileList row only navigates).
+
+`admin/index.html` and `admin/index-local.html` pre-seed `localStorage["sveltia-cms.prefs"]` with `closeOnSave: false` before the bundle loads. Sveltia's default is `closeOnSave: true` (route back to the collection list after every Save), which is jarring when iterating on a single entry. The pre-seed only sets the default for first-time visitors; editors can still override via Sveltia's preferences UI.
+
+`reading_time` is computed at build time (word count ÷ 200 + 1) — there is no editor-facing field.
+
+Editor-facing walkthrough: [`docs/CONTENT_GUIDE.md`](docs/CONTENT_GUIDE.md).
 
 ## Live preview
 
@@ -179,19 +185,25 @@ Uses a separate Playwright config (`playwright.regression.config.js`) and spec (
 
 #### Job: `generate`
 
-1. Detect changed pages via `git diff` → `e2e/detect-changed-pages.js` → `/tmp/page-changes.json`
+1. Detect changed pages via `git diff` → `e2e/detect-changed-pages.js` → `/tmp/page-changes.json` (changeset heuristic — "what *could* this diff have affected")
 2. Build Jekyll site locally (`_site/`)
-3. Screenshot all pages from localhost (PR build) and adamdaniel.ai (production) via Playwright
+3. Screenshot every page on the PR (localhost) and on production (adamdaniel.ai) at 1920×1080 via Playwright
 4. For new pages: production screenshot replaced with "No previous version of this page" placeholder
-5. Generate side-by-side comparison video via ffmpeg (`e2e/generate-video.sh`)
-6. Upload video to `s3://adamdaniel-ai-previews/pr-{N}/regression.mp4`
-7. Post/update PR comment (`<!-- adamdaniel-regression-bot -->` marker) with video link and change summary
+5. Compute the per-page pixel diff between PR and prod via `e2e/compute-visual-diffs.js` → `screenshots/regression/diffs.json` (fact — "what actually looks different"). 0.5% pixel-ratio threshold absorbs anti-aliasing noise.
+6. Generate side-by-side comparison video via ffmpeg (`e2e/generate-video.sh`) at 1920×1080 / CRF 20 / 2fps. Each segment shows a prominent 80px top bar — VISUALLY DIFFERENT (red), VISUALLY IDENTICAL (green), or NEW PAGE (blue) — for *that* page, plus a smaller "X in changeset" line for the heuristic classification.
+7. Upload `regression.mp4` AND `regression.json` to `s3://adamdaniel-ai-previews/pr-{N}/`. Both are CloudFront-invalidated.
+8. Post/update PR comment (`<!-- adamdaniel-regression-bot -->`) with both stats:
+   - **Visually different** — pages where pixels actually changed (the ones to look at)
+   - **Potentially affected by changes** — pages the changeset heuristic flagged
 
 Video URL: `https://preview-pr{N}.adamdaniel.ai/regression.mp4`
+Diffs JSON URL: `https://preview-pr{N}.adamdaniel.ai/regression.json` (consumed by `/admin/reviews/` so editors see the same stats without GitHub access)
 
 #### Job: `approve-regression`
 
-Uses `regression-review` GitHub Environment with required reviewers (all write-access users). Blocks merge until a reviewer approves the visual regression via GitHub Actions UI or the admin review dashboard.
+Uses `regression-review` GitHub Environment with required reviewers (all write-access users). Blocks merge until a reviewer approves the visual regression via GitHub Actions UI or the admin review dashboard. The `Waiting` state on this job comes from `environment: regression-review` (`visual-regression.yml`) plus the required-reviewers list configured in **repo Settings → Environments → regression-review**.
+
+**Billing:** Time spent in the `Waiting` state does **not** count toward Actions minutes — GitHub does not allocate a runner while waiting for a deployment review. Billing only resumes when a reviewer approves and the runner picks the job back up. The job itself is a one-line `echo` so post-approval billing is rounding-error.
 
 #### Video page ordering
 
@@ -227,9 +239,10 @@ Auto-merge is enabled in repository settings. Direct pushes to `main` are allowe
 Located at `/admin/reviews/` (separate from Sveltia CMS). Linked from a floating button on the CMS page.
 
 - Cobalt Thermal theme
-- GitHub OAuth authentication (reuses existing Lambda proxy)
+- GitHub OAuth authentication (reuses existing Lambda proxy). Implements the full Decap/Sveltia handshake: the popup posts `"authorizing:github"`, the dashboard echoes it back at the popup's origin, the popup releases an `"authorization:github:success:<JSON>"` payload, the dashboard parses the token. Skipping the echo leaves the popup spinning on "Completing authorisation…" forever — the same shape of bug the Sveltia CMS would surface if its handshake broke.
 - Lists all pending visual regression reviews
 - Embedded `<video>` player for regression videos hosted at `preview-pr{N}.adamdaniel.ai/regression.mp4`
+- Stat grid (Visually different / Potentially affected / New / Identical) plus the per-page list of visually-different paths, fetched from `preview-pr{N}.adamdaniel.ai/regression.json` per card. Cross-origin GET, no GitHub auth needed.
 - One-click approve / request-changes with comment
 - Auto-refreshes every 60 seconds
 
@@ -239,13 +252,25 @@ Located at `/admin/reviews/` (separate from Sveltia CMS). Linked from a floating
 
 **Jobs:** `e2e`
 
-1. Checkout, setup Ruby 3.2 + Node 20
-2. `npm ci` → install test dependencies
-3. `npx playwright install chromium firefox webkit --with-deps`
-4. `npx playwright test` — runs all tests across the full browser matrix
-5. Upload `test-results/` artifact (7-day retention)
+1. Checkout (full history — `e2e/select-specs.js` needs it), setup Ruby 3.2 + Node 20
+2. Run `_plugins_test/*_test.rb` — plain-Ruby unit tests for the Jekyll plugins
+3. `npm ci` → install test dependencies
+4. `npx playwright install chromium firefox webkit --with-deps`
+5. **Diff-aware spec selection** — on PRs, `e2e/select-specs.js --base $BASE_REF` returns one of three scopes:
+   - `all` — fanout files changed (`_layouts/`, `_includes/`, `_config.yml`, `assets/css/`, `_plugins/`, `package*.json`, `Gemfile*`, `e2e/base.js`, `e2e/cms-test-helpers.js`, `playwright*.config.js`). Run the full matrix.
+   - `subset` — match each changed file against `SPEC_RULES` and run only the resulting list (always-run baseline included).
+   - `skip` — only docs (`README.md`, `AGENTS.md`, `docs/`, `.agents/skills/`) changed. Run the always-run baseline only as a smoke check.
+   On push-to-main, the selector is bypassed and the full matrix runs.
+6. Upload `test-results/` artifact (7-day retention)
 
 Tests run with `fullyParallel: true` — all 8 projects execute concurrently.
+
+#### Always-run baseline
+
+Cheap, deterministic, no browser:
+- `e2e/compute-visual-diffs.test.js` — pure pngjs unit tests for the visual-diff classifier
+- `e2e/cms-config.spec.js` — YAML structural invariants for the Sveltia config (editorial workflow on, every folder collection has explicit create + delete, all required fields present, etc.)
+- `e2e/visual-change-guard.spec.js` — guards against unintended visual changes
 
 ---
 

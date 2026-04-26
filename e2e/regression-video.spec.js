@@ -36,7 +36,7 @@ test.describe("Regression video screenshots", () => {
     const isNew = (changes.new || []).includes(pagePath);
 
     test(`screenshot PR: ${pagePath}`, async ({ page }) => {
-      await page.setViewportSize({ width: 1280, height: 720 });
+      await page.setViewportSize({ width: 1920, height: 1080 });
       const resp = await page.goto(pagePath, {
         waitUntil: "domcontentloaded",
         timeout: 30000,
@@ -52,7 +52,7 @@ test.describe("Regression video screenshots", () => {
 
     if (isNew) {
       test(`placeholder PROD: ${pagePath}`, async ({ page }) => {
-        await page.setViewportSize({ width: 1280, height: 720 });
+        await page.setViewportSize({ width: 1920, height: 1080 });
         await page.setContent(`
           <html><body style="margin:0;background:#1a1a2e;color:#8ab0e8;
             display:flex;align-items:center;justify-content:center;
@@ -76,7 +76,7 @@ test.describe("Regression video screenshots", () => {
       });
     } else {
       test(`screenshot PROD: ${pagePath}`, async ({ page }) => {
-        await page.setViewportSize({ width: 1280, height: 720 });
+        await page.setViewportSize({ width: 1920, height: 1080 });
         try {
           await page.goto(`${PROD_BASE}${pagePath}`, {
             waitUntil: "domcontentloaded",

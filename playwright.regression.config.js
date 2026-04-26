@@ -10,7 +10,7 @@ module.exports = defineConfig({
   },
   use: {
     baseURL: "http://localhost:4000",
-    viewport: { width: 1280, height: 720 },
+    viewport: { width: 1920, height: 1080 },
   },
   projects: [
     {

@@ -10,6 +10,10 @@ on:
 
 permissions:
   contents: read
+  # Needed by the failure-summary step so we can post / update the
+  # `<!-- e2e-failure-summary -->` comment on the PR. Read-only on
+  # contents stays in place.
+  pull-requests: write
 
 jobs:
   e2e:
@@ -17,6 +21,10 @@ jobs:
     steps:
       - name: Checkout
         uses: actions/checkout@34e114876b0b11c390a56381ad16ebd13914f8d5  # v4.3.1
+        with:
+          # Need history for `git diff origin/main...HEAD` so the spec
+          # selector can decide which tests are actually relevant.
+          fetch-depth: 0
 
       - name: Setup Ruby
         uses: ruby/setup-ruby@319994f95fa847cf3fb3cd3dbe89f6dcde9f178f  # v1.295.0
@@ -46,8 +54,189 @@ jobs:
       - name: Install Playwright browsers
         run: npx playwright install chromium firefox webkit --with-deps
 
-      - name: Run Playwright tests
-        run: npx playwright test
+      - name: Select relevant e2e specs
+        id: select
+        # On push to main we run everything (the diff would be the
+        # entire merged commit and the selector can't reason about
+        # that usefully). On PRs we run the diff-aware subset against
+        # the base branch tip.
+        run: |
+          if [ "${{ github.event_name }}" = "push" ]; then
+            echo "scope=all" >> "$GITHUB_OUTPUT"
+            echo "files=" >> "$GITHUB_OUTPUT"
+            echo "Running full matrix on push-to-main"
+            exit 0
+          fi
+          git fetch origin main --depth=500 || true
+          # Fall back gracefully if the selector or git diff fails — a
+          # broken selector should never block the PR. Run full matrix.
+          if ! node e2e/select-specs.js --base origin/main > /tmp/select.json 2>/tmp/select.err; then
+            echo "Selector failed:"
+            cat /tmp/select.err || true
+            echo "scope=all" >> "$GITHUB_OUTPUT"
+            echo "files=" >> "$GITHUB_OUTPUT"
+            exit 0
+          fi
+          cat /tmp/select.json
+          SCOPE=$(node -e "console.log(JSON.parse(require('fs').readFileSync('/tmp/select.json')).scope)")
+          FILES=$(node -e "const j=JSON.parse(require('fs').readFileSync('/tmp/select.json'));console.log((j.files||[]).join(' '))")
+          echo "scope=$SCOPE" >> "$GITHUB_OUTPUT"
+          echo "files=$FILES" >> "$GITHUB_OUTPUT"
+
+      - name: Run Playwright tests (full matrix)
+        if: steps.select.outputs.scope == 'all'
+        id: pw-full
+        continue-on-error: true
+        # `tee` captures the run log so the failure-summary step can
+        # post the relevant block to the PR. `set -o pipefail` keeps
+        # the test step's exit code visible to GHA's outcome.
+        run: |
+          set -o pipefail
+          npx playwright test 2>&1 | tee /tmp/playwright-output.log
+
+      - name: Run Playwright tests (selected subset)
+        if: steps.select.outputs.scope == 'subset'
+        id: pw-subset
+        continue-on-error: true
+        run: |
+          set -o pipefail
+          npx playwright test ${{ steps.select.outputs.files }} 2>&1 \
+            | tee /tmp/playwright-output.log
+
+      - name: Run Playwright tests (baseline only)
+        if: steps.select.outputs.scope == 'skip'
+        id: pw-baseline
+        continue-on-error: true
+        # Always-run baseline keeps a smoke check on every PR so a
+        # broken selector or harness regression can't sneak through.
+        run: |
+          set -o pipefail
+          npx playwright test \
+            e2e/compute-visual-diffs.test.js \
+            e2e/cms-config.spec.js \
+            e2e/visual-change-guard.spec.js \
+            2>&1 | tee /tmp/playwright-output.log
+
+      # ── Failure summary on the PR ────────────────────────────────
+      # Without log access from outside the workflow, a failed CI
+      # run is opaque to anyone (or any agent) iterating on a PR.
+      # Surface the actual Playwright failure blocks as a PR
+      # comment, scrubbed of secrets via gitleaks first.
+      - name: Determine if any test step failed
+        id: pw-status
+        if: always() && github.event_name == 'pull_request'
+        run: |
+          full="${{ steps.pw-full.outcome }}"
+          subset="${{ steps.pw-subset.outcome }}"
+          baseline="${{ steps.pw-baseline.outcome }}"
+          if [ "$full" = "failure" ] || [ "$subset" = "failure" ] || [ "$baseline" = "failure" ]; then
+            echo "failed=true" >> "$GITHUB_OUTPUT"
+          else
+            echo "failed=false" >> "$GITHUB_OUTPUT"
+          fi
+
+      - name: Install gitleaks
+        if: steps.pw-status.outputs.failed == 'true'
+        env:
+          GITLEAKS_VERSION: 8.21.2
+        run: |
+          curl -sSfL "https://github.com/gitleaks/gitleaks/releases/download/v${GITLEAKS_VERSION}/gitleaks_${GITLEAKS_VERSION}_linux_x64.tar.gz" \
+            | sudo tar -xzC /usr/local/bin gitleaks
+          gitleaks version
+
+      - name: Extract and scrub failure summary
+        if: steps.pw-status.outputs.failed == 'true'
+        run: |
+          bash scripts/extract-playwright-failures.sh /tmp/playwright-output.log > /tmp/failures-raw.txt || true
+          if [ ! -s /tmp/failures-raw.txt ]; then
+            # Fallback: send the tail of the log so the comment isn't empty.
+            tail -c 80000 /tmp/playwright-output.log > /tmp/failures-raw.txt
+          fi
+          node scripts/scrub-secrets.js /tmp/failures-raw.txt /tmp/failures-clean.txt
+          # Truncate to fit comfortably in a GitHub comment
+          # (the hard cap is ~65 535 chars; leave headroom for the
+          # surrounding markdown).
+          head -c 60000 /tmp/failures-clean.txt > /tmp/failures-final.txt
+
+      - name: Post failure summary to PR
+        if: steps.pw-status.outputs.failed == 'true'
+        uses: actions/github-script@f28e40c7f34bde8b3046d885e986cb6290c5673b  # v7.1.0
+        with:
+          script: |
+            const fs = require('fs');
+            const summary = fs.readFileSync('/tmp/failures-final.txt', 'utf8');
+            const sha = context.payload.pull_request.head.sha.slice(0, 7);
+            const runUrl = `${context.serverUrl}/${context.repo.owner}/${context.repo.repo}/actions/runs/${context.runId}`;
+
+            const body = [
+              '<!-- e2e-failure-summary -->',
+              `## ❌ E2E test failures on \`${sha}\``,
+              '',
+              `[View full run](${runUrl})`,
+              '',
+              '<details>',
+              '<summary>Failure log (secrets redacted via gitleaks)</summary>',
+              '',
+              '```',
+              summary || '(no failure block matched the extractor; see the run for full output)',
+              '```',
+              '',
+              '</details>',
+              '',
+              '*Posted automatically. The comment refreshes on every CI run; the most recent failures are always shown here.*',
+            ].join('\n');
+
+            const pr = context.payload.pull_request.number;
+            const { data: comments } = await github.rest.issues.listComments({
+              owner: context.repo.owner,
+              repo: context.repo.repo,
+              issue_number: pr,
+            });
+            const marker = '<!-- e2e-failure-summary -->';
+            const existing = comments.find(c => c.body && c.body.includes(marker));
+            if (existing) {
+              await github.rest.issues.updateComment({
+                owner: context.repo.owner,
+                repo: context.repo.repo,
+                comment_id: existing.id,
+                body,
+              });
+            } else {
+              await github.rest.issues.createComment({
+                owner: context.repo.owner,
+                repo: context.repo.repo,
+                issue_number: pr,
+                body,
+              });
+            }
+
+      - name: Resolve failure-summary comment on success
+        if: always() && github.event_name == 'pull_request' && steps.pw-status.outputs.failed != 'true'
+        uses: actions/github-script@f28e40c7f34bde8b3046d885e986cb6290c5673b  # v7.1.0
+        with:
+          script: |
+            const pr = context.payload.pull_request.number;
+            const { data: comments } = await github.rest.issues.listComments({
+              owner: context.repo.owner,
+              repo: context.repo.repo,
+              issue_number: pr,
+            });
+            const marker = '<!-- e2e-failure-summary -->';
+            const existing = comments.find(c => c.body && c.body.includes(marker));
+            if (existing) {
+              await github.rest.issues.updateComment({
+                owner: context.repo.owner,
+                repo: context.repo.repo,
+                comment_id: existing.id,
+                body: `${marker}\n## ✅ E2E tests passing on \`${context.payload.pull_request.head.sha.slice(0,7)}\`\n\n_Cleared by the most recent green run._`,
+              });
+            }
+
+      - name: Fail the job if any test step failed
+        if: steps.pw-status.outputs.failed == 'true' || steps.pw-full.outcome == 'failure' || steps.pw-subset.outcome == 'failure' || steps.pw-baseline.outcome == 'failure'
+        run: |
+          echo "One or more Playwright test steps failed."
+          exit 1
 
       - name: Upload test results
         if: ${{ !cancelled() }}

@@ -70,8 +70,17 @@ jobs:
           PAGE_CHANGES_PATH: /tmp/page-changes.json
         run: npx playwright test --config=playwright.regression.config.js
 
+      - name: Compute per-page visual diffs
+        run: |
+          node e2e/compute-visual-diffs.js \
+            /tmp/page-changes.json \
+            screenshots/regression/pr \
+            screenshots/regression/prod \
+            screenshots/regression/diffs.json
+          cat screenshots/regression/diffs.json
+
       - name: Generate comparison video
-        run: bash e2e/generate-video.sh /tmp/page-changes.json
+        run: bash e2e/generate-video.sh /tmp/page-changes.json screenshots/regression/diffs.json
 
       - name: Configure AWS credentials
         uses: aws-actions/configure-aws-credentials@7474bc4690e29a8392af63c5b98e7449536d5c3a  # v4.3.1
@@ -79,19 +88,23 @@ jobs:
           role-to-assume: ${{ secrets.AWS_ROLE_ARN }}
           aws-region: ${{ env.AWS_REGION }}
 
-      - name: Upload video to S3
+      - name: Upload video and diffs JSON to S3
         run: |
           aws s3 cp screenshots/regression/comparison.mp4 \
             "s3://${PREVIEW_BUCKET}/pr-${PR_NUMBER}/regression.mp4" \
             --cache-control "no-cache, must-revalidate" \
             --content-type "video/mp4"
+          aws s3 cp screenshots/regression/diffs.json \
+            "s3://${PREVIEW_BUCKET}/pr-${PR_NUMBER}/regression.json" \
+            --cache-control "no-cache, must-revalidate" \
+            --content-type "application/json"
 
-      - name: Invalidate CloudFront cache for video
+      - name: Invalidate CloudFront cache for video and diffs
         if: env.CLOUDFRONT_DISTRIBUTION_ID != ''
         run: |
           aws cloudfront create-invalidation \
             --distribution-id "$CLOUDFRONT_DISTRIBUTION_ID" \
-            --paths "/pr-${PR_NUMBER}/regression.mp4"
+            --paths "/pr-${PR_NUMBER}/regression.mp4" "/pr-${PR_NUMBER}/regression.json"
 
       - name: Post regression video comment
         uses: actions/github-script@f28e40c7f34bde8b3046d885e986cb6290c5673b  # v7.1.0
@@ -100,6 +113,7 @@ jobs:
             const fs = require('fs');
             const pr = context.payload.pull_request.number;
             const changes = JSON.parse(fs.readFileSync('/tmp/page-changes.json', 'utf-8'));
+            const diffs = JSON.parse(fs.readFileSync('screenshots/regression/diffs.json', 'utf-8'));
             const apex = process.env.APEX_DOMAIN;
             const cfId = process.env.CLOUDFRONT_DISTRIBUTION_ID;
 
@@ -120,6 +134,24 @@ jobs:
             const BOT_MARKER = '<!-- adamdaniel-regression-bot -->';
             const existing = comments.find(c => c.body.includes(BOT_MARKER));
 
+            // The two stats answer different questions:
+            //
+            //   "Potentially affected"  — pages whose source files changed,
+            //                             OR pages on a globally-fanout file
+            //                             (_layouts, _includes, _config.yml,
+            //                             assets/css). Heuristic — anything
+            //                             could break in here.
+            //
+            //   "Visually different"    — pages where the screenshot actually
+            //                             differs from production beyond the
+            //                             anti-aliasing tolerance. Fact —
+            //                             these are the ones to look at.
+            const t = diffs.totals;
+            const visuallyDifferentList = diffs.pages
+              .filter(p => p.status === 'different' || p.status === 'new')
+              .map(p => `\`${p.path}\``)
+              .join(', ');
+
             const body = [
               BOT_MARKER,
               '## Visual Regression Video',
@@ -129,11 +161,12 @@ jobs:
               `| **Video** | [regression.mp4](${videoUrl}) |`,
               `| **Preview** | [preview-pr${pr}.${apex}](${previewUrl}) |`,
               `| **Commit** | \`${context.payload.pull_request.head.sha.slice(0, 7)}\` |`,
-              `| **Changed** | ${changes.changed.length} page(s) |`,
-              `| **New** | ${changes.new.length} page(s) |`,
-              `| **Unchanged** | ${changes.unchanged.length} page(s) |`,
+              `| **Visually different** | ${t.visuallyDifferent} page(s)${visuallyDifferentList ? ` — ${visuallyDifferentList}` : ''} |`,
+              `| **Potentially affected by changes** | ${t.potentiallyAffected} page(s) |`,
+              `| **New** | ${t.new} page(s) |`,
+              `| **Visually identical** | ${t.identical} page(s) |`,
               '',
-              `> **Review required.** Watch the regression video and [approve in the dashboard](${dashboardUrl}) or via GitHub Actions.`,
+              `> **Review required.** Watch the regression video and [approve in the dashboard](${dashboardUrl}) or via GitHub Actions. The dashboard also lists the per-page stats so you don't need GitHub access to see them.`,
               '',
               '*Video regenerates automatically on every push to this PR.*',
             ].join('\n');
@@ -159,7 +192,9 @@ jobs:
         uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02  # v4.6.2
         with:
           name: regression-video
-          path: screenshots/regression/comparison.mp4
+          path: |
+            screenshots/regression/comparison.mp4
+            screenshots/regression/diffs.json
           retention-days: 14
 
   approve-regression:

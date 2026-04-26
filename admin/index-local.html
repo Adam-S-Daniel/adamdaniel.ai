@@ -73,6 +73,22 @@
   <!-- Tell Sveltia CMS to use the local config file -->
   <link rel="cms-config-url" type="text/yaml" href="config-local.yml">
 
+  <script>
+    // Pre-seed Sveltia's user prefs so Save stays on the entry-edit
+    // form. Mirrors admin/index.html. See that file for rationale.
+    (function () {
+      try {
+        var KEY = 'sveltia-cms.prefs';
+        var raw = localStorage.getItem(KEY);
+        var prefs = raw ? JSON.parse(raw) : {};
+        if (typeof prefs.closeOnSave === 'undefined') {
+          prefs.closeOnSave = false;
+          localStorage.setItem(KEY, JSON.stringify(prefs));
+        }
+      } catch (_) { /* fall through to Sveltia's defaults */ }
+    })();
+  </script>
+
   <!--
     Loaded from unpkg (rather than the gitignored vendor/ copy) so this page
     works in a fresh clone and in CI without a separate vendor step. Pinned to

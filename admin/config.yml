@@ -10,9 +10,13 @@ backend:
   base_url: https://sq8d4876v8.execute-api.us-east-1.amazonaws.com
   auth_endpoint: prod/auth
 
-# Uncomment to enable the editorial workflow (draft → review → ready → publish)
-# This creates branches for each draft and opens pull requests for review.
-# publish_mode: editorial_workflow
+# Editorial workflow: every Save opens a PR on its own branch instead of
+# committing straight to main. The PR drives the draft → review → ready →
+# publish pipeline (cms/draft / cms/ready labels in cms-editorial-workflow.yml,
+# the per-PR preview-pr{N}.adamdaniel.ai environment, and the visual
+# regression review at /admin/reviews/). Without this, Save deploys to
+# production immediately and bypasses the entire review gate.
+publish_mode: editorial_workflow
 
 # Site configuration
 site_url: https://adamdaniel.ai
@@ -23,7 +27,10 @@ logo_url: https://adamdaniel.ai/assets/images/logo.svg
 custom_css: custom.css
 
 # Media library
-media_folder: assets/images/uploads
+# Bucket uploads by year/month so the picker stays browsable as the archive
+# grows. `public_folder` stays at the root because Jekyll serves files from
+# the same path regardless of the YYYY/MM subdirectory they were uploaded into.
+media_folder: "assets/images/uploads/{{year}}/{{month}}"
 public_folder: /assets/images/uploads
 
 # ============================================================
@@ -44,6 +51,7 @@ collections:
     label_singular: Post
     folder: _posts
     create: true
+    delete: true
     slug: "{{year}}-{{month}}-{{day}}-{{fields.slug | default('{{fields.title}}') | slugify}}"
     preview_path: "/blog/{{fields.slug | default('{{fields.title}}') | slugify}}/"
     summary: "{{title}} ({{date | date('MMM D, YYYY')}}){% if publish_date %} — Scheduled{% endif %}"
@@ -87,16 +95,9 @@ collections:
 
       - name: tags
         label: Tags
-        widget: relation
-        collection: tags
-        search_fields:
-          - name
-        value_field: name
-        display_fields:
-          - name
-        multiple: true
+        widget: list
         required: false
-        hint: "Select one or more tags. Add new tags in the Tags collection first."
+        hint: "Type a tag and press Enter. New tags get an auto-generated archive page (the auto_tag_pages plugin) — no need to create them up front. Add a matching entry in the Tags collection if you want to give the tag a description."
 
       - name: featured_image
         label: Featured Image
@@ -111,7 +112,7 @@ collections:
         label: Published
         widget: boolean
         default: false
-        hint: "Toggle on to make this post visible on the public site. Or set a Publish Date below to auto-publish at a specific time."
+        hint: "ON = goes live on the next deploy. Leave OFF to schedule a future publish via the Publish Date below — the scheduled-posts workflow flips this toggle on when the date arrives."
 
       - name: publish_date
         label: Publish Date
@@ -120,21 +121,13 @@ collections:
         date_format: "YYYY-MM-DD"
         time_format: "HH:mm"
         format: "YYYY-MM-DD HH:mm:ss ZZ"
-        hint: "Optional. Set a future date/time to auto-publish this post (UTC). Leave blank to publish manually via the Published toggle above."
-
-      - name: reading_time
-        label: Reading Time (minutes)
-        widget: number
-        required: false
-        value_type: int
-        min: 1
-        hint: "Auto-calculated at build time from word count — you can leave this blank"
+        hint: "Optional. Future date/time (UTC) to auto-publish this post. Only honoured when Published above is OFF — if Published is ON, the post goes live immediately and this field is ignored."
 
       - name: body
         label: Body
         widget: markdown
         required: true
-        hint: "Full post content. Supports Markdown, images, code blocks, and embeds."
+        hint: "Full post content. Supports Markdown, images, code blocks, and embeds. For a real-layout preview that updates on every Save, open /preview/?collection=posts in a second browser tab and snap it next to the editor."
         modes:
           - rich_text
           - raw
@@ -145,6 +138,7 @@ collections:
     label_singular: Tag
     folder: _tags
     create: true
+    delete: true
     slug: "{{slug}}"
     identifier_field: name
     summary: "{{name}}"
@@ -167,6 +161,7 @@ collections:
     label_singular: Project
     folder: _projects
     create: true
+    delete: true
     slug: "{{slug}}"
     preview_path: /projects/{{slug}}/
     summary: "{{title}}{% if featured %} ⭐{% endif %}"
@@ -226,59 +221,47 @@ collections:
   - name: pages
     label: Pages
     label_singular: Page
-    files:
-      - name: about
-        label: About Me
-        file: pages/about.md
-        preview_path: /pages/about/
-        fields:
-          - name: title
-            label: Title
-            widget: string
-            default: "About Me"
+    folder: pages
+    create: true
+    delete: true
+    slug: "{{slug}}"
+    preview_path: "/pages/{{slug}}/"
+    summary: "{{title}}"
+    sortable_fields:
+      - title
+    fields:
+      - name: title
+        label: Title
+        widget: string
+        required: true
+        hint: "The page heading — also used as the browser tab title"
 
-          - name: layout
-            label: Layout
-            widget: hidden
-            default: page
+      - name: layout
+        label: Layout
+        widget: hidden
+        default: page
 
-          - name: permalink
-            label: Permalink
-            widget: hidden
-            default: /pages/about/
+      - name: permalink
+        label: Permalink
+        widget: string
+        required: true
+        default: "/pages/"
+        hint: "The URL path the page lives at. Convention is /pages/<slug>/, but you can use any path. Must start and end with a slash."
+        pattern:
+          - "^/.*/$"
+          - "Must start and end with a slash, e.g. /pages/about/"
 
-          - name: body
-            label: Content
-            widget: markdown
-            hint: "Your About Me page content"
-            modes:
-              - rich_text
-              - raw
+      - name: published
+        label: Published
+        widget: boolean
+        default: false
+        hint: "ON = page goes live on the next deploy. Leave OFF to keep it as a draft."
 
-      - name: contact
-        label: Contact
-        file: pages/contact.md
-        preview_path: /pages/contact/
-        fields:
-          - name: title
-            label: Title
-            widget: string
-            default: "Contact"
-
-          - name: layout
-            label: Layout
-            widget: hidden
-            default: page
-
-          - name: permalink
-            label: Permalink
-            widget: hidden
-            default: /pages/contact/
-
-          - name: body
-            label: Content
-            widget: markdown
-            hint: "Your Contact page content"
-            modes:
-              - rich_text
-              - raw
+      - name: body
+        label: Content
+        widget: markdown
+        required: true
+        hint: "Page content. For a real-layout preview that updates on every Save, open /preview/?collection=pages in a second tab."
+        modes:
+          - rich_text
+          - raw

@@ -186,6 +186,31 @@
     Reviews
   </a>
 
+  <script>
+    // Pre-seed Sveltia's user prefs before the bundle boots so that
+    // hitting Save in the editor stays on the entry-edit form instead
+    // of routing back to the collection list. The default Sveltia
+    // behaviour (closeOnSave=true) is jarring when iterating on a
+    // post — every Save costs a navigation. Editors can still toggle
+    // this in Sveltia's own preferences UI; we only set the default
+    // for the first visit.
+    //
+    // Storage shape: localStorage key `sveltia-cms.prefs` → JSON
+    // object. Preserve any existing keys; only fill closeOnSave when
+    // the editor hasn't expressed a preference yet.
+    (function () {
+      try {
+        var KEY = 'sveltia-cms.prefs';
+        var raw = localStorage.getItem(KEY);
+        var prefs = raw ? JSON.parse(raw) : {};
+        if (typeof prefs.closeOnSave === 'undefined') {
+          prefs.closeOnSave = false;
+          localStorage.setItem(KEY, JSON.stringify(prefs));
+        }
+      } catch (_) { /* localStorage disabled — leave Sveltia's defaults in place */ }
+    })();
+  </script>
+
   <!-- Sveltia CMS -->
   <script src="https://unpkg.com/@sveltia/cms/dist/sveltia-cms.js" type="module"></script>
 
