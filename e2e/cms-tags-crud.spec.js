@@ -64,14 +64,25 @@ test.describe("/admin/ Tags collection", () => {
     expect(saved.content).toMatch(/description:\s*['"]?Original description/);
 
     // ── Delete ─────────────────────────────────────────────────────
-    // Sveltia's delete affordance lives behind the editor-options
-    // overflow menu — aria-label="Show Editor Options" (i18n key
-    // `show_editor_options`). The toolbar re-renders briefly after
-    // Save, so settle via networkidle and dispatch the click event
-    // directly to bypass actionability churn.
+    // The "Show Editor Options" overflow only appears on the entry-edit
+    // form, not on the post-save new-entry form. Force a hashchange
+    // to /entries/<slug> so Sveltia's router lands on the edit form
+    // before we look for the menu trigger.
+    await page.evaluate(() => {
+      window.location.hash = "#/collections/tags/entries/crud-test-tag";
+      window.dispatchEvent(new HashChangeEvent("hashchange", {
+        oldURL: window.location.href,
+        newURL: window.location.href,
+      }));
+    });
     await page.waitForLoadState("networkidle", { timeout: 10_000 }).catch(() => {});
+
+    // Sveltia's delete affordance: aria-label="Show Editor Options"
+    // (i18n key `show_editor_options`). The toolbar re-renders briefly
+    // post-save, so dispatch the click via the event instead of
+    // .click() to bypass the visible/enabled/stable churn.
     const menuTrigger = page.getByRole("button", { name: /Show Editor Options/i });
-    await expect(menuTrigger).toBeVisible({ timeout: 30_000 });
+    await expect(menuTrigger).toBeVisible({ timeout: 60_000 });
     await menuTrigger.dispatchEvent("click");
 
     await page.getByRole("menuitem", { name: /^Delete/i }).click();
