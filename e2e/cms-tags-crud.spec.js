@@ -56,10 +56,12 @@ test.describe("/admin/ Tags collection", () => {
     expect(saved.content).toMatch(/description:\s*['"]?Original description/);
 
     // With closeOnSave=false, Sveltia stays on the entry-edit form
-    // and the Show Editor Options overflow is right there.
+    // and the Show Editor Options overflow is right there. Plain
+    // .click() opens the menu correctly — Svelte's MenuButton needs
+    // a real synthetic click for the popup to mount.
     const menuTrigger = page.getByRole("button", { name: /Show Editor Options/i });
     await expect(menuTrigger).toBeVisible({ timeout: 30_000 });
-    await menuTrigger.dispatchEvent("click");
+    await menuTrigger.click();
 
     await page.getByRole("menuitem", { name: /^Delete/i }).click();
     await page
