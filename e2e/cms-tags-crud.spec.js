@@ -55,18 +55,20 @@ test.describe("/admin/ Tags collection", () => {
     expect(saved.content).toMatch(/name:\s*['"]?CRUD Test Tag['"]?/);
     expect(saved.content).toMatch(/description:\s*['"]?Original description/);
 
-    // With closeOnSave=false, Sveltia stays on the entry-edit form
-    // and the Show Editor Options overflow is right there. Plain
-    // .click() opens the menu correctly — Svelte's MenuButton needs
-    // a real synthetic click for the popup to mount.
-    const menuTrigger = page.getByRole("button", { name: /Show Editor Options/i });
-    await expect(menuTrigger).toBeVisible({ timeout: 30_000 });
-    await menuTrigger.click();
+    // With closeOnSave=false, Sveltia stays on the entry-edit form.
+    // On a desktop viewport (1920×1080 here) the Delete affordance
+    // is a top-level toolbar button with aria-label="Delete Entry"
+    // (i18n key `delete_entry`). The Show-Editor-Options overflow
+    // only carries Delete on small viewports, so go straight to the
+    // top-level button.
+    const deleteBtn = page.getByRole("button", { name: /Delete Entry/i });
+    await expect(deleteBtn).toBeVisible({ timeout: 30_000 });
+    await deleteBtn.click();
 
-    await page.getByRole("menuitem", { name: /^Delete/i }).click();
+    // Confirmation dialog: a Delete button next to Cancel.
     await page
       .getByRole("dialog")
-      .getByRole("button", { name: /^Delete/i })
+      .getByRole("button", { name: /^Delete$/i })
       .click();
 
     await expect
