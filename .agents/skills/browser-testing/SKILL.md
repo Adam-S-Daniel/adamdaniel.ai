@@ -15,7 +15,9 @@ All e2e tests run across 8 Playwright projects covering browsers, viewports, tex
 | `playwright.config.js` | Matrix definition, webServer config, parallelism |
 | `e2e/base.js` | Custom fixture — extends `test` with `rootFontSize` option |
 | `e2e/*.spec.js` | Test files — import `{ test, expect }` from `./base` |
-| `.github/workflows/e2e-tests.yml` | CI — installs chromium + firefox + webkit |
+| `e2e/cms-test-helpers.js` | Writable FileSystemDirectoryHandle mock + Sveltia stubs (`buildFixtures`, `installSveltiaStubs`, `signInLocal`, `readFixtureFile`, `listFixtureDir`). Shared across all CMS-driving specs. |
+| `e2e/select-specs.js` | Diff-aware spec selector — maps changed files to relevant specs so a content-only PR doesn't pay for the full e2e matrix |
+| `.github/workflows/e2e-tests.yml` | CI — installs chromium + firefox + webkit, runs the selector on PRs, full matrix on push to main |
 
 ## Matrix projects
 
@@ -147,13 +149,41 @@ They ignore the `page` fixture and don't need Jekyll to be running — treat the
 
 ## Driving Sveltia CMS in an e2e spec
 
-`e2e/admin-cms.spec.js` loads the real Sveltia CMS editor against a hand-rolled `FileSystemDirectoryHandle` mock. Sveltia's local backend calls `showDirectoryPicker()`, which needs a real user gesture in Chromium; stubbing the picker lets us exercise Sveltia's actual template engine (what the "View on Live Site" button runs when it computes a preview URL). Key pieces:
+`e2e/cms-test-helpers.js` is the shared foundation. It builds an in-memory tree from `_posts/` + `_tags/` + `_projects/` + `pages/` + `assets/` and installs a `FileSystemDirectoryHandle` mock that Sveltia's local backend talks to as if it were a real picked directory. Used by:
 
-- `window.showDirectoryPicker` returns a mock directory handle backed by a tree loaded from `_posts/` + `_tags/` + `_projects/` + `pages/`.
-- `IDBObjectStore.prototype.put` is wrapped to swallow `DataCloneError` — the mock has function properties and isn't structured-cloneable.
-- `window.open` is stubbed so the menu item's `window.open(previewURL)` call is captured instead of opening a popup.
+- `e2e/admin-cms.spec.js` — verifies the "View on Live Site" template engine for existing posts
+- `e2e/cms-posts-crud.spec.js` — create + featured-image upload + edit + delete
+- `e2e/cms-tags-crud.spec.js` — create + edit + delete
+- `e2e/cms-projects-crud.spec.js` — create + multi-image gallery + edit + delete
+- `e2e/cms-pages-crud.spec.js` — create + edit + delete (Pages is a folder collection now)
 
-Restricted to `chromium-desktop` because Sveltia is heavy to boot.
+The mock is **writable**: `createWritable()` collects chunks and atomically replaces the node's content on close, so saves and deletes flow back into the fixture tree where the test can read them out via `readFixtureFile(page, ...segments)` and `listFixtureDir(page, ...segments)`. No DOM scraping required.
+
+Other browser-level stubs:
+
+- `window.showDirectoryPicker` returns the root mock handle.
+- `IDBObjectStore.prototype.put` swallows `DataCloneError` (the mock has function properties and isn't structured-cloneable; Sveltia caches the picked handle in IndexedDB on sign-in).
+- `window.open` is captured so the "View on Live Site" button records its URL instead of opening a popup.
+
+Restricted to `chromium-desktop` because Sveltia is heavy to boot — the spec asserts app behaviour, not browser quirks.
+
+### Sveltia config gotcha
+
+Folder collections need **explicit** `create: true` AND `delete: true` in `admin/config*.yml`. Sveltia's `contents-page.svelte` gates the toolbar on `_type === 'entry'`, and the toolbar create/delete buttons only render when both flags are set. Implicit Decap defaults are not safe to rely on. `files:` collections never expose create/delete in Sveltia regardless of flags — convert to `folder:` if editors need to add or remove entries. `cms-config.spec.js` locks this in structurally.
+
+## Diff-aware spec selection
+
+The full matrix is 8 projects × ~25 specs. A content-only edit shouldn't pay for the cross-browser admin-CMS specs, the preview-bridge specs, or the CloudFront router specs — those tests can't possibly be affected. `e2e/select-specs.js` reads the PR's `git diff --name-only origin/main...HEAD` and returns one of three scopes:
+
+- **`all`** — fanout file changed (`_layouts/`, `_includes/`, `_config.yml`, `assets/css/`, `_plugins/`, `package*.json`, `Gemfile*`, `e2e/base.js`, `e2e/cms-test-helpers.js`, `playwright*.config.js`). Run the full matrix.
+- **`subset`** — match each changed file against `SPEC_RULES` and run only the resulting list, plus the always-run baseline.
+- **`skip`** — only docs (`README.md`, `AGENTS.md`, `docs/`, `.agents/skills/`) changed. Run the baseline only as a smoke check.
+
+Always-run baseline (cheap, no browser): `compute-visual-diffs.test.js`, `cms-config.spec.js`, `visual-change-guard.spec.js`, plus the spec's own changed file.
+
+Push to main bypasses the selector and runs the full matrix, since "the diff" for a merge commit covers everything anyway.
+
+`e2e/select-specs.test.js` covers each rule.
 
 ## Visual showcase
 

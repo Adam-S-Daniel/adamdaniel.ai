@@ -44,12 +44,14 @@ provisioned.
 
 | Collection | Type | Key Fields |
 |---|---|---|
-| **Posts** | Entry (folder: `_posts/`) | title, body, date, tags, excerpt, featured_image, published, reading_time* |
+| **Posts** | Entry (folder: `_posts/`) | title, body, date, tags, excerpt, featured_image, published, publish_date |
 | **Tags** | Entry (folder: `_tags/`) | name, description |
-| **Projects** | Entry (folder: `_projects/`) | title, description, images, url, technology, featured |
-| **Pages** | File (About Me, Contact) | title, body |
+| **Projects** | Entry (folder: `_projects/`) | title, description, images, url_link, technology, featured |
+| **Pages** | Entry (folder: `pages/`) | title, body, permalink, published |
 
-*reading_time is auto-calculated at build time from word count (÷200 wpm + 1).
+`reading_time` is computed at build time from word count (÷200 wpm + 1) — there's no editor-facing field for it.
+
+**Editor's guide:** see [`docs/CONTENT_GUIDE.md`](docs/CONTENT_GUIDE.md) for a walkthrough of the CMS UI (sign-in, all four collections, image uploads, scheduling, previews, and the Save → PR → review → publish pipeline).
 
 ## CMS Setup (`/admin/`)
 
@@ -77,11 +79,9 @@ Sveltia CMS is configured at `/admin/config.yml`. To activate:
      auth_endpoint: prod/auth
    ```
 
-4. **Enable editorial workflow** (optional) by uncommenting in `admin/config.yml`:
-   ```yaml
-   publish_mode: editorial_workflow
-   ```
-   This creates PR branches for drafts and enables the draft→review→ready pipeline.
+4. **Editorial workflow is on by default** (`publish_mode: editorial_workflow` in `admin/config.yml`). Every Save in the CMS opens a PR on its own branch instead of committing straight to main, lighting up the `cms/draft` → `cms/ready` labels, the per-PR `preview-pr{N}.adamdaniel.ai` environment, and the visual-regression review at `/admin/reviews/`.
+
+> **Sveltia config gotcha:** every folder collection needs **explicit** `create: true` AND `delete: true`. The Decap docs imply `delete` defaults to `true` when `create: true`, but Sveltia's UI hides the affordance when the flag isn't set. Set both flags on every folder collection. `files:` collections (a fixed list of named entries) never expose create or delete in Sveltia regardless of flags — convert to a folder collection if editors need to add or remove entries.
 
 ## OAuth Proxy (AWS Lambda)
 
@@ -103,6 +103,8 @@ Tests: `cd oauth-proxy && python -m pytest test_lambda.py -v`
 | `deploy-production.yml` | Push to `main` | Builds Jekyll, syncs to S3, invalidates CloudFront |
 | `deploy-preview.yml` | PR open/update | Builds Jekyll, syncs to preview S3 prefix, posts URL comment |
 | `cms-editorial-workflow.yml` | PR from CMS | Validates front matter, applies `cms/draft` label; auto-merges on `cms/ready` |
+| `visual-regression.yml` | PR open/update | Screenshots every page on the PR vs prod, computes the per-page pixel diff (`screenshots/regression/diffs.json`), generates a 1920×1080 side-by-side video with a prominent VISUALLY DIFFERENT / IDENTICAL / NEW indicator per page, posts both stats to the PR, and gates merge on a human review at `/admin/reviews/` |
+| `e2e-tests.yml` | PR + push to main | Runs Playwright. On PRs, `e2e/select-specs.js` picks only the specs the diff can affect (full matrix on push to main). |
 
 ### Preview Environments
 
@@ -122,12 +124,19 @@ Required secrets:
 ```bash
 # Install dependencies
 gem install jekyll jekyll-seo-tag jekyll-feed jekyll-sitemap webrick
+npm ci
 
 # Build and serve
 jekyll serve --livereload
 
-# Site: http://localhost:4000
-# CMS admin: http://localhost:4000/admin/
+# Site:        http://localhost:4000
+# CMS admin:   http://localhost:4000/admin/index-local.html  (uses config-local.yml)
+
+# Run e2e tests (full matrix)
+npx playwright test
+
+# Run only the specs that the current diff can affect
+node e2e/select-specs.js | jq -r '.files[]?' | xargs npx playwright test
 ```
 
 ## Branching Strategy

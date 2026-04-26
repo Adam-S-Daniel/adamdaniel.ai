@@ -15,14 +15,16 @@ CMS shell.
 
 ## 2. The four collections
 
-The left sidebar shows everything you can edit:
+The left sidebar shows everything you can edit. All four are folder
+collections — you can **create**, **edit**, and **delete** entries in
+each from the CMS UI:
 
 | Collection | What it holds | When to use it |
 |---|---|---|
 | **Posts** | Blog articles in `_posts/` | Anything dated; goes on `/blog/` |
 | **Tags** | Tag descriptions in `_tags/` | Optional — only needed if you want a description on a tag's archive page |
 | **Projects** | Portfolio entries in `_projects/` | Featured work shown on `/projects/` |
-| **Pages** | Two fixed files: *About Me* and *Contact* | Editing the static pages |
+| **Pages** | Static pages in `pages/` | About Me, Contact, plus any new pages you create |
 
 ## 3. Write a blog post
 
@@ -156,9 +158,25 @@ Same Save-to-PR flow as posts.
 
 ### Pages collection
 
-The About Me and Contact pages are file entries — you edit them in
-place rather than creating new ones. Just edit **Content** (Markdown)
-and Save. Title and permalink are fixed and hidden from the form.
+For one-off static pages outside the blog/projects flow. Click
+**Pages → New Page** to create one. Fields:
+
+- **Title** — the heading and browser tab title.
+- **Permalink** — the URL the page lives at. Defaults to `/pages/`,
+  which you finish (e.g. `/pages/about/`). Must start and end with
+  a slash. **Don't change this on an existing page** — that breaks
+  inbound links.
+- **Published** — same gate as posts; OFF means the page is a draft.
+- **Content** — the page body in Markdown.
+
+About Me and Contact already exist as page entries — open either to
+edit. Same Save-to-PR flow as posts.
+
+> **Historical note:** Pages used to be a fixed-list (`files:`)
+> collection in the CMS — only the two pre-existing files were
+> editable, and there was no way to add or remove pages from the UI.
+> This is now a folder collection, so you have full create / edit /
+> delete control.
 
 ## 7. Media library
 
@@ -177,10 +195,12 @@ uploaded image:
 | Symptom | Likely cause | Fix |
 |---|---|---|
 | "Login with GitHub" loops back to the login screen | Browser blocked third-party cookies for the OAuth proxy | Allow cookies for `*.execute-api.us-east-1.amazonaws.com`, or use a different browser |
-| Saved a post but it's not on the live site | **Published** toggle is OFF (draft) | Open the post, flip Published to ON, Save again |
+| `+ Create` button missing on a folder collection | Either you're not signed in (Sveltia hides write affordances when there's no GitHub token), or someone removed `create: true` / `delete: true` from `admin/config.yml` | Sign out and back in; verify the config has both flags explicitly set |
+| Saved a post but it's not on the live site | **Published** toggle is OFF (draft), or the PR hasn't been approved yet (editorial workflow) | Either flip Published to ON, or finish the review flow: change the PR label from `cms/draft` to `cms/ready` and approve the visual regression in the dashboard |
 | Scheduled post never went live | **Published** is ON (so the date is ignored), or the publish date is in the future, or the hourly cron hasn't run yet | Confirm Published is OFF and the timestamp is in the past UTC |
 | `/preview/` tab isn't updating | The two tabs aren't on the same origin | Open the preview from `https://adamdaniel.ai/preview/...` (or the same `preview-pr<N>` host you logged into the CMS on), not localhost or a different subdomain |
 | Tag pill on a post doesn't link to a styled page | Either the tag is brand-new (auto-generated archive pages have an empty description) or there's a typo | Add a `_tags/<slug>.md` entry in the Tags collection if you want a description; otherwise the page works as-is |
+| Reviews dashboard hangs on "Completing authorisation…" | Old version of `admin/reviews/index.html` that doesn't echo back the OAuth handshake | Hard-refresh the dashboard tab; the fix landed in commit `50779fd` |
 
 ## 9. What's happening behind the scenes
 

@@ -134,18 +134,17 @@ test.describe("Sveltia CMS config invariants", () => {
     test(`${label}: each content collection allows create + delete`, () => {
       const yml = readConfig(configPath);
       // Tags / Posts / Projects / Pages must all be folder collections
-      // with create:true (and delete:true where supported) so editors
-      // can manage them entirely from the CMS UI.
+      // with create + delete explicitly true so editors get the full
+      // CRUD affordances in the Sveltia UI. Implicit defaults are not
+      // safe to rely on — Sveltia doesn't render the toolbar when the
+      // flag isn't set, even though Decap historically defaults it on.
       for (const name of ["posts", "tags", "projects", "pages"]) {
         const chunk = findCollection(yml, name);
         expect(chunk, `${name} collection must exist`).not.toBeNull();
         expect(chunk).toMatch(/^\s{4}folder:\s*\S+/m);
         expect(chunk).toMatch(/^\s{4}create:\s*true/m);
+        expect(chunk).toMatch(/^\s{4}delete:\s*true/m);
       }
-      // Pages used to be a `files:` collection (no create / delete).
-      // Now folder-based — verify create + delete are both on.
-      const pages = findCollection(yml, "pages");
-      expect(pages).toMatch(/^\s{4}delete:\s*true/m);
     });
 
     test(`${label}: posts collection exposes title, date, body, tags, featured_image`, () => {
