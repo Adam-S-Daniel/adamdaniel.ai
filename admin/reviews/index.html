@@ -163,6 +163,46 @@
       background: rgba(40,90,255,0.15); color: var(--primary);
     }
 
+    .stat-grid {
+      display: grid;
+      grid-template-columns: repeat(auto-fit, minmax(140px, 1fr));
+      gap: 0.75rem;
+      margin: 1rem 0;
+    }
+    .stat-card {
+      background: var(--bg-elevated);
+      border: 1px solid var(--border-subtle);
+      border-radius: 6px;
+      padding: 0.75rem 1rem;
+    }
+    .stat-card .stat-label {
+      font-size: 0.7rem; text-transform: uppercase;
+      letter-spacing: 0.06em; color: var(--text-muted);
+      margin: 0 0 0.3rem;
+    }
+    .stat-card .stat-value {
+      font-size: 1.5rem; font-weight: 200;
+      color: var(--text-primary); margin: 0;
+      font-family: 'SF Mono', 'Fira Code', monospace;
+    }
+    .stat-card.stat-different .stat-value { color: var(--error); }
+    .stat-card.stat-identical .stat-value { color: var(--success); }
+    .stat-card.stat-affected .stat-value { color: var(--text-secondary); }
+
+    .stat-pages {
+      margin: 0.5rem 0 0;
+      font-size: 0.75rem;
+      color: var(--text-muted);
+      font-family: 'SF Mono', 'Fira Code', monospace;
+      word-break: break-all;
+    }
+    .stat-pages-loading {
+      font-size: 0.75rem;
+      color: var(--text-muted);
+      font-style: italic;
+      margin: 0.5rem 0 0;
+    }
+
     .spinner {
       display: inline-block; width: 14px; height: 14px;
       border: 2px solid transparent; border-top-color: currentColor;
@@ -375,12 +415,13 @@
           } catch { /* use defaults */ }
 
           const videoUrl = `https://preview-pr${prNum}.${APEX_DOMAIN}/regression.mp4`;
+          const diffsUrl = `https://preview-pr${prNum}.${APEX_DOMAIN}/regression.json`;
           const previewUrl = `https://preview-pr${prNum}.${APEX_DOMAIN}/`;
           const prUrl = `https://github.com/${REPO_OWNER}/${REPO_NAME}/pull/${prNum}`;
           const envId = pendingDeps[0]?.environment?.id;
 
           html += `
-            <div class="review-card" data-run-id="${run.id}" data-env-id="${envId}">
+            <div class="review-card" data-run-id="${run.id}" data-env-id="${envId}" data-pr-num="${prNum}">
               <div class="review-header">
                 <div>
                   <h3 class="review-title">
@@ -393,6 +434,9 @@
                   </div>
                 </div>
                 <span class="status-badge status-waiting">Awaiting Review</span>
+              </div>
+              <div class="review-stats" data-diffs-url="${diffsUrl}">
+                <p class="stat-pages-loading">Loading visual-diff stats…</p>
               </div>
               <div class="review-video">
                 <video controls preload="metadata" src="${videoUrl}"></video>
@@ -416,12 +460,55 @@
             <p>&#10003;</p>
             <p>No pending regression reviews.</p>
           </div>`;
+
+        // Per-card visual-diff stats. Fetched separately because each
+        // PR has its own regression.json on its preview subdomain — no
+        // GitHub auth required, just a cross-origin GET.
+        for (const node of list.querySelectorAll('.review-stats')) {
+          renderStats(node);
+        }
       } catch (err) {
         list.innerHTML = `
           <div class="empty-state">
             <p>!</p>
             <p>Failed to load reviews: ${escapeHtml(err.message)}</p>
           </div>`;
+      }
+    }
+
+    async function renderStats(node) {
+      const url = node.dataset.diffsUrl;
+      try {
+        const res = await fetch(url, { cache: 'no-store' });
+        if (!res.ok) throw new Error(`HTTP ${res.status}`);
+        const diffs = await res.json();
+        const t = diffs.totals || {};
+        const visuallyDifferentPages = (diffs.pages || [])
+          .filter(p => p.status === 'different' || p.status === 'new')
+          .map(p => p.path);
+
+        const cards = [
+          { label: 'Visually different', value: t.visuallyDifferent ?? 0, cls: 'stat-different' },
+          { label: 'Potentially affected', value: t.potentiallyAffected ?? 0, cls: 'stat-affected' },
+          { label: 'New', value: t.new ?? 0, cls: '' },
+          { label: 'Identical', value: t.identical ?? 0, cls: 'stat-identical' },
+        ];
+
+        const grid = cards.map(c => `
+          <div class="stat-card ${c.cls}">
+            <p class="stat-label">${c.label}</p>
+            <p class="stat-value">${c.value}</p>
+          </div>`).join('');
+
+        const pagesLine = visuallyDifferentPages.length
+          ? `<p class="stat-pages">${visuallyDifferentPages.map(escapeHtml).join(' · ')}</p>`
+          : '';
+
+        node.innerHTML = `<div class="stat-grid">${grid}</div>${pagesLine}`;
+      } catch {
+        // Don't make the dashboard scary just because the JSON 404s — older
+        // PRs won't have one. Fall back to a quiet placeholder.
+        node.innerHTML = `<p class="stat-pages-loading">Visual-diff stats not available for this run.</p>`;
       }
     }
 
