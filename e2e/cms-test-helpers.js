@@ -19,6 +19,22 @@ const path = require("node:path");
 
 const REPO_ROOT = path.join(__dirname, "..");
 
+// Serve the Sveltia CMS bundle out of node_modules when the browser
+// asks unpkg.com for it. The admin pages reference the unpkg URL so
+// they work in a fresh clone, but Playwright runs in sandboxed
+// environments where unpkg.com can be blocked or have an untrusted
+// TLS chain (ERR_CERT_AUTHORITY_INVALID). Routing the request to the
+// pinned npm copy keeps the tests offline-clean and faster, and the
+// production HTML is unchanged.
+const SVELTIA_BUNDLE_PATH = path.join(
+  REPO_ROOT,
+  "node_modules",
+  "@sveltia",
+  "cms",
+  "dist",
+  "sveltia-cms.js",
+);
+
 function loadTree(dir) {
   if (!fs.existsSync(dir)) return undefined;
   const stat = fs.statSync(dir);
@@ -88,6 +104,17 @@ function parseFrontMatter(src) {
  * Pass the result of `buildFixtures()` (or your own tree) as fixtures.
  */
 async function installSveltiaStubs(page, fixtures) {
+  if (fs.existsSync(SVELTIA_BUNDLE_PATH)) {
+    const body = fs.readFileSync(SVELTIA_BUNDLE_PATH);
+    await page.route(/unpkg\.com\/@sveltia\/cms\//, (route) =>
+      route.fulfill({
+        status: 200,
+        contentType: "application/javascript",
+        body,
+      }),
+    );
+  }
+
   await page.addInitScript((fx) => {
     // ── Pre-seed Sveltia user prefs ───────────────────────────────
     // Match admin/index.html's behaviour so the test harness sees
@@ -381,6 +408,29 @@ async function listFixtureDir(page, ...segments) {
 }
 
 /**
+ * Fill a markdown widget's body. Sveltia's current bundle (0.158+)
+ * renders rich-text by default and exposes an "Edit in Markdown"
+ * toggle button; raw mode reveals a plain <textarea> we can fill.
+ * Older bundles used a Raw/Rich tab pair — handle both.
+ *
+ * The body field is always the last in the collections we drive
+ * (posts/pages/projects), so we pick the last visible textarea to
+ * avoid hitting earlier text-widget fields like Excerpt.
+ */
+async function fillMarkdownBody(page, content) {
+  const editInMd = page.getByRole("button", { name: /^edit in markdown$/i });
+  if (await editInMd.first().isVisible().catch(() => false)) {
+    await editInMd.first().click();
+  } else {
+    const rawTab = page.getByRole("tab", { name: /^Raw$/ });
+    if (await rawTab.isVisible().catch(() => false)) await rawTab.click();
+  }
+  const bodyArea = page.locator("textarea:visible").last();
+  await bodyArea.waitFor({ state: "visible", timeout: 30_000 });
+  await bodyArea.fill(content);
+}
+
+/**
  * Snapshot Sveltia's UI state from outside the bundle: viewport,
  * matchMedia for the `(width < 768px)` small-screen breakpoint, the
  * current URL hash, and every <button> in the page (with its
@@ -436,6 +486,7 @@ module.exports = {
   signInLocal,
   readFixtureFile,
   listFixtureDir,
+  fillMarkdownBody,
   getCmsState,
   waitForToolbarButton,
 };

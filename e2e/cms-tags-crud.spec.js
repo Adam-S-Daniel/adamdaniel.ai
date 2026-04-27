@@ -139,9 +139,10 @@ test.describe("/admin/ Tags collection", () => {
         .click();
     }
 
-    // Confirm dialog.
+    // Confirm dialog. Sveltia 0.158+ uses <dialog role="alertdialog">,
+    // which Playwright's getByRole("dialog") doesn't match.
     await page
-      .getByRole("dialog")
+      .locator('dialog[open], [role="alertdialog"], [role="dialog"]')
       .getByRole("button", { name: /^Delete$/i })
       .click();
 

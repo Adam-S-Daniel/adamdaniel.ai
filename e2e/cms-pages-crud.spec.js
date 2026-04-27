@@ -5,6 +5,7 @@ const {
   signInLocal,
   readFixtureFile,
   listFixtureDir,
+  fillMarkdownBody,
 } = require("./cms-test-helpers");
 
 // CRUD for the Pages collection — now a folder collection (was a
@@ -41,12 +42,7 @@ test.describe("/admin/ Pages collection: create / edit / delete", () => {
     const permalinkField = page.getByLabel(/^Permalink$/);
     await permalinkField.fill("/pages/crud-test/");
 
-    const rawTab = page.getByRole("tab", { name: /^Raw$/ });
-    if (await rawTab.isVisible().catch(() => false)) await rawTab.click();
-    const bodyArea = page
-      .locator('textarea[name*="body"], textarea[aria-label*="Content"]')
-      .first();
-    await bodyArea.fill("# Hello\n\nFresh page body.");
+    await fillMarkdownBody(page, "# Hello\n\nFresh page body.");
 
     await page.getByRole("button", { name: /^Save/i }).first().click();
 
@@ -80,10 +76,7 @@ test.describe("/admin/ Pages collection: create / edit / delete", () => {
     await permalinkField.fill("/pages/crud-test/");
 
     // Body in raw mode (more reliable than the rich-text contenteditable).
-    const rawTab = page.getByRole("tab", { name: /^Raw$/ });
-    if (await rawTab.isVisible().catch(() => false)) await rawTab.click();
-    const bodyArea = page.locator('textarea[name*="body"], textarea[aria-label*="Content"]').first();
-    await bodyArea.fill("# Hello\n\nFresh page body.");
+    await fillMarkdownBody(page, "# Hello\n\nFresh page body.");
 
     await page.getByRole("button", { name: /^Save$/ }).click();
 

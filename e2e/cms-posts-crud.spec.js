@@ -8,6 +8,7 @@ const {
   signInLocal,
   readFixtureFile,
   listFixtureDir,
+  fillMarkdownBody,
   REPO_ROOT,
 } = require("./cms-test-helpers");
 
@@ -57,12 +58,7 @@ test.describe("/admin/ Posts collection: create / edit / delete + featured image
     await titleField.fill("CRUD Test Post");
 
     // Body in raw mode — the rich-text contenteditable is racy.
-    const rawTab = page.getByRole("tab", { name: /^Raw$/ });
-    if (await rawTab.isVisible().catch(() => false)) await rawTab.click();
-    const bodyArea = page
-      .locator('textarea[name*="body"], textarea[aria-label*="Body"]')
-      .first();
-    await bodyArea.fill("# CRUD Test\n\nA post body.");
+    await fillMarkdownBody(page, "# CRUD Test\n\nA post body.");
 
     await page.getByRole("button", { name: /^Save/i }).first().click();
 
@@ -110,12 +106,7 @@ test.describe("/admin/ Posts collection: create / edit / delete + featured image
 
     // Body in raw mode is the lowest-friction text input. Rich-text
     // mode uses contenteditable which is harder to drive reliably.
-    const rawTab = page.getByRole("tab", { name: /^Raw$/ });
-    if (await rawTab.isVisible().catch(() => false)) await rawTab.click();
-    const bodyArea = page
-      .locator('textarea[name*="body"], textarea[aria-label*="Body"]')
-      .first();
-    await bodyArea.fill("# CRUD Test\n\nThis is a test post body.");
+    await fillMarkdownBody(page, "# CRUD Test\n\nThis is a test post body.");
 
     // ── Featured image upload ────────────────────────────────────
     // Sveltia's image widget exposes a hidden <input type="file">
@@ -164,15 +155,7 @@ test.describe("/admin/ Posts collection: create / edit / delete + featured image
     await page.goto(
       `/admin/index-local.html#/collections/posts/entries/${entryId}`,
     );
-    const editorRawTab = page.getByRole("tab", { name: /^Raw$/ });
-    if (await editorRawTab.isVisible().catch(() => false)) {
-      await editorRawTab.click();
-    }
-    const bodyEdit = page
-      .locator('textarea[name*="body"], textarea[aria-label*="Body"]')
-      .first();
-    await expect(bodyEdit).toBeVisible({ timeout: 30_000 });
-    await bodyEdit.fill("# CRUD Test (edited)\n\nUpdated body content.");
+    await fillMarkdownBody(page, "# CRUD Test (edited)\n\nUpdated body content.");
     await page.getByRole("button", { name: /^Save$/ }).click();
 
     await expect
