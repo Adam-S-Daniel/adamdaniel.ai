@@ -12,8 +12,34 @@ permissions:
   contents: read
 
 jobs:
+  unit:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout
+        uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd  # v6.0.2 (2026-01-09)
+
+      - name: Setup Ruby
+        uses: ruby/setup-ruby@7372622e62b60b3cb750dcd2b9e32c247ffec26a  # v1.302.0 (2026-04-15)
+        with:
+          ruby-version: '3.2'
+          bundler-cache: true
+
+      - name: Run Jekyll plugin unit tests
+        # Plain-Ruby tests under _plugins_test/ — fast (sub-second each),
+        # no extra gems. Keeps plugin behaviour covered even when no
+        # Playwright spec exercises the same code path.
+        run: |
+          for t in _plugins_test/*_test.rb; do
+            echo "==> $t"
+            bundle exec ruby "$t"
+          done
+
   e2e:
     runs-on: ubuntu-latest
+    strategy:
+      fail-fast: false
+      matrix:
+        shard: [1, 2, 3, 4]
     steps:
       - name: Checkout
         uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd  # v6.0.2 (2026-01-09)
@@ -30,37 +56,61 @@ jobs:
           node-version: '20'
           cache: 'npm'
 
-      - name: Run Jekyll plugin unit tests
-        # Plain-Ruby tests under _plugins_test/ — fast (sub-second each),
-        # no extra gems. Keeps plugin behaviour covered even when no
-        # Playwright spec exercises the same code path.
-        run: |
-          for t in _plugins_test/*_test.rb; do
-            echo "==> $t"
-            bundle exec ruby "$t"
-          done
-
       - name: Install npm dependencies
         run: npm ci
 
       - name: Install Playwright browsers
         run: npx playwright install chromium firefox webkit --with-deps
 
-      - name: Run Playwright tests
-        run: npx playwright test
+      - name: Run Playwright tests (shard ${{ matrix.shard }}/4)
+        run: npx playwright test --shard=${{ matrix.shard }}/4 --reporter=blob,list
 
-      - name: Upload test results
+      - name: Upload blob report
         if: ${{ !cancelled() }}
         uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a  # v7.0.1 (2026-04-10)
         with:
-          name: test-results
+          name: blob-report-${{ matrix.shard }}
+          path: blob-report
+          retention-days: 1
+
+      - name: Upload test results (shard ${{ matrix.shard }})
+        if: ${{ !cancelled() }}
+        uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a  # v7.0.1 (2026-04-10)
+        with:
+          name: test-results-shard-${{ matrix.shard }}
           path: test-results/
           retention-days: 7
 
-      - name: Upload HTML report (visual diffs)
-        if: ${{ !cancelled() }}
+  merge-reports:
+    if: ${{ !cancelled() }}
+    needs: [e2e]
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout
+        uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd  # v6.0.2 (2026-01-09)
+
+      - name: Setup Node
+        uses: actions/setup-node@48b55a011bda9f5d6aeb4c2d9c7362e8dae4041e  # v6.4.0 (2026-04-20)
+        with:
+          node-version: '20'
+          cache: 'npm'
+
+      - name: Install npm dependencies
+        run: npm ci
+
+      - name: Download blob reports
+        uses: actions/download-artifact@3e5f45b2cfb9172054b4087a40e8e0b5a5461e7c  # v8.0.1 (2026-03-11)
+        with:
+          path: all-blob-reports
+          pattern: blob-report-*
+          merge-multiple: true
+
+      - name: Merge into single HTML report
+        run: npx playwright merge-reports --reporter html ./all-blob-reports
+
+      - name: Upload merged HTML report
         uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a  # v7.0.1 (2026-04-10)
         with:
           name: playwright-report
-          path: playwright-report/
+          path: playwright-report
           retention-days: 7
