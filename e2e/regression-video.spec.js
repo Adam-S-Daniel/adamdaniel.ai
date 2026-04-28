@@ -28,6 +28,23 @@ function safeFileName(pagePath) {
   return name || "index";
 }
 
+// Admin shells hide an SVG splash (#cms-loading) over the Decap bundle
+// during boot. The splash fades out via MutationObserver once Decap mounts.
+// Wait for it to detach before screenshotting — otherwise both the PR and
+// prod screenshots would just be "Adam Daniel · Content Manager" splash
+// art with no signal about whether the admin actually changed.
+async function waitForAdminBootIfApplicable(page, pagePath) {
+  if (!pagePath.startsWith("/admin/")) return;
+  try {
+    await page.locator("#cms-loading").waitFor({ state: "detached", timeout: 15_000 });
+  } catch {
+    // Splash didn't render or didn't detach — capture whatever is on screen,
+    // the comparison is still informative.
+  }
+  // Belt-and-braces beat for Decap's first paint after the splash detaches.
+  await page.waitForTimeout(800);
+}
+
 test.describe("Regression video screenshots", () => {
   test.describe.configure({ mode: "serial" });
 
@@ -44,6 +61,7 @@ test.describe("Regression video screenshots", () => {
       if (resp && resp.ok()) {
         await page.waitForTimeout(500);
       }
+      await waitForAdminBootIfApplicable(page, pagePath);
       await page.screenshot({
         path: path.join(OUTPUT_DIR, "pr", `${safeName}.png`),
         fullPage: false,
@@ -83,6 +101,7 @@ test.describe("Regression video screenshots", () => {
             timeout: 30000,
           });
           await page.waitForTimeout(500);
+          await waitForAdminBootIfApplicable(page, pagePath);
         } catch {
           await page.setContent(`
             <html><body style="margin:0;background:#1a1a2e;color:#8ab0e8;

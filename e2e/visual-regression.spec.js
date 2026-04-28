@@ -58,10 +58,19 @@ test.describe("Visual regression", () => {
 // needing GitHub OAuth. The smoke spec covers the data plane (save / delete
 // round-trips through to disk); these tests cover the visual plane.
 test.describe("Visual regression — admin", () => {
+  // Admin baselines run on chromium-desktop AND webkit-tablet. WebKit is
+  // the closest analogue Playwright provides to iOS Safari, where users
+  // have reported the Decap edit form rendering blank below the toolbar.
+  // Chromium-desktop is the editor's canonical desktop view. The other 6
+  // projects in the matrix (laptop / mobile / forced-colors / firefox)
+  // would just burn cycles on baselines that say the same thing as
+  // chromium-desktop.
+  const ADMIN_VR_PROJECTS = new Set(["chromium-desktop", "webkit-tablet"]);
+
   test.beforeEach(async ({ page }, testInfo) => {
     test.skip(
-      testInfo.project.name !== "chromium-desktop",
-      "Admin visual baselines are chromium-desktop only.",
+      !ADMIN_VR_PROJECTS.has(testInfo.project.name),
+      "Admin visual baselines run on chromium-desktop and webkit-tablet only.",
     );
     await page.addStyleTag({ content: FREEZE_ANIMATIONS });
   });
