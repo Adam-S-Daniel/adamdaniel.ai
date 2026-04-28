@@ -87,14 +87,17 @@ note "Installing npm dependencies…"
 npm install --no-audit --no-fund --silent
 ok "node_modules/ ready"
 
-note "Downloading Playwright browser binaries (chromium, firefox, webkit)…"
-npx --yes playwright install chromium firefox webkit
 # `playwright install-deps` knows the full apt set for all three browsers
 # (libgtk-4, libwebpdemux, libgraphene, libenchant-2 — too many to hand
-# list and they shift between Playwright versions). Sudo, since it shells
-# out to apt-get install.
+# list and they shift between Playwright versions). Run BEFORE the browser
+# download so the post-download host-validation step doesn't print a long
+# scary "missing libraries" warning. Sudo, since it shells out to
+# apt-get install.
 note "Installing Playwright apt deps for all three browsers…"
 sudo DEBIAN_FRONTEND=noninteractive npx --yes playwright install-deps
+
+note "Downloading Playwright browser binaries (chromium, firefox, webkit)…"
+npx --yes playwright install chromium firefox webkit
 ok "Playwright browsers + system deps installed"
 
 # ── 8. Python + pytest (for oauth-proxy unit tests) ───────────────────────
