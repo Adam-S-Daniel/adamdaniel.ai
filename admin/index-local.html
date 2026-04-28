@@ -123,6 +123,9 @@
        open /preview/ tab. Loads after Decap so `window.CMS` exists. -->
   <script src="preview-bridge.js" defer></script>
 
+  <!-- "View page on site:" banner — see admin/index.html for rationale. -->
+  <script src="live-url-banner.js" defer></script>
+
   <script>
     document.addEventListener('DOMContentLoaded', function () {
       var loading = document.getElementById('cms-loading');

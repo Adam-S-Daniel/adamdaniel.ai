@@ -240,6 +240,11 @@
        open /preview/ tab. Loads after Decap so `window.CMS` exists. -->
   <script src="preview-bridge.js" defer></script>
 
+  <!-- "View page on site:" banner above the entry form. Reads form
+       state from the DOM and renders a link (or placeholder when
+       Published is OFF / no slug yet). -->
+  <script src="live-url-banner.js" defer></script>
+
   <script>
     // Hide the loading overlay once Decap CMS fires its ready event
     document.addEventListener('DOMContentLoaded', function () {
