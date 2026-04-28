@@ -79,30 +79,17 @@
       100% { background-color: #03040c; }
     }
 
-    /* Ambient glow behind the CMS frame */
-    body::before {
-      content: '';
-      position: fixed;
-      inset: 0;
-      background: radial-gradient(ellipse 70% 50% at 50% 20%, rgba(40,90,255,0.18), transparent 70%);
-      animation: warmth 8s ease-in-out infinite alternate;
-      pointer-events: none;
-      z-index: 0;
-    }
-
-    @keyframes warmth {
-      0%   { opacity: 0.05; transform: scale(0.7); }
-      100% { opacity: 0.5;  transform: scale(1.3); }
-    }
-
-    /* The Decap CMS app root sits above the ambient layer */
-    #nc-root,
-    [class*="nc-app"],
-    [id^="cms"],
-    .cms-wrapper {
-      position: relative;
-      z-index: 1;
-    }
+    /*
+     * Ambient glow REMOVED: a `position: fixed` pseudo-element with a
+     * radial gradient and a `transform: scale` keyframe animation forces
+     * iOS WebKit to allocate a compositing layer that, in conjunction
+     * with Decap's emotion-CSS-in-JS, occluded the entry-edit form
+     * fields below the toolbar on real iPhone Safari and Chrome (Chrome
+     * iOS uses WebKit). Confirmed bisect: the cobalt theme as a whole
+     * caused empty forms; removing this rule + the toolbar's
+     * `backdrop-filter` (see custom.css) restores rendering.
+     * The static page background and the cobalt design tokens stay.
+     */
 
     /* ── Loading screen ──────────────────────────── */
     #cms-loading {

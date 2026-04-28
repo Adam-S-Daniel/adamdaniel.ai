@@ -120,14 +120,17 @@ aside {
   background: #04060f !important;
 }
 
-/* Toolbar / header bar */
+/* Toolbar / header bar.
+ * `backdrop-filter` removed: iOS WebKit treats backdrop-filtered elements
+ * as compositing layers, and combined with Decap's emotion-CSS-in-JS
+ * stacking contexts it occluded the form fields below the toolbar on
+ * real iPhone Safari/Chrome. The semi-transparent background reads fine
+ * on its own without the blur. */
 [class*="Toolbar"],
 [class*="AppHeader"],
 header[class*="app"] {
   background: rgba(4, 6, 15, 0.92) !important;
   border-bottom-color: #1a2a5e !important;
-  backdrop-filter: blur(12px) !important;
-  -webkit-backdrop-filter: blur(12px) !important;
 }
 
 /* Buttons — primary */
@@ -301,7 +304,7 @@ label,
 [class*="Overlay"],
 [class*="Backdrop"] {
   background: rgba(4, 6, 15, 0.85) !important;
-  backdrop-filter: blur(4px) !important;
+  /* backdrop-filter removed; same iOS WebKit reason as the toolbar. */
 }
 
 /* Notification / alert toasts */
