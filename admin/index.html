@@ -151,9 +151,8 @@
       100% { transform: translateX(300%); }
     }
 
-    #reviews-link {
+    .floating-link {
       position: fixed;
-      bottom: 1.5rem;
       right: 1.5rem;
       z-index: 10000;
       display: flex;
@@ -169,15 +168,18 @@
       text-decoration: none;
       transition: border-color 0.2s, background 0.2s;
     }
-    #reviews-link:hover {
+    .floating-link:hover {
       border-color: #285aff;
       background: #111e40;
     }
-    #reviews-link svg {
+    .floating-link svg {
       width: 16px;
       height: 16px;
       fill: currentColor;
     }
+    /* Stack Live Preview above Reviews so the more frequent action is on top. */
+    #live-preview-link { bottom: 5rem; }
+    #reviews-link      { bottom: 1.5rem; }
   </style>
 </head>
 <body>
@@ -189,10 +191,42 @@
     <div class="cms-loading-sub">Content Manager</div>
   </div>
 
-  <a id="reviews-link" href="/admin/reviews/" title="Visual regression reviews">
+  <!--
+    Live Preview — opens /preview/?collection=<current> in a new tab.
+    The href is updated on every URL hash change so the link always
+    points at the collection of the entry the editor is on. Tip text
+    is intentionally explicit: the preview only updates *after* a
+    Save, so editors don't sit there waiting for it to fill.
+  -->
+  <a id="live-preview-link" class="floating-link"
+     href="/preview/"
+     target="_blank" rel="noopener"
+     title="Opens a new tab. Hit Save in the editor for the preview to fill in.">
+    <svg viewBox="0 0 24 24"><path d="M12 5c-7 0-10 7-10 7s3 7 10 7 10-7 10-7-3-7-10-7zm0 12a5 5 0 1 1 0-10 5 5 0 0 1 0 10zm0-8a3 3 0 1 0 0 6 3 3 0 0 0 0-6z"/></svg>
+    Live Preview
+  </a>
+
+  <a id="reviews-link" class="floating-link" href="/admin/reviews/" title="Visual regression reviews">
     <svg viewBox="0 0 24 24"><path d="M18 4l2 4h-3l-2-4h-2l2 4h-3l-2-4H8l2 4H7L5 4H4c-1.1 0-2 .9-2 2v12c0 1.1.9 2 2 2h16c1.1 0 2-.9 2-2V4h-4z"/></svg>
     Reviews
   </a>
+
+  <script>
+    // Keep the Live Preview link's `?collection=…` in sync with the
+    // collection the editor is currently inside. Decap uses hash routing,
+    // so we listen on hashchange (also fired once on initial load via
+    // the dispatch below).
+    (function () {
+      var link = document.getElementById('live-preview-link');
+      function updateHref() {
+        var m = /#\/collections\/([^\/]+)/.exec(location.hash || '');
+        var col = m ? m[1] : '';
+        link.href = '/preview/' + (col ? '?collection=' + encodeURIComponent(col) : '');
+      }
+      window.addEventListener('hashchange', updateHref);
+      updateHref();
+    })();
+  </script>
 
   <!--
     Decap CMS — pinned to a major version. Editorial workflow + the

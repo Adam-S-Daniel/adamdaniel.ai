@@ -200,15 +200,32 @@ label,
   font-family: 'SF Mono', 'Fira Code', monospace !important;
 }
 
-/* Rich text / markdown editor */
+/* Rich text / markdown editor.
+ *
+ * Decap 3.x renders the rich-text body as a Slate `<div data-slate-editor
+ * contenteditable="true" role="textbox">`; the markdown raw mode swaps in
+ * a CodeMirror `.cm-editor`. The class-substring selectors below catch
+ * older / future Decap versions; the attribute selectors are the stable
+ * hooks for the version we currently ship. Without these, the body
+ * editor renders black-on-white against the cobalt-themed surrounding
+ * form — visually broken. */
 [class*="markdown"],
 [class*="rich-text"],
 [class*="Editor"] .ProseMirror,
+[data-slate-editor],
+[role="textbox"][contenteditable="true"],
 .cm-editor {
   background: #0a1530 !important;
   color: #d8e4ff !important;
   border-color: #1a2a5e !important;
   border-radius: 6px !important;
+}
+/* The Slate editor renders its content inside child <div>/<span> which
+ * default to inheriting `color: rgb(68, 74, 87)` from Decap's CSS-in-JS.
+ * Force inheritance from the editor surface so typed text is readable. */
+[data-slate-editor] *,
+[role="textbox"][contenteditable="true"] * {
+  color: inherit !important;
 }
 
 .ProseMirror:focus,

@@ -67,6 +67,18 @@
       border: 1px solid #285aff; border-radius: 3px; padding: 0.25em 0.6em;
       color: #285aff; margin-top: 0.5rem;
     }
+    .floating-link {
+      position: fixed; right: 1.5rem; z-index: 10000;
+      display: flex; align-items: center; gap: 0.5rem;
+      padding: 0.6rem 1rem; background: #0a1530;
+      border: 1px solid #1a2a5e; border-radius: 8px;
+      color: #c8d4f0; font-family: 'Helvetica Neue', Arial, sans-serif;
+      font-size: 0.8rem; text-decoration: none;
+      transition: border-color 0.2s, background 0.2s;
+    }
+    .floating-link:hover { border-color: #285aff; background: #111e40; }
+    .floating-link svg  { width: 16px; height: 16px; fill: currentColor; }
+    #live-preview-link { bottom: 5rem; }
   </style>
 </head>
 <body>
@@ -76,6 +88,24 @@
     <div class="cms-loading-sub">Content Manager</div>
     <div class="local-badge">Local Backend</div>
   </div>
+
+  <!-- Live Preview link — see admin/index.html for rationale. -->
+  <a id="live-preview-link" class="floating-link" href="/preview/" target="_blank" rel="noopener"
+     title="Opens a new tab. Hit Save in the editor for the preview to fill in.">
+    <svg viewBox="0 0 24 24"><path d="M12 5c-7 0-10 7-10 7s3 7 10 7 10-7 10-7-3-7-10-7zm0 12a5 5 0 1 1 0-10 5 5 0 0 1 0 10zm0-8a3 3 0 1 0 0 6 3 3 0 0 0 0-6z"/></svg>
+    Live Preview
+  </a>
+  <script>
+    (function () {
+      var link = document.getElementById('live-preview-link');
+      function updateHref() {
+        var m = /#\/collections\/([^\/]+)/.exec(location.hash || '');
+        link.href = '/preview/' + (m ? '?collection=' + encodeURIComponent(m[1]) : '');
+      }
+      window.addEventListener('hashchange', updateHref);
+      updateHref();
+    })();
+  </script>
 
   <!-- Tell Decap CMS to use the local config file -->
   <link rel="cms-config-url" type="text/yaml" href="config-local.yml">
