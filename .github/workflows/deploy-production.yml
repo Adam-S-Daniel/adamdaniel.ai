@@ -59,12 +59,15 @@ jobs:
 
       - name: Write deploy-time commit metadata
         # Surfaces the deployed commit in the admin's top-right corner via
-        # admin/index.html. See deploy-preview.yml for the same step.
+        # admin/index.html. Use HEAD (whatever's checked out) rather than
+        # github.sha — sidesteps shallow-clone issues. On push events HEAD
+        # equals github.sha anyway, so the SHA in the JSON is identical.
         run: |
           mkdir -p ./_site/admin
-          ISO=$(git log -1 --format=%cI ${{ github.sha }})
+          SHA=$(git rev-parse HEAD)
+          ISO=$(git log -1 --format=%cI HEAD)
           cat > ./_site/admin/commit.json <<JSON
-          { "sha": "${{ github.sha }}", "iso": "${ISO}", "branch": "main" }
+          { "sha": "${SHA}", "iso": "${ISO}", "branch": "main" }
           JSON
           cat ./_site/admin/commit.json
 

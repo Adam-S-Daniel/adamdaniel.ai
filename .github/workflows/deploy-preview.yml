@@ -71,11 +71,17 @@ jobs:
         # render a commit pill in the top-right of the admin shell, linked
         # to the GitHub commit page. Editors use it to confirm which build
         # of the admin they're looking at.
+        #
+        # Use the PR head SHA (which is in the checkout) rather than
+        # github.sha — the latter is a synthesised merge commit on
+        # pull_request events and isn't in the shallow clone, which made
+        # `git log -1 --format=%cI ${github.sha}` fail with `bad object`.
         run: |
           mkdir -p ./_site_preview/admin
-          ISO=$(git log -1 --format=%cI ${{ github.sha }})
+          SHA="${{ github.event.pull_request.head.sha }}"
+          ISO=$(git log -1 --format=%cI HEAD)
           cat > ./_site_preview/admin/commit.json <<JSON
-          { "sha": "${{ github.sha }}", "iso": "${ISO}", "branch": "${{ github.event.pull_request.head.ref }}" }
+          { "sha": "${SHA}", "iso": "${ISO}", "branch": "${{ github.event.pull_request.head.ref }}" }
           JSON
           cat ./_site_preview/admin/commit.json
 
