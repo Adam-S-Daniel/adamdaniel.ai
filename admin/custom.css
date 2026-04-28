@@ -1,11 +1,13 @@
 /*
- * Sveltia CMS — Cobalt Thermal Theme
+ * Decap CMS — Cobalt Thermal Theme
  * Matches the adamdaniel.ai visual identity: deep navy/cobalt, minimal,
- * with a subtle breathing glow animation.
+ * with a subtle breathing glow animation. Linked from admin/index.html
+ * and admin/index-local.html (Decap has no `custom_css` config option).
  *
- * Sveltia CMS renders its root in the <body> as custom elements.
- * CSS variables declared here flow into the component tree and
- * override the default light-mode palette.
+ * Decap renders its root into <body>; the `.nc-`-prefixed selectors
+ * below come from Decap's compiled className output. Overrides applied
+ * to those classes win because Decap's CSS-in-JS injects with lower
+ * specificity than a real stylesheet.
  */
 
 /* ── Design token overrides ─────────────────────── */
@@ -87,7 +89,7 @@ body {
   background: #285aff;
 }
 
-/* ── Sveltia CMS shell elements ─────────────────── */
+/* ── Decap CMS shell elements ─────────────────── */
 
 /* App chrome */
 #nc-root,
@@ -118,14 +120,17 @@ aside {
   background: #04060f !important;
 }
 
-/* Toolbar / header bar */
+/* Toolbar / header bar.
+ * `backdrop-filter` removed: iOS WebKit treats backdrop-filtered elements
+ * as compositing layers, and combined with Decap's emotion-CSS-in-JS
+ * stacking contexts it occluded the form fields below the toolbar on
+ * real iPhone Safari/Chrome. The semi-transparent background reads fine
+ * on its own without the blur. */
 [class*="Toolbar"],
 [class*="AppHeader"],
 header[class*="app"] {
   background: rgba(4, 6, 15, 0.92) !important;
   border-bottom-color: #1a2a5e !important;
-  backdrop-filter: blur(12px) !important;
-  -webkit-backdrop-filter: blur(12px) !important;
 }
 
 /* Buttons — primary */
@@ -195,15 +200,91 @@ label,
   font-family: 'SF Mono', 'Fira Code', monospace !important;
 }
 
-/* Rich text / markdown editor */
+/* Field hint text (Decap's `ControlHint` — the helper sentence under
+ * each input). Decap's default `rgb(93, 98, 111)` dark gray is
+ * unreadable on the cobalt-themed widget wrappers. Use a soft
+ * neutral slate-gray that's readable but deliberately *not* the
+ * cobalt accent — hint text shouldn't compete visually with the
+ * cobalt-blue field labels above it. */
+[class*="ControlHint"] {
+  color: #a8b3c8 !important;
+}
+
+/* Rich text / markdown editor.
+ *
+ * Decap 3.x renders the rich-text body as a Slate `<div data-slate-editor
+ * contenteditable="true" role="textbox">`; the markdown raw mode swaps in
+ * a CodeMirror `.cm-editor`. The class-substring selectors below catch
+ * older / future Decap versions; the attribute selectors are the stable
+ * hooks for the version we currently ship. Without these, the body
+ * editor renders black-on-white against the cobalt-themed surrounding
+ * form — visually broken. */
 [class*="markdown"],
 [class*="rich-text"],
 [class*="Editor"] .ProseMirror,
+[data-slate-editor],
+[role="textbox"][contenteditable="true"],
 .cm-editor {
   background: #0a1530 !important;
   color: #d8e4ff !important;
   border-color: #1a2a5e !important;
   border-radius: 6px !important;
+}
+/* The Slate editor renders its content inside child <div>/<span> which
+ * default to inheriting `color: rgb(68, 74, 87)` from Decap's CSS-in-JS.
+ * Force inheritance from the editor surface so typed text is readable. */
+[data-slate-editor] *,
+[role="textbox"][contenteditable="true"] * {
+  color: inherit !important;
+}
+
+/* The Slate editor element itself has a transparent background — it
+ * inherits from its container, which Decap styles white. Walk up via
+ * `:has()` and paint the immediate parent + grandparent cobalt so the
+ * editor surface matches the rest of the form. iOS Safari 15.4+ /
+ * Chrome 105+ all support `:has()`, safe everywhere the admin runs. */
+*:has(> [data-slate-editor]),
+*:has(> * > [data-slate-editor]),
+*:has(> [role="textbox"][contenteditable="true"]),
+*:has(> * > [role="textbox"][contenteditable="true"]) {
+  background: #0a1530 !important;
+  color: #d8e4ff !important;
+}
+
+/* Same problem for widget wrappers Decap renders with a default white
+ * background — the boolean toggle (Published) and the image picker
+ * (Featured Image) don't fill their own container, so the white bleeds
+ * around them. The toggle button's class includes "ToggleContainer"
+ * (stable component name); the image picker has a hidden file input.
+ * Walk up via `:has()` to paint the wrapper cobalt. The split-pane
+ * outer container (Decap's editor canvas) gets the page background so
+ * the white doesn't peek between widgets either. */
+[class*="SplitPane"] {
+  background: #04060f !important;
+}
+*:has(> button[class*="ToggleContainer"]),
+*:has(> * > button[class*="ToggleContainer"]),
+*:has(> input[type="file"]),
+*:has(> * > input[type="file"]) {
+  background: #0a1530 !important;
+}
+
+/* Inline embed wrappers in the rich-text body — Decap renders Image
+ * blocks, Code Blocks, and other "shortcode" components inside slate
+ * via a `ControlContainer-Shortcode` wrapper, then paints its inner
+ * card white. Force cobalt on the outer wrapper and clear backgrounds
+ * on inner non-input descendants so the cobalt surface shows through.
+ * Inputs / textareas / selects still get their cobalt from the
+ * tag-level rules above. */
+[class*="ControlContainer-Shortcode"] {
+  background: #060d1f !important;
+  border: 1px solid #1a2a5e !important;
+  border-radius: 6px !important;
+  color: #d8e4ff !important;
+}
+[class*="ControlContainer-Shortcode"] *:not(input):not(textarea):not(select):not(option):not(button) {
+  background-color: transparent !important;
+  color: inherit !important;
 }
 
 .ProseMirror:focus,
@@ -286,20 +367,45 @@ label,
   color: #d8e4ff !important;
 }
 
-/* Modal / dialog */
+/* Modal / dialog / floating field-settings popups.
+ *
+ * Decap renders the markdown widget's per-block "Field Settings" popup
+ * (the one that opens beside a code block to let you pick MODE / THEME /
+ * KEYMAP) without painting it a solid background — it ships with a faint
+ * white-ish surface that's almost invisible against the cobalt-themed
+ * editor below it. Any class that smells like a settings panel /
+ * popover / float gets a solid cobalt surface here. */
 [class*="Modal"],
 [class*="Dialog"],
+[class*="Popup"],
+[class*="Popover"],
+[class*="FieldSettings"],
+[class*="field-settings"],
+[class*="BlockMenu"],
+[class*="OptionsList"],
+[class*="EditorComponentForm"],
 [role="dialog"] {
   background: #060d1f !important;
-  border-color: #1a2a5e !important;
+  border: 1px solid #1a2a5e !important;
   box-shadow: 0 16px 64px rgba(0, 0, 20, 0.9) !important;
   border-radius: 8px !important;
+  color: #d8e4ff !important;
+}
+/* Their inner labels / headings need the cobalt cream too — Decap leaves
+ * these as the default light-gray which is unreadable on cobalt. */
+[class*="Modal"] *,
+[class*="Dialog"] *,
+[class*="Popup"] *,
+[class*="Popover"] *,
+[class*="FieldSettings"] *,
+[class*="BlockMenu"] * {
+  color: inherit !important;
 }
 
 [class*="Overlay"],
 [class*="Backdrop"] {
   background: rgba(4, 6, 15, 0.85) !important;
-  backdrop-filter: blur(4px) !important;
+  /* backdrop-filter removed; same iOS WebKit reason as the toolbar. */
 }
 
 /* Notification / alert toasts */
@@ -349,7 +455,7 @@ h1, h2, h3, h4, h5, h6 {
   letter-spacing: 0.02em;
 }
 
-/* ── Sveltia CMS top navigation brand ──────────── */
+/* ── Decap CMS top navigation brand ──────────── */
 
 /* Pulse animation on the primary action elements */
 @keyframes cobalt-glow {

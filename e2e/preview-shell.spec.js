@@ -4,7 +4,7 @@ const { test, expect } = require("./base");
 // renders with the real Jekyll layouts so its styling is always identical
 // to the production site by construction. The CMS (or any caller) streams
 // draft content via postMessage; this spec asserts the shell's contract
-// directly without booting Sveltia, so it stays fast and hermetic.
+// directly without booting Decap, so it stays fast and hermetic.
 //
 // Tests are gated to chromium-desktop because the contract is DOM-level,
 // not visual — the cross-browser matrix is covered by visual-regression.

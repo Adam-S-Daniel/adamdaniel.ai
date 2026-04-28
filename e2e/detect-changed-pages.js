@@ -36,8 +36,19 @@ function isPublished(filePath) {
   return true;
 }
 
+// Admin shell URLs that the regression video should always include — these
+// are the surfaces a content editor sees, so theme / bundle regressions on
+// them are exactly what reviewers want to spot in the side-by-side video.
+// `/preview/` is excluded because it's a CMS-driven canvas with no static
+// state of its own — it'd just render an empty preview shell.
+const ALWAYS_INCLUDED_ADMIN_PAGES = [
+  "/admin/", // login screen
+  "/admin/reviews/", // visual-regression review dashboard, unauth state
+];
+
 function discoverAllPages() {
   const pages = new Set(["/"]);
+  for (const p of ALWAYS_INCLUDED_ADMIN_PAGES) pages.add(p);
   const siteDir = path.join(ROOT, "_site");
   const useSiteScan = fs.existsSync(siteDir);
 
@@ -136,6 +147,12 @@ function mapFileToUrls(filePath) {
   if (filePath === "index.html") return ["/"];
   if (filePath === "blog/index.html") return ["/blog/"];
   if (filePath === "projects/index.html") return ["/projects/"];
+
+  // Admin shell changes — touch /admin/ and /admin/reviews/ regardless of
+  // which file was edited, since both pull the same bundle / theme assets.
+  if (filePath.startsWith("admin/")) {
+    return ["/admin/", "/admin/reviews/"];
+  }
 
   if (
     filePath.startsWith("_layouts/") ||

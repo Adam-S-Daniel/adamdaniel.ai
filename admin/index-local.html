@@ -5,7 +5,24 @@
   <meta name="viewport" content="width=device-width, initial-scale=1.0" />
   <title>Content Manager — Adam Daniel (Local Dev)</title>
   <!-- Material Symbols Outlined — served locally so headless Chromium never needs Google Fonts -->
-  <style>
+  <!--
+    Cobalt-thermal theme. Kill-switch: ?notheme on the URL disables it
+    (mirrors the production admin/index.html behaviour).
+  -->
+  <script>
+    if (new URLSearchParams(location.search).has('notheme')) {
+      document.documentElement.dataset.notheme = '1';
+      var mo = new MutationObserver(function () {
+        var inline = document.getElementById('cobalt-inline-theme');
+        var ext = document.getElementById('cobalt-theme');
+        if (inline) inline.media = 'not all';
+        if (ext) ext.media = 'not all';
+        if (inline && ext) mo.disconnect();
+      });
+      mo.observe(document.documentElement, { childList: true, subtree: true });
+    }
+  </script>
+  <style id="cobalt-inline-theme">
     @font-face {
       font-family: "Material Symbols Outlined";
       font-style: normal;
@@ -22,17 +39,7 @@
       50%  { background-color: #060d1f; }
       100% { background-color: #03040c; }
     }
-    body::before {
-      content: '';
-      position: fixed; inset: 0;
-      background: radial-gradient(ellipse 70% 50% at 50% 20%, rgba(40,90,255,0.18), transparent 70%);
-      animation: warmth 8s ease-in-out infinite alternate;
-      pointer-events: none; z-index: 0;
-    }
-    @keyframes warmth {
-      0%   { opacity: 0.05; transform: scale(0.7); }
-      100% { opacity: 0.5;  transform: scale(1.3); }
-    }
+    /* Ambient glow removed — see admin/index.html for rationale. */
     #cms-loading {
       position: fixed; inset: 0; display: flex; flex-direction: column;
       align-items: center; justify-content: center; background: #04060f;
@@ -60,6 +67,18 @@
       border: 1px solid #285aff; border-radius: 3px; padding: 0.25em 0.6em;
       color: #285aff; margin-top: 0.5rem;
     }
+    .floating-link {
+      position: fixed; right: 1.5rem; z-index: 10000;
+      display: flex; align-items: center; gap: 0.5rem;
+      padding: 0.6rem 1rem; background: #0a1530;
+      border: 1px solid #1a2a5e; border-radius: 8px;
+      color: #c8d4f0; font-family: 'Helvetica Neue', Arial, sans-serif;
+      font-size: 0.8rem; text-decoration: none;
+      transition: border-color 0.2s, background 0.2s;
+    }
+    .floating-link:hover { border-color: #285aff; background: #111e40; }
+    .floating-link svg  { width: 16px; height: 16px; fill: currentColor; }
+    #live-preview-link { bottom: 5rem; }
   </style>
 </head>
 <body>
@@ -70,35 +89,42 @@
     <div class="local-badge">Local Backend</div>
   </div>
 
-  <!-- Tell Sveltia CMS to use the local config file -->
-  <link rel="cms-config-url" type="text/yaml" href="config-local.yml">
-
+  <!-- Live Preview link — see admin/index.html for rationale. -->
+  <a id="live-preview-link" class="floating-link" href="/preview/" target="_blank" rel="noopener"
+     title="Opens a new tab. Hit Save in the editor for the preview to fill in.">
+    <svg viewBox="0 0 24 24"><path d="M12 5c-7 0-10 7-10 7s3 7 10 7 10-7 10-7-3-7-10-7zm0 12a5 5 0 1 1 0-10 5 5 0 0 1 0 10zm0-8a3 3 0 1 0 0 6 3 3 0 0 0 0-6z"/></svg>
+    Live Preview
+  </a>
   <script>
-    // Pre-seed Sveltia's user prefs so Save stays on the entry-edit
-    // form. Mirrors admin/index.html. See that file for rationale.
     (function () {
-      try {
-        var KEY = 'sveltia-cms.prefs';
-        var raw = localStorage.getItem(KEY);
-        var prefs = raw ? JSON.parse(raw) : {};
-        if (typeof prefs.closeOnSave === 'undefined') {
-          prefs.closeOnSave = false;
-          localStorage.setItem(KEY, JSON.stringify(prefs));
-        }
-      } catch (_) { /* fall through to Sveltia's defaults */ }
+      var link = document.getElementById('live-preview-link');
+      function updateHref() {
+        var m = /#\/collections\/([^\/]+)/.exec(location.hash || '');
+        link.href = '/preview/' + (m ? '?collection=' + encodeURIComponent(m[1]) : '');
+      }
+      window.addEventListener('hashchange', updateHref);
+      updateHref();
     })();
   </script>
 
+  <!-- Tell Decap CMS to use the local config file -->
+  <link rel="cms-config-url" type="text/yaml" href="config-local.yml">
+  <link rel="stylesheet" href="custom.css" id="cobalt-theme">
+
   <!--
-    Loaded from unpkg (rather than the gitignored vendor/ copy) so this page
-    works in a fresh clone and in CI without a separate vendor step. Pinned to
-    the same version as `admin/index.html`'s implicit @latest for parity.
+    Decap CMS — same pinned version as admin/index.html. The local
+    config sets `local_backend: true` so saves go through the
+    decap-server proxy (port 8081) into the working tree instead of
+    GitHub.
   -->
-  <script src="https://unpkg.com/@sveltia/cms/dist/sveltia-cms.js" type="module"></script>
+  <script src="https://unpkg.com/decap-cms@^3.12.0/dist/decap-cms.js"></script>
 
   <!-- Live Preview bridge: broadcasts entry data on every save to any
-       open /preview/ tab. Loads after Sveltia so `window.CMS` exists. -->
+       open /preview/ tab. Loads after Decap so `window.CMS` exists. -->
   <script src="preview-bridge.js" defer></script>
+
+  <!-- "View page on site:" banner — see admin/index.html for rationale. -->
+  <script src="live-url-banner.js" defer></script>
 
   <script>
     document.addEventListener('DOMContentLoaded', function () {
@@ -121,6 +147,72 @@
         setTimeout(function () { loading.remove(); }, 500);
       }, 8000);
     });
+  </script>
+
+  <!-- Commit indicator — see admin/index.html for the full rationale.
+       Locally, run scripts/write-commit-json.sh to populate commit.json
+       (otherwise the pill stays hidden). -->
+  <script>
+    (function () {
+      var REPO_URL = 'https://github.com/Adam-S-Daniel/adamdaniel.ai';
+      fetch('commit.json', { cache: 'no-cache' })
+        .then(function (r) { return r.ok ? r.json() : null; })
+        .then(function (c) {
+          if (!c || !c.sha) return;
+          var d = c.iso ? new Date(c.iso) : null;
+          var dateLabel = d
+            ? d.toLocaleString('en-US', { dateStyle: 'short', timeStyle: 'short' })
+            : '';
+          var isPreview = c.branch && c.branch !== 'main';
+          var a = document.createElement('a');
+          a.id = 'cms-commit-pill';
+          a.href = REPO_URL + '/commit/' + c.sha;
+          a.target = '_blank';
+          a.rel = 'noopener';
+          a.title = 'Deployed commit — opens on GitHub';
+          a.innerHTML = (isPreview
+            ? '<span style="color:#f5a623;font-weight:600;margin-right:0.5em">PREVIEW: ' +
+                String(c.branch).replace(/[<>&"']/g, '') + '</span>'
+            : '') +
+            '<span>' + c.sha.slice(0, 7) +
+            (dateLabel ? '  ' + dateLabel : '') + '</span>';
+          a.style.cssText = 'position:fixed;top:60px;right:12px;z-index:10000;padding:0.25rem 0.55rem;background:rgba(4,6,15,0.85);border:1px solid ' + (isPreview ? '#f5a623' : '#1a2a5e') + ';border-radius:4px;color:#8ab0e8;font-family:"SF Mono","Fira Code",monospace;font-size:0.7rem;letter-spacing:0.04em;text-decoration:none;';
+          document.body.appendChild(a);
+        })
+        .catch(function () {});
+    })();
+  </script>
+
+  <!-- Cobalt popup tagger — see admin/index.html for full rationale. -->
+  <script>
+    (function () {
+      var style = document.createElement('style');
+      style.textContent = '[data-cobalt-popup]{background:#060d1f !important;border:1px solid #1a2a5e !important;box-shadow:0 16px 64px rgba(0,0,20,0.9) !important;border-radius:8px !important;color:#d8e4ff !important;}[data-cobalt-popup] *{color:inherit !important;}[data-cobalt-popup] select,[data-cobalt-popup] input,[data-cobalt-popup] textarea{background:#0a1530 !important;border:1px solid #1a2a5e !important;color:#d8e4ff !important;}[data-cobalt-popup] option{background:#0a1530 !important;color:#d8e4ff !important;}';
+      document.head.appendChild(style);
+      function findAndTag() {
+        var candidates = document.querySelectorAll('div, section, aside, form');
+        for (var i = 0; i < candidates.length; i++) {
+          var el = candidates[i];
+          if (el.dataset.cobaltPopup) continue;
+          var t = el.textContent || '';
+          if (t.indexOf('Field Settings') === -1 || t.indexOf('Global Settings') === -1) continue;
+          var cur = el;
+          while (cur && cur !== document.body) {
+            var pos = getComputedStyle(cur).position;
+            if (pos === 'absolute' || pos === 'fixed') break;
+            cur = cur.parentElement;
+          }
+          (cur || el).dataset.cobaltPopup = '1';
+        }
+      }
+      var pending = false;
+      new MutationObserver(function () {
+        if (pending) return;
+        pending = true;
+        requestAnimationFrame(function () { pending = false; findAndTag(); });
+      }).observe(document.body, { childList: true, subtree: true });
+      findAndTag();
+    })();
   </script>
 </body>
 </html>

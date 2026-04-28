@@ -57,6 +57,20 @@ jobs:
           JEKYLL_ENV: production
         run: bundle exec jekyll build
 
+      - name: Write deploy-time commit metadata
+        # Surfaces the deployed commit in the admin's top-right corner via
+        # admin/index.html. Use HEAD (whatever's checked out) rather than
+        # github.sha — sidesteps shallow-clone issues. On push events HEAD
+        # equals github.sha anyway, so the SHA in the JSON is identical.
+        run: |
+          mkdir -p ./_site/admin
+          SHA=$(git rev-parse HEAD)
+          ISO=$(git log -1 --format=%cI HEAD)
+          cat > ./_site/admin/commit.json <<JSON
+          { "sha": "${SHA}", "iso": "${ISO}", "branch": "main" }
+          JSON
+          cat ./_site/admin/commit.json
+
       - name: Configure AWS credentials
         uses: aws-actions/configure-aws-credentials@ec61189d14ec14c8efccab744f656cffd0e33f37  # v6.1.0 (2026-04-06)
         with:

@@ -52,7 +52,6 @@ const FANOUT_PATTERNS = [
   /^package(-lock)?\.json$/,
   /^playwright(\.regression)?\.config\.js$/,
   /^e2e\/base\.js$/,
-  /^e2e\/cms-test-helpers\.js$/,
   /^\.github\/workflows\/e2e-tests\.yml$/,
 ];
 
@@ -60,13 +59,6 @@ const FANOUT_PATTERNS = [
 // matches one of these patterns, include this spec." A spec NOT named
 // here is included only via fanout (or because its own file changed).
 const SPEC_RULES = {
-  "e2e/admin-cms.spec.js": [
-    /^admin\//,
-    /^_posts\//,
-    /^_tags\//,
-    /^_projects\//,
-    /^pages\//,
-  ],
   "e2e/admin-reviews-auth.spec.js": [
     /^admin\/reviews\//,
     /^oauth-proxy\//,
@@ -77,21 +69,18 @@ const SPEC_RULES = {
     /^e2e\/generate-video\.sh$/,
     /^\.github\/workflows\/visual-regression\.yml$/,
   ],
-  "e2e/cms-posts-crud.spec.js": [
-    /^admin\/(config\.yml|config-local\.yml|index.*\.html)$/,
+  "e2e/cms-smoke.spec.js": [
+    /^admin\//,
     /^_posts\//,
-  ],
-  "e2e/cms-tags-crud.spec.js": [
-    /^admin\/(config\.yml|config-local\.yml|index.*\.html)$/,
     /^_tags\//,
-  ],
-  "e2e/cms-projects-crud.spec.js": [
-    /^admin\/(config\.yml|config-local\.yml|index.*\.html)$/,
     /^_projects\//,
-  ],
-  "e2e/cms-pages-crud.spec.js": [
-    /^admin\/(config\.yml|config-local\.yml|index.*\.html)$/,
     /^pages\//,
+  ],
+  "e2e/cms-publish-flow.spec.js": [
+    /^admin\//,
+    /^_posts\//,
+    /^_layouts\/(post|default)\.html$/,
+    /^_includes\//,
   ],
   "e2e/cms-preview-url.spec.js": [
     /^admin\//,

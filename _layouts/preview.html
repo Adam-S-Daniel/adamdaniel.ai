@@ -19,6 +19,49 @@ layout: default
 
 <meta name="robots" content="noindex, nofollow">
 
+<style>
+  /* Empty-state overlay — visible until the first cms-preview-update
+     message arrives. Editors land here from the Live Preview link in
+     the admin and need to know that the preview only fills in after
+     they hit Save (or Publish now) on the entry. */
+  #preview-empty-state {
+    position: fixed; inset: 0;
+    display: flex; flex-direction: column;
+    align-items: center; justify-content: center;
+    background: var(--bg-page, #04060f);
+    color: var(--text-secondary, #c8d4f0);
+    font-family: 'Helvetica Neue', Arial, sans-serif;
+    text-align: center; padding: 2rem;
+    z-index: 100;
+    transition: opacity 0.3s ease;
+  }
+  #preview-empty-state.hidden { opacity: 0; pointer-events: none; }
+  #preview-empty-state h2 {
+    font-weight: 200; font-size: 1.6rem;
+    margin: 0 0 1rem; color: var(--text-primary, #d8e4ff);
+  }
+  #preview-empty-state p { margin: 0.25rem 0; max-width: 32rem; }
+  #preview-empty-state code {
+    font-family: 'SF Mono', 'Fira Code', monospace;
+    font-size: 0.85em;
+    background: rgba(40, 90, 255, 0.12);
+    padding: 0.1em 0.4em; border-radius: 3px;
+  }
+  #preview-empty-state .hint {
+    margin-top: 1.5rem;
+    font-size: 0.8rem;
+    color: var(--text-muted, #8ab0e8);
+    letter-spacing: 0.04em;
+  }
+</style>
+
+<div id="preview-empty-state">
+  <h2>Live preview</h2>
+  <p>Hit <code>Save</code> or <code>Publish now</code> on the entry you're
+  editing in the admin tab — this preview will fill in automatically.</p>
+  <p class="hint">Keep this tab open while you edit.</p>
+</div>
+
 <div class="preview-root" data-preview-root>
   <!-- Post layout — mirrors _layouts/post.html -->
   <div class="container preview-variant" data-preview-layout="posts" hidden>
@@ -195,6 +238,15 @@ layout: default
 
   function apply(fields) {
     fields = fields || {};
+
+    // First update — hide the empty-state overlay. Subsequent updates
+    // are no-ops here.
+    var emptyState = document.getElementById("preview-empty-state");
+    if (emptyState && !emptyState.classList.contains("hidden")) {
+      emptyState.classList.add("hidden");
+      // Detach after the fade so it can't capture any clicks/scrolls.
+      setTimeout(function () { emptyState.remove(); }, 400);
+    }
 
     setText("title", fields.title || "");
 

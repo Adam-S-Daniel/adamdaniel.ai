@@ -1,7 +1,7 @@
 /*
- * admin/preview-bridge.js — wires Sveltia CMS saves to the live preview page.
+ * admin/preview-bridge.js — wires Decap CMS saves to the live preview page.
  *
- * Boots after Sveltia's `window.CMS` global is defined, then:
+ * Boots after Decap's `window.CMS` global is defined, then:
  *   1. Registers a `postSave` event listener. On every save, the current
  *      entry is broadcast via a same-origin BroadcastChannel that the
  *      `/preview/` page subscribes to, so every open preview tab updates
@@ -9,10 +9,9 @@
  *   2. Injects a "Live Preview" link into the editor toolbar. Clicking it
  *      opens `/preview/?collection=<current>` in a new tab.
  *
- * This is intentionally decoupled from Sveltia internals — it uses only
- * `CMS.registerEventListener` (a public, documented API) and a generic
- * DOM observer for the button. If Sveltia ever adds `registerPreviewTemplate`,
- * we can optionally embed the preview inline without touching this file.
+ * Uses only Decap's public CMS API (`registerEventListener`) and a generic
+ * DOM observer for the button — no internal selectors, so it survives
+ * Decap minor-version churn.
  *
  * Exposed for tests: window.adamdaniel_cms_preview_url(collection).
  */
@@ -41,7 +40,7 @@
   function readEntry(entry) {
     if (!entry) return null;
 
-    // Sveltia passes Immutable-like objects with `get()` / `toJS()`; our
+    // Decap passes Immutable.js records with `get()` / `toJS()`; our
     // test harness passes plain objects with the same shape. Handle both.
     var dataHolder = typeof entry.get === "function" ? entry.get("data") : entry.data;
     var fields =
@@ -91,11 +90,11 @@
     tick();
   }
 
-  // Inject a "Live Preview" link into Sveltia's entry editor toolbar.
-  // The toolbar shadow-DOM selectors may shift across Sveltia releases, so
-  // the injector is defensive: it looks for any anchor/button labelled
-  // "View on Live Site" and attaches a sibling. If no such anchor is
-  // found, the link simply doesn't appear — a harmless no-op.
+  // Inject a "Live Preview" link into Decap's entry editor toolbar.
+  // The toolbar selectors may shift across Decap releases, so the injector
+  // is defensive: it looks for any anchor/button labelled "View on Live
+  // Site" and attaches a sibling. If no such anchor is found, the link
+  // simply doesn't appear — a harmless no-op.
   function injectLivePreviewButton() {
     var inferCollection = function () {
       // URL hash pattern: #/collections/<name>/entries/<id>

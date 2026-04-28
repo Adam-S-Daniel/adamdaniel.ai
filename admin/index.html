@@ -4,18 +4,39 @@
   <meta charset="utf-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1.0" />
   <title>Content Manager — Adam Daniel</title>
-  <style>
+  <!--
+    Cobalt-thermal theme. Kill-switch: append ?notheme to the URL to
+    disable this stylesheet (and the inline cobalt CSS below) so the
+    Decap default theme renders. Useful when triaging a render bug
+    that may be theme-induced — visit /admin/?notheme to A/B without
+    redeploying.
+  -->
+  <link rel="stylesheet" href="custom.css" id="cobalt-theme">
+  <script>
+    if (new URLSearchParams(location.search).has('notheme')) {
+      document.getElementById('cobalt-theme').media = 'not all';
+      document.documentElement.dataset.notheme = '1';
+      // The inline <style> below is parsed *after* this script runs, so
+      // patch its media attr the moment it appears.
+      var mo = new MutationObserver(function () {
+        var s = document.getElementById('cobalt-inline-theme');
+        if (s) { s.media = 'not all'; mo.disconnect(); }
+      });
+      mo.observe(document.documentElement, { childList: true, subtree: true });
+    }
+  </script>
+  <style id="cobalt-inline-theme">
     /*
-     * Cobalt Thermal theme injected before Sveltia CMS loads.
-     * These CSS variables and selectors target the Sveltia CMS shell layer,
-     * which lives outside the shadow DOM boundary.
+     * Cobalt Thermal theme injected before Decap CMS loads.
+     * Design tokens flow into the CMS app via CSS variables.
+     * Disabled by the ?notheme kill-switch above.
      */
 
     /* Force dark mode globally */
     :root {
       color-scheme: dark;
 
-      /* Sveltia CMS exposes these design tokens */
+      /* Design tokens — overlap with Decap's variable names */
       --primary-color: #285aff;
       --primary-color-dark: #1a3abf;
       --primary-color-light: rgba(40, 90, 255, 0.15);
@@ -58,30 +79,17 @@
       100% { background-color: #03040c; }
     }
 
-    /* Ambient glow behind the CMS frame */
-    body::before {
-      content: '';
-      position: fixed;
-      inset: 0;
-      background: radial-gradient(ellipse 70% 50% at 50% 20%, rgba(40,90,255,0.18), transparent 70%);
-      animation: warmth 8s ease-in-out infinite alternate;
-      pointer-events: none;
-      z-index: 0;
-    }
-
-    @keyframes warmth {
-      0%   { opacity: 0.05; transform: scale(0.7); }
-      100% { opacity: 0.5;  transform: scale(1.3); }
-    }
-
-    /* The Sveltia CMS app root sits above the ambient layer */
-    #nc-root,
-    sveltia-cms,
-    [id^="cms"],
-    .cms-wrapper {
-      position: relative;
-      z-index: 1;
-    }
+    /*
+     * Ambient glow REMOVED: a `position: fixed` pseudo-element with a
+     * radial gradient and a `transform: scale` keyframe animation forces
+     * iOS WebKit to allocate a compositing layer that, in conjunction
+     * with Decap's emotion-CSS-in-JS, occluded the entry-edit form
+     * fields below the toolbar on real iPhone Safari and Chrome (Chrome
+     * iOS uses WebKit). Confirmed bisect: the cobalt theme as a whole
+     * caused empty forms; removing this rule + the toolbar's
+     * `backdrop-filter` (see custom.css) restores rendering.
+     * The static page background and the cobalt design tokens stay.
+     */
 
     /* ── Loading screen ──────────────────────────── */
     #cms-loading {
@@ -143,9 +151,8 @@
       100% { transform: translateX(300%); }
     }
 
-    #reviews-link {
+    .floating-link {
       position: fixed;
-      bottom: 1.5rem;
       right: 1.5rem;
       z-index: 10000;
       display: flex;
@@ -161,70 +168,90 @@
       text-decoration: none;
       transition: border-color 0.2s, background 0.2s;
     }
-    #reviews-link:hover {
+    .floating-link:hover {
       border-color: #285aff;
       background: #111e40;
     }
-    #reviews-link svg {
+    .floating-link svg {
       width: 16px;
       height: 16px;
       fill: currentColor;
     }
+    /* Stack Live Preview above Reviews so the more frequent action is on top. */
+    #live-preview-link { bottom: 5rem; }
+    #reviews-link      { bottom: 1.5rem; }
   </style>
 </head>
 <body>
 
-  <!-- Custom loading screen shown while Sveltia CMS initialises -->
+  <!-- Custom loading screen shown while Decap CMS initialises -->
   <div id="cms-loading">
     <div class="cms-loading-name">Adam Daniel</div>
     <div class="cms-loading-bar"><div class="cms-loading-bar-fill"></div></div>
     <div class="cms-loading-sub">Content Manager</div>
   </div>
 
-  <a id="reviews-link" href="/admin/reviews/" title="Visual regression reviews">
+  <!--
+    Live Preview — opens /preview/?collection=<current> in a new tab.
+    The href is updated on every URL hash change so the link always
+    points at the collection of the entry the editor is on. Tip text
+    is intentionally explicit: the preview only updates *after* a
+    Save, so editors don't sit there waiting for it to fill.
+  -->
+  <a id="live-preview-link" class="floating-link"
+     href="/preview/"
+     target="_blank" rel="noopener"
+     title="Opens a new tab. Hit Save in the editor for the preview to fill in.">
+    <svg viewBox="0 0 24 24"><path d="M12 5c-7 0-10 7-10 7s3 7 10 7 10-7 10-7-3-7-10-7zm0 12a5 5 0 1 1 0-10 5 5 0 0 1 0 10zm0-8a3 3 0 1 0 0 6 3 3 0 0 0 0-6z"/></svg>
+    Live Preview
+  </a>
+
+  <a id="reviews-link" class="floating-link" href="/admin/reviews/" title="Visual regression reviews">
     <svg viewBox="0 0 24 24"><path d="M18 4l2 4h-3l-2-4h-2l2 4h-3l-2-4H8l2 4H7L5 4H4c-1.1 0-2 .9-2 2v12c0 1.1.9 2 2 2h16c1.1 0 2-.9 2-2V4h-4z"/></svg>
     Reviews
   </a>
 
   <script>
-    // Pre-seed Sveltia's user prefs before the bundle boots so that
-    // hitting Save in the editor stays on the entry-edit form instead
-    // of routing back to the collection list. The default Sveltia
-    // behaviour (closeOnSave=true) is jarring when iterating on a
-    // post — every Save costs a navigation. Editors can still toggle
-    // this in Sveltia's own preferences UI; we only set the default
-    // for the first visit.
-    //
-    // Storage shape: localStorage key `sveltia-cms.prefs` → JSON
-    // object. Preserve any existing keys; only fill closeOnSave when
-    // the editor hasn't expressed a preference yet.
+    // Keep the Live Preview link's `?collection=…` in sync with the
+    // collection the editor is currently inside. Decap uses hash routing,
+    // so we listen on hashchange (also fired once on initial load via
+    // the dispatch below).
     (function () {
-      try {
-        var KEY = 'sveltia-cms.prefs';
-        var raw = localStorage.getItem(KEY);
-        var prefs = raw ? JSON.parse(raw) : {};
-        if (typeof prefs.closeOnSave === 'undefined') {
-          prefs.closeOnSave = false;
-          localStorage.setItem(KEY, JSON.stringify(prefs));
-        }
-      } catch (_) { /* localStorage disabled — leave Sveltia's defaults in place */ }
+      var link = document.getElementById('live-preview-link');
+      function updateHref() {
+        var m = /#\/collections\/([^\/]+)/.exec(location.hash || '');
+        var col = m ? m[1] : '';
+        link.href = '/preview/' + (col ? '?collection=' + encodeURIComponent(col) : '');
+      }
+      window.addEventListener('hashchange', updateHref);
+      updateHref();
     })();
   </script>
 
-  <!-- Sveltia CMS -->
-  <script src="https://unpkg.com/@sveltia/cms/dist/sveltia-cms.js" type="module"></script>
+  <!--
+    Decap CMS — pinned to a major version. Editorial workflow + the
+    GitHub backend with our custom OAuth proxy (`base_url` +
+    `auth_endpoint` in admin/config.yml) drive the cms/<branch> →
+    PR → preview → merge pipeline documented in AGENTS.md.
+  -->
+  <script src="https://unpkg.com/decap-cms@^3.12.0/dist/decap-cms.js"></script>
 
   <!-- Live Preview bridge: broadcasts entry data on every save to any
-       open /preview/ tab. Loads after Sveltia so `window.CMS` exists. -->
+       open /preview/ tab. Loads after Decap so `window.CMS` exists. -->
   <script src="preview-bridge.js" defer></script>
 
+  <!-- "View page on site:" banner above the entry form. Reads form
+       state from the DOM and renders a link (or placeholder when
+       Published is OFF / no slug yet). -->
+  <script src="live-url-banner.js" defer></script>
+
   <script>
-    // Hide the loading overlay once Sveltia CMS fires its ready event
+    // Hide the loading overlay once Decap CMS fires its ready event
     document.addEventListener('DOMContentLoaded', function () {
       var loading = document.getElementById('cms-loading');
 
-      // Sveltia CMS dispatches a custom 'load' event on the window
-      // and renders into the body; we watch for the app root to appear.
+      // Decap renders its app root into the body; watch for the
+      // first child element to appear and fade out the splash.
       var observer = new MutationObserver(function (mutations) {
         for (var m of mutations) {
           for (var node of m.addedNodes) {
@@ -246,6 +273,135 @@
         setTimeout(function () { loading.remove(); }, 500);
       }, 6000);
     });
+  </script>
+
+  <!--
+    Deployed-build commit indicator. Pinned to the top-right corner
+    under Decap's user/host menu so editors can tell which version of
+    the admin they're looking at. The deploy workflows (deploy-prod and
+    deploy-preview) write `commit.json` next to this file before the S3
+    sync; if it's absent (local dev, or someone served the repo root
+    without running the writer) the pill stays hidden.
+  -->
+  <script>
+    (function () {
+      var REPO_URL = 'https://github.com/Adam-S-Daniel/adamdaniel.ai';
+      fetch('commit.json', { cache: 'no-cache' })
+        .then(function (r) { return r.ok ? r.json() : null; })
+        .then(function (c) {
+          if (!c || !c.sha) return;
+          var d = c.iso ? new Date(c.iso) : null;
+          var dateLabel = d
+            ? d.toLocaleString('en-US', { dateStyle: 'short', timeStyle: 'short' })
+            : '';
+          var isPreview = c.branch && c.branch !== 'main';
+
+          var a = document.createElement('a');
+          a.id = 'cms-commit-pill';
+          a.href = REPO_URL + '/commit/' + c.sha;
+          a.target = '_blank';
+          a.rel = 'noopener';
+          a.title = 'Deployed commit — opens on GitHub';
+          // On a feature/preview branch the pill leads with the branch
+          // name in amber so it's unmissable that this isn't production
+          // and that any CMS edits made here stay on this branch.
+          a.innerHTML = (isPreview
+            ? '<span style="color:#f5a623;font-weight:600;margin-right:0.5em">' +
+                'PREVIEW: ' + escapeHTML(c.branch) +
+              '</span>'
+            : '') +
+            '<span>' + escapeHTML(c.sha.slice(0, 7)) +
+            (dateLabel ? '  ' + escapeHTML(dateLabel) : '') + '</span>';
+          a.style.cssText = [
+            'position:fixed', 'top:60px', 'right:12px', 'z-index:10000',
+            'padding:0.25rem 0.55rem',
+            'background:rgba(4,6,15,0.85)',
+            'border:1px solid ' + (isPreview ? '#f5a623' : '#1a2a5e'),
+            'border-radius:4px',
+            'color:#8ab0e8',
+            'font-family:"SF Mono","Fira Code",monospace',
+            'font-size:0.7rem',
+            'letter-spacing:0.04em',
+            'text-decoration:none',
+            'transition:border-color 0.2s,color 0.2s'
+          ].join(';') + ';';
+          a.onmouseenter = function () {
+            a.style.borderColor = isPreview ? '#ffcb6b' : '#285aff';
+            a.style.color = '#d8e4ff';
+          };
+          a.onmouseleave = function () {
+            a.style.borderColor = isPreview ? '#f5a623' : '#1a2a5e';
+            a.style.color = '#8ab0e8';
+          };
+          document.body.appendChild(a);
+        })
+        .catch(function () { /* offline / 404 — leave hidden */ });
+
+      function escapeHTML(s) {
+        return String(s)
+          .replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;')
+          .replace(/"/g, '&quot;').replace(/'/g, '&#39;');
+      }
+    })();
+  </script>
+
+  <!--
+    Cobalt popup tagger.
+
+    Decap's per-block field-settings popup (the floater that opens beside a
+    code block, image embed, etc. with "Field Settings" / "Global Settings"
+    sections) is generated by emotion-CSS-in-JS with hashed class names that
+    aren't stable across Decap versions. Class-substring selectors in
+    custom.css couldn't reliably match it, leaving the popup with its
+    default near-transparent background.
+
+    Instead of guessing classes, this observer watches body mutations,
+    finds any DOM subtree that contains both "Field Settings" and "Global
+    Settings" headers, walks up to the first absolute/fixed-positioned
+    ancestor, and tags it with `data-cobalt-popup`. The injected stylesheet
+    below paints those elements cobalt — robust against Decap class churn.
+  -->
+  <script>
+    (function () {
+      var style = document.createElement('style');
+      style.textContent = [
+        '[data-cobalt-popup]{background:#060d1f !important;border:1px solid #1a2a5e !important;box-shadow:0 16px 64px rgba(0,0,20,0.9) !important;border-radius:8px !important;color:#d8e4ff !important;}',
+        '[data-cobalt-popup] *{color:inherit !important;}',
+        '[data-cobalt-popup] select,[data-cobalt-popup] input,[data-cobalt-popup] textarea{background:#0a1530 !important;border:1px solid #1a2a5e !important;color:#d8e4ff !important;}',
+        '[data-cobalt-popup] option{background:#0a1530 !important;color:#d8e4ff !important;}',
+      ].join('\n');
+      document.head.appendChild(style);
+
+      function findAndTag() {
+        // Look for any container that holds BOTH Decap settings headers —
+        // distinctive enough to avoid false positives.
+        var candidates = document.querySelectorAll('div, section, aside, form');
+        for (var i = 0; i < candidates.length; i++) {
+          var el = candidates[i];
+          if (el.dataset.cobaltPopup) continue;
+          var text = el.textContent || '';
+          if (text.indexOf('Field Settings') === -1 || text.indexOf('Global Settings') === -1) continue;
+          // Walk up to the floating ancestor — that's the actual popup root.
+          var cur = el;
+          while (cur && cur !== document.body) {
+            var pos = getComputedStyle(cur).position;
+            if (pos === 'absolute' || pos === 'fixed') break;
+            cur = cur.parentElement;
+          }
+          (cur || el).dataset.cobaltPopup = '1';
+        }
+      }
+
+      var pending = false;
+      var observer = new MutationObserver(function () {
+        if (pending) return;
+        pending = true;
+        requestAnimationFrame(function () { pending = false; findAndTag(); });
+      });
+      observer.observe(document.body, { childList: true, subtree: true });
+      // Initial pass in case the popup is already in the DOM.
+      findAndTag();
+    })();
   </script>
 
 </body>

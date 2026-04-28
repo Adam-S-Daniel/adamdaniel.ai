@@ -2,14 +2,14 @@
 
 Personal website and blog for Adam Daniel — Freelance AI Engineer.
 
-Built with Jekyll + Sveltia CMS, deployed to S3 + CloudFront with an AWS Lambda OAuth proxy.
+Built with Jekyll + Decap CMS, deployed to S3 + CloudFront with an AWS Lambda OAuth proxy.
 
 ## Architecture
 
 ```
 adamdaniel.ai
 ├── Jekyll site          (S3 + CloudFront, custom domain)
-├── Sveltia CMS          (/admin/ — headless CMS backed by this repo)
+├── Decap CMS            (/admin/ — headless CMS backed by this repo)
 ├── AWS OAuth Proxy      (Lambda + API Gateway HTTP API — ~$0/month)
 └── GitHub Actions       (production deploy + PR preview environments)
 ```
@@ -55,7 +55,7 @@ provisioned.
 
 ## CMS Setup (`/admin/`)
 
-Sveltia CMS is configured at `/admin/config.yml`. To activate:
+Decap CMS is configured at `/admin/config.yml`. To activate:
 
 1. **Create a GitHub OAuth App** at https://github.com/settings/developers
    - Homepage URL: `https://adamdaniel.ai`
@@ -81,12 +81,14 @@ Sveltia CMS is configured at `/admin/config.yml`. To activate:
 
 4. **Editorial workflow is on by default** (`publish_mode: editorial_workflow` in `admin/config.yml`). Every Save in the CMS opens a PR on its own branch instead of committing straight to main, lighting up the `cms/draft` → `cms/ready` labels, the per-PR `preview-pr{N}.adamdaniel.ai` environment, and the visual-regression review at `/admin/reviews/`.
 
-> **Sveltia config gotcha:** every folder collection needs **explicit** `create: true` AND `delete: true`. The Decap docs imply `delete` defaults to `true` when `create: true`, but Sveltia's UI hides the affordance when the flag isn't set. Set both flags on every folder collection. `files:` collections (a fixed list of named entries) never expose create or delete in Sveltia regardless of flags — convert to a folder collection if editors need to add or remove entries.
+> **Config gotcha:** every folder collection in `admin/config*.yml` ships with **explicit** `create: true` AND `delete: true`. Decap defaults both to `true`, but spelling them out keeps editor capabilities visible in the YAML and survives any future major-version default change. `files:` collections (a fixed list of named entries) don't expose create or delete in the Decap UI — convert to a folder collection if editors need to add or remove entries.
+>
+> **Why Decap, not Sveltia:** an earlier iteration of this repo used Sveltia CMS for its UX improvements, but Sveltia ≤ 0.158 silently ignores `publish_mode: editorial_workflow` (the upstream feature is on the 1.0 roadmap, not implemented yet). With branch protection on `main`, that meant every Save returned "Repository rule violations found / Changes must be made through a pull request." Decap implements the editorial workflow, so each Save creates a `cms/...` branch and opens a PR.
 
 ## OAuth Proxy (AWS Lambda)
 
 Located in `oauth-proxy/`. Implements the GitHub OAuth handshake required by
-Sveltia/Decap/Netlify CMS. Uses:
+Decap/Netlify CMS. Uses:
 
 - **AWS Lambda** (Python 3.12, 128 MB) — free tier: 1M requests/month
 - **API Gateway HTTP API** — cheapest API Gateway type, $1/M requests
@@ -122,12 +124,14 @@ Required secrets:
 ## Local Development
 
 ```bash
-# Install dependencies
-gem install jekyll jekyll-seo-tag jekyll-feed jekyll-sitemap webrick
-npm ci
+# One-shot setup: installs everything needed to run the full test stack
+# locally on Debian/Ubuntu/WSL2 — apt packages (libnspr4, libnss3, ffmpeg,
+# ruby-full, python3), Bundler + Gemfile gems, npm deps, Playwright
+# browser binaries, and a project-local pytest venv. Idempotent.
+bash scripts/setup-test-environment.sh
 
 # Build and serve
-jekyll serve --livereload
+bundle exec jekyll serve --livereload
 
 # Site:        http://localhost:4000
 # CMS admin:   http://localhost:4000/admin/index-local.html  (uses config-local.yml)
@@ -137,13 +141,121 @@ npx playwright test
 
 # Run only the specs that the current diff can affect
 node e2e/select-specs.js | jq -r '.files[]?' | xargs npx playwright test
+
+# Decap admin smoke test (boots decap-server + a static fileserver)
+npx playwright test e2e/cms-smoke.spec.js --project chromium-desktop
+
+# Other suites
+bundle exec ruby _plugins_test/auto_tag_pages_test.rb   # Jekyll plugin unit tests
+cd oauth-proxy && python3 -m pytest test_lambda.py -v   # OAuth proxy Lambda tests
 ```
 
-## Branching Strategy
+For the full test strategy — categories, trigger map, per-spec walkthrough,
+known gaps, and the recipe for adding tests when a new content collection
+ships — see [`docs/TESTING.md`](docs/TESTING.md).
+
+## Status vs. Published
+
+When editing posts via the CMS, **two independent dimensions** decide
+whether content reaches the live site. They look similar in the UI
+but gate two different things:
+
+| Dimension | What it controls | Where it lives |
+|---|---|---|
+| **Status** (Draft / In Review / Ready) | Whether the *PR* gets merged into its base branch | Decap's editorial workflow — translates to `cms/draft` / `cms/ready` PR labels in `cms-editorial-workflow.yml`. Auto-merge fires on `cms/ready`. |
+| **Published** toggle | Whether the *post*, once on its base branch, is rendered on the live site | Custom front-matter field. Jekyll filters `published: false` out of `site.posts` at build time. |
+
+> **Status** = "is this *change* ready?"
+> **Published** = "should this *post* be visible right now?"
+
+**Editor-facing detail:** see
+[`docs/CONTENT_GUIDE.md` § Status vs. Published](docs/CONTENT_GUIDE.md#status-vs-published--they-gate-two-different-things)
+for the full matrix, including what changes when editing on a preview
+branch (`preview-pr<N>.adamdaniel.ai`) instead of production
+(`adamdaniel.ai`).
+
+## Branches
+
+| Branch / pattern | Created by | Merges into | What it represents |
+|---|---|---|---|
+| `main` | the only long-lived branch | — (production) | Single source of truth. Every push triggers `deploy-production.yml`. |
+| `feature/*` *(by convention)* | a developer | `main` | Code changes (workflows, CSS, plugins, infra). PR previews live at `preview-pr<N>.adamdaniel.ai`. **The current example: `restore-decap-cms` (PR #48).** |
+| `cms/<collection>/<slug>` | Decap, when editing on `adamdaniel.ai/admin/` | `main` | A single CMS edit in editorial workflow. Auto-merges to `main` once `cms/ready` is set and checks pass. Production-bound. |
+| `cms/<collection>/<slug>` *(off a feature branch)* | Decap, when editing on `preview-pr<N>.adamdaniel.ai/admin/` | the feature branch (e.g. `restore-decap-cms`) | A CMS edit made on a feature-branch preview to demonstrate / test changes. **Stays on the preview tree — content edits here are not meant to reach production.** Decap's branch name doesn't encode the parent, so the admin shows the active backend branch in its commit pill (top-right) when it isn't `main`. PRs from `cms/...` into a non-`main` base get the `cms/preview-only` label automatically. |
+| `cms/draft-<timestamp>` | Decap legacy fallback (older versions / no slug yet) | same rules as above | Same role as `cms/<collection>/<slug>` — the timestamped form is what Decap used in earlier releases. |
+
+Standing rule: **content additions made on a feature branch's preview
+admin (the `cms/...` PRs targeting the feature branch) should be
+dropped when the feature branch itself merges into `main`.** They
+exist to exercise the preview environment, not to ship.
+
+## Repository layout
+
+Folders grouped by purpose. Anything not listed is incidental.
+
+### Content (what lives on the live site)
+
+| Path | Holds |
+|---|---|
+| `_posts/` | Blog posts. Filename `YYYY-MM-DD-<slug>.md` is required by Jekyll; live URL is `/blog/<slug>/` (no date prefix, see `_config.yml`'s `permalink`). |
+| `_tags/` | Curated tag descriptions. Optional — `auto_tag_pages.rb` synthesises archive pages for any tag a post uses. |
+| `_projects/` | Project case studies. |
+| `pages/` | Standalone pages with their own permalink (e.g. `/about/`). Currently disabled on the public route. |
+| `assets/images/uploads/` | Editor-uploaded images, bucketed by `YYYY/MM/`. The CMS's `media_folder` config points here. |
+
+### Appearance (how it looks)
+
+| Path | Holds |
+|---|---|
+| `_layouts/` | Page templates (`default.html`, `post.html`, `page.html`, `project.html`, `preview.html`). Changes here re-render every page that uses the layout. |
+| `_includes/` | Partial templates (header, footer, head, etc.) reused across layouts. |
+| `assets/css/` | Stylesheets compiled into the site CSS. |
+| `assets/images/` (non-`uploads/`) | Static design assets (logo, OG images, decorative SVG). |
+| `assets/js/` | Static JS shipped with the site (e.g. `marked.min.js`). |
+| `admin/custom.css` | Cobalt-thermal theme for the Decap CMS shell. |
+
+### Editorial / CMS surface
+
+| Path | Holds |
+|---|---|
+| `admin/` | Decap CMS shell — `index.html` (production), `index-local.html` (local dev), `config.yml` / `config-local.yml`, `preview-bridge.js`, `custom.css`, the `reviews/` dashboard. |
+| `preview.md` + `_layouts/preview.html` | The live-preview shell at `/preview/` that the admin's preview bridge feeds. |
+
+### Site framework
+
+| Path | Holds |
+|---|---|
+| `_config.yml`, `Gemfile` | Jekyll configuration and Ruby dependencies. |
+| `_plugins/` | Site-build Ruby plugins (`auto_tag_pages.rb`, `normalize_empty_slug.rb`). |
+| `_plugins_test/` | Plain-Ruby unit tests for `_plugins/`. |
+| `_data/` | Build-time data (e.g. `reading_times.yml`). |
+
+### Tests
+
+| Path | Holds |
+|---|---|
+| `e2e/` | Playwright specs + helpers. See [`docs/TESTING.md`](docs/TESTING.md) for the per-spec walkthrough. |
+| `playwright.config.js`, `playwright.regression.config.js` | Test runner configuration. |
+| `oauth-proxy/test_lambda.py` | OAuth Lambda unit tests. |
+
+### Infrastructure
+
+| Path | Holds |
+|---|---|
+| `infrastructure/bootstrap/` | One-time AWS setup (CloudFormation templates, deploy scripts). |
+| `oauth-proxy/` | AWS Lambda + API Gateway implementing the GitHub OAuth handshake Decap requires. |
+| `.github/workflows/` | CI/CD: deploy-production, deploy-preview, e2e-tests, visual-regression, cms-editorial-workflow, publish-scheduled-posts. |
+| `scripts/` | Build-time helpers (`patch-preview-config.sh`, `setup-test-environment.sh`, `write-commit-json.sh`, `generate-showcase.js`, etc.). |
+| `docs/` | Long-form documentation: [`CONTENT_GUIDE.md`](docs/CONTENT_GUIDE.md), [`TESTING.md`](docs/TESTING.md). |
+
+## Branching Strategy (visual)
 
 ```
-main                    ← production (deploys automatically)
-  └─ cms/draft-*        ← created by Sveltia CMS editorial workflow
-      └─ PR opened      ← preview URL deployed, content validated
-          └─ cms/ready  ← auto-merged to main, preview cleaned up
+main                                  ← production (deploys automatically)
+ ├─ feature/*                         ← code changes (e.g. restore-decap-cms)
+ │   └─ cms/<collection>/<slug>       ← CMS edits made on the feature's preview admin
+ │                                     (preview-only — don't carry to main)
+ └─ cms/<collection>/<slug>           ← CMS edits made on adamdaniel.ai/admin/
+     └─ PR opened, cms/draft applied  ← preview URL deployed, regression video posted
+         └─ cms/ready                 ← auto-merged to main, preview cleaned up
 ```

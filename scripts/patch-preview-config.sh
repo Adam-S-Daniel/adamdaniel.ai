@@ -19,7 +19,7 @@ PREVIEW_HOST="$4"
 
 PREVIEW_URL="https://${PREVIEW_HOST}"
 
-# 1. site_url: Sveltia keeps only .origin() from this, so the host must be
+# 1. site_url: Decap keeps only .origin() from this, so the host must be
 #    the full subdomain. No path component needed — each PR lives at the
 #    root of its own subdomain, so preview and prod share URL paths.
 sed -i -E "s|^site_url:.*|site_url: ${PREVIEW_URL}|" "$CONFIG"
@@ -28,9 +28,9 @@ sed -i -E "s|^site_url:.*|site_url: ${PREVIEW_URL}|" "$CONFIG"
 #    at the same preview so the button doesn't fling editors at prod.
 sed -i -E "s|^display_url:.*|display_url: ${PREVIEW_URL}|" "$CONFIG"
 
-# 3. backend.branch: Sveltia's GitHub backend fetches posts from whichever
+# 3. backend.branch: Decap's GitHub backend fetches posts from whichever
 #    branch is listed here, not whichever branch the preview was *built*
-#    from. Without repointing, Sveltia reads stale `main` copies and the
+#    from. Without repointing, Decap reads stale `main` copies and the
 #    editor sees last-merged content instead of this PR's.
 sed -i -E "s|^(  branch:).*|\\1 ${BRANCH}|" "$CONFIG"
 

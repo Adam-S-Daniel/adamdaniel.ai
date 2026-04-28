@@ -1,11 +1,19 @@
 name: Publish Scheduled Posts
 
-# Runs every hour to check whether any post's publish_date has arrived.
+# Runs once a day to check whether any post's publish_date has arrived.
 # When posts are published, the resulting push to main triggers the
 # normal Deploy to Production workflow automatically.
 on:
   schedule:
-    - cron: '0 * * * *'   # top of every hour (UTC)
+    # 14:00 UTC = 9am ET in winter (EST), 10am ET in summer (EDT).
+    # Targets the start of the US professional workday, slanted toward
+    # the East Coast — late enough that scheduled posts are live before
+    # most people open LinkedIn / RSS / email, early enough that the
+    # social-feed algorithms have the morning to surface them. GitHub
+    # cron can't track DST, so the run-time drifts by an hour twice a
+    # year; either edge of that band still lands inside the 8–10am ET
+    # sweet spot for professional engagement.
+    - cron: '0 14 * * *'
   workflow_dispatch:        # allow manual runs from the Actions UI
 
 permissions:

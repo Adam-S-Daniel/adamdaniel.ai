@@ -9,11 +9,9 @@ const POSTS_DIR = path.join(REPO_ROOT, "_posts");
 // configs must keep it in sync with Jekyll's `permalink: /blog/:slug/` — if it
 // drifts (e.g. includes the date prefix), the button 404s.
 //
-// This spec reproduces the slugify logic in JavaScript to check every post is
-// reachable at its computed URL; e2e/admin-cms.spec.js drives the real Sveltia
-// CMS to cover the template engine itself.
-const POSTS_PREVIEW_PATH =
-  `preview_path: "/blog/{{fields.slug | default('{{fields.title}}') | slugify}}/"`;
+// This spec reproduces Decap's slug derivation in JavaScript so every post is
+// reachable at its computed URL.
+const POSTS_PREVIEW_PATH = `preview_path: "/blog/{{slug}}/"`;
 
 function slugify(s) {
   return s

@@ -9,12 +9,22 @@ module.exports = defineConfig({
   testDir: "./e2e",
   testIgnore: /regression-video\.spec\.js/,
   fullyParallel: true,
-  webServer: {
-    command:
-      "bundle exec jekyll build --quiet && npx serve _site -l 4000 --no-clipboard",
-    port: 4000,
-    reuseExistingServer: !process.env.CI,
-  },
+  webServer: [
+    {
+      command:
+        "bundle exec jekyll build --quiet && npx serve _site -l 4000 --no-clipboard",
+      port: 4000,
+      reuseExistingServer: !process.env.CI,
+    },
+    {
+      // Decap CMS local-backend proxy: handles file IO for `local_backend: true`
+      // in admin/config-local.yml. Without it, the smoke spec's Login →
+      // Save / Delete cycle has nowhere to write to.
+      command: "npx decap-server",
+      port: 8081,
+      reuseExistingServer: !process.env.CI,
+    },
+  ],
   use: {
     baseURL: "http://localhost:4000",
     screenshot: "on",
