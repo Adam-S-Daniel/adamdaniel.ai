@@ -241,6 +241,24 @@ label,
   color: #d8e4ff !important;
 }
 
+/* Same problem for widget wrappers Decap renders with a default white
+ * background — the boolean toggle (Published) and the image picker
+ * (Featured Image) don't fill their own container, so the white bleeds
+ * around them. The toggle button's class includes "ToggleContainer"
+ * (stable component name); the image picker has a hidden file input.
+ * Walk up via `:has()` to paint the wrapper cobalt. The split-pane
+ * outer container (Decap's editor canvas) gets the page background so
+ * the white doesn't peek between widgets either. */
+[class*="SplitPane"] {
+  background: #04060f !important;
+}
+*:has(> button[class*="ToggleContainer"]),
+*:has(> * > button[class*="ToggleContainer"]),
+*:has(> input[type="file"]),
+*:has(> * > input[type="file"]) {
+  background: #0a1530 !important;
+}
+
 .ProseMirror:focus,
 .cm-focused {
   outline: none !important;
