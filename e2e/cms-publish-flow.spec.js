@@ -26,6 +26,22 @@ const { test, expect } = require("./base");
 //     rebuild is picked up without restarting the webServer.
 //   - The post is cleaned up in afterAll regardless of pass/fail —
 //     leaving cruft in `_posts/` would pollute the live site.
+//
+// FUTURE CONTENT TYPES — pattern to copy:
+//   When a new collection is added to admin/config*.yml AND its public
+//   pages are enabled in Jekyll's routing (i.e. the collection's
+//   `published`/`enabled` route exists), add a sibling test that:
+//     1. Drives the admin to create an entry in that collection
+//     2. Asserts the file lands at the expected on-disk path
+//     3. Runs a Jekyll build
+//     4. GETs the public URL the new entry should produce and asserts
+//        layout-expected DOM (e.g. h1, body container) renders the
+//        typed content
+//     5. Cleans up both the source file in the collection's folder
+//        AND the rendered output under `_site/<route>/`
+//   The Pages collection is currently disabled/hidden in the public
+//   site routing, so it doesn't have a sibling test here. Re-enable
+//   that test when the Pages collection's public route ships.
 
 const REPO_ROOT = path.join(__dirname, "..");
 const POSTS_DIR = path.join(REPO_ROOT, "_posts");
@@ -33,6 +49,10 @@ const POSTS_DIR = path.join(REPO_ROOT, "_posts");
 const SMOKE_TITLE = "E2E Publish Flow Smoke";
 const SMOKE_SLUG = "e2e-publish-flow-smoke";
 const SMOKE_BODY = "This post was created by the cms-publish-flow e2e spec. Safe to delete.";
+// Tag chosen so auto_tag_pages has to manufacture the archive (no curated
+// _tags/<slug>.md exists). Slug is what Jekyll's slugify will produce.
+const SMOKE_TAG_LABEL = "e2e-smoke-flow-tag";
+const SMOKE_TAG_SLUG = "e2e-smoke-flow-tag";
 
 function findSmokePostFile() {
   if (!fs.existsSync(POSTS_DIR)) return null;
@@ -50,8 +70,12 @@ function removeSmokePost() {
   // post reachable at /blog/<slug>/ after the test ran. The next jekyll
   // build would normally wipe it, but the playwright webServer only
   // builds once at startup.
-  const renderedDir = path.join(REPO_ROOT, "_site", "blog", SMOKE_SLUG);
-  if (fs.existsSync(renderedDir)) fs.rmSync(renderedDir, { recursive: true, force: true });
+  for (const dir of [
+    path.join(REPO_ROOT, "_site", "blog", SMOKE_SLUG),
+    path.join(REPO_ROOT, "_site", "tags", SMOKE_TAG_SLUG),
+  ]) {
+    if (fs.existsSync(dir)) fs.rmSync(dir, { recursive: true, force: true });
+  }
 }
 
 function jekyllBuild() {
@@ -113,6 +137,15 @@ test.describe("CMS publish flow: create → build → browse to live URL", () =>
     await bodyEditor.click();
     await bodyEditor.fill(SMOKE_BODY);
 
+    // Set an inline tag — exercises the auto_tag_pages plugin's
+    // "manufacture an archive page when no curated _tags/<slug>.md
+    // exists" branch. Tags is a list-of-strings widget; click into its
+    // input, type, press Enter to commit the chip.
+    const tagsInput = page.getByLabel(/^Tags/i).first();
+    await tagsInput.click();
+    await tagsInput.fill(SMOKE_TAG_LABEL);
+    await page.keyboard.press("Enter");
+
     // Flip Published on so this post is part of `site.posts` immediately.
     // (Default in the schema is OFF, which would route the post into the
     // scheduled-publish bucket and skip Jekyll's _posts/ rendering for the
@@ -148,5 +181,18 @@ test.describe("CMS publish flow: create → build → browse to live URL", () =>
 
     await expect(page.locator(".post-header h1")).toHaveText(SMOKE_TITLE);
     await expect(page.locator(".post-content")).toContainText(SMOKE_BODY);
+
+    // ── Inline tag → auto-generated archive page ─────────────────────
+    // The auto_tag_pages plugin should manufacture /tags/<slug>/ for
+    // any tag a post uses, even if no curated _tags/<slug>.md exists.
+    // This catches plugin regressions that break the post → tag-archive
+    // handoff (issue #27 territory).
+    const tagURL = `/tags/${SMOKE_TAG_SLUG}/`;
+    const tagResp = await page.goto(tagURL);
+    expect(tagResp.status(), `${tagURL} should be 200`).toBe(200);
+    await expect(
+      page.getByRole("link", { name: SMOKE_TITLE }).first(),
+      "auto-generated tag archive should list the new post",
+    ).toBeVisible();
   });
 });

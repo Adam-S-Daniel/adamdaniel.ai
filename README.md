@@ -150,6 +150,10 @@ bundle exec ruby _plugins_test/auto_tag_pages_test.rb   # Jekyll plugin unit tes
 cd oauth-proxy && python3 -m pytest test_lambda.py -v   # OAuth proxy Lambda tests
 ```
 
+For the full test strategy — categories, trigger map, per-spec walkthrough,
+known gaps, and the recipe for adding tests when a new content collection
+ships — see [`docs/TESTING.md`](docs/TESTING.md).
+
 ## Branching Strategy
 
 ```
