@@ -228,6 +228,19 @@ label,
   color: inherit !important;
 }
 
+/* The Slate editor element itself has a transparent background — it
+ * inherits from its container, which Decap styles white. Walk up via
+ * `:has()` and paint the immediate parent + grandparent cobalt so the
+ * editor surface matches the rest of the form. iOS Safari 15.4+ /
+ * Chrome 105+ all support `:has()`, safe everywhere the admin runs. */
+*:has(> [data-slate-editor]),
+*:has(> * > [data-slate-editor]),
+*:has(> [role="textbox"][contenteditable="true"]),
+*:has(> * > [role="textbox"][contenteditable="true"]) {
+  background: #0a1530 !important;
+  color: #d8e4ff !important;
+}
+
 .ProseMirror:focus,
 .cm-focused {
   outline: none !important;
