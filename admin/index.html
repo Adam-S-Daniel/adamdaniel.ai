@@ -4,11 +4,32 @@
   <meta charset="utf-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1.0" />
   <title>Content Manager — Adam Daniel</title>
-  <link rel="stylesheet" href="custom.css">
-  <style>
+  <!--
+    Cobalt-thermal theme. Kill-switch: append ?notheme to the URL to
+    disable this stylesheet (and the inline cobalt CSS below) so the
+    Decap default theme renders. Useful when triaging a render bug
+    that may be theme-induced — visit /admin/?notheme to A/B without
+    redeploying.
+  -->
+  <link rel="stylesheet" href="custom.css" id="cobalt-theme">
+  <script>
+    if (new URLSearchParams(location.search).has('notheme')) {
+      document.getElementById('cobalt-theme').media = 'not all';
+      document.documentElement.dataset.notheme = '1';
+      // The inline <style> below is parsed *after* this script runs, so
+      // patch its media attr the moment it appears.
+      var mo = new MutationObserver(function () {
+        var s = document.getElementById('cobalt-inline-theme');
+        if (s) { s.media = 'not all'; mo.disconnect(); }
+      });
+      mo.observe(document.documentElement, { childList: true, subtree: true });
+    }
+  </script>
+  <style id="cobalt-inline-theme">
     /*
      * Cobalt Thermal theme injected before Decap CMS loads.
      * Design tokens flow into the CMS app via CSS variables.
+     * Disabled by the ?notheme kill-switch above.
      */
 
     /* Force dark mode globally */
