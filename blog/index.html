@@ -6,7 +6,10 @@ permalink: /blog/
 ---
 <div class="container">
   <div class="page-header">
-    <h1>Blog</h1>
+    <div class="page-header-with-feed">
+      <h1>Blog</h1>
+      {% include feed-link.html href="/feed.xml" label="Subscribe to all posts (Atom feed)" %}
+    </div>
     <p class="subtitle">Thoughts on AI engineering &amp; building intelligent systems</p>
   </div>
 

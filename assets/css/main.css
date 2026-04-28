@@ -726,6 +726,121 @@ main {
 .mb-3 { margin-bottom: 1.5rem; }
 .mb-4 { margin-bottom: 2rem; }
 
+/* ── Feed Link (RSS icon) ───────────────────────── */
+
+.feed-link {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 1.6rem;
+  height: 1.6rem;
+  vertical-align: middle;
+  border: 1px solid var(--border);
+  border-radius: var(--radius);
+  color: var(--text-dim);
+  background: transparent;
+  text-decoration: none;
+  transition: color var(--transition), border-color var(--transition), background var(--transition);
+}
+
+.feed-link:hover,
+.feed-link:focus-visible {
+  color: #ee802f; /* canonical RSS orange — appears only on intent */
+  border-color: #ee802f;
+  background: rgba(238, 128, 47, 0.08);
+}
+
+.feed-link-icon {
+  width: 0.95rem;
+  height: 0.95rem;
+}
+
+.page-header-with-feed {
+  display: flex;
+  align-items: baseline;
+  flex-wrap: wrap;
+  gap: 0.6rem 0.9rem;
+  margin-bottom: 0.5rem;
+}
+
+.page-header-with-feed h1,
+.page-header-with-feed h2 {
+  margin-bottom: 0;
+}
+
+/* ── Share Row ──────────────────────────────────── */
+
+.share-row {
+  display: flex;
+  align-items: center;
+  gap: 0.6rem;
+  flex-wrap: wrap;
+  margin-top: 3rem;
+  padding-top: 1.4rem;
+  border-top: 1px solid var(--border);
+}
+
+.share-row-label {
+  font-size: 0.72rem;
+  letter-spacing: 0.16em;
+  text-transform: uppercase;
+  font-family: var(--mono);
+  color: var(--text-dim);
+  margin-right: 0.4rem;
+}
+
+.share-link {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 1.9rem;
+  height: 1.9rem;
+  padding: 0;
+  border: 1px solid var(--border);
+  border-radius: var(--radius);
+  background: transparent;
+  color: var(--text-dim);
+  cursor: pointer;
+  text-decoration: none;
+  position: relative;
+  transition: color var(--transition), border-color var(--transition), background var(--transition);
+}
+
+.share-link svg {
+  width: 0.95rem;
+  height: 0.95rem;
+  display: block;
+}
+
+.share-link:hover,
+.share-link:focus-visible {
+  color: var(--text-bright);
+  border-color: var(--border-bright);
+  background: var(--bg-2);
+}
+
+.share-icon-success { display: none; }
+.share-copy.share-copied .share-icon-default { display: none; }
+.share-copy.share-copied .share-icon-success { display: block; }
+.share-copy.share-copied {
+  color: var(--text-bright);
+  border-color: var(--accent);
+}
+
+@media (forced-colors: active) {
+  .feed-link,
+  .share-link {
+    border-color: ButtonText;
+  }
+  .feed-link:hover,
+  .feed-link:focus-visible,
+  .share-link:hover,
+  .share-link:focus-visible {
+    border-color: Highlight;
+    color: Highlight;
+  }
+}
+
 /* ── Responsive ─────────────────────────────────── */
 
 @media (max-width: 640px) {

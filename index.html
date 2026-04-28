@@ -20,7 +20,10 @@ title: Home
   <section style="padding: 4rem 0; border-top: 1px solid var(--border);">
     <div class="container">
       <div class="page-header" style="border:none; padding:0; margin-bottom:2rem;">
-        <h2>Latest Posts</h2>
+        <div class="page-header-with-feed">
+          <h2>Latest Posts</h2>
+          {% include feed-link.html href="/feed.xml" label="Subscribe to all posts (Atom feed)" %}
+        </div>
       </div>
       <ul class="post-list">
         {% for post in featured_posts %}
