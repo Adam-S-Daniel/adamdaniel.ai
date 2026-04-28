@@ -236,5 +236,52 @@
     });
   </script>
 
+  <!--
+    Deployed-build commit indicator. Pinned to the top-right corner
+    under Decap's user/host menu so editors can tell which version of
+    the admin they're looking at. The deploy workflows (deploy-prod and
+    deploy-preview) write `commit.json` next to this file before the S3
+    sync; if it's absent (local dev, or someone served the repo root
+    without running the writer) the pill stays hidden.
+  -->
+  <script>
+    (function () {
+      var REPO_URL = 'https://github.com/Adam-S-Daniel/adamdaniel.ai';
+      fetch('commit.json', { cache: 'no-cache' })
+        .then(function (r) { return r.ok ? r.json() : null; })
+        .then(function (c) {
+          if (!c || !c.sha) return;
+          var d = c.iso ? new Date(c.iso) : null;
+          var dateLabel = d
+            ? d.toLocaleString('en-US', { dateStyle: 'short', timeStyle: 'short' })
+            : '';
+          var a = document.createElement('a');
+          a.id = 'cms-commit-pill';
+          a.href = REPO_URL + '/commit/' + c.sha;
+          a.target = '_blank';
+          a.rel = 'noopener';
+          a.title = 'Deployed commit — opens on GitHub';
+          a.textContent = c.sha.slice(0, 7) + (dateLabel ? '  ' + dateLabel : '');
+          a.style.cssText = [
+            'position:fixed', 'top:60px', 'right:12px', 'z-index:10000',
+            'padding:0.25rem 0.55rem',
+            'background:rgba(4,6,15,0.85)',
+            'border:1px solid #1a2a5e',
+            'border-radius:4px',
+            'color:#8ab0e8',
+            'font-family:"SF Mono","Fira Code",monospace',
+            'font-size:0.7rem',
+            'letter-spacing:0.04em',
+            'text-decoration:none',
+            'transition:border-color 0.2s,color 0.2s'
+          ].join(';') + ';';
+          a.onmouseenter = function () { a.style.borderColor = '#285aff'; a.style.color = '#d8e4ff'; };
+          a.onmouseleave = function () { a.style.borderColor = '#1a2a5e'; a.style.color = '#8ab0e8'; };
+          document.body.appendChild(a);
+        })
+        .catch(function () { /* offline / 404 — leave hidden */ });
+    })();
+  </script>
+
 </body>
 </html>

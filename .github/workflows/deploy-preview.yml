@@ -66,6 +66,19 @@ jobs:
           echo "--- Patched admin/config.yml ---"
           grep -E "^(site_url|display_url):|^  branch:|preview_path:" "$CONFIG"
 
+      - name: Write deploy-time commit metadata
+        # admin/index.html and admin/index-local.html load this JSON to
+        # render a commit pill in the top-right of the admin shell, linked
+        # to the GitHub commit page. Editors use it to confirm which build
+        # of the admin they're looking at.
+        run: |
+          mkdir -p ./_site_preview/admin
+          ISO=$(git log -1 --format=%cI ${{ github.sha }})
+          cat > ./_site_preview/admin/commit.json <<JSON
+          { "sha": "${{ github.sha }}", "iso": "${ISO}", "branch": "${{ github.event.pull_request.head.ref }}" }
+          JSON
+          cat ./_site_preview/admin/commit.json
+
       - name: Configure AWS credentials
         uses: aws-actions/configure-aws-credentials@ec61189d14ec14c8efccab744f656cffd0e33f37  # v6.1.0 (2026-04-06)
         with:

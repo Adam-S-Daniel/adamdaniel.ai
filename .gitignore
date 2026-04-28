@@ -21,3 +21,5 @@ screenshots/regression/
 bin/
 e2e/visual-regression.spec.js-snapshots-before/
 .claude/scheduled_tasks.lock
+admin/commit.json
+
