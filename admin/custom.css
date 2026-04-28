@@ -269,6 +269,24 @@ label,
   background: #0a1530 !important;
 }
 
+/* Inline embed wrappers in the rich-text body — Decap renders Image
+ * blocks, Code Blocks, and other "shortcode" components inside slate
+ * via a `ControlContainer-Shortcode` wrapper, then paints its inner
+ * card white. Force cobalt on the outer wrapper and clear backgrounds
+ * on inner non-input descendants so the cobalt surface shows through.
+ * Inputs / textareas / selects still get their cobalt from the
+ * tag-level rules above. */
+[class*="ControlContainer-Shortcode"] {
+  background: #060d1f !important;
+  border: 1px solid #1a2a5e !important;
+  border-radius: 6px !important;
+  color: #d8e4ff !important;
+}
+[class*="ControlContainer-Shortcode"] *:not(input):not(textarea):not(select):not(option):not(button) {
+  background-color: transparent !important;
+  color: inherit !important;
+}
+
 .ProseMirror:focus,
 .cm-focused {
   outline: none !important;
