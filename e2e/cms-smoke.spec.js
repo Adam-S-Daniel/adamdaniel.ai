@@ -87,14 +87,19 @@ test.describe("/admin/ Decap CMS smoke test", () => {
     await expect(nameField).toBeVisible({ timeout: 30_000 });
     await nameField.fill(SMOKE_TAG_NAME);
 
-    // ── Save (writes the file via decap-server's local_fs proxy in
-    // simple mode — local_backend can't run editorial_workflow). ──────
+    // ── Save (writes the file via decap-server's local_fs proxy;
+    // local_backend forces simple mode regardless of publish_mode). ───
     //
-    // Decap's primary action button changes label between simple and
-    // editorial-workflow modes ("Publish" vs "Save"). Use Ctrl+S, which
-    // Decap binds in both modes via its keyboard shortcut hook (the
-    // PRESERVE editor in `decap-cms-editor-component-...`).
-    await page.keyboard.press("Control+s");
+    // Decap's primary action in simple mode is a split button:
+    //   [ Publish ▼ ]
+    // where the dropdown holds "Publish now" / "Publish and create new".
+    // Clicking the main Publish trigger opens the menu, then we pick
+    // Publish now to actually commit the entry.
+    await page.getByRole("button", { name: /^publish$/i }).first().click();
+    await page
+      .getByRole("menuitem", { name: /publish now/i })
+      .first()
+      .click();
 
     // The file should land in _tags/<slug>.md within a few seconds.
     await expect
