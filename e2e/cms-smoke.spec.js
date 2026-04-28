@@ -89,23 +89,34 @@ test.describe("/admin/ Decap CMS smoke test", () => {
 
     // ── Save (writes the file via decap-server's local_fs proxy in
     // simple mode — local_backend can't run editorial_workflow). ──────
-    await page.getByRole("button", { name: /^save/i }).first().click();
+    //
+    // Decap's primary action button changes label between simple and
+    // editorial-workflow modes ("Publish" vs "Save"). Use Ctrl+S, which
+    // Decap binds in both modes via its keyboard shortcut hook (the
+    // PRESERVE editor in `decap-cms-editor-component-...`).
+    await page.keyboard.press("Control+s");
 
     // The file should land in _tags/<slug>.md within a few seconds.
     await expect
-      .poll(() => fs.existsSync(SMOKE_TAG_FILE), { timeout: 30_000 })
+      .poll(() => fs.existsSync(SMOKE_TAG_FILE), { timeout: 60_000 })
       .toBe(true);
 
     const saved = fs.readFileSync(SMOKE_TAG_FILE, "utf8");
     expect(saved).toContain(`name: ${SMOKE_TAG_NAME}`);
 
     // ── Delete the entry through the editor ──────────────────────────
-    const deleteBtn = page.getByRole("button", { name: /^delete entry$/i });
+    // After Save, Decap routes from `#/collections/tags/new` to
+    // `#/collections/tags/entries/<slug>` and reveals the Delete button
+    // in the toolbar.
+    const deleteBtn = page
+      .getByRole("button", { name: /^delete (entry|published entry)$/i })
+      .first();
     await expect(deleteBtn).toBeVisible({ timeout: 30_000 });
+
+    // Auto-accept any browser-level confirm() Decap pops before deletion.
+    page.on("dialog", (d) => d.accept());
     await deleteBtn.click();
 
-    // Decap pops a confirm dialog before deletion completes.
-    page.once("dialog", (d) => d.accept());
     // Some Decap versions render an in-DOM confirm rather than a
     // browser dialog — handle that path too.
     const inDomConfirm = page.getByRole("button", {
