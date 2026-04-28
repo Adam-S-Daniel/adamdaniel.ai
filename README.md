@@ -154,11 +154,108 @@ For the full test strategy — categories, trigger map, per-spec walkthrough,
 known gaps, and the recipe for adding tests when a new content collection
 ships — see [`docs/TESTING.md`](docs/TESTING.md).
 
-## Branching Strategy
+## Status vs. Published
+
+When editing posts via the CMS, **two independent dimensions** decide
+whether content reaches the live site. They look similar in the UI
+but gate two different things:
+
+| Dimension | What it controls | Where it lives |
+|---|---|---|
+| **Status** (Draft / In Review / Ready) | Whether the *PR* gets merged into its base branch | Decap's editorial workflow — translates to `cms/draft` / `cms/ready` PR labels in `cms-editorial-workflow.yml`. Auto-merge fires on `cms/ready`. |
+| **Published** toggle | Whether the *post*, once on its base branch, is rendered on the live site | Custom front-matter field. Jekyll filters `published: false` out of `site.posts` at build time. |
+
+> **Status** = "is this *change* ready?"
+> **Published** = "should this *post* be visible right now?"
+
+**Editor-facing detail:** see
+[`docs/CONTENT_GUIDE.md` § Status vs. Published](docs/CONTENT_GUIDE.md#status-vs-published--they-gate-two-different-things)
+for the full matrix, including what changes when editing on a preview
+branch (`preview-pr<N>.adamdaniel.ai`) instead of production
+(`adamdaniel.ai`).
+
+## Branches
+
+| Branch / pattern | Created by | Merges into | What it represents |
+|---|---|---|---|
+| `main` | the only long-lived branch | — (production) | Single source of truth. Every push triggers `deploy-production.yml`. |
+| `feature/*` *(by convention)* | a developer | `main` | Code changes (workflows, CSS, plugins, infra). PR previews live at `preview-pr<N>.adamdaniel.ai`. **The current example: `restore-decap-cms` (PR #48).** |
+| `cms/<collection>/<slug>` | Decap, when editing on `adamdaniel.ai/admin/` | `main` | A single CMS edit in editorial workflow. Auto-merges to `main` once `cms/ready` is set and checks pass. Production-bound. |
+| `cms/<collection>/<slug>` *(off a feature branch)* | Decap, when editing on `preview-pr<N>.adamdaniel.ai/admin/` | the feature branch (e.g. `restore-decap-cms`) | A CMS edit made on a feature-branch preview to demonstrate / test changes. **Stays on the preview tree — content edits here are not meant to reach production.** Decap's branch name doesn't encode the parent, so the admin shows the active backend branch in its commit pill (top-right) when it isn't `main`. PRs from `cms/...` into a non-`main` base get the `cms/preview-only` label automatically. |
+| `cms/draft-<timestamp>` | Decap legacy fallback (older versions / no slug yet) | same rules as above | Same role as `cms/<collection>/<slug>` — the timestamped form is what Decap used in earlier releases. |
+
+Standing rule: **content additions made on a feature branch's preview
+admin (the `cms/...` PRs targeting the feature branch) should be
+dropped when the feature branch itself merges into `main`.** They
+exist to exercise the preview environment, not to ship.
+
+## Repository layout
+
+Folders grouped by purpose. Anything not listed is incidental.
+
+### Content (what lives on the live site)
+
+| Path | Holds |
+|---|---|
+| `_posts/` | Blog posts. Filename `YYYY-MM-DD-<slug>.md` is required by Jekyll; live URL is `/blog/<slug>/` (no date prefix, see `_config.yml`'s `permalink`). |
+| `_tags/` | Curated tag descriptions. Optional — `auto_tag_pages.rb` synthesises archive pages for any tag a post uses. |
+| `_projects/` | Project case studies. |
+| `pages/` | Standalone pages with their own permalink (e.g. `/about/`). Currently disabled on the public route. |
+| `assets/images/uploads/` | Editor-uploaded images, bucketed by `YYYY/MM/`. The CMS's `media_folder` config points here. |
+
+### Appearance (how it looks)
+
+| Path | Holds |
+|---|---|
+| `_layouts/` | Page templates (`default.html`, `post.html`, `page.html`, `project.html`, `preview.html`). Changes here re-render every page that uses the layout. |
+| `_includes/` | Partial templates (header, footer, head, etc.) reused across layouts. |
+| `assets/css/` | Stylesheets compiled into the site CSS. |
+| `assets/images/` (non-`uploads/`) | Static design assets (logo, OG images, decorative SVG). |
+| `assets/js/` | Static JS shipped with the site (e.g. `marked.min.js`). |
+| `admin/custom.css` | Cobalt-thermal theme for the Decap CMS shell. |
+
+### Editorial / CMS surface
+
+| Path | Holds |
+|---|---|
+| `admin/` | Decap CMS shell — `index.html` (production), `index-local.html` (local dev), `config.yml` / `config-local.yml`, `preview-bridge.js`, `custom.css`, the `reviews/` dashboard. |
+| `preview.md` + `_layouts/preview.html` | The live-preview shell at `/preview/` that the admin's preview bridge feeds. |
+
+### Site framework
+
+| Path | Holds |
+|---|---|
+| `_config.yml`, `Gemfile` | Jekyll configuration and Ruby dependencies. |
+| `_plugins/` | Site-build Ruby plugins (`auto_tag_pages.rb`, `normalize_empty_slug.rb`). |
+| `_plugins_test/` | Plain-Ruby unit tests for `_plugins/`. |
+| `_data/` | Build-time data (e.g. `reading_times.yml`). |
+
+### Tests
+
+| Path | Holds |
+|---|---|
+| `e2e/` | Playwright specs + helpers. See [`docs/TESTING.md`](docs/TESTING.md) for the per-spec walkthrough. |
+| `playwright.config.js`, `playwright.regression.config.js` | Test runner configuration. |
+| `oauth-proxy/test_lambda.py` | OAuth Lambda unit tests. |
+
+### Infrastructure
+
+| Path | Holds |
+|---|---|
+| `infrastructure/bootstrap/` | One-time AWS setup (CloudFormation templates, deploy scripts). |
+| `oauth-proxy/` | AWS Lambda + API Gateway implementing the GitHub OAuth handshake Decap requires. |
+| `.github/workflows/` | CI/CD: deploy-production, deploy-preview, e2e-tests, visual-regression, cms-editorial-workflow, publish-scheduled-posts. |
+| `scripts/` | Build-time helpers (`patch-preview-config.sh`, `setup-test-environment.sh`, `write-commit-json.sh`, `generate-showcase.js`, etc.). |
+| `docs/` | Long-form documentation: [`CONTENT_GUIDE.md`](docs/CONTENT_GUIDE.md), [`TESTING.md`](docs/TESTING.md). |
+
+## Branching Strategy (visual)
 
 ```
-main                    ← production (deploys automatically)
-  └─ cms/draft-*        ← created by Decap CMS editorial workflow
-      └─ PR opened      ← preview URL deployed, content validated
-          └─ cms/ready  ← auto-merged to main, preview cleaned up
+main                                  ← production (deploys automatically)
+ ├─ feature/*                         ← code changes (e.g. restore-decap-cms)
+ │   └─ cms/<collection>/<slug>       ← CMS edits made on the feature's preview admin
+ │                                     (preview-only — don't carry to main)
+ └─ cms/<collection>/<slug>           ← CMS edits made on adamdaniel.ai/admin/
+     └─ PR opened, cms/draft applied  ← preview URL deployed, regression video posted
+         └─ cms/ready                 ← auto-merged to main, preview cleaned up
 ```

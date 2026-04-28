@@ -1,14 +1,19 @@
 name: CMS Editorial Workflow
 
-# Triggered when Sveltia CMS opens or updates a PR for a draft post.
-# This workflow validates the content and sets PR labels to drive the
-# draft → review → ready pipeline.
+# Triggered when Decap CMS opens or updates a PR for a draft entry.
+# Validates the content, applies cms/draft on open, and on PRs whose
+# base isn't main also applies cms/preview-only — flagging that the
+# content edit lives on a feature branch's preview tree and is not
+# meant to flow to production.
+#
+# No `branches:` filter — Decap creates `cms/...` PRs against whatever
+# `backend.branch` is configured to. On adamdaniel.ai/admin/ that's
+# main; on preview-pr<N>.adamdaniel.ai/admin/ that's the PR's head
+# ref (set by scripts/patch-preview-config.sh).
 
 on:
   pull_request:
     types: [opened, synchronize, labeled]
-    branches:
-      - main
     paths:
       - '_posts/**'
       - '_projects/**'
@@ -94,11 +99,30 @@ jobs:
               });
             } catch (_) {}
 
+            var labels = ['cms/draft'];
+
+            // Mark CMS PRs whose base isn't `main` as preview-only — they
+            // exist to demonstrate / test the parent feature branch's
+            // changes against real content, and the content edit itself
+            // is not meant to flow to main when the feature merges.
+            if (context.payload.pull_request.base.ref !== 'main') {
+              try {
+                await github.rest.issues.createLabel({
+                  owner: context.repo.owner,
+                  repo:  context.repo.repo,
+                  name:  'cms/preview-only',
+                  color: 'f5a623',
+                  description: 'CMS edit made on a feature-branch preview — drop this content from the parent branch when it merges to main',
+                });
+              } catch (_) {}
+              labels.push('cms/preview-only');
+            }
+
             await github.rest.issues.addLabels({
               owner: context.repo.owner,
               repo:  context.repo.repo,
               issue_number: context.payload.pull_request.number,
-              labels: ['cms/draft'],
+              labels: labels,
             });
 
   auto-merge-when-ready:

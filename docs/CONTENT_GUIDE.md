@@ -109,10 +109,61 @@ The body field's hint reminds you of these URLs while you write.
 
 ## 5. Save → review → publish
 
-Hit **Save**. Decap routes you to the unpublished-entries view so
-you can keep editing the same entry while it's in review.
+### Status vs. Published — they gate two different things
 
-The editorial workflow is enabled, so each Save:
+The Decap toolbar shows a **Status** dropdown (Draft / In Review / Ready)
+and the post form has a **Published** toggle field. They look similar.
+They aren't.
+
+| Dimension | What it controls | Where it lives |
+|---|---|---|
+| **Status** (Draft / In Review / Ready) | Whether the *PR* gets merged into its base branch | Decap's editorial workflow — translates to the `cms/draft` / `cms/ready` PR labels in `cms-editorial-workflow.yml`. Auto-merge fires on `cms/ready`. |
+| **Published** toggle | Whether the *post*, once on its base branch, is rendered on the live site | A custom front-matter field. Jekyll filters `published: false` out of `site.posts` at build time. |
+
+Mental model:
+
+- **Status** = "is this *change* ready?"
+- **Published** = "should this *post* be visible right now?"
+
+A summary version of this table lives in [`README.md`](../README.md);
+the cases below are the editor-facing detail.
+
+#### Editing on `main` (the normal case)
+
+When you edit a post via `/admin/` on the production site
+(`adamdaniel.ai/admin/`), Decap creates a `cms/<collection>/<slug>`
+branch off `main` and opens a PR back into `main`.
+
+| Status | Published | Result |
+|---|---|---|
+| Draft / In Review | OFF or ON | PR open against `main`, not merged. Nothing on the live site. |
+| Ready | OFF | PR auto-merges into `main`. Post sits in the repo on `main` but **stays hidden** on the live site. |
+| Ready | ON | PR auto-merges into `main`. Post goes live on the next deploy (~1 min). |
+| Ready | OFF + Publish Date set | PR auto-merges into `main`. Post stays hidden until the daily 14:00 UTC cron flips Published=ON when the date arrives. Hands-off scheduled publishing. |
+
+#### Editing on a preview branch (e.g. PR #48 = `restore-decap-cms`)
+
+When you edit a post via the **preview admin** at
+`preview-pr<N>.adamdaniel.ai/admin/`, the deploy-preview workflow has
+patched `backend.branch` to point at that PR's head ref (e.g.
+`restore-decap-cms`). So Decap creates `cms/<collection>/<slug>` off
+`restore-decap-cms` and PRs into `restore-decap-cms` — **not** `main`.
+
+| Status | Published | Result |
+|---|---|---|
+| Draft / In Review | OFF or ON | PR open against the preview branch. Visible only on `preview-pr<N>`. |
+| Ready | OFF or ON | PR auto-merges into the preview branch. The change shows up on `preview-pr<N>.adamdaniel.ai` once the preview redeploys (~1 min). **Does not affect production.** |
+
+Important: **content edits made on a preview branch are not meant to
+flow to production.** They exist to demonstrate / test the preview's
+changes against real content. When the preview branch itself
+eventually merges into `main`, drop those content edits from the
+merge — keep only the structural / code changes the preview was
+opened for. The admin's commit pill in the top-right shows the
+current backend branch when it's not `main`, so you can spot at a
+glance that you're editing on a preview.
+
+### What Save actually does
 
 1. **A pull request is opened** on its own branch — your changes are *not*
    pushed straight to production.
@@ -200,7 +251,7 @@ uploaded image:
 | "Login with GitHub" loops back to the login screen | Browser blocked third-party cookies for the OAuth proxy | Allow cookies for `*.execute-api.us-east-1.amazonaws.com`, or use a different browser |
 | `+ Create` button missing on a folder collection | Either you're not signed in (Decap hides write affordances when there's no GitHub token), or someone removed `create: true` / `delete: true` from `admin/config.yml` | Sign out and back in; verify the config has both flags explicitly set |
 | Saved a post but it's not on the live site | **Published** toggle is OFF (draft), or the PR hasn't been approved yet (editorial workflow) | Either flip Published to ON, or finish the review flow: change the PR label from `cms/draft` to `cms/ready` and approve the visual regression in the dashboard |
-| Scheduled post never went live | **Published** is ON (so the date is ignored), or the publish date is in the future, or the hourly cron hasn't run yet | Confirm Published is OFF and the timestamp is in the past UTC |
+| Scheduled post never went live | **Published** is ON (so the date is ignored), or the publish date is in the future, or the daily cron hasn't run yet (runs at 14:00 UTC = 9–10am ET) | Confirm Published is OFF and the timestamp is in the past UTC |
 | `/preview/` tab isn't updating | The two tabs aren't on the same origin | Open the preview from `https://adamdaniel.ai/preview/...` (or the same `preview-pr<N>` host you logged into the CMS on), not localhost or a different subdomain |
 | Tag pill on a post doesn't link to a styled page | Either the tag is brand-new (auto-generated archive pages have an empty description) or there's a typo | Add a `_tags/<slug>.md` entry in the Tags collection if you want a description; otherwise the page works as-is |
 | Reviews dashboard hangs on "Completing authorisation…" | Old version of `admin/reviews/index.html` that doesn't echo back the OAuth handshake | Hard-refresh the dashboard tab; the fix landed in commit `50779fd` |

@@ -160,14 +160,20 @@
           var dateLabel = d
             ? d.toLocaleString('en-US', { dateStyle: 'short', timeStyle: 'short' })
             : '';
+          var isPreview = c.branch && c.branch !== 'main';
           var a = document.createElement('a');
           a.id = 'cms-commit-pill';
           a.href = REPO_URL + '/commit/' + c.sha;
           a.target = '_blank';
           a.rel = 'noopener';
           a.title = 'Deployed commit — opens on GitHub';
-          a.textContent = c.sha.slice(0, 7) + (dateLabel ? '  ' + dateLabel : '');
-          a.style.cssText = 'position:fixed;top:60px;right:12px;z-index:10000;padding:0.25rem 0.55rem;background:rgba(4,6,15,0.85);border:1px solid #1a2a5e;border-radius:4px;color:#8ab0e8;font-family:"SF Mono","Fira Code",monospace;font-size:0.7rem;letter-spacing:0.04em;text-decoration:none;';
+          a.innerHTML = (isPreview
+            ? '<span style="color:#f5a623;font-weight:600;margin-right:0.5em">PREVIEW: ' +
+                String(c.branch).replace(/[<>&"']/g, '') + '</span>'
+            : '') +
+            '<span>' + c.sha.slice(0, 7) +
+            (dateLabel ? '  ' + dateLabel : '') + '</span>';
+          a.style.cssText = 'position:fixed;top:60px;right:12px;z-index:10000;padding:0.25rem 0.55rem;background:rgba(4,6,15,0.85);border:1px solid ' + (isPreview ? '#f5a623' : '#1a2a5e') + ';border-radius:4px;color:#8ab0e8;font-family:"SF Mono","Fira Code",monospace;font-size:0.7rem;letter-spacing:0.04em;text-decoration:none;';
           document.body.appendChild(a);
         })
         .catch(function () {});
