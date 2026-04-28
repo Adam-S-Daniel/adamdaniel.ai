@@ -131,13 +131,14 @@ Run the test stack:
   npx playwright test --project chromium-desktop # single-browser run
   npx playwright test e2e/cms-smoke.spec.js      # Decap admin save/delete
   bundle exec jekyll build                       # site build
-  cd oauth-proxy && .venv/bin/pytest test_lambda.py -v
-  bundle exec ruby _plugins_test/auto_tag_pages_test.rb     # Jekyll plugin unit tests
+  cd oauth-proxy && python3 -m pytest test_lambda.py -v   # OAuth proxy
+  bundle exec ruby _plugins_test/auto_tag_pages_test.rb   # Jekyll plugin unit tests
 
 Notes:
-  - The bundler `path` was set to `vendor/bundle/` so gems live alongside
+  - The bundler `path` is set to `vendor/bundle/` so gems live alongside
     the repo. Delete that directory to fully reset the Ruby env.
-  - The Python tests use a project-local venv at oauth-proxy/.venv. Activate
-    it with `source oauth-proxy/.venv/bin/activate` if you prefer.
+  - If your system python doesn't have pytest, this script created a
+    venv at oauth-proxy/.venv — use `oauth-proxy/.venv/bin/pytest` in
+    that case (or `source oauth-proxy/.venv/bin/activate`).
 ────────────────────────────────────────────────────────────────────────
 EOF

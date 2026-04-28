@@ -147,7 +147,7 @@ npx playwright test e2e/cms-smoke.spec.js --project chromium-desktop
 
 # Other suites
 bundle exec ruby _plugins_test/auto_tag_pages_test.rb   # Jekyll plugin unit tests
-cd oauth-proxy && .venv/bin/pytest test_lambda.py -v    # OAuth proxy Lambda tests
+cd oauth-proxy && python3 -m pytest test_lambda.py -v   # OAuth proxy Lambda tests
 ```
 
 ## Branching Strategy
