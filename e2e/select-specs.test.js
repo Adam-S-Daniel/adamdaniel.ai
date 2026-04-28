@@ -34,24 +34,14 @@ test.describe("select-specs", () => {
     expect(r.scope).toBe("all");
   });
 
-  test("test helper change → fanout (cms-test-helpers.js touches all CMS specs)", () => {
-    const r = selectSpecs(["e2e/cms-test-helpers.js"]);
-    expect(r.scope).toBe("all");
-  });
-
   test("single post change → posts-related specs only", () => {
     const r = selectSpecs(["_posts/2026-04-25-something.md"]);
     expect(r.scope).toBe("subset");
-    expect(r.files).toContain("e2e/admin-cms.spec.js");
-    expect(r.files).toContain("e2e/cms-posts-crud.spec.js");
+    expect(r.files).toContain("e2e/cms-smoke.spec.js");
     expect(r.files).toContain("e2e/blog-post.spec.js");
     expect(r.files).toContain("e2e/visual-regression.spec.js");
     // CMS preview-url is post-specific
     expect(r.files).toContain("e2e/cms-preview-url.spec.js");
-    // Tags / projects / pages CRUD aren't relevant
-    expect(r.files).not.toContain("e2e/cms-tags-crud.spec.js");
-    expect(r.files).not.toContain("e2e/cms-projects-crud.spec.js");
-    expect(r.files).not.toContain("e2e/cms-pages-crud.spec.js");
     // Infrastructure isn't relevant
     expect(r.files).not.toContain("e2e/cloudfront-preview-router.spec.js");
     // Always-run baseline included
@@ -76,12 +66,9 @@ test.describe("select-specs", () => {
   test("admin/config.yml change → CMS specs only", () => {
     const r = selectSpecs(["admin/config.yml"]);
     expect(r.scope).toBe("subset");
-    expect(r.files).toContain("e2e/admin-cms.spec.js");
+    expect(r.files).toContain("e2e/cms-smoke.spec.js");
     expect(r.files).toContain("e2e/cms-config.spec.js");
-    expect(r.files).toContain("e2e/cms-posts-crud.spec.js");
-    expect(r.files).toContain("e2e/cms-tags-crud.spec.js");
-    expect(r.files).toContain("e2e/cms-projects-crud.spec.js");
-    expect(r.files).toContain("e2e/cms-pages-crud.spec.js");
+    expect(r.files).toContain("e2e/cms-preview-url.spec.js");
     // Layouts aren't touched, so no fanout to e.g. CloudFront specs.
     expect(r.files).not.toContain("e2e/cloudfront-preview-router.spec.js");
   });
@@ -116,14 +103,15 @@ test.describe("select-specs", () => {
     expect(r.scope).toBe("all");
   });
 
-  test("mixed: tag + post change → both groups", () => {
+  test("mixed: tag + post change → CMS smoke + blog/tags page specs", () => {
     const r = selectSpecs([
       "_tags/python.md",
       "_posts/2026-01-01-hi.md",
     ]);
     expect(r.scope).toBe("subset");
-    expect(r.files).toContain("e2e/cms-tags-crud.spec.js");
-    expect(r.files).toContain("e2e/cms-posts-crud.spec.js");
+    expect(r.files).toContain("e2e/cms-smoke.spec.js");
+    expect(r.files).toContain("e2e/blog-post.spec.js");
+    expect(r.files).toContain("e2e/tags.spec.js");
   });
 
   test("disableSkip: docs change still runs baseline rather than skip", () => {

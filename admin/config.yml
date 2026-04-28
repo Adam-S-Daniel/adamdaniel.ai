@@ -1,5 +1,5 @@
 # ============================================================
-# Sveltia CMS Configuration
+# Decap CMS Configuration
 # ============================================================
 
 backend:
@@ -23,8 +23,8 @@ site_url: https://adamdaniel.ai
 display_url: https://adamdaniel.ai
 logo_url: https://adamdaniel.ai/assets/images/logo.svg
 
-# Custom CSS — applies the cobalt thermal theme to the CMS shell
-custom_css: custom.css
+# Cobalt-thermal theme: Decap doesn't support a `custom_css` config key,
+# so admin/index.html and admin/index-local.html link `custom.css` directly.
 
 # Media library
 # Bucket uploads by year/month so the picker stays browsable as the archive
@@ -52,9 +52,12 @@ collections:
     folder: _posts
     create: true
     delete: true
-    slug: "{{year}}-{{month}}-{{day}}-{{fields.slug | default('{{fields.title}}') | slugify}}"
-    preview_path: "/blog/{{fields.slug | default('{{fields.title}}') | slugify}}/"
-    summary: "{{title}} ({{date | date('MMM D, YYYY')}}){% if publish_date %} — Scheduled{% endif %}"
+    # Decap auto-derives `{{slug}}` from the `slug` field if present, falling
+    # back to `title`. The YYYY-MM-DD prefix is required by Jekyll's `_posts/`
+    # collection but is stripped from the live URL by `permalink: /blog/:slug/`.
+    slug: "{{year}}-{{month}}-{{day}}-{{slug}}"
+    preview_path: "/blog/{{slug}}/"
+    summary: "{{title}} ({{date | date('MMM D, YYYY')}}){{publish_date | ternary(' — Scheduled', '')}}"
     sortable_fields:
       - date
       - title
@@ -164,7 +167,7 @@ collections:
     delete: true
     slug: "{{slug}}"
     preview_path: /projects/{{slug}}/
-    summary: "{{title}}{% if featured %} ⭐{% endif %}"
+    summary: "{{title}}{{featured | ternary(' ⭐', '')}}"
     sortable_fields:
       - title
     view_filters:

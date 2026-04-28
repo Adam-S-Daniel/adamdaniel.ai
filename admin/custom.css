@@ -1,11 +1,13 @@
 /*
- * Sveltia CMS — Cobalt Thermal Theme
+ * Decap CMS — Cobalt Thermal Theme
  * Matches the adamdaniel.ai visual identity: deep navy/cobalt, minimal,
- * with a subtle breathing glow animation.
+ * with a subtle breathing glow animation. Linked from admin/index.html
+ * and admin/index-local.html (Decap has no `custom_css` config option).
  *
- * Sveltia CMS renders its root in the <body> as custom elements.
- * CSS variables declared here flow into the component tree and
- * override the default light-mode palette.
+ * Decap renders its root into <body>; the `.nc-`-prefixed selectors
+ * below come from Decap's compiled className output. Overrides applied
+ * to those classes win because Decap's CSS-in-JS injects with lower
+ * specificity than a real stylesheet.
  */
 
 /* ── Design token overrides ─────────────────────── */
@@ -87,7 +89,7 @@ body {
   background: #285aff;
 }
 
-/* ── Sveltia CMS shell elements ─────────────────── */
+/* ── Decap CMS shell elements ─────────────────── */
 
 /* App chrome */
 #nc-root,
@@ -349,7 +351,7 @@ h1, h2, h3, h4, h5, h6 {
   letter-spacing: 0.02em;
 }
 
-/* ── Sveltia CMS top navigation brand ──────────── */
+/* ── Decap CMS top navigation brand ──────────── */
 
 /* Pulse animation on the primary action elements */
 @keyframes cobalt-glow {

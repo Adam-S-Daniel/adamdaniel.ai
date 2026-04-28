@@ -1,5 +1,5 @@
 # ============================================================
-# Sveltia CMS — LOCAL DEVELOPMENT CONFIG
+# Decap CMS — LOCAL DEVELOPMENT CONFIG
 # Uses decap-server proxy — no GitHub OAuth needed
 # Run:  npx decap-server   (from repo root, port 8081)
 # ============================================================
@@ -14,7 +14,8 @@ backend:
 site_url: http://localhost:4000
 display_url: http://localhost:4000
 
-custom_css: custom.css
+# Cobalt-thermal theme is linked from admin/index-local.html (Decap has no
+# `custom_css` config option).
 
 media_folder: "assets/images/uploads/{{year}}/{{month}}"
 public_folder: /assets/images/uploads
@@ -27,9 +28,9 @@ collections:
     folder: _posts
     create: true
     delete: true
-    slug: "{{year}}-{{month}}-{{day}}-{{fields.slug | default('{{fields.title}}') | slugify}}"
-    preview_path: "/blog/{{fields.slug | default('{{fields.title}}') | slugify}}/"
-    summary: "{{title}} ({{date | date('MMM D, YYYY')}}){% if publish_date %} — Scheduled{% endif %}"
+    slug: "{{year}}-{{month}}-{{day}}-{{slug}}"
+    preview_path: "/blog/{{slug}}/"
+    summary: "{{title}} ({{date | date('MMM D, YYYY')}}){{publish_date | ternary(' — Scheduled', '')}}"
     sortable_fields:
       - date
       - title
@@ -120,7 +121,7 @@ collections:
     delete: true
     slug: "{{slug}}"
     preview_path: /projects/{{slug}}/
-    summary: "{{title}}{% if featured %} ⭐{% endif %}"
+    summary: "{{title}}{{featured | ternary(' ⭐', '')}}"
     fields:
       - name: title
         label: Title

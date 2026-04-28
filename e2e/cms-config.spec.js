@@ -2,7 +2,7 @@ const fs = require("node:fs");
 const path = require("node:path");
 const { test, expect } = require("./base");
 
-// Locks in the editor-experience invariants of the Sveltia CMS configs.
+// Locks in the editor-experience invariants of the Decap CMS configs.
 // These properties together close the gaps documented in the content-workflow
 // review: drafts go through PRs (not straight to main), the auto-overwritten
 // reading_time field doesn't waste editor time, the precedence between
@@ -53,7 +53,7 @@ function findField(collectionChunk, fieldName) {
   return null;
 }
 
-test.describe("Sveltia CMS config invariants", () => {
+test.describe("Decap CMS config invariants", () => {
   test.describe.configure({ mode: "serial" });
 
   for (const configPath of CONFIGS) {
@@ -81,10 +81,10 @@ test.describe("Sveltia CMS config invariants", () => {
       const posts = findCollection(yml, "posts");
       const tags = findField(posts, "tags");
       expect(tags, "posts.tags field must exist").not.toBeNull();
-      // The relation widget (Decap/Sveltia) only picks from existing entries
-      // — inline creation requires switching to a list-of-strings widget.
-      // The auto_tag_pages plugin generates archive pages for any string tag,
-      // so we don't need a curated `_tags/` entry up front.
+      // Decap's relation widget only picks from existing entries —
+      // inline creation requires the list-of-strings widget. The
+      // auto_tag_pages plugin generates archive pages for any string
+      // tag, so we don't need a curated `_tags/` entry up front.
       expect(tags).toMatch(/widget:\s*list/);
       expect(tags).not.toMatch(/widget:\s*relation/);
     });
@@ -124,9 +124,8 @@ test.describe("Sveltia CMS config invariants", () => {
   // ── Editor capability invariants ─────────────────────────────────────
   //
   // These lock in *what an editor can do* per collection — create new
-  // entries, delete existing ones, attach images, etc. — without going
-  // through Sveltia's UI. If a future config edit removes a capability
-  // by accident, these tests fail fast.
+  // entries, delete existing ones, attach images, etc. If a future
+  // config edit removes a capability by accident, these tests fail fast.
 
   for (const configPath of CONFIGS) {
     const label = path.relative(REPO_ROOT, configPath);
@@ -135,9 +134,9 @@ test.describe("Sveltia CMS config invariants", () => {
       const yml = readConfig(configPath);
       // Tags / Posts / Projects / Pages must all be folder collections
       // with create + delete explicitly true so editors get the full
-      // CRUD affordances in the Sveltia UI. Implicit defaults are not
-      // safe to rely on — Sveltia doesn't render the toolbar when the
-      // flag isn't set, even though Decap historically defaults it on.
+      // CRUD affordances in the Decap UI. Spelling them out keeps the
+      // intent visible in the YAML — defaults can shift between major
+      // versions.
       for (const name of ["posts", "tags", "projects", "pages"]) {
         const chunk = findCollection(yml, name);
         expect(chunk, `${name} collection must exist`).not.toBeNull();
@@ -162,9 +161,9 @@ test.describe("Sveltia CMS config invariants", () => {
       const projects = findCollection(yml, "projects");
       const images = findField(projects, "images");
       expect(images, "projects.images field must exist").not.toBeNull();
-      // List widget with a nested image field — the standard Decap/
-      // Sveltia recipe for "an ordered, repeatable image gallery"
-      // (drag-to-reorder, individual remove).
+      // List widget with a nested image field — the standard Decap
+      // recipe for "an ordered, repeatable image gallery" (drag-to-
+      // reorder, individual remove).
       expect(images).toMatch(/widget:\s*list/);
       expect(images).toMatch(/widget:\s*image/);
     });

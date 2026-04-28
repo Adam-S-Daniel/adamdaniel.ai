@@ -4,8 +4,8 @@ const { test, expect } = require("./base");
 
 // Unit-style tests for admin/preview-bridge.js against a stubbed window.CMS.
 // This covers the bridge's contract — "register a postSave listener, and
-// broadcast entry data on save" — without booting Sveltia, so it runs in
-// under a second and is immune to Sveltia DOM churn. The companion
+// broadcast entry data on save" — without booting Decap, so it runs in
+// under a second and is immune to Decap DOM churn. The companion
 // admin-cms-preview.spec.js exercises the real editor integration.
 
 const BRIDGE_PATH = path.join(__dirname, "..", "admin", "preview-bridge.js");
@@ -21,7 +21,7 @@ async function loadBridgeHarness(page) {
       // tab to be the "admin" side of the bridge, not a preview receiver.
       window.stop();
 
-      // Stub a minimal Sveltia-compatible CMS global. registerEventListener
+      // Stub a minimal Decap-compatible CMS global. registerEventListener
       // captures handlers; tests invoke them directly to simulate saves.
       window.__capturedListeners = {};
       window.CMS = {
@@ -52,7 +52,7 @@ test.describe("admin preview bridge", () => {
     );
   });
 
-  test("registers a postSave event listener with Sveltia", async ({ page }) => {
+  test("registers a postSave event listener with Decap", async ({ page }) => {
     await loadBridgeHarness(page);
     const registered = await page.evaluate(() =>
       Object.keys(window.__capturedListeners),
@@ -81,7 +81,7 @@ test.describe("admin preview bridge", () => {
     });
 
     // Simulate a save via the captured handler. The `entry` arg mirrors
-    // Sveltia's shape: an Immutable-like Map with .get()/.getIn()/.toJS().
+    // Decap's shape: an Immutable-like Map with .get()/.getIn()/.toJS().
     await page.evaluate(() => {
       const mockEntry = {
         data: {

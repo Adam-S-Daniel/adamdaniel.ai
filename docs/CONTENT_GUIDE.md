@@ -109,10 +109,8 @@ The body field's hint reminds you of these URLs while you write.
 
 ## 5. Save → review → publish
 
-Hit **Save**. With this site's defaults, Sveltia **stays on the entry
-you're editing** instead of routing back to the collection list, so
-you can iterate without losing your place. (You can flip this in
-Sveltia's own preferences if you'd rather it close on save.)
+Hit **Save**. Decap routes you to the unpublished-entries view so
+you can keep editing the same entry while it's in review.
 
 The editorial workflow is enabled, so each Save:
 
@@ -200,7 +198,7 @@ uploaded image:
 | Symptom | Likely cause | Fix |
 |---|---|---|
 | "Login with GitHub" loops back to the login screen | Browser blocked third-party cookies for the OAuth proxy | Allow cookies for `*.execute-api.us-east-1.amazonaws.com`, or use a different browser |
-| `+ Create` button missing on a folder collection | Either you're not signed in (Sveltia hides write affordances when there's no GitHub token), or someone removed `create: true` / `delete: true` from `admin/config.yml` | Sign out and back in; verify the config has both flags explicitly set |
+| `+ Create` button missing on a folder collection | Either you're not signed in (Decap hides write affordances when there's no GitHub token), or someone removed `create: true` / `delete: true` from `admin/config.yml` | Sign out and back in; verify the config has both flags explicitly set |
 | Saved a post but it's not on the live site | **Published** toggle is OFF (draft), or the PR hasn't been approved yet (editorial workflow) | Either flip Published to ON, or finish the review flow: change the PR label from `cms/draft` to `cms/ready` and approve the visual regression in the dashboard |
 | Scheduled post never went live | **Published** is ON (so the date is ignored), or the publish date is in the future, or the hourly cron hasn't run yet | Confirm Published is OFF and the timestamp is in the past UTC |
 | `/preview/` tab isn't updating | The two tabs aren't on the same origin | Open the preview from `https://adamdaniel.ai/preview/...` (or the same `preview-pr<N>` host you logged into the CMS on), not localhost or a different subdomain |

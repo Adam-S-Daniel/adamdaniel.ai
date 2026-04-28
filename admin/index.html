@@ -4,18 +4,18 @@
   <meta charset="utf-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1.0" />
   <title>Content Manager — Adam Daniel</title>
+  <link rel="stylesheet" href="custom.css">
   <style>
     /*
-     * Cobalt Thermal theme injected before Sveltia CMS loads.
-     * These CSS variables and selectors target the Sveltia CMS shell layer,
-     * which lives outside the shadow DOM boundary.
+     * Cobalt Thermal theme injected before Decap CMS loads.
+     * Design tokens flow into the CMS app via CSS variables.
      */
 
     /* Force dark mode globally */
     :root {
       color-scheme: dark;
 
-      /* Sveltia CMS exposes these design tokens */
+      /* Design tokens — overlap with Decap's variable names */
       --primary-color: #285aff;
       --primary-color-dark: #1a3abf;
       --primary-color-light: rgba(40, 90, 255, 0.15);
@@ -74,9 +74,9 @@
       100% { opacity: 0.5;  transform: scale(1.3); }
     }
 
-    /* The Sveltia CMS app root sits above the ambient layer */
+    /* The Decap CMS app root sits above the ambient layer */
     #nc-root,
-    sveltia-cms,
+    [class*="nc-app"],
     [id^="cms"],
     .cms-wrapper {
       position: relative;
@@ -174,7 +174,7 @@
 </head>
 <body>
 
-  <!-- Custom loading screen shown while Sveltia CMS initialises -->
+  <!-- Custom loading screen shown while Decap CMS initialises -->
   <div id="cms-loading">
     <div class="cms-loading-name">Adam Daniel</div>
     <div class="cms-loading-bar"><div class="cms-loading-bar-fill"></div></div>
@@ -186,45 +186,25 @@
     Reviews
   </a>
 
-  <script>
-    // Pre-seed Sveltia's user prefs before the bundle boots so that
-    // hitting Save in the editor stays on the entry-edit form instead
-    // of routing back to the collection list. The default Sveltia
-    // behaviour (closeOnSave=true) is jarring when iterating on a
-    // post — every Save costs a navigation. Editors can still toggle
-    // this in Sveltia's own preferences UI; we only set the default
-    // for the first visit.
-    //
-    // Storage shape: localStorage key `sveltia-cms.prefs` → JSON
-    // object. Preserve any existing keys; only fill closeOnSave when
-    // the editor hasn't expressed a preference yet.
-    (function () {
-      try {
-        var KEY = 'sveltia-cms.prefs';
-        var raw = localStorage.getItem(KEY);
-        var prefs = raw ? JSON.parse(raw) : {};
-        if (typeof prefs.closeOnSave === 'undefined') {
-          prefs.closeOnSave = false;
-          localStorage.setItem(KEY, JSON.stringify(prefs));
-        }
-      } catch (_) { /* localStorage disabled — leave Sveltia's defaults in place */ }
-    })();
-  </script>
-
-  <!-- Sveltia CMS -->
-  <script src="https://unpkg.com/@sveltia/cms/dist/sveltia-cms.js" type="module"></script>
+  <!--
+    Decap CMS — pinned to a major version. Editorial workflow + the
+    GitHub backend with our custom OAuth proxy (`base_url` +
+    `auth_endpoint` in admin/config.yml) drive the cms/<branch> →
+    PR → preview → merge pipeline documented in AGENTS.md.
+  -->
+  <script src="https://unpkg.com/decap-cms@^3.12.0/dist/decap-cms.js"></script>
 
   <!-- Live Preview bridge: broadcasts entry data on every save to any
-       open /preview/ tab. Loads after Sveltia so `window.CMS` exists. -->
+       open /preview/ tab. Loads after Decap so `window.CMS` exists. -->
   <script src="preview-bridge.js" defer></script>
 
   <script>
-    // Hide the loading overlay once Sveltia CMS fires its ready event
+    // Hide the loading overlay once Decap CMS fires its ready event
     document.addEventListener('DOMContentLoaded', function () {
       var loading = document.getElementById('cms-loading');
 
-      // Sveltia CMS dispatches a custom 'load' event on the window
-      // and renders into the body; we watch for the app root to appear.
+      // Decap renders its app root into the body; watch for the
+      // first child element to appear and fade out the splash.
       var observer = new MutationObserver(function (mutations) {
         for (var m of mutations) {
           for (var node of m.addedNodes) {

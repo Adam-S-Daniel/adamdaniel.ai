@@ -308,7 +308,7 @@
       const popup = window.open(OAUTH_URL, 'github-auth',
         `width=${w},height=${h},left=${left},top=${top}`);
 
-      // Decap / Sveltia / Netlify CMS handshake. The OAuth proxy popup
+      // Decap / Netlify CMS handshake. The OAuth proxy popup
       // (oauth-proxy/lambda.py) won't release the token until it sees the
       // opener echo back its "authorizing:<provider>" message. Skipping the
       // reply leaves the popup spinning on "Completing authorisation…"

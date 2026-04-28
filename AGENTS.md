@@ -1,13 +1,13 @@
 # adamdaniel.ai — Project Guide
 
-Personal website and blog for Adam Daniel (Freelance AI Engineer). Jekyll static site with Sveltia CMS, AWS OAuth proxy, and PR preview environments.
+Personal website and blog for Adam Daniel (Freelance AI Engineer). Jekyll static site with Decap CMS, AWS OAuth proxy, and PR preview environments.
 
 ## Architecture
 
 ```
 Production:   adamdaniel.ai                     → CloudFront → S3
 Preview:      preview-pr${N}.adamdaniel.ai      → CloudFront → S3 (/pr-${N}/)
-CMS:          adamdaniel.ai/admin/              → Sveltia CMS → GitHub OAuth → Lambda
+CMS:          adamdaniel.ai/admin/              → Decap CMS → GitHub OAuth → Lambda
 ```
 
 Each PR gets its own subdomain under `*.adamdaniel.ai`. A single
@@ -69,9 +69,9 @@ npx playwright test e2e/glow-banding.spec.js       # single test file
 | Projects | `_projects/` | folder | title, technology, url_link, featured, images (gallery) |
 | Pages | `pages/` | folder | title, body, permalink, published (was `files:` until PR #33) |
 
-Every folder collection in `admin/config*.yml` ships with **explicit** `create: true` AND `delete: true`. Sveltia hides the toolbar create/delete affordances when either flag isn't set, even though Decap historically defaults them on. `files:` collections never expose create/delete in Sveltia regardless of flags — confirmed in `src/lib/components/contents/contents-page.svelte` (the SecondaryToolbar is gated on `_type === 'entry'`) and `src/lib/components/contents/list/file-list.svelte` (the FileList row only navigates).
+Every folder collection in `admin/config*.yml` ships with **explicit** `create: true` AND `delete: true`. Decap defaults both to true, but spelling them out keeps editor capabilities visible in the YAML and survives any future major-version default change. The `cms-config.spec.js` invariants enforce this.
 
-`admin/index.html` and `admin/index-local.html` pre-seed `localStorage["sveltia-cms.prefs"]` with `closeOnSave: false` before the bundle loads. Sveltia's default is `closeOnSave: true` (route back to the collection list after every Save), which is jarring when iterating on a single entry. The pre-seed only sets the default for first-time visitors; editors can still override via Sveltia's preferences UI.
+The earlier Sveltia CMS bundle silently ignored `publish_mode: editorial_workflow` (the upstream feature is unimplemented as of 0.158), so every Save tried to commit straight to `main` and got rejected by GitHub's branch ruleset with "Repository rule violations found / Changes must be made through a pull request." Switching back to Decap fixed both Save and Delete because Decap implements the editorial workflow: each Save lands on a `cms/...` branch and opens a PR. See PR history for the swap commit.
 
 `reading_time` is computed at build time (word count ÷ 200 + 1) — there is no editor-facing field.
 
@@ -85,13 +85,13 @@ Editors get a WYSIWYG preview of the page they're editing without publishing. Th
 
 - `preview.md` → `/preview/` — a Jekyll page that uses `_layouts/preview.html`. Accepts `?collection=posts|pages|projects` to pick the layout shell.
 - `_layouts/preview.html` — hosts the three layout variants, picks one at runtime, and listens for draft content via `window.postMessage` and a `BroadcastChannel("adamdaniel-cms-preview")`.
-- `admin/preview-bridge.js` — loaded after Sveltia in both `admin/index.html` and `admin/index-local.html`. Registers a `postSave` event listener with Sveltia's public API (`CMS.registerEventListener`) and broadcasts entry data on every save.
+- `admin/preview-bridge.js` — loaded after Decap in both `admin/index.html` and `admin/index-local.html`. Registers a `postSave` event listener with Decap's public API (`CMS.registerEventListener`) and broadcasts entry data on every save.
 
 **Flow:** editor opens `/preview/` in a second tab (or snaps it side-by-side with the admin) → edits in the CMS → hits Save → every open preview tab updates within a frame. Same-origin only: `BroadcastChannel` is origin-scoped and the `postMessage` listener rejects foreign origins.
 
 **Markdown:** rendered client-side via [marked](https://marked.js.org/) v13. The preview layout loads marked from unpkg with a synchronous `document.write` fallback to `assets/js/marked.min.js` when the CDN is unreachable — so the markup is identical in dev and prod. Minor fidelity gap vs. kramdown (footnotes, attribute lists); acceptable for an editor preview.
 
-**Not supported upstream yet:** Sveltia CMS ≤ 0.x doesn't expose `registerPreviewTemplate` (planned for 1.0). Until then we don't get per-keystroke live; the bridge uses `postSave` which fires on every save — including auto-saves — so the preview still feels live.
+**Per-keystroke updates:** the bridge uses Decap's `postSave` event, which fires on every save (including auto-saves), not on every keystroke. Decap also exposes `CMS.registerPreviewTemplate` for inline previews — we don't use it because the `/preview/` real-layout approach renders with the actual Jekyll layouts, which an inline preview can't match without duplicating the layout HTML.
 
 ## Workflows
 
@@ -123,7 +123,7 @@ Editors get a WYSIWYG preview of the page they're editing without publishing. Th
 #### Job: `deploy-preview` (when action ≠ `closed`)
 
 1. Build Jekyll with no `--baseurl` → `./_site_preview/` (URLs are root-relative; the subdomain already isolates each PR)
-2. Run `scripts/patch-preview-config.sh` on `_site_preview/admin/config.yml` to point Sveltia at the preview subdomain and the PR's head branch
+2. Run `scripts/patch-preview-config.sh` on `_site_preview/admin/config.yml` to point Decap at the preview subdomain and the PR's head branch
 3. AWS OIDC auth via `AWS_ROLE_ARN`
 4. `aws s3 sync` → `s3://adamdaniel-ai-previews/pr-{N}/` with `no-cache` headers (S3 layout unchanged; CloudFront Function maps host → prefix)
 5. CloudFront invalidation at `/pr-{N}/*` (skipped if `PREVIEW_CLOUDFRONT_ID` not set)
@@ -131,7 +131,7 @@ Editors get a WYSIWYG preview of the page they're editing without publishing. Th
 
 URL shown in comment:
 - With `PREVIEW_CLOUDFRONT_ID`: `https://preview-pr{N}.adamdaniel.ai/`
-- Without: `http://adamdaniel-ai-previews.s3-website-us-east-1.amazonaws.com/pr-{N}/` (HTTP fallback — Sveltia CMS won't work over this)
+- Without: `http://adamdaniel-ai-previews.s3-website-us-east-1.amazonaws.com/pr-{N}/` (HTTP fallback — Decap CMS won't work over this)
 
 #### Job: `teardown-preview` (when action == `closed`)
 
@@ -238,10 +238,10 @@ Auto-merge is enabled in repository settings. Direct pushes to `main` are allowe
 
 ### Admin review dashboard
 
-Located at `/admin/reviews/` (separate from Sveltia CMS). Linked from a floating button on the CMS page.
+Located at `/admin/reviews/` (separate from Decap CMS). Linked from a floating button on the CMS page.
 
 - Cobalt Thermal theme
-- GitHub OAuth authentication (reuses existing Lambda proxy). Implements the full Decap/Sveltia handshake: the popup posts `"authorizing:github"`, the dashboard echoes it back at the popup's origin, the popup releases an `"authorization:github:success:<JSON>"` payload, the dashboard parses the token. Skipping the echo leaves the popup spinning on "Completing authorisation…" forever — the same shape of bug the Sveltia CMS would surface if its handshake broke.
+- GitHub OAuth authentication (reuses existing Lambda proxy). Implements the full Decap handshake: the popup posts `"authorizing:github"`, the dashboard echoes it back at the popup's origin, the popup releases an `"authorization:github:success:<JSON>"` payload, the dashboard parses the token. Skipping the echo leaves the popup spinning on "Completing authorisation…" forever — the same shape of bug Decap itself would surface if its handshake broke.
 - Lists all pending visual regression reviews
 - Embedded `<video>` player for regression videos hosted at `preview-pr{N}.adamdaniel.ai/regression.mp4`
 - Stat grid (Visually different / Potentially affected / New / Identical) plus the per-page list of visually-different paths, fetched from `preview-pr{N}.adamdaniel.ai/regression.json` per card. Cross-origin GET, no GitHub auth needed.
@@ -259,7 +259,7 @@ Located at `/admin/reviews/` (separate from Sveltia CMS). Linked from a floating
 3. `npm ci` → install test dependencies
 4. `npx playwright install chromium firefox webkit --with-deps`
 5. **Diff-aware spec selection** — on PRs, `e2e/select-specs.js --base $BASE_REF` returns one of three scopes:
-   - `all` — fanout files changed (`_layouts/`, `_includes/`, `_config.yml`, `assets/css/`, `_plugins/`, `package*.json`, `Gemfile*`, `e2e/base.js`, `e2e/cms-test-helpers.js`, `playwright*.config.js`). Run the full matrix.
+   - `all` — fanout files changed (`_layouts/`, `_includes/`, `_config.yml`, `assets/css/`, `_plugins/`, `package*.json`, `Gemfile*`, `e2e/base.js`, `playwright*.config.js`). Run the full matrix.
    - `subset` — match each changed file against `SPEC_RULES` and run only the resulting list (always-run baseline included).
    - `skip` — only docs (`README.md`, `AGENTS.md`, `docs/`, `.agents/skills/`) changed. Run the always-run baseline only as a smoke check.
    On push-to-main, the selector is bypassed and the full matrix runs.
@@ -271,7 +271,7 @@ Tests run with `fullyParallel: true` — all 8 projects execute concurrently.
 
 Cheap, deterministic, no browser:
 - `e2e/compute-visual-diffs.test.js` — pure pngjs unit tests for the visual-diff classifier
-- `e2e/cms-config.spec.js` — YAML structural invariants for the Sveltia config (editorial workflow on, every folder collection has explicit create + delete, all required fields present, etc.)
+- `e2e/cms-config.spec.js` — YAML structural invariants for the Decap config (editorial workflow on, every folder collection has explicit create + delete, all required fields present, etc.)
 - `e2e/visual-change-guard.spec.js` — guards against unintended visual changes
 
 ---

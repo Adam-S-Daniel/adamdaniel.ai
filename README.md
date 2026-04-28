@@ -2,14 +2,14 @@
 
 Personal website and blog for Adam Daniel — Freelance AI Engineer.
 
-Built with Jekyll + Sveltia CMS, deployed to S3 + CloudFront with an AWS Lambda OAuth proxy.
+Built with Jekyll + Decap CMS, deployed to S3 + CloudFront with an AWS Lambda OAuth proxy.
 
 ## Architecture
 
 ```
 adamdaniel.ai
 ├── Jekyll site          (S3 + CloudFront, custom domain)
-├── Sveltia CMS          (/admin/ — headless CMS backed by this repo)
+├── Decap CMS            (/admin/ — headless CMS backed by this repo)
 ├── AWS OAuth Proxy      (Lambda + API Gateway HTTP API — ~$0/month)
 └── GitHub Actions       (production deploy + PR preview environments)
 ```
@@ -55,7 +55,7 @@ provisioned.
 
 ## CMS Setup (`/admin/`)
 
-Sveltia CMS is configured at `/admin/config.yml`. To activate:
+Decap CMS is configured at `/admin/config.yml`. To activate:
 
 1. **Create a GitHub OAuth App** at https://github.com/settings/developers
    - Homepage URL: `https://adamdaniel.ai`
@@ -81,12 +81,14 @@ Sveltia CMS is configured at `/admin/config.yml`. To activate:
 
 4. **Editorial workflow is on by default** (`publish_mode: editorial_workflow` in `admin/config.yml`). Every Save in the CMS opens a PR on its own branch instead of committing straight to main, lighting up the `cms/draft` → `cms/ready` labels, the per-PR `preview-pr{N}.adamdaniel.ai` environment, and the visual-regression review at `/admin/reviews/`.
 
-> **Sveltia config gotcha:** every folder collection needs **explicit** `create: true` AND `delete: true`. The Decap docs imply `delete` defaults to `true` when `create: true`, but Sveltia's UI hides the affordance when the flag isn't set. Set both flags on every folder collection. `files:` collections (a fixed list of named entries) never expose create or delete in Sveltia regardless of flags — convert to a folder collection if editors need to add or remove entries.
+> **Config gotcha:** every folder collection in `admin/config*.yml` ships with **explicit** `create: true` AND `delete: true`. Decap defaults both to `true`, but spelling them out keeps editor capabilities visible in the YAML and survives any future major-version default change. `files:` collections (a fixed list of named entries) don't expose create or delete in the Decap UI — convert to a folder collection if editors need to add or remove entries.
+>
+> **Why Decap, not Sveltia:** an earlier iteration of this repo used Sveltia CMS for its UX improvements, but Sveltia ≤ 0.158 silently ignores `publish_mode: editorial_workflow` (the upstream feature is on the 1.0 roadmap, not implemented yet). With branch protection on `main`, that meant every Save returned "Repository rule violations found / Changes must be made through a pull request." Decap implements the editorial workflow, so each Save creates a `cms/...` branch and opens a PR.
 
 ## OAuth Proxy (AWS Lambda)
 
 Located in `oauth-proxy/`. Implements the GitHub OAuth handshake required by
-Sveltia/Decap/Netlify CMS. Uses:
+Decap/Netlify CMS. Uses:
 
 - **AWS Lambda** (Python 3.12, 128 MB) — free tier: 1M requests/month
 - **API Gateway HTTP API** — cheapest API Gateway type, $1/M requests
@@ -143,7 +145,7 @@ node e2e/select-specs.js | jq -r '.files[]?' | xargs npx playwright test
 
 ```
 main                    ← production (deploys automatically)
-  └─ cms/draft-*        ← created by Sveltia CMS editorial workflow
+  └─ cms/draft-*        ← created by Decap CMS editorial workflow
       └─ PR opened      ← preview URL deployed, content validated
           └─ cms/ready  ← auto-merged to main, preview cleaned up
 ```

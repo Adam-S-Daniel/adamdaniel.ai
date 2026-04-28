@@ -70,34 +70,20 @@
     <div class="local-badge">Local Backend</div>
   </div>
 
-  <!-- Tell Sveltia CMS to use the local config file -->
+  <!-- Tell Decap CMS to use the local config file -->
   <link rel="cms-config-url" type="text/yaml" href="config-local.yml">
-
-  <script>
-    // Pre-seed Sveltia's user prefs so Save stays on the entry-edit
-    // form. Mirrors admin/index.html. See that file for rationale.
-    (function () {
-      try {
-        var KEY = 'sveltia-cms.prefs';
-        var raw = localStorage.getItem(KEY);
-        var prefs = raw ? JSON.parse(raw) : {};
-        if (typeof prefs.closeOnSave === 'undefined') {
-          prefs.closeOnSave = false;
-          localStorage.setItem(KEY, JSON.stringify(prefs));
-        }
-      } catch (_) { /* fall through to Sveltia's defaults */ }
-    })();
-  </script>
+  <link rel="stylesheet" href="custom.css">
 
   <!--
-    Loaded from unpkg (rather than the gitignored vendor/ copy) so this page
-    works in a fresh clone and in CI without a separate vendor step. Pinned to
-    the same version as `admin/index.html`'s implicit @latest for parity.
+    Decap CMS — same pinned version as admin/index.html. The local
+    config sets `local_backend: true` so saves go through the
+    decap-server proxy (port 8081) into the working tree instead of
+    GitHub.
   -->
-  <script src="https://unpkg.com/@sveltia/cms/dist/sveltia-cms.js" type="module"></script>
+  <script src="https://unpkg.com/decap-cms@^3.12.0/dist/decap-cms.js"></script>
 
   <!-- Live Preview bridge: broadcasts entry data on every save to any
-       open /preview/ tab. Loads after Sveltia so `window.CMS` exists. -->
+       open /preview/ tab. Loads after Decap so `window.CMS` exists. -->
   <script src="preview-bridge.js" defer></script>
 
   <script>

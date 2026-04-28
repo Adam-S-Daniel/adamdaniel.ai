@@ -77,7 +77,7 @@ test.describe("/admin/reviews/ OAuth handshake", () => {
 
     // Step 1: the popup posts "authorizing:github" to the opener.
     // The opener MUST reply with the same string — that's the
-    // Decap/Sveltia CMS handshake. Without the reply, the popup never
+    // Decap CMS handshake. Without the reply, the popup never
     // sends the token and stays stuck on "Completing authorisation…".
     await page.evaluate(() =>
       window.__simulatePopupMessage("authorizing:github"),
