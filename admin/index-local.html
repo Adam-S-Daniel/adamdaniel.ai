@@ -179,5 +179,37 @@
         .catch(function () {});
     })();
   </script>
+
+  <!-- Cobalt popup tagger — see admin/index.html for full rationale. -->
+  <script>
+    (function () {
+      var style = document.createElement('style');
+      style.textContent = '[data-cobalt-popup]{background:#060d1f !important;border:1px solid #1a2a5e !important;box-shadow:0 16px 64px rgba(0,0,20,0.9) !important;border-radius:8px !important;color:#d8e4ff !important;}[data-cobalt-popup] *{color:inherit !important;}[data-cobalt-popup] select,[data-cobalt-popup] input,[data-cobalt-popup] textarea{background:#0a1530 !important;border:1px solid #1a2a5e !important;color:#d8e4ff !important;}[data-cobalt-popup] option{background:#0a1530 !important;color:#d8e4ff !important;}';
+      document.head.appendChild(style);
+      function findAndTag() {
+        var candidates = document.querySelectorAll('div, section, aside, form');
+        for (var i = 0; i < candidates.length; i++) {
+          var el = candidates[i];
+          if (el.dataset.cobaltPopup) continue;
+          var t = el.textContent || '';
+          if (t.indexOf('Field Settings') === -1 || t.indexOf('Global Settings') === -1) continue;
+          var cur = el;
+          while (cur && cur !== document.body) {
+            var pos = getComputedStyle(cur).position;
+            if (pos === 'absolute' || pos === 'fixed') break;
+            cur = cur.parentElement;
+          }
+          (cur || el).dataset.cobaltPopup = '1';
+        }
+      }
+      var pending = false;
+      new MutationObserver(function () {
+        if (pending) return;
+        pending = true;
+        requestAnimationFrame(function () { pending = false; findAndTag(); });
+      }).observe(document.body, { childList: true, subtree: true });
+      findAndTag();
+    })();
+  </script>
 </body>
 </html>
