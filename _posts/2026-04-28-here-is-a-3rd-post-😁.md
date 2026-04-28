@@ -5,3 +5,5 @@ featured_image: data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAAfQAAADICAMAAAApx+
 published: false
 ---
 This is so great
+
+![](https://pen4rent.com/wp-content/uploads/2019/02/SuperOutrigger.ArtistsConception-copy.jpg)
