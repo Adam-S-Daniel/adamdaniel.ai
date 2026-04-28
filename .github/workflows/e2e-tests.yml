@@ -16,27 +16,17 @@ permissions:
   pull-requests: write
 
 jobs:
-  e2e:
+  unit:
     runs-on: ubuntu-latest
     steps:
       - name: Checkout
-        uses: actions/checkout@34e114876b0b11c390a56381ad16ebd13914f8d5  # v4.3.1
-        with:
-          # Need history for `git diff origin/main...HEAD` so the spec
-          # selector can decide which tests are actually relevant.
-          fetch-depth: 0
+        uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd  # v6.0.2 (2026-01-09)
 
       - name: Setup Ruby
-        uses: ruby/setup-ruby@319994f95fa847cf3fb3cd3dbe89f6dcde9f178f  # v1.295.0
+        uses: ruby/setup-ruby@7372622e62b60b3cb750dcd2b9e32c247ffec26a  # v1.302.0 (2026-04-15)
         with:
           ruby-version: '3.2'
           bundler-cache: true
-
-      - name: Setup Node
-        uses: actions/setup-node@49933ea5288caeca8642d1e84afbd3f7d6820020  # v4.4.0
-        with:
-          node-version: '20'
-          cache: 'npm'
 
       - name: Run Jekyll plugin unit tests
         # Plain-Ruby tests under _plugins_test/ — fast (sub-second each),
@@ -47,6 +37,32 @@ jobs:
             echo "==> $t"
             bundle exec ruby "$t"
           done
+
+  e2e:
+    runs-on: ubuntu-latest
+    strategy:
+      fail-fast: false
+      matrix:
+        shard: [1, 2, 3, 4]
+    steps:
+      - name: Checkout
+        uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd  # v6.0.2 (2026-01-09)
+        with:
+          # Need history for `git diff origin/main...HEAD` so the spec
+          # selector can decide which tests are actually relevant.
+          fetch-depth: 0
+
+      - name: Setup Ruby
+        uses: ruby/setup-ruby@7372622e62b60b3cb750dcd2b9e32c247ffec26a  # v1.302.0 (2026-04-15)
+        with:
+          ruby-version: '3.2'
+          bundler-cache: true
+
+      - name: Setup Node
+        uses: actions/setup-node@48b55a011bda9f5d6aeb4c2d9c7362e8dae4041e  # v6.4.0 (2026-04-20)
+        with:
+          node-version: '20'
+          cache: 'npm'
 
       - name: Install npm dependencies
         run: npm ci
@@ -59,7 +75,9 @@ jobs:
         # On push to main we run everything (the diff would be the
         # entire merged commit and the selector can't reason about
         # that usefully). On PRs we run the diff-aware subset against
-        # the base branch tip.
+        # the base branch tip. Each shard runs the selector
+        # independently — it is deterministic for a given commit, so
+        # all shards arrive at the same scope/files.
         run: |
           if [ "${{ github.event_name }}" = "push" ]; then
             echo "scope=all" >> "$GITHUB_OUTPUT"
@@ -83,30 +101,37 @@ jobs:
           echo "scope=$SCOPE" >> "$GITHUB_OUTPUT"
           echo "files=$FILES" >> "$GITHUB_OUTPUT"
 
-      - name: Run Playwright tests (full matrix)
+      - name: Prepare shard output dir
+        run: mkdir -p shard-output
+
+      - name: Run Playwright tests (full matrix, shard ${{ matrix.shard }}/4)
         if: steps.select.outputs.scope == 'all'
         id: pw-full
-        continue-on-error: true
-        # `tee` captures the run log so the failure-summary step can
+        # `tee` captures the run log so the failure-summary job can
         # post the relevant block to the PR. `set -o pipefail` keeps
         # the test step's exit code visible to GHA's outcome.
+        # `--reporter=blob,list` writes a blob report (for later merge
+        # into a single HTML report) and prints to stdout for logs.
         run: |
           set -o pipefail
-          npx playwright test 2>&1 | tee /tmp/playwright-output.log
+          npx playwright test \
+            --shard=${{ matrix.shard }}/4 \
+            --reporter=blob,list \
+            2>&1 | tee shard-output/playwright-output.log
 
-      - name: Run Playwright tests (selected subset)
+      - name: Run Playwright tests (selected subset, shard ${{ matrix.shard }}/4)
         if: steps.select.outputs.scope == 'subset'
         id: pw-subset
-        continue-on-error: true
         run: |
           set -o pipefail
-          npx playwright test ${{ steps.select.outputs.files }} 2>&1 \
-            | tee /tmp/playwright-output.log
+          npx playwright test ${{ steps.select.outputs.files }} \
+            --shard=${{ matrix.shard }}/4 \
+            --reporter=blob,list \
+            2>&1 | tee shard-output/playwright-output.log
 
-      - name: Run Playwright tests (baseline only)
+      - name: Run Playwright tests (baseline only, shard ${{ matrix.shard }}/4)
         if: steps.select.outputs.scope == 'skip'
         id: pw-baseline
-        continue-on-error: true
         # Always-run baseline keeps a smoke check on every PR so a
         # broken selector or harness regression can't sneak through.
         run: |
@@ -115,28 +140,108 @@ jobs:
             e2e/compute-visual-diffs.test.js \
             e2e/cms-config.spec.js \
             e2e/visual-change-guard.spec.js \
-            2>&1 | tee /tmp/playwright-output.log
+            --shard=${{ matrix.shard }}/4 \
+            --reporter=blob,list \
+            2>&1 | tee shard-output/playwright-output.log
+
+      - name: Upload blob report (shard ${{ matrix.shard }})
+        if: ${{ !cancelled() }}
+        uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a  # v7.0.1 (2026-04-10)
+        with:
+          name: blob-report-${{ matrix.shard }}
+          path: blob-report
+          retention-days: 1
+
+      - name: Upload shard log (shard ${{ matrix.shard }})
+        if: ${{ !cancelled() }}
+        uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a  # v7.0.1 (2026-04-10)
+        with:
+          name: shard-log-${{ matrix.shard }}
+          path: shard-output/playwright-output.log
+          retention-days: 1
+
+      - name: Upload test results (shard ${{ matrix.shard }})
+        if: ${{ !cancelled() }}
+        uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a  # v7.0.1 (2026-04-10)
+        with:
+          name: test-results-shard-${{ matrix.shard }}
+          path: test-results/
+          retention-days: 7
+
+  finalize:
+    if: ${{ !cancelled() }}
+    needs: [e2e]
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout
+        uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd  # v6.0.2 (2026-01-09)
+
+      - name: Setup Node
+        uses: actions/setup-node@48b55a011bda9f5d6aeb4c2d9c7362e8dae4041e  # v6.4.0 (2026-04-20)
+        with:
+          node-version: '20'
+          cache: 'npm'
+
+      - name: Install npm dependencies
+        run: npm ci
+
+      - name: Download blob reports
+        uses: actions/download-artifact@3e5f45b2cfb9172054b4087a40e8e0b5a5461e7c  # v8.0.1 (2026-03-11)
+        with:
+          path: all-blob-reports
+          pattern: blob-report-*
+          merge-multiple: true
+
+      - name: Merge blob reports into single HTML report
+        run: npx playwright merge-reports --reporter html ./all-blob-reports
+
+      - name: Upload merged HTML report
+        uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a  # v7.0.1 (2026-04-10)
+        with:
+          name: playwright-report
+          path: playwright-report
+          retention-days: 7
+
+      - name: Download shard logs
+        uses: actions/download-artifact@3e5f45b2cfb9172054b4087a40e8e0b5a5461e7c  # v8.0.1 (2026-03-11)
+        with:
+          path: all-shard-logs
+          pattern: shard-log-*
+
+      - name: Concatenate shard logs
+        run: |
+          : > /tmp/playwright-output.log
+          for d in all-shard-logs/shard-log-*; do
+            shard=$(basename "$d" | sed 's/shard-log-//')
+            echo "===== shard $shard =====" >> /tmp/playwright-output.log
+            if [ -f "$d/playwright-output.log" ]; then
+              cat "$d/playwright-output.log" >> /tmp/playwright-output.log
+            else
+              echo "(no log captured)" >> /tmp/playwright-output.log
+            fi
+            echo "" >> /tmp/playwright-output.log
+          done
 
       # ── Failure summary on the PR ────────────────────────────────
       # Without log access from outside the workflow, a failed CI
       # run is opaque to anyone (or any agent) iterating on a PR.
       # Surface the actual Playwright failure blocks as a PR
       # comment, scrubbed of secrets via gitleaks first.
-      - name: Determine if any test step failed
-        id: pw-status
+      - name: Determine if any shard failed
+        id: e2e-status
         if: always() && github.event_name == 'pull_request'
+        # `needs.e2e.result` is "success" only when every matrix
+        # entry succeeded; "failure" when any failed; "cancelled"
+        # when any was cancelled.
         run: |
-          full="${{ steps.pw-full.outcome }}"
-          subset="${{ steps.pw-subset.outcome }}"
-          baseline="${{ steps.pw-baseline.outcome }}"
-          if [ "$full" = "failure" ] || [ "$subset" = "failure" ] || [ "$baseline" = "failure" ]; then
+          if [ "${{ needs.e2e.result }}" = "failure" ]; then
             echo "failed=true" >> "$GITHUB_OUTPUT"
           else
             echo "failed=false" >> "$GITHUB_OUTPUT"
           fi
 
       - name: Install gitleaks
-        if: steps.pw-status.outputs.failed == 'true'
+        if: steps.e2e-status.outputs.failed == 'true'
         env:
           GITLEAKS_VERSION: 8.21.2
         run: |
@@ -145,7 +250,7 @@ jobs:
           gitleaks version
 
       - name: Extract and scrub failure summary
-        if: steps.pw-status.outputs.failed == 'true'
+        if: steps.e2e-status.outputs.failed == 'true'
         run: |
           bash scripts/extract-playwright-failures.sh /tmp/playwright-output.log > /tmp/failures-raw.txt || true
           if [ ! -s /tmp/failures-raw.txt ]; then
@@ -159,8 +264,8 @@ jobs:
           head -c 60000 /tmp/failures-clean.txt > /tmp/failures-final.txt
 
       - name: Post failure summary to PR
-        if: steps.pw-status.outputs.failed == 'true'
-        uses: actions/github-script@f28e40c7f34bde8b3046d885e986cb6290c5673b  # v7.1.0
+        if: steps.e2e-status.outputs.failed == 'true'
+        uses: actions/github-script@3a2844b7e9c422d3c10d287c895573f7108da1b3  # v9.0.0 (2026-04-09)
         with:
           script: |
             const fs = require('fs');
@@ -211,8 +316,8 @@ jobs:
             }
 
       - name: Resolve failure-summary comment on success
-        if: always() && github.event_name == 'pull_request' && steps.pw-status.outputs.failed != 'true'
-        uses: actions/github-script@f28e40c7f34bde8b3046d885e986cb6290c5673b  # v7.1.0
+        if: always() && github.event_name == 'pull_request' && steps.e2e-status.outputs.failed != 'true'
+        uses: actions/github-script@3a2844b7e9c422d3c10d287c895573f7108da1b3  # v9.0.0 (2026-04-09)
         with:
           script: |
             const pr = context.payload.pull_request.number;
@@ -232,24 +337,8 @@ jobs:
               });
             }
 
-      - name: Fail the job if any test step failed
-        if: steps.pw-status.outputs.failed == 'true' || steps.pw-full.outcome == 'failure' || steps.pw-subset.outcome == 'failure' || steps.pw-baseline.outcome == 'failure'
+      - name: Re-fail if any shard failed
+        if: needs.e2e.result == 'failure'
         run: |
-          echo "One or more Playwright test steps failed."
+          echo "One or more matrix shards failed."
           exit 1
-
-      - name: Upload test results
-        if: ${{ !cancelled() }}
-        uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02  # v4.6.2
-        with:
-          name: test-results
-          path: test-results/
-          retention-days: 7
-
-      - name: Upload HTML report (visual diffs)
-        if: ${{ !cancelled() }}
-        uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02  # v4.6.2
-        with:
-          name: playwright-report
-          path: playwright-report/
-          retention-days: 7
