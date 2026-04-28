@@ -68,23 +68,13 @@ fi
 ok "node $(node --version)"
 ok "npm $(npm --version)"
 
-# ── 4. System libs Playwright's Chromium needs ────────────────────────────
-note "Installing Playwright browser system dependencies…"
-apt_install libnspr4 libnss3 libasound2t64
-
-# ── 5. ffmpeg (visual-regression video generation in e2e/generate-video.sh) ─
+# ── 4. ffmpeg (visual-regression video generation in e2e/generate-video.sh) ─
 apt_install ffmpeg
 
-# ── 6. Ruby + Bundler + Jekyll deps ───────────────────────────────────────
-apt_install ruby-full build-essential zlib1g-dev
-if ! have bundle; then
-  note "Installing bundler gem (user-local)…"
-  # --user-install drops gems in ~/.local/share/gem; no sudo needed.
-  gem install --user-install bundler --no-document
-  # Make the user-gem bin directory discoverable in this shell.
-  GEM_USER_BIN="$(ruby -e 'puts Gem.user_dir')/bin"
-  export PATH="$GEM_USER_BIN:$PATH"
-fi
+# ── 5. Ruby + Bundler + Jekyll deps ───────────────────────────────────────
+# `ruby-bundler` lives in /usr/bin/bundle so future shells find it without
+# any PATH gymnastics; preferred over `gem install --user-install bundler`.
+apt_install ruby-full ruby-bundler build-essential zlib1g-dev
 ok "bundler $(bundle --version | awk '{print $3}')"
 
 note "Installing Gemfile dependencies (jekyll, jekyll-seo-tag, etc.)…"
@@ -99,7 +89,13 @@ ok "node_modules/ ready"
 
 note "Downloading Playwright browser binaries (chromium, firefox, webkit)…"
 npx --yes playwright install chromium firefox webkit
-ok "Playwright browsers installed"
+# `playwright install-deps` knows the full apt set for all three browsers
+# (libgtk-4, libwebpdemux, libgraphene, libenchant-2 — too many to hand
+# list and they shift between Playwright versions). Sudo, since it shells
+# out to apt-get install.
+note "Installing Playwright apt deps for all three browsers…"
+sudo DEBIAN_FRONTEND=noninteractive npx --yes playwright install-deps
+ok "Playwright browsers + system deps installed"
 
 # ── 8. Python + pytest (for oauth-proxy unit tests) ───────────────────────
 apt_install python3 python3-pip python3-venv
