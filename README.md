@@ -124,12 +124,14 @@ Required secrets:
 ## Local Development
 
 ```bash
-# Install dependencies
-gem install jekyll jekyll-seo-tag jekyll-feed jekyll-sitemap webrick
-npm ci
+# One-shot setup: installs everything needed to run the full test stack
+# locally on Debian/Ubuntu/WSL2 — apt packages (libnspr4, libnss3, ffmpeg,
+# ruby-full, python3), Bundler + Gemfile gems, npm deps, Playwright
+# browser binaries, and a project-local pytest venv. Idempotent.
+bash scripts/setup-test-environment.sh
 
 # Build and serve
-jekyll serve --livereload
+bundle exec jekyll serve --livereload
 
 # Site:        http://localhost:4000
 # CMS admin:   http://localhost:4000/admin/index-local.html  (uses config-local.yml)
@@ -139,6 +141,13 @@ npx playwright test
 
 # Run only the specs that the current diff can affect
 node e2e/select-specs.js | jq -r '.files[]?' | xargs npx playwright test
+
+# Decap admin smoke test (boots decap-server + a static fileserver)
+npx playwright test e2e/cms-smoke.spec.js --project chromium-desktop
+
+# Other suites
+bundle exec ruby _plugins_test/auto_tag_pages_test.rb   # Jekyll plugin unit tests
+cd oauth-proxy && .venv/bin/pytest test_lambda.py -v    # OAuth proxy Lambda tests
 ```
 
 ## Branching Strategy
