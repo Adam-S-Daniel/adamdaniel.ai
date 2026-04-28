@@ -29,5 +29,8 @@ layout: default
     <div class="post-content">
       {{ content }}
     </div>
+
+    {% assign _share_url = page.url | absolute_url %}
+    {% include share-row.html url=_share_url title=page.title %}
   </article>
 </div>

@@ -7,6 +7,11 @@
   <link rel="stylesheet" href="{{ '/assets/css/main.css' | relative_url }}">
   {% seo %}
   <link rel="alternate" type="application/atom+xml" title="{{ site.title }}" href="{{ '/feed.xml' | relative_url }}">
+  {%- if page.layout == 'tag' -%}
+  {%- assign _tag = page.tag_name | default: page.name -%}
+  {%- assign _tag_slug = _tag | slugify -%}
+  <link rel="alternate" type="application/atom+xml" title="{{ site.title }}: {{ _tag }}" href="{{ '/tags/' | append: _tag_slug | append: '/feed.xml' | relative_url }}">
+  {%- endif -%}
 </head>
 <body>
   <div class="site-wrapper">
