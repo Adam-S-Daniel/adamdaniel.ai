@@ -339,14 +339,39 @@ label,
   color: #d8e4ff !important;
 }
 
-/* Modal / dialog */
+/* Modal / dialog / floating field-settings popups.
+ *
+ * Decap renders the markdown widget's per-block "Field Settings" popup
+ * (the one that opens beside a code block to let you pick MODE / THEME /
+ * KEYMAP) without painting it a solid background — it ships with a faint
+ * white-ish surface that's almost invisible against the cobalt-themed
+ * editor below it. Any class that smells like a settings panel /
+ * popover / float gets a solid cobalt surface here. */
 [class*="Modal"],
 [class*="Dialog"],
+[class*="Popup"],
+[class*="Popover"],
+[class*="FieldSettings"],
+[class*="field-settings"],
+[class*="BlockMenu"],
+[class*="OptionsList"],
+[class*="EditorComponentForm"],
 [role="dialog"] {
   background: #060d1f !important;
-  border-color: #1a2a5e !important;
+  border: 1px solid #1a2a5e !important;
   box-shadow: 0 16px 64px rgba(0, 0, 20, 0.9) !important;
   border-radius: 8px !important;
+  color: #d8e4ff !important;
+}
+/* Their inner labels / headings need the cobalt cream too — Decap leaves
+ * these as the default light-gray which is unreadable on cobalt. */
+[class*="Modal"] *,
+[class*="Dialog"] *,
+[class*="Popup"] *,
+[class*="Popover"] *,
+[class*="FieldSettings"] *,
+[class*="BlockMenu"] * {
+  color: inherit !important;
 }
 
 [class*="Overlay"],
