@@ -200,6 +200,16 @@ label,
   font-family: 'SF Mono', 'Fira Code', monospace !important;
 }
 
+/* Field hint text (Decap's `ControlHint` — the helper sentence under
+ * each input). Decap's default `rgb(93, 98, 111)` dark gray is
+ * unreadable on the cobalt-themed widget wrappers. Use a soft
+ * neutral slate-gray that's readable but deliberately *not* the
+ * cobalt accent — hint text shouldn't compete visually with the
+ * cobalt-blue field labels above it. */
+[class*="ControlHint"] {
+  color: #a8b3c8 !important;
+}
+
 /* Rich text / markdown editor.
  *
  * Decap 3.x renders the rich-text body as a Slate `<div data-slate-editor
