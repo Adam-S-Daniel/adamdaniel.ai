@@ -280,6 +280,24 @@ Cheap, deterministic, no browser:
 
 ---
 
+### `secrets-scan.yml`
+
+**Trigger:** PRs and pushes targeting `main`, plus a Sunday 07:00 UTC `cron` for a full-history sweep, plus `workflow_dispatch`.
+
+**Secrets needed:** none (uses built-in `GITHUB_TOKEN`; no `GITLEAKS_LICENSE` because this is a public personal-account repo — gitleaks-action is free in that case).
+
+#### Job: `scan`
+
+Runs [gitleaks](https://github.com/gitleaks/gitleaks) via the official `gitleaks/gitleaks-action`. PRs scan only the diff against base; pushes to `main` and the weekly cron walk full history. The diff-only path catches "leak introduced by this PR"; the weekly sweep catches anything that landed via a force-push or rebase that the diff scan missed.
+
+The underlying gitleaks binary is pinned via `GITLEAKS_VERSION`. Bump deliberately, not on a whim.
+
+Allowlist for known test fixtures lives in `.gitleaks.toml`. When a new test hardcodes a fake-looking token, add it there rather than disabling the workflow.
+
+The `scripts/scrub-secrets.js` helper (used by the e2e bot to redact failure summaries before commenting on PRs) runs the same `gitleaks` binary at runtime. The CI gate and the runtime scrubber share the same default ruleset.
+
+---
+
 ## E2E testing
 
 Every e2e test runs across a matrix of browsers, viewports, text sizes, and color settings. The matrix is defined in `playwright.config.js` as Playwright projects.
