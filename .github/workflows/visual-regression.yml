@@ -51,8 +51,23 @@ jobs:
       - name: Install npm dependencies
         run: npm ci
 
+      - name: Cache Playwright browsers
+        id: pw-cache
+        uses: actions/cache@27d5ce7f107fe9357f9df03efb73ab90386fccae  # v5.0.5 (2026-04-13)
+        with:
+          path: ~/.cache/ms-playwright
+          # `playwright-chromium-` keeps this cache distinct from the
+          # all-three-browsers cache used by e2e-tests.yml so neither
+          # trashes the other.
+          key: playwright-chromium-${{ runner.os }}-${{ hashFiles('package-lock.json') }}
+
       - name: Install Playwright browsers
+        if: steps.pw-cache.outputs.cache-hit != 'true'
         run: npx playwright install chromium --with-deps
+
+      - name: Install Playwright OS deps (browsers cached)
+        if: steps.pw-cache.outputs.cache-hit == 'true'
+        run: npx playwright install-deps chromium
 
       - name: Install ffmpeg
         run: sudo apt-get update -qq && sudo apt-get install -y -qq ffmpeg

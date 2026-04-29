@@ -25,6 +25,13 @@ permissions:
   pull-requests: write
   issues: write
 
+concurrency:
+  # Cancel previous validation runs when the CMS pushes another commit
+  # to the same draft PR (Decap pushes per-keystroke during editing).
+  # Labeled events also pile up on rapid label toggling — same group.
+  group: cms-editorial-${{ github.event.pull_request.number }}
+  cancel-in-progress: true
+
 jobs:
   validate-content:
     runs-on: ubuntu-latest
