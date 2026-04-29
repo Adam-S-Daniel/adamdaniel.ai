@@ -2,6 +2,10 @@
 
 Personal website and blog for Adam Daniel (Freelance AI Engineer). Jekyll static site with Decap CMS, AWS OAuth proxy, and PR preview environments.
 
+## Test-Driven Design
+
+- **Red-green TDD.** Write a failing test first, then make it pass, then refactor. Always follow this cycle.
+
 ## Architecture
 
 ```
