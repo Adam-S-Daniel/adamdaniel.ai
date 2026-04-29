@@ -120,4 +120,25 @@ test.describe("select-specs", () => {
     // Baseline only — none of the CRUD specs.
     expect(r.files).toEqual(ALWAYS_RUN.slice().sort());
   });
+
+  test("non-doc change that matches no SPEC_RULES collapses to skip", () => {
+    // The skills-mirror unification PR's signature: lots of files
+    // touched (tests/, scripts/, .githooks/, .claude/, _plugins_test/)
+    // but none match any spec rule or fanout pattern. Without the
+    // collapse this returns subset = ALWAYS_RUN, which is identical to
+    // scope=skip but pays for a full 4-way matrix.
+    const r = selectSpecs([
+      "tests/test_bootstrap.py",
+      "scripts/bootstrap.sh",
+      ".githooks/pre-commit",
+      "pyproject.toml",
+    ]);
+    expect(r.scope).toBe("skip");
+  });
+
+  test("disableSkip: baseline-only collapse is also bypassed", () => {
+    const r = selectSpecs(["tests/test_bootstrap.py"], { disableSkip: true });
+    expect(r.scope).toBe("subset");
+    expect(r.files).toEqual(ALWAYS_RUN.slice().sort());
+  });
 });
