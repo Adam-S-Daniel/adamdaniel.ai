@@ -4,9 +4,60 @@ on:
   pull_request:
     branches:
       - main
+    # Skip when nothing the e2e suite covers can have changed —
+    # docs/explainers, screenshots from local recordings, license
+    # files, and CI workflows for unrelated pipelines. e2e/select-
+    # specs.js handles the finer-grained "which specs to run" cut at
+    # runtime, but coarse-skipping here saves the Ruby + Node +
+    # Playwright bring-up entirely.
+    #
+    # Things deliberately NOT in the list (i.e. they DO trigger e2e):
+    #   - any site source (caught by select-specs.js's fanout/per-spec rules)
+    #   - any e2e/* file (test code itself)
+    #   - playwright config files
+    #   - package*.json / Gemfile* (dep changes can break tests)
+    #   - .github/workflows/e2e-tests.yml (workflow self-validation)
+    paths-ignore:
+      - 'README.md'
+      - 'AGENTS.md'
+      - 'CLAUDE.md'
+      - 'ANALYTICS_SETUP.md'
+      - 'docs/**'
+      - '.agents/**'
+      - 'screenshots/**'
+      - 'recordings/**'
+      - 'test-results/**'
+      - 'LICENSE'
+      - '.gitignore'
+      - '.gitleaks.toml'
+      - '.editorconfig'
+      - '.bundle/**'
+      - '.github/dependabot.yml'
+      - '.github/workflows/secrets-scan.yml'
+      - '.github/workflows/publish-scheduled-posts.yml'
+      - '.github/workflows/claude.yml'
   push:
     branches:
       - main
+    paths-ignore:
+      - 'README.md'
+      - 'AGENTS.md'
+      - 'CLAUDE.md'
+      - 'ANALYTICS_SETUP.md'
+      - 'docs/**'
+      - '.agents/**'
+      - 'screenshots/**'
+      - 'recordings/**'
+      - 'test-results/**'
+      - 'LICENSE'
+      - '.gitignore'
+      - '.gitleaks.toml'
+      - '.editorconfig'
+      - '.bundle/**'
+      - '.github/dependabot.yml'
+      - '.github/workflows/secrets-scan.yml'
+      - '.github/workflows/publish-scheduled-posts.yml'
+      - '.github/workflows/claude.yml'
 
 permissions:
   contents: read

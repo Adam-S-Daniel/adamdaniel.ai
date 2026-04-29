@@ -124,6 +124,28 @@ Cost: roughly **$0.10/month** at this site's traffic. Full setup, sampling, rete
 | `secrets-scan.yml` | PR + push to main + weekly cron | Runs [gitleaks](https://github.com/gitleaks/gitleaks) on the PR diff (or full history on push/cron). Allowlist for known test fixtures lives in `.gitleaks.toml`. |
 | `dependabot-auto-merge.yml` | PR opened/updated by `dependabot[bot]` | Verifies the diff only touches dependency-manifest paths, then enables GitHub native auto-merge (`--squash`). Branch protection holds the merge until e2e + visual-regression checks pass. Configured by `.github/dependabot.yml`. |
 
+### Path-based skip rules (don't burn CI on docs/CI-only changes)
+
+Three workflows declare path filters on their triggers so that diffs which can't possibly affect deployed output never even allocate a runner:
+
+| Workflow | Filter | Effect |
+|---|---|---|
+| `deploy-production.yml` | `paths-ignore` (push to `main`) | Skips the prod deploy when a commit only touches docs (`README.md`, `docs/**`, etc.), test/CI tooling (`e2e/**`, `playwright.*.js`, `_plugins_test/**`, `scripts/extract-playwright-failures.sh`, …), non-Jekyll infra (`oauth-proxy/**`, `infrastructure/**`), or the workflow files of pipelines unrelated to deploy. The workflow's own file is **not** in the ignore list, so workflow-self changes always trigger a deploy run for validation. `workflow_dispatch` ignores `paths-ignore`, so a manual force-deploy from the Actions UI always runs. |
+| `visual-regression.yml` | `paths` (positive list) | Only runs when the diff can actually shift rendered output (`_posts/**`, `_layouts/**`, `assets/**`, `Gemfile.lock`, …) **or** changes one of the tools the regression pipeline uses (`e2e/detect-changed-pages.js`, `e2e/compute-visual-diffs.js`, `e2e/generate-video.sh`, `e2e/regression-video.spec.js`, `playwright.regression.config.js`, the workflow file itself). Stated as a positive list — `e2e/`'s dual nature (most specs irrelevant, a few drive this pipeline) makes a negative list awkward. |
+| `e2e-tests.yml` | `paths-ignore` (PR + push to `main`) | Coarse-skip for docs-only / unrelated-CI-only diffs. `e2e/select-specs.js` still does the fine-grained "which specs to run" cut at runtime for diffs that *do* affect anything testable; this trigger filter just spares the Ruby + Node + Playwright bring-up when nothing testable changed at all. |
+
+`deploy-preview.yml` is intentionally **not** path-filtered — its `closed`-action teardown step needs to run on every PR close, and `paths-ignore` would also skip teardown, leaking preview deployments. The build cost is moderate (~2-3 min) and the safety win of always tearing down the per-PR S3 prefix outweighs the savings.
+
+`secrets-scan.yml`, `cms-editorial-workflow.yml`, `dependabot-auto-merge.yml`, and `publish-scheduled-posts.yml` are all either security-critical, label-driven (cheap), or cron-driven, so they have no path filter.
+
+### Why the [Deployments page](https://github.com/Adam-S-Daniel/adamdaniel.ai/deployments) is mostly red ❌ (by design)
+
+The `regression-review` entries on GitHub's Deployments page show up as red, but **none of them are deploy failures.** `regression-review` is not a deploy target — it's a human-approval gate. When `visual-regression.yml` detects visually-different pages, its `approve-regression` job declares `environment: regression-review` to pause for a reviewer (configured in repo Settings → Environments). GitHub models that pause as a "deployment" stuck in `waiting`. The next push to the same PR supersedes the pending approval and GitHub flips its status from `waiting` → `error`, which the Deployments page renders as red. Every iteration on a PR with visual diffs therefore leaves a trail of red entries — all expected.
+
+The `github-pages` entries are dormant history from before the 2026-03-15 cutover to S3 + CloudFront in `deploy-production.yml`. One genuinely errored on first attempt; the rest succeeded and were auto-deactivated when superseded.
+
+**Real deploy outcomes live in the Actions tab, not the Deployments page.**
+
 ### Preview Environments
 
 PR previews are deployed to S3 and served via CloudFront with HTTPS:

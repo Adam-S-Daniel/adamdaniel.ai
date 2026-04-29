@@ -5,6 +5,38 @@ on:
     types: [opened, synchronize, reopened]
     branches:
       - main
+    # Positive path list — only run when the diff can actually shift
+    # rendered output OR change one of the tools the regression
+    # pipeline uses. Stated as a positive list (rather than the
+    # paths-ignore form used elsewhere) because the dual nature of
+    # `e2e/` (most specs unrelated, but a handful drive this workflow)
+    # makes a negative list awkward to express.
+    paths:
+      # Site-rendered content / templates / styling
+      - '_posts/**'
+      - '_tags/**'
+      - '_projects/**'
+      - '_layouts/**'
+      - '_includes/**'
+      - '_plugins/**'
+      - '_data/**'
+      - 'pages/**'
+      - 'assets/**'
+      - 'admin/**'
+      - '_config.yml'
+      - 'Gemfile'
+      - 'Gemfile.lock'
+      - 'index.html'
+      - '404.html'
+      - 'robots.txt'
+      - 'preview.md'
+      # Tools the regression pipeline itself depends on
+      - '.github/workflows/visual-regression.yml'
+      - 'e2e/detect-changed-pages.js'
+      - 'e2e/compute-visual-diffs.js'
+      - 'e2e/generate-video.sh'
+      - 'e2e/regression-video.spec.js'
+      - 'playwright.regression.config.js'
 
 permissions:
   contents: read

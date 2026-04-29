@@ -4,7 +4,55 @@ on:
   push:
     branches:
       - main
-  # Allow manual trigger from the Actions UI
+    # Skip the deploy when a push to main only touches files that
+    # cannot change what's served from S3 (docs, CI scripts, test
+    # tooling, infra-as-code for non-Jekyll AWS pieces, dev-only
+    # toolchains, etc.). Keep `.github/workflows/deploy-production.yml`
+    # OUT of this list — workflow-self changes must still trigger a
+    # run to validate them. Same for Gemfile/Gemfile.lock (Bundler
+    # bumps can change Jekyll output) and admin/ (the editorial shell
+    # is part of the deployed site).
+    paths-ignore:
+      - 'README.md'
+      - 'AGENTS.md'
+      - 'CLAUDE.md'
+      - 'ANALYTICS_SETUP.md'
+      - 'docs/**'
+      - '.agents/**'
+      - '_plugins_test/**'
+      - 'oauth-proxy/**'
+      - 'infrastructure/**'
+      - 'e2e/**'
+      - 'screenshots/**'
+      - 'recordings/**'
+      - 'test-results/**'
+      - 'playwright.config.js'
+      - 'playwright.regression.config.js'
+      - 'package.json'
+      - 'package-lock.json'
+      - 'LICENSE'
+      - '.gitignore'
+      - '.gitleaks.toml'
+      - '.editorconfig'
+      - '.bundle/**'
+      - 'scripts/setup-test-environment.sh'
+      - 'scripts/extract-playwright-failures.sh'
+      - 'scripts/scrub-secrets.js'
+      - 'scripts/generate-showcase.js'
+      - 'scripts/write-commit-json.sh'
+      - 'scripts/publish_scheduled_posts.py'
+      - 'scripts/patch-preview-config.sh'
+      - '.github/dependabot.yml'
+      - '.github/workflows/cms-editorial-workflow.yml'
+      - '.github/workflows/dependabot-auto-merge.yml'
+      - '.github/workflows/secrets-scan.yml'
+      - '.github/workflows/publish-scheduled-posts.yml'
+      - '.github/workflows/visual-regression.yml'
+      - '.github/workflows/e2e-tests.yml'
+      - '.github/workflows/claude.yml'
+      - '.github/workflows/deploy-preview.yml'
+  # Allow manual trigger from the Actions UI. workflow_dispatch ignores
+  # paths-ignore, so a force-deploy from the UI always runs.
   workflow_dispatch:
 
 permissions:
