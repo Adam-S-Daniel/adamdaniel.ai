@@ -14,6 +14,11 @@ const REPO_ROOT = path.join(__dirname, "..");
 const CONFIGS = [
   path.join(REPO_ROOT, "admin/config.yml"),
   path.join(REPO_ROOT, "admin/config-local.yml"),
+  // config-test.yml is the editorial-workflow + test-repo backend
+  // entrypoint that cms-editorial-workflow.spec.js drives. Its
+  // collection schema must mirror production so the spec catches
+  // real production-shape regressions.
+  path.join(REPO_ROOT, "admin/config-test.yml"),
 ];
 
 function readConfig(file) {
@@ -118,6 +123,16 @@ test.describe("Decap CMS config invariants", () => {
     // PR-based draft → preview → visual-regression-approval pipeline that
     // the rest of the system (cms-editorial-workflow.yml, the cms/draft
     // and cms/ready labels, /admin/reviews/) is built around.
+    expect(yml).toMatch(/^publish_mode:\s*editorial_workflow\b/m);
+  });
+
+  test("admin/config-test.yml uses test-repo backend with editorial workflow", () => {
+    const yml = readConfig(path.join(REPO_ROOT, "admin/config-test.yml"));
+    // The whole point of this config is to exercise the editorial
+    // workflow + GitHub-style backend code path that local_backend
+    // forces off. If either of these regresses, cms-editorial-workflow.spec.js
+    // reverts to testing nothing meaningfully different from cms-smoke.
+    expect(yml).toMatch(/^\s+name:\s*test-repo\b/m);
     expect(yml).toMatch(/^publish_mode:\s*editorial_workflow\b/m);
   });
 
