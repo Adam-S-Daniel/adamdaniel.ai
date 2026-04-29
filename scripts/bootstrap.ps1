@@ -45,11 +45,18 @@ foreach ($d in @('.claude', '.agents')) {
 
 # 1. Migration: handle existing real .claude/skills directory.
 if ((Test-Path -LiteralPath $MirrorDir) -and (-not (Test-IsLinkLike -Path $MirrorDir))) {
-    if (-not (Test-Path -LiteralPath $MirrorDir -PathType Container)) {
-        Write-Bootstrap -Err "ERROR: $MirrorDir exists but is not a directory or link."
+    if (Test-Path -LiteralPath $MirrorDir -PathType Leaf) {
+        # Likely a "fake symlink" file from a checkout with core.symlinks=false
+        # on Windows. Discard it; the real link is recreated below.
+        Write-Bootstrap "Removing stale plain file at $MirrorDir (was probably a checkout-emitted text symlink)"
+        Remove-Item -LiteralPath $MirrorDir -Force
+    } elseif (-not (Test-Path -LiteralPath $MirrorDir -PathType Container)) {
+        Write-Bootstrap -Err "ERROR: $MirrorDir exists but is not a regular file, directory, or link."
         exit 2
     }
+}
 
+if ((Test-Path -LiteralPath $MirrorDir -PathType Container) -and (-not (Test-IsLinkLike -Path $MirrorDir))) {
     $mirrorHas = Test-DirHasContent -Path $MirrorDir
     $agentsHas = Test-DirHasContent -Path $AgentsDir
 

@@ -122,6 +122,24 @@ def test_bootstrap_aborts_when_both_have_content(synthetic_repo: Path) -> None:
 
 
 @pytest.mark.skipif(_NOT_LINUX, reason="bash bootstrap is for Unix-likes")
+def test_bootstrap_handles_text_symlink_from_no_symlinks_checkout(synthetic_repo: Path) -> None:
+    """A checkout with core.symlinks=false materializes the committed symlink
+    as a plain file containing the target path. Bootstrap must replace it."""
+    _make_skill(synthetic_repo / ".agents" / "skills", "demo")
+
+    (synthetic_repo / ".claude").mkdir()
+    fake_link = synthetic_repo / ".claude" / "skills"
+    fake_link.write_text("../.agents/skills", encoding="utf-8")
+    assert fake_link.is_file() and not fake_link.is_symlink()
+
+    result = _run_bash_bootstrap(synthetic_repo)
+    assert result.returncode == 0, f"bootstrap failed:\nstderr={result.stderr}"
+
+    assert fake_link.is_symlink(), "the plain file must be replaced with a real symlink"
+    assert fake_link.resolve() == (synthetic_repo / ".agents" / "skills").resolve()
+
+
+@pytest.mark.skipif(_NOT_LINUX, reason="bash bootstrap is for Unix-likes")
 def test_bootstrap_finishes_under_three_seconds(synthetic_repo: Path) -> None:
     """Bootstrap is in the cloud-session-startup critical path (sessionStart hook)."""
     _make_skill(synthetic_repo / ".agents" / "skills", "demo")

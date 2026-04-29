@@ -26,10 +26,18 @@ mkdir -p .claude .agents
 
 # 1. Migration: handle existing real .claude/skills directory.
 if [[ -e "$MIRROR_DIR" && ! -L "$MIRROR_DIR" ]]; then
-    if [[ ! -d "$MIRROR_DIR" ]]; then
-        err "ERROR: $MIRROR_DIR exists but is not a directory or symlink."
+    if [[ -f "$MIRROR_DIR" ]]; then
+        # Likely a "fake symlink" file from a checkout with core.symlinks=false.
+        # Discard it; the link will be recreated below.
+        log "Removing stale plain file at $MIRROR_DIR (was probably a checkout-emitted text symlink)"
+        rm -f "$MIRROR_DIR"
+    elif [[ ! -d "$MIRROR_DIR" ]]; then
+        err "ERROR: $MIRROR_DIR exists but is not a regular file, directory, or symlink."
         exit 2
     fi
+fi
+
+if [[ -d "$MIRROR_DIR" && ! -L "$MIRROR_DIR" ]]; then
 
     if dir_has_content "$MIRROR_DIR" && dir_has_content "$AGENTS_DIR"; then
         err "ERROR: Both $AGENTS_DIR and $MIRROR_DIR contain content."
