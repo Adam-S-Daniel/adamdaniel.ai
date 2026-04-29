@@ -63,7 +63,7 @@ PR close/merge
 - `AWS_ROLE_ARN` — OIDC role for AWS auth (no long-lived keys)
 - `PREVIEW_CLOUDFRONT_ID` — CloudFront distribution ID (`E2OBHKV0LC6CJ2`)
 
-If `PREVIEW_CLOUDFRONT_ID` is unset, the workflow falls back to the S3 website URL at `/pr-{N}/` (HTTP only — won't work with Sveltia CMS).
+If `PREVIEW_CLOUDFRONT_ID` is unset, the workflow falls back to the S3 website URL at `/pr-{N}/` (HTTP only — won't work with Decap CMS).
 
 ## Jekyll build
 
@@ -120,11 +120,11 @@ aws s3 sync ./_site_preview s3://adamdaniel-ai-previews/pr-<N>/ \
 **Preview URL shows HTTP S3 link instead of HTTPS:**
 The `PREVIEW_CLOUDFRONT_ID` secret was not set when the workflow ran. Add the secret and re-trigger (push an empty commit).
 
-**Sveltia CMS won't load from the preview URL:**
-Sveltia CMS requires HTTPS or localhost. The preview domain must be served via CloudFront (HTTPS). If the S3 fallback URL appears, check the secret is set.
+**Decap CMS won't load from the preview URL:**
+Decap requires HTTPS for GitHub OAuth (or a localhost dev server). The preview domain must be served via CloudFront (HTTPS). If the S3 fallback URL appears, check the secret is set.
 
 **"View on Live Site" in the CMS editor sends editors to prod:**
-`patch-preview-config.sh` rewrites `admin/config.yml` during the preview build so Sveltia's `site_url`/`display_url` point at the PR's subdomain and the GitHub backend reads from the PR's head branch. If this step is missing, Sveltia will open production URLs with the slugified title rather than the PR's draft content.
+`patch-preview-config.sh` rewrites `admin/config.yml` during the preview build so Decap's `site_url`/`display_url` point at the PR's subdomain and the GitHub backend reads from the PR's head branch. If this step is missing, Decap will open production URLs with the slugified title rather than the PR's draft content.
 
 **preview-pr{N}.adamdaniel.ai resolves but returns 404 or XML:**
 Either the CloudFront Function isn't attached to the distribution's viewer-request behaviour, or the wildcard Route53 record / wildcard ACM cert is missing. Re-run `infrastructure/bootstrap/deploy.sh`.

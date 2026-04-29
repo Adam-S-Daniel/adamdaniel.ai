@@ -15,7 +15,6 @@ All e2e tests run across 8 Playwright projects covering browsers, viewports, tex
 | `playwright.config.js` | Matrix definition, webServer config, parallelism |
 | `e2e/base.js` | Custom fixture — extends `test` with `rootFontSize` option |
 | `e2e/*.spec.js` | Test files — import `{ test, expect }` from `./base` |
-| `e2e/cms-test-helpers.js` | Writable FileSystemDirectoryHandle mock + Sveltia stubs (`buildFixtures`, `installSveltiaStubs`, `signInLocal`, `readFixtureFile`, `listFixtureDir`). Shared across all CMS-driving specs. |
 | `e2e/select-specs.js` | Diff-aware spec selector — maps changed files to relevant specs so a content-only PR doesn't pay for the full e2e matrix |
 | `.github/workflows/e2e-tests.yml` | CI — installs chromium + firefox + webkit, runs the selector on PRs, full matrix on push to main |
 
@@ -147,35 +146,31 @@ Some specs run under Playwright's runner purely for its discovery + parallelism,
 
 They ignore the `page` fixture and don't need Jekyll to be running — treat them as unit tests that happen to share the test harness.
 
-## Driving Sveltia CMS in an e2e spec
+## Driving Decap CMS in an e2e spec
 
-`e2e/cms-test-helpers.js` is the shared foundation. It builds an in-memory tree from `_posts/` + `_tags/` + `_projects/` + `pages/` + `assets/` and installs a `FileSystemDirectoryHandle` mock that Sveltia's local backend talks to as if it were a real picked directory. Used by:
+The current CMS is Decap, which talks to GitHub directly via the OAuth Lambda proxy and to `decap-server` locally. Specs don't need a `FileSystemDirectoryHandle` mock — Decap's local backend is just an HTTP server pointed at the on-disk repo, which Playwright's webServer config already starts. The CMS specs in tree:
 
-- `e2e/admin-cms.spec.js` — verifies the "View on Live Site" template engine for existing posts
-- `e2e/cms-posts-crud.spec.js` — create + featured-image upload + edit + delete
-- `e2e/cms-tags-crud.spec.js` — create + edit + delete
-- `e2e/cms-projects-crud.spec.js` — create + multi-image gallery + edit + delete
-- `e2e/cms-pages-crud.spec.js` — create + edit + delete (Pages is a folder collection now)
+- `e2e/cms-smoke.spec.js` — boots `decap-server` + a static fileserver and asserts the admin shell loads, sign-in works, and at least one collection's entry list renders.
+- `e2e/cms-config.spec.js` — pure YAML invariants on `admin/config*.yml` (editorial workflow on, every folder collection has explicit `create: true` AND `delete: true`, all required fields). Runs as part of the always-run baseline. Pinned because Decap's defaults can drift between major versions.
+- `e2e/cms-publish-flow.spec.js` — exercises the editor's status pill (Draft → In Review → Ready) and asserts each transition produces the expected GitHub label-change request via a mocked OAuth proxy.
+- `e2e/cms-preview-url.spec.js` — verifies the preview-bridge's `/preview/` URL is opened with the right collection and slug for each entry type.
+- `e2e/admin-reviews-auth.spec.js` / `-stats.spec.js` — drive the visual-regression reviews dashboard at `/admin/reviews/`. Mock the GitHub OAuth handshake using `ghp_test_token_abc123` / `ghp_fake_token_for_test` (allowlisted in `.gitleaks.toml`).
 
-The mock is **writable**: `createWritable()` collects chunks and atomically replaces the node's content on close, so saves and deletes flow back into the fixture tree where the test can read them out via `readFixtureFile(page, ...segments)` and `listFixtureDir(page, ...segments)`. No DOM scraping required.
+Heavy CMS specs are restricted to `chromium-desktop` — the assertion is about app behaviour, not browser quirks, and booting decap-server + Playwright in webkit/firefox is wasted minutes.
 
-Other browser-level stubs:
+### Decap config gotcha
 
-- `window.showDirectoryPicker` returns the root mock handle.
-- `IDBObjectStore.prototype.put` swallows `DataCloneError` (the mock has function properties and isn't structured-cloneable; Sveltia caches the picked handle in IndexedDB on sign-in).
-- `window.open` is captured so the "View on Live Site" button records its URL instead of opening a popup.
+Folder collections need **explicit** `create: true` AND `delete: true` in `admin/config*.yml`. Decap defaults both to true, but the explicit form keeps editor capabilities visible in the YAML and survives major-version default changes. `files:` collections never expose create/delete in the UI — convert to `folder:` if editors need to add or remove entries. `cms-config.spec.js` locks this in structurally.
 
-Restricted to `chromium-desktop` because Sveltia is heavy to boot — the spec asserts app behaviour, not browser quirks.
+### Why not Sveltia
 
-### Sveltia config gotcha
-
-Folder collections need **explicit** `create: true` AND `delete: true` in `admin/config*.yml`. Sveltia's `contents-page.svelte` gates the toolbar on `_type === 'entry'`, and the toolbar create/delete buttons only render when both flags are set. Implicit Decap defaults are not safe to rely on. `files:` collections never expose create/delete in Sveltia regardless of flags — convert to `folder:` if editors need to add or remove entries. `cms-config.spec.js` locks this in structurally.
+An earlier iteration used Sveltia CMS for its UX improvements, but Sveltia ≤ 0.158 silently ignores `publish_mode: editorial_workflow`. With branch protection on `main`, every Save returned "Repository rule violations found." Decap implements the editorial workflow correctly — each Save lands on a `cms/...` branch and opens a PR — so we swapped back. See PR #48.
 
 ## Diff-aware spec selection
 
 The full matrix is 8 projects × ~25 specs. A content-only edit shouldn't pay for the cross-browser admin-CMS specs, the preview-bridge specs, or the CloudFront router specs — those tests can't possibly be affected. `e2e/select-specs.js` reads the PR's `git diff --name-only origin/main...HEAD` and returns one of three scopes:
 
-- **`all`** — fanout file changed (`_layouts/`, `_includes/`, `_config.yml`, `assets/css/`, `_plugins/`, `package*.json`, `Gemfile*`, `e2e/base.js`, `e2e/cms-test-helpers.js`, `playwright*.config.js`). Run the full matrix.
+- **`all`** — fanout file changed (`_layouts/`, `_includes/`, `_config.yml`, `assets/css/`, `_plugins/`, `package*.json`, `Gemfile*`, `e2e/base.js`, `playwright*.config.js`). Run the full matrix.
 - **`subset`** — match each changed file against `SPEC_RULES` and run only the resulting list, plus the always-run baseline.
 - **`skip`** — only docs (`README.md`, `AGENTS.md`, `docs/`, `.agents/skills/`) changed. Run the baseline only as a smoke check.
 

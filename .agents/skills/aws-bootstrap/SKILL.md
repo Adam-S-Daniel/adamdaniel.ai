@@ -90,3 +90,7 @@ All policies are scoped to `adamdaniel-ai-*` prefixed resources:
 
 `infrastructure/bootstrap/template.yaml` — vanilla CloudFormation (no SAM transform).
 `infrastructure/bootstrap/deploy.sh` — idempotent deploy script.
+
+## Sibling stack: CloudWatch RUM
+
+A separate CloudFormation stack `adamdaniel-ai-rum` provisions Amazon CloudWatch RUM (real-user monitoring — Core Web Vitals, JS errors, page-load timings). Independent of the bootstrap stack so you can deploy/redeploy/teardown analytics without touching the deploy pipeline. See [`ANALYTICS_SETUP.md`](../../../ANALYTICS_SETUP.md) for the deploy + config-wiring steps; the script is `infrastructure/rum/deploy.sh`.
