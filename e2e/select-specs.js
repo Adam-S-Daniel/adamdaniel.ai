@@ -69,6 +69,9 @@ const SPEC_RULES = {
     /^e2e\/generate-video\.sh$/,
     /^\.github\/workflows\/visual-regression\.yml$/,
   ],
+  "e2e/detect-changed-pages.test.js": [
+    /^e2e\/detect-changed-pages\.js$/,
+  ],
   "e2e/cms-smoke.spec.js": [
     /^admin\//,
     /^_posts\//,

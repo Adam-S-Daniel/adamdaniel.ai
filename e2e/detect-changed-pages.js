@@ -166,53 +166,86 @@ function mapFileToUrls(filePath) {
   return [];
 }
 
-try {
-  git("git fetch origin main --depth=1 2>/dev/null || true");
-} catch {
-  // may fail in some environments
-}
+// Pure classifier — given the canonical page list and the changed-files
+// list, decide which pages are changed / new / unchanged. Extracted so
+// tests can hit it without a git environment.
+//
+// `fileExistsOnMain` is injected so tests don't need a real `origin/main`.
+// In CI the production binding queries git; tests pass a pure stub.
+function classifyPages({ allPages, changedFiles, fileExistsOnMain = () => true }) {
+  const directlyChanged = new Set();
+  const newPages = new Set();
+  let globalChange = false;
 
-let changedFiles;
-try {
-  changedFiles = git("git diff --name-only origin/main...HEAD")
-    .split("\n")
-    .filter(Boolean);
-} catch {
-  changedFiles = [];
-}
-
-const allPages = discoverAllPages();
-const directlyChanged = new Set();
-const newPages = new Set();
-let globalChange = false;
-
-for (const file of changedFiles) {
-  const urls = mapFileToUrls(file);
-  for (const url of urls) {
-    if (url === "__ALL__") {
-      globalChange = true;
-    } else {
-      directlyChanged.add(url);
-      if (!fileExistsOnMain(file)) {
-        newPages.add(url);
+  for (const file of changedFiles) {
+    const urls = mapFileToUrls(file);
+    for (const url of urls) {
+      if (url === "__ALL__") {
+        globalChange = true;
+      } else {
+        directlyChanged.add(url);
+        if (!fileExistsOnMain(file)) {
+          newPages.add(url);
+        }
       }
     }
   }
-}
 
-const changed = [];
-const newList = [];
-const unchanged = [];
+  const changed = [];
+  const newList = [];
+  const unchanged = [];
 
-for (const page of allPages) {
-  if (newPages.has(page)) {
-    newList.push(page);
-  } else if (globalChange || directlyChanged.has(page)) {
-    changed.push(page);
-  } else {
-    unchanged.push(page);
+  for (const page of allPages) {
+    if (newPages.has(page)) {
+      newList.push(page);
+    } else if (globalChange || directlyChanged.has(page)) {
+      changed.push(page);
+    } else {
+      unchanged.push(page);
+    }
   }
+
+  return { changed, new: newList, unchanged };
 }
 
-const result = { changed, new: newList, unchanged };
-process.stdout.write(JSON.stringify(result, null, 2) + "\n");
+module.exports = {
+  ALWAYS_INCLUDED_ADMIN_PAGES,
+  classifyPages,
+  discoverAllPages,
+  fileExistsOnMain,
+  mapFileToUrls,
+};
+
+if (require.main === module) {
+  // Best-effort fetch of origin/main so the diff below has a base to
+  // resolve against. `|| true` keeps a missing remote (offline dev) from
+  // killing the script — the next git command is the real gate.
+  //
+  // Historic gotcha: do NOT pass `--depth=1` here. The workflow checks
+  // out with `fetch-depth: 0` (full history); a depth-1 fetch on top of
+  // that converts the local clone to shallow and severs the merge base,
+  // which then causes the next `git diff origin/main...HEAD` to fail
+  // with "no merge base".
+  try {
+    git("git fetch origin main 2>/dev/null || true");
+  } catch {
+    // ignore — the diff below will surface any real problem
+  }
+
+  // No silent catch here — if git diff fails, the script must fail
+  // loudly. A previous version swallowed the error and treated it as
+  // an empty changeset, which made the visual-regression workflow
+  // report `potentiallyAffected: 0` on every PR regardless of what
+  // actually changed.
+  const changedFiles = git("git diff --name-only origin/main...HEAD")
+    .split("\n")
+    .filter(Boolean);
+
+  const allPages = discoverAllPages();
+  const result = classifyPages({
+    allPages,
+    changedFiles,
+    fileExistsOnMain,
+  });
+  process.stdout.write(JSON.stringify(result, null, 2) + "\n");
+}

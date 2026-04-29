@@ -17,6 +17,12 @@ concurrency:
 
 jobs:
   generate:
+    # Skip entirely on Dependabot PRs whose ecosystem can't possibly
+    # change rendered output (npm/github-actions are dev-only here).
+    # Bundler bumps (Jekyll + plugins) DO affect rendering, so they
+    # still run the regression gate. Branch naming is Dependabot's
+    # contract: `dependabot/<ecosystem>/...`.
+    if: github.actor != 'dependabot[bot]' || startsWith(github.head_ref, 'dependabot/bundler/')
     runs-on: ubuntu-latest
     outputs:
       visually-different: ${{ steps.compute.outputs.visually-different }}
@@ -102,13 +108,20 @@ jobs:
       - name: Generate comparison video
         run: bash e2e/generate-video.sh /tmp/page-changes.json screenshots/regression/diffs.json
 
+      # AWS / S3 / CloudFront / PR-comment steps below are skipped for
+      # Dependabot PRs — Dependabot can't access the OIDC role secret,
+      # and the comment links to S3-hosted media that wouldn't have
+      # been uploaded anyway. The diff computation above still ran, so
+      # `approve-regression` still functions as the merge gate.
       - name: Configure AWS credentials
+        if: github.actor != 'dependabot[bot]'
         uses: aws-actions/configure-aws-credentials@ec61189d14ec14c8efccab744f656cffd0e33f37  # v6.1.0 (2026-04-06)
         with:
           role-to-assume: ${{ secrets.AWS_ROLE_ARN }}
           aws-region: ${{ env.AWS_REGION }}
 
       - name: Upload video and diffs JSON to S3
+        if: github.actor != 'dependabot[bot]'
         run: |
           aws s3 cp screenshots/regression/comparison.mp4 \
             "s3://${PREVIEW_BUCKET}/pr-${PR_NUMBER}/regression.mp4" \
@@ -120,13 +133,14 @@ jobs:
             --content-type "application/json"
 
       - name: Invalidate CloudFront cache for video and diffs
-        if: env.CLOUDFRONT_DISTRIBUTION_ID != ''
+        if: github.actor != 'dependabot[bot]' && env.CLOUDFRONT_DISTRIBUTION_ID != ''
         run: |
           aws cloudfront create-invalidation \
             --distribution-id "$CLOUDFRONT_DISTRIBUTION_ID" \
             --paths "/pr-${PR_NUMBER}/regression.mp4" "/pr-${PR_NUMBER}/regression.json"
 
       - name: Post regression video comment
+        if: github.actor != 'dependabot[bot]'
         uses: actions/github-script@3a2844b7e9c422d3c10d287c895573f7108da1b3  # v9.0.0 (2026-04-09)
         with:
           script: |
