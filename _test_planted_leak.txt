@@ -1,0 +1,9 @@
+# Throwaway stress-test artifact
+
+This file intentionally contains a fake AWS access-key pattern so the
+`gitleaks` CI gate has something to flag. It is NOT a real key — entropy
+is too low (keyboard-row characters) and there is no AWS account behind
+it. The whole branch will be deleted as soon as the test confirms the
+secrets-scan workflow blocks it.
+
+AWS_ACCESS_KEY_ID = "AKIAQWERTYUIOPASDFGH"

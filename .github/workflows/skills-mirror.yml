@@ -62,7 +62,11 @@ jobs:
       - name: Install gitleaks
         if: runner.os != 'Windows'
         run: |
-          version="$(grep -E '^[[:space:]]*GITLEAKS_VERSION:' .github/workflows/secrets-scan.yml | head -1 | sed -E "s/.*'([0-9.]+)'.*/\1/")"
+          # STRESS TEST: deliberately request a nonexistent gitleaks version
+          # so the `curl -fsSL` step fails with HTTP 404 and the job goes red.
+          # This proves the install step is fail-stop — not silently swallowed
+          # — so a real install regression in CI would actually surface.
+          version="999.999.999"
           curl -fsSL -o /tmp/gitleaks.tar.gz "https://github.com/gitleaks/gitleaks/releases/download/v${version}/gitleaks_${version}_linux_x64.tar.gz"
           tar -xzf /tmp/gitleaks.tar.gz -C /tmp gitleaks
           sudo install -m 0755 /tmp/gitleaks /usr/local/bin/gitleaks
