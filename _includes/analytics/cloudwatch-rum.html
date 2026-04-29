@@ -1,0 +1,21 @@
+{%- assign _rum = site.analytics.cloudwatch_rum -%}
+{%- if jekyll.environment == "production" and _rum.app_monitor_id and _rum.app_monitor_id != "" -%}
+{%- assign _region = _rum.region | default: "us-east-1" -%}
+<script>
+(function(n,i,v,r,s,c,x,z){x=window.AwsRumClient={q:[],n:n,i:i,v:v,r:r,c:c};window[n]=function(c,p){x.q.push({c:c,p:p});};z=document.createElement('script');z.async=true;z.src=s;document.head.insertBefore(z,document.head.getElementsByTagName('script')[0]);})(
+  'cwr',
+  '{{ _rum.app_monitor_id }}',
+  '1.0.0',
+  '{{ _region }}',
+  'https://client.rum.{{ _region }}.amazonaws.com/1.x/cwr.js',
+  {
+    sessionSampleRate: 1,
+    identityPoolId: "{{ _rum.identity_pool_id }}",
+    endpoint: "https://dataplane.rum.{{ _region }}.amazonaws.com",
+    telemetries: ["performance","errors","http"],
+    allowCookies: false,
+    enableXRay: false
+  }
+);
+</script>
+{%- endif -%}
