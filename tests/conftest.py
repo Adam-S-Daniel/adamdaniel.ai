@@ -1,6 +1,17 @@
+import os
 from pathlib import Path
 
 import pytest
+
+
+def pytest_configure(config: pytest.Config) -> None:
+    """Honor SKILLS_TEST_LIVE=1 by switching the default `-m 'not live'`
+    marker filter to `-m live`, so the env var matches an explicit
+    `pytest -m live` invocation."""
+    if os.environ.get("SKILLS_TEST_LIVE") == "1":
+        current = getattr(config.option, "markexpr", "") or ""
+        if current in ("", "not live"):
+            config.option.markexpr = "live"
 
 
 @pytest.fixture(scope="session")

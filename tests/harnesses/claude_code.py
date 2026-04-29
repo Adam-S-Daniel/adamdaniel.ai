@@ -1,7 +1,9 @@
 """Claude Code harness for the skill-mirror test suite."""
 from __future__ import annotations
 
+import json
 import shutil
+import subprocess
 from pathlib import Path
 
 from .base import AgentHarness, HarnessResult, Outcome
@@ -9,6 +11,22 @@ from .base import AgentHarness, HarnessResult, Outcome
 
 class ClaudeCodeHarness(AgentHarness):
     name = "claude-code"
+
+    _LIVE_PROMPT_TEMPLATE = (
+        "Read .claude/skills/{skill}/SKILL.md and output only the line that "
+        "begins with SKILLS_MIRROR. No explanation, no other text."
+    )
+    _EXPECTED_MARKER = "SKILLS_MIRROR_CANARY_OK"
+    _LIVE_TIMEOUT_SECONDS = 60
+    _AUTH_FAIL_NEEDLES = (
+        "auth",
+        "log in",
+        "logged out",
+        "login",
+        "unauthorized",
+        "401",
+        "credentials",
+    )
 
     def verify_offline(self, repo_root: Path, skill_name: str) -> HarnessResult:
         mirrored = repo_root / ".claude" / "skills" / skill_name / "SKILL.md"
@@ -61,10 +79,88 @@ class ClaudeCodeHarness(AgentHarness):
             return HarnessResult(
                 self.name, Outcome.SKIP, "claude CLI not on PATH"
             )
-        # Step 6 wires up the actual `claude -p` invocation; for now the
-        # offline-mode harness is the only thing this PR is shipping.
+
+        prompt = self._LIVE_PROMPT_TEMPLATE.format(skill=skill_name)
+        cmd = [
+            "claude",
+            "-p",
+            prompt,
+            "--output-format",
+            "json",
+            "--allowedTools",
+            "Read",
+            "--no-session-persistence",
+        ]
+
+        try:
+            proc = subprocess.run(
+                cmd,
+                capture_output=True,
+                text=True,
+                cwd=str(repo_root),
+                timeout=self._LIVE_TIMEOUT_SECONDS,
+            )
+        except subprocess.TimeoutExpired:
+            return HarnessResult(
+                self.name,
+                Outcome.FAIL,
+                f"`claude -p` timed out after {self._LIVE_TIMEOUT_SECONDS}s",
+            )
+
+        if proc.returncode != 0:
+            stderr_lower = (proc.stderr or "").lower()
+            if any(needle in stderr_lower for needle in self._AUTH_FAIL_NEEDLES):
+                return HarnessResult(
+                    self.name,
+                    Outcome.SKIP,
+                    f"claude not authenticated: {(proc.stderr or '').strip()[:200]}",
+                )
+            return HarnessResult(
+                self.name,
+                Outcome.FAIL,
+                (
+                    f"`claude -p` exited {proc.returncode}\n"
+                    f"stdout: {(proc.stdout or '')[:500]}\n"
+                    f"stderr: {(proc.stderr or '')[:500]}"
+                ),
+            )
+
+        try:
+            payload = json.loads(proc.stdout)
+        except json.JSONDecodeError as exc:
+            return HarnessResult(
+                self.name,
+                Outcome.FAIL,
+                f"could not parse claude output as JSON: {exc}\n"
+                f"stdout: {(proc.stdout or '')[:500]}",
+            )
+
+        # `claude -p --output-format json` emits a JSON array of events;
+        # the final `type=="result"` event carries the answer in `.result`.
+        # Older versions returned a bare object — handle both shapes.
+        body = ""
+        if isinstance(payload, list):
+            for event in reversed(payload):
+                if isinstance(event, dict) and event.get("type") == "result":
+                    body = event.get("result", "") or ""
+                    break
+        elif isinstance(payload, dict):
+            body = payload.get("result", "") or ""
+        if not isinstance(body, str):
+            body = str(body)
+
+        if self._EXPECTED_MARKER in body:
+            return HarnessResult(
+                self.name,
+                Outcome.PASS,
+                f"claude -p returned {self._EXPECTED_MARKER} via the mirror",
+            )
+
         return HarnessResult(
             self.name,
-            Outcome.SKIP,
-            "live verify_live not yet implemented (step 6)",
+            Outcome.FAIL,
+            (
+                f"canary marker {self._EXPECTED_MARKER!r} not found in claude response\n"
+                f"result: {body[:500]}"
+            ),
         )
