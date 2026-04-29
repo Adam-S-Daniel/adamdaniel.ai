@@ -21,7 +21,10 @@ _NOT_LINUX = sys.platform == "win32"
 def _copy_assets(repo_root: Path, dest: Path) -> None:
     src_scripts = repo_root / "scripts"
     (dest / "scripts").mkdir(parents=True, exist_ok=True)
-    for n in ("bootstrap.sh", "verify-skills-mirror.sh"):
+    # secrets-scan.sh is copied alongside verify-skills-mirror.sh because
+    # bootstrap registers both pre-commit hooks; if either script is
+    # missing the hook chain won't even start.
+    for n in ("bootstrap.sh", "verify-skills-mirror.sh", "secrets-scan.sh"):
         s = src_scripts / n
         if s.exists():
             shutil.copy(s, dest / "scripts" / n)
@@ -52,6 +55,10 @@ def _git(*args: str, cwd: Path, env: dict | None = None) -> subprocess.Completed
         "GIT_AUTHOR_EMAIL": "t@example.com",
         "GIT_COMMITTER_NAME": "Test",
         "GIT_COMMITTER_EMAIL": "t@example.com",
+        # These tests exercise the skills-mirror hook in isolation. The
+        # secrets-scan hook is also registered by bootstrap; short-circuit
+        # it so this file isn't gated on gitleaks being installed.
+        "SKIP_SECRETS_SCAN": "1",
     }
     if env:
         real_env.update(env)
@@ -72,6 +79,10 @@ def synthetic_git_repo(tmp_path: Path, repo_root: Path) -> Path:
     _copy_assets(repo_root, tmp_path)
     init = _git("init", "-q", "-b", "main", cwd=tmp_path)
     assert init.returncode == 0, init.stderr
+    # Override any host-level commit signing so commits in these tests don't
+    # depend on a signing service being reachable.
+    _git("config", "--local", "commit.gpgsign", "false", cwd=tmp_path)
+    _git("config", "--local", "tag.gpgsign", "false", cwd=tmp_path)
     return tmp_path
 
 

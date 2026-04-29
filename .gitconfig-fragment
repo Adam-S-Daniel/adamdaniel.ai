@@ -1,7 +1,10 @@
-# Git config fragment for the skills-mirror pre-commit guard.
+# Git config fragment for repo-local pre-commit guards.
 # Loaded via `git config --local --add include.path ../.gitconfig-fragment`,
 # wired up by scripts/bootstrap.sh / bootstrap.ps1 on Git >= 2.54.
-# `git hook list pre-commit` will then show skills-mirror-check.
+# `git hook list pre-commit` will then show every guard below.
 [hook "skills-mirror-check"]
 	event = pre-commit
 	command = scripts/verify-skills-mirror.sh --staged
+[hook "secrets-scan"]
+	event = pre-commit
+	command = scripts/secrets-scan.sh

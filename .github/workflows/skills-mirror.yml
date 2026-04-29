@@ -53,5 +53,20 @@ jobs:
       - name: Install test deps
         run: python -m pip install --upgrade pip pytest pyyaml
 
+      # The secrets-scan hook tests in tests/test_secrets_scan_hook.py
+      # need the same gitleaks binary the secrets-scan workflow pins
+      # (.github/workflows/secrets-scan.yml → GITLEAKS_VERSION). The tests
+      # skip gracefully if it isn't installed; installing it ensures they
+      # actually run on every push instead of silently skipping. Linux only
+      # because the tests themselves skip on Windows (bash hooks).
+      - name: Install gitleaks
+        if: runner.os != 'Windows'
+        run: |
+          version="$(grep -E '^[[:space:]]*GITLEAKS_VERSION:' .github/workflows/secrets-scan.yml | head -1 | sed -E "s/.*'([0-9.]+)'.*/\1/")"
+          curl -fsSL -o /tmp/gitleaks.tar.gz "https://github.com/gitleaks/gitleaks/releases/download/v${version}/gitleaks_${version}_linux_x64.tar.gz"
+          tar -xzf /tmp/gitleaks.tar.gz -C /tmp gitleaks
+          sudo install -m 0755 /tmp/gitleaks /usr/local/bin/gitleaks
+          gitleaks version
+
       - name: Run offline tests
         run: python -m pytest tests/
