@@ -303,7 +303,7 @@ Located at `/admin/reviews/` (separate from Decap CMS). Linked from a floating b
 
 ### `e2e-tests.yml`
 
-**Trigger:** push to `main`, or pull request targeting `main`
+**Trigger:** pull request targeting `main`. The PR run is required by branch protection, so the merge commit on `main` is already covered — no post-merge re-run.
 
 **Jobs:** `e2e`
 
@@ -311,11 +311,10 @@ Located at `/admin/reviews/` (separate from Decap CMS). Linked from a floating b
 2. Run `_plugins_test/*_test.rb` — plain-Ruby unit tests for the Jekyll plugins
 3. `npm ci` → install test dependencies
 4. `npx playwright install chromium firefox webkit --with-deps`
-5. **Diff-aware spec selection** — on PRs, `e2e/select-specs.js --base $BASE_REF` returns one of three scopes:
+5. **Diff-aware spec selection** — `e2e/select-specs.js --base $BASE_REF` returns one of three scopes:
    - `all` — fanout files changed (`_layouts/`, `_includes/`, `_config.yml`, `assets/css/`, `_plugins/`, `package*.json`, `Gemfile*`, `e2e/base.js`, `playwright*.config.js`). Run the full matrix.
    - `subset` — match each changed file against `SPEC_RULES` and run only the resulting list (always-run baseline included).
    - `skip` — only docs (`README.md`, `AGENTS.md`, `docs/`, `.agents/skills/`) changed. Run the always-run baseline only as a smoke check.
-   On push-to-main, the selector is bypassed and the full matrix runs.
 6. Upload `test-results/` artifact (7-day retention)
 
 Tests run with `fullyParallel: true` — all 8 projects execute concurrently.
