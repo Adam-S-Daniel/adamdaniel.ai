@@ -20,8 +20,6 @@ paths = [
   # Admin-reviews specs hardcode a fake GitHub PAT to drive the auth
   # flow without touching the real OAuth proxy.
   '''e2e/admin-reviews-(auth|stats)\.spec\.js''',
-  # Mocked-CMS screenshot script uses a clearly-fake demo token.
-  '''screenshots/demo_cms_mocked\.py''',
   # The scrubber's own comments reference rule IDs and example
   # secrets in docstrings.
   '''scripts/scrub-secrets\.js''',
