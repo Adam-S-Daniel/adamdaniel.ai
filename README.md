@@ -124,6 +124,14 @@ Cost: roughly **$0.10/month** at this site's traffic. Full setup, sampling, rete
 | `secrets-scan.yml` | PR + push to main + weekly cron | Runs [gitleaks](https://github.com/gitleaks/gitleaks) on the PR diff (or full history on push/cron). Allowlist for known test fixtures lives in `.gitleaks.toml`. |
 | `dependabot-auto-merge.yml` | PR opened/updated by `dependabot[bot]` | Verifies the diff only touches dependency-manifest paths, then enables GitHub native auto-merge (`--squash`). Branch protection holds the merge until e2e + visual-regression checks pass. Configured by `.github/dependabot.yml`. |
 
+### Why the [Deployments page](https://github.com/Adam-S-Daniel/adamdaniel.ai/deployments) is mostly red ❌ (by design)
+
+The `regression-review` entries on GitHub's Deployments page show up as red, but **none of them are deploy failures.** `regression-review` is not a deploy target — it's a human-approval gate. When `visual-regression.yml` detects visually-different pages, its `approve-regression` job declares `environment: regression-review` to pause for a reviewer (configured in repo Settings → Environments). GitHub models that pause as a "deployment" stuck in `waiting`. The next push to the same PR supersedes the pending approval and GitHub flips its status from `waiting` → `error`, which the Deployments page renders as red. Every iteration on a PR with visual diffs therefore leaves a trail of red entries — all expected.
+
+The `github-pages` entries are dormant history from before the 2026-03-15 cutover to S3 + CloudFront in `deploy-production.yml`. One genuinely errored on first attempt; the rest succeeded and were auto-deactivated when superseded.
+
+**Real deploy outcomes live in the Actions tab, not the Deployments page.**
+
 ### Preview Environments
 
 PR previews are deployed to S3 and served via CloudFront with HTTPS:
