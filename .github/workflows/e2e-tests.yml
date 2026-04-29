@@ -36,28 +36,6 @@ on:
       - '.github/workflows/secrets-scan.yml'
       - '.github/workflows/publish-scheduled-posts.yml'
       - '.github/workflows/claude.yml'
-  push:
-    branches:
-      - main
-    paths-ignore:
-      - 'README.md'
-      - 'AGENTS.md'
-      - 'CLAUDE.md'
-      - 'ANALYTICS_SETUP.md'
-      - 'docs/**'
-      - '.agents/**'
-      - 'screenshots/**'
-      - 'recordings/**'
-      - 'test-results/**'
-      - 'LICENSE'
-      - '.gitignore'
-      - '.gitleaks.toml'
-      - '.editorconfig'
-      - '.bundle/**'
-      - '.github/dependabot.yml'
-      - '.github/workflows/secrets-scan.yml'
-      - '.github/workflows/publish-scheduled-posts.yml'
-      - '.github/workflows/claude.yml'
 
 permissions:
   contents: read
@@ -67,11 +45,10 @@ permissions:
   pull-requests: write
 
 concurrency:
-  # On PRs: cancel any in-flight run for the same PR — save minutes
-  # on rapid-push spam. On push to main: keep every run so each
-  # merged commit's green/red signal reaches branch protection.
-  group: e2e-${{ github.event_name }}-${{ github.event.pull_request.number || github.ref }}
-  cancel-in-progress: ${{ github.event_name == 'pull_request' }}
+  # Cancel any in-flight run for the same PR — saves minutes on
+  # rapid-push spam.
+  group: e2e-pr-${{ github.event.pull_request.number }}
+  cancel-in-progress: true
 
 jobs:
   unit:
@@ -125,32 +102,23 @@ jobs:
 
       - name: Decide scope and shard count
         id: s
-        # On push to main we run everything (the diff would be the
-        # entire merged commit and the selector can't reason about
-        # that usefully). On PRs we run the diff-aware subset against
-        # the base branch tip. The selector itself has no npm deps —
-        # `node e2e/select-specs.js` runs with the runner's stock
-        # Node, so we can skip `npm ci` here.
+        # Diff-aware subset against the base branch tip. The selector
+        # itself has no npm deps — `node e2e/select-specs.js` runs
+        # with the runner's stock Node, so we can skip `npm ci` here.
         run: |
-          if [ "${{ github.event_name }}" = "push" ]; then
+          git fetch origin main --depth=500 || true
+          # Fall back gracefully if the selector or git diff fails —
+          # a broken selector should never block the PR. Run full
+          # matrix.
+          if ! node e2e/select-specs.js --base origin/main > /tmp/select.json 2>/tmp/select.err; then
+            echo "Selector failed:"
+            cat /tmp/select.err || true
             scope=all
             files=
-            echo "Running full matrix on push-to-main"
           else
-            git fetch origin main --depth=500 || true
-            # Fall back gracefully if the selector or git diff fails —
-            # a broken selector should never block the PR. Run full
-            # matrix.
-            if ! node e2e/select-specs.js --base origin/main > /tmp/select.json 2>/tmp/select.err; then
-              echo "Selector failed:"
-              cat /tmp/select.err || true
-              scope=all
-              files=
-            else
-              cat /tmp/select.json
-              scope=$(node -e "console.log(JSON.parse(require('fs').readFileSync('/tmp/select.json')).scope)")
-              files=$(node -e "const j=JSON.parse(require('fs').readFileSync('/tmp/select.json'));console.log((j.files||[]).join(' '))")
-            fi
+            cat /tmp/select.json
+            scope=$(node -e "console.log(JSON.parse(require('fs').readFileSync('/tmp/select.json')).scope)")
+            files=$(node -e "const j=JSON.parse(require('fs').readFileSync('/tmp/select.json'));console.log((j.files||[]).join(' '))")
           fi
           # Baseline-only runs (scope=skip) are pure file-comparison
           # tests with no browser work — sharding them is overhead
@@ -345,7 +313,7 @@ jobs:
       # comment, scrubbed of secrets via gitleaks first.
       - name: Determine if any shard failed
         id: e2e-status
-        if: always() && github.event_name == 'pull_request'
+        if: always()
         # `needs.e2e.result` is "success" only when every matrix
         # entry succeeded; "failure" when any failed; "cancelled"
         # when any was cancelled.
@@ -432,7 +400,7 @@ jobs:
             }
 
       - name: Resolve failure-summary comment on success
-        if: always() && github.event_name == 'pull_request' && steps.e2e-status.outputs.failed != 'true'
+        if: always() && steps.e2e-status.outputs.failed != 'true'
         uses: actions/github-script@3a2844b7e9c422d3c10d287c895573f7108da1b3  # v9.0.0 (2026-04-09)
         with:
           script: |
