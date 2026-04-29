@@ -424,6 +424,55 @@ node scripts/generate-showcase.js                           # produces before/af
 
 ## Skills
 
+Skills live in `.agents/skills/`. Each skill is a folder with a `SKILL.md`.
+
+`.claude/skills` is a symlink (or directory junction on Windows) to
+`.agents/skills` so Claude Code discovers the same set.
+
+### After cloning
+
+- macOS / Linux / WSL: `bash scripts/bootstrap.sh`
+- native Windows: `pwsh scripts/bootstrap.ps1`
+- Claude Code on the web: nothing — `.claude/settings.json` runs the
+  bootstrap automatically via the `SessionStart` hook.
+
+Bootstrap is idempotent and exits in well under three seconds.
+
+### Editing rule
+
+Only edit files under `.agents/skills/`. The pre-commit hook
+(`skills-mirror-check`, registered via `.gitconfig-fragment` on Git ≥ 2.54
+or `.githooks/pre-commit` on older Git) and the `skills-mirror` CI workflow
+both reject commits that turn `.claude/skills` into real files.
+
+### Tests
+
+- `pytest tests/` — offline (CI runs this on `ubuntu-latest` and
+  `windows-latest`).
+- `pytest tests/ -m live` (or `SKILLS_TEST_LIVE=1 pytest tests/`) — invokes
+  `claude -p` against the canary skill. Requires the `claude` CLI on PATH
+  and an authenticated subscription session. Run on a local
+  Windows / WSL / macOS shell, or in a Claude Code on the web session
+  terminal.
+
+### Cloud session sanity check (manual)
+
+After pushing a branch, opening a Claude Code on the web session against
+this repo, and running `pytest tests/ -m live` in the session terminal,
+the `claude-code` harness should report PASS.
+
+### Current skills
+
 - `.agents/skills/aws-bootstrap/` — bootstrap stack deployment and troubleshooting
 - `.agents/skills/preview-environments/` — preview pipeline, CloudFront, S3 debugging
 - `.agents/skills/browser-testing/` — e2e test matrix, fixtures, cross-browser testing
+- `.agents/skills/github-actions-sha-pinning/` — workflow SHA-pinning rules + 7-day cooldown
+- `.agents/skills/sveltia-cms-playwright-demo/` — historical Sveltia/Playwright notes (Decap is current)
+- `.agents/skills/test-canary/` — internal test fixture; never invoke from real work
+
+### Adding an agent harness
+
+Drop a new module in `tests/harnesses/` extending `AgentHarness` with
+`verify_offline` and `verify_live`, then add an entry to
+`tests/harness-config.yaml` with `enabled: true`. No edits to
+`tests/test_skill_discovery.py` or any other runner code are required.

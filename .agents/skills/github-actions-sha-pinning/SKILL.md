@@ -1,3 +1,8 @@
+---
+name: github-actions-sha-pinning
+description: Project-local rules for pinning every GitHub Actions `uses:` reference in this repo's `.github/workflows/` to a full 40-character commit SHA with a version comment, plus the 7-day cooling-off period before adopting new releases. Trigger when adding, editing, or auditing workflow files.
+---
+
 # GitHub Actions Security: SHA Pinning and Version Policy
 
 All GitHub Actions in `.github/workflows/` must follow these three rules.
