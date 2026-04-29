@@ -116,10 +116,14 @@ function Get-LinkRealPath {
 function New-MirrorLink {
     param([string]$LinkPath, [string]$TargetRel, [string]$TargetAbs)
 
-    # Try SymbolicLink with the relative target first (matches Unix layout, portable).
+    # On Windows we use the *absolute* target for SymbolicLink. Relative
+    # targets like "../.agents/skills" technically work via the shell but
+    # tend to produce a reparse point that Python's os.stat treats as
+    # access-denied (WinError 5). Bootstrap re-runs every session so the
+    # absolute-path-per-machine trade-off is invisible.
     try {
-        New-Item -ItemType SymbolicLink -Path $LinkPath -Target $TargetRel -ErrorAction Stop | Out-Null
-        Write-Bootstrap "Created symlink: $LinkPath -> $TargetRel"
+        New-Item -ItemType SymbolicLink -Path $LinkPath -Target $TargetAbs -ErrorAction Stop | Out-Null
+        Write-Bootstrap "Created symlink: $LinkPath -> $TargetAbs"
         return
     } catch {
         Write-Bootstrap "SymbolicLink unavailable, falling back to junction: $($_.Exception.Message)"
