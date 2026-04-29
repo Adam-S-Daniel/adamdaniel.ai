@@ -204,6 +204,20 @@ function selectSpecs(changedFiles, options = {}) {
     };
   }
 
+  // If after all the rules the only specs that survived are the always-
+  // run baselines, the payload is identical to scope=skip. Collapse it
+  // so the workflow can run a single shard instead of a 4-way matrix —
+  // sharding 3 sub-second file-comparison tests is pure overhead.
+  const onlyBaseline =
+    specs.size === ALWAYS_RUN.length &&
+    ALWAYS_RUN.every((s) => specs.has(s));
+  if (onlyBaseline && !options.disableSkip) {
+    return {
+      scope: "skip",
+      reason: `${changedFiles.length} file(s) changed but none affect a non-baseline spec.`,
+    };
+  }
+
   return {
     scope: "subset",
     files: [...specs].sort(),
