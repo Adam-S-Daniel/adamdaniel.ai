@@ -16,7 +16,10 @@ jobs:
   # Build & Deploy preview (on open / update)
   # ────────────────────────────────────────────────────────────
   deploy-preview:
-    if: github.event.action != 'closed'
+    # Dependabot PRs can't access the OIDC role secret, and the
+    # preview is for a human reviewer to look at — Dependabot PRs are
+    # unattended by design. Skip both the deploy and teardown jobs.
+    if: github.event.action != 'closed' && github.actor != 'dependabot[bot]'
     runs-on: ubuntu-latest
     env:
       AWS_REGION: us-east-1
@@ -168,7 +171,7 @@ jobs:
   # Teardown preview (on close / merge)
   # ────────────────────────────────────────────────────────────
   teardown-preview:
-    if: github.event.action == 'closed'
+    if: github.event.action == 'closed' && github.actor != 'dependabot[bot]'
     runs-on: ubuntu-latest
     env:
       AWS_REGION: us-east-1
