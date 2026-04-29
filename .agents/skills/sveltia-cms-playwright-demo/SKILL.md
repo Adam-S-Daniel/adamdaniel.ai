@@ -1,3 +1,8 @@
+---
+name: sveltia-cms-playwright-demo
+description: Historical learnings from automating Playwright screenshots of Sveltia CMS with a local-backend mock — scroll containers, body-editor detection, font interception, IndexedDB mocking, and other Sveltia-specific quirks. Reference only; this repo runs Decap CMS now, not Sveltia.
+---
+
 # Sveltia CMS Headless Playwright Demo
 
 Learnings from building automated Playwright screenshots of Sveltia CMS running with a local-backend mock.
