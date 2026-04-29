@@ -248,6 +248,47 @@ Required status checks (strict):
 
 Auto-merge is enabled in repository settings. Direct pushes to `main` are allowed for the repository owner only.
 
+The same required-checks list governs Dependabot's unattended-merge pipeline (`dependabot-auto-merge.yml`). When a Dependabot PR enables auto-merge, GitHub holds the merge until both checks above report success — so a vulnerable browser fixture, a regressed pixel, or a broken Jekyll build all block the bump.
+
+---
+
+### `dependabot-auto-merge.yml`
+
+**Trigger:** `pull_request` opened/synchronised/reopened by `dependabot[bot]`, targeting `main`.
+
+**Secrets needed:** none (uses built-in `GITHUB_TOKEN`).
+
+**Pairs with:** `.github/dependabot.yml` — defines the npm / bundler / github-actions ecosystems, a 7-day `cooldown.default-days` on every non-security update, and `update-types: [minor, patch]` grouping per ecosystem so the auto-merge pipeline isn't drowning in N PRs/week.
+
+#### Job: `auto-merge`
+
+1. Only runs when `github.actor == 'dependabot[bot]'`
+2. Uses `dependabot/fetch-metadata` to pick up the update-type / dependency-name and validate the PR genuinely came from Dependabot
+3. Path-allowlist gate — diff must only touch `package*.json`, `Gemfile*`, or `.github/workflows/*.{yml,yaml}`. Anything else fails the job and disables auto-merge (idempotent — `gh pr merge --disable-auto || true`). This is the "no content will be altered" guarantee: a Dependabot PR can never ship a content change unattended, even if its branch were tampered with.
+4. On a clean diff: `gh pr merge --auto --squash` enables GitHub's native auto-merge. Branch protection's required-checks list (e2e + visual-regression / approve-regression) governs when the merge actually fires.
+
+#### Cooldown semantics
+
+- **Non-security updates** wait 7 days from the upstream release before Dependabot opens the PR. Per GitHub's spec, `cooldown` "is only available for version updates, not security updates", so the wait is automatic.
+- **Security updates** bypass cooldown — Dependabot opens the PR as soon as the advisory is detected, the PR lands on the same auto-merge gate, and ships the moment the test matrix is green.
+
+#### Visual-regression interaction
+
+Dependency-only diffs almost never produce pixel differences against production, so `approve-regression` typically auto-passes (zero pages visually different). When a bump *does* shift rendered output (e.g. a Jekyll plugin patch), the regression video lands in `/admin/reviews/` and the merge waits for human approval — same path as any content PR.
+
+#### SHA-pinning interaction
+
+Dependabot's github-actions ecosystem updates the `@<sha>` ref and the version part of the trailing comment, but it does not refresh the `(YYYY-MM-DD)` release-date suffix this repo's pinning convention requires. After Dependabot lands an actions bump, run the `pin-actions-to-sha` skill to refresh the dates. This drift is cosmetic — the SHA pin is still authoritative.
+
+#### Required repository settings
+
+For the auto-merge gate to function, two settings need to be set in repo Settings:
+
+- **Settings → Actions → General → Workflow permissions** — the workflow's own `permissions:` block already requests `contents: write` and `pull-requests: write`, which is honoured as long as the repo-level default isn't restricted below read.
+- **Settings → General → Pull Requests → Allow auto-merge** — must be enabled. Without this, `gh pr merge --auto` returns an error.
+
+`secrets-scan.yml`, `e2e-tests.yml`, and `visual-regression.yml` all run normally on Dependabot's PRs (they're branch-internal, not from a fork), so the required-checks list works without further configuration.
+
 ### Admin review dashboard
 
 Located at `/admin/reviews/` (separate from Decap CMS). Linked from a floating button on the CMS page.

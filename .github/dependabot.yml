@@ -1,0 +1,92 @@
+# Dependabot configuration for adamdaniel.ai.
+#
+# Pairs with .github/workflows/dependabot-auto-merge.yml to ship dep
+# bumps unattended once branch protection's required checks (e2e
+# matrix + visual-regression / approve-regression) report success.
+#
+# Cooldown: every non-security update waits 7 days from the upstream
+# release before Dependabot opens the PR. This lets the wider
+# ecosystem surface regressions before we adopt a release. Per
+# GitHub's spec the `cooldown` option is "only available for version
+# updates, not security updates" — security advisories bypass it
+# automatically and ship as soon as Dependabot detects them.
+#
+# Grouping: minor + patch bumps batch into one PR per ecosystem so
+# the auto-merge pipeline isn't drowning in N PRs/week. Major bumps
+# stay individual so each gets a clear visual-regression review
+# window.
+#
+# SHA pinning note: Dependabot updates the SHA and version part of
+# the inline comment for github-actions deps but does not refresh
+# the `(YYYY-MM-DD)` release-date suffix used by this repo's pinning
+# convention. Re-run the pin-actions-to-sha skill periodically to
+# refresh the dates after Dependabot lands a bump.
+
+version: 2
+
+updates:
+  # ────────────────────────────────────────────────────────────
+  # GitHub Actions
+  # ────────────────────────────────────────────────────────────
+  - package-ecosystem: "github-actions"
+    directory: "/"
+    schedule:
+      interval: "daily"
+    cooldown:
+      default-days: 7
+    open-pull-requests-limit: 10
+    labels:
+      - "dependencies"
+      - "github-actions"
+    commit-message:
+      prefix: "chore"
+      include: "scope"
+    groups:
+      actions-minor-patch:
+        update-types:
+          - "minor"
+          - "patch"
+
+  # ────────────────────────────────────────────────────────────
+  # npm — Playwright + decap-cms + serve toolchain
+  # ────────────────────────────────────────────────────────────
+  - package-ecosystem: "npm"
+    directory: "/"
+    schedule:
+      interval: "daily"
+    cooldown:
+      default-days: 7
+    open-pull-requests-limit: 10
+    labels:
+      - "dependencies"
+      - "npm"
+    commit-message:
+      prefix: "chore"
+      include: "scope"
+    groups:
+      npm-minor-patch:
+        update-types:
+          - "minor"
+          - "patch"
+
+  # ────────────────────────────────────────────────────────────
+  # Bundler — Jekyll + plugins
+  # ────────────────────────────────────────────────────────────
+  - package-ecosystem: "bundler"
+    directory: "/"
+    schedule:
+      interval: "daily"
+    cooldown:
+      default-days: 7
+    open-pull-requests-limit: 10
+    labels:
+      - "dependencies"
+      - "bundler"
+    commit-message:
+      prefix: "chore"
+      include: "scope"
+    groups:
+      bundler-minor-patch:
+        update-types:
+          - "minor"
+          - "patch"
