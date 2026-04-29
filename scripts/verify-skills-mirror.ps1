@@ -9,6 +9,9 @@ param(
 )
 
 $ErrorActionPreference = 'Stop'
+# Don't let PowerShell 7+ promote non-zero native-command exit codes
+# (e.g. `git rev-parse` outside a repo) into terminating script errors.
+$PSNativeCommandUseErrorActionPreference = $false
 
 $ScriptDir = Split-Path -Parent $MyInvocation.MyCommand.Path
 $RepoRoot  = Resolve-Path (Join-Path $ScriptDir '..')

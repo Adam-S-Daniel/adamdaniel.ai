@@ -169,8 +169,15 @@ def test_git_hook_list_shows_skills_mirror_check(synthetic_git_repo: Path) -> No
     assert bootstrap.returncode == 0
 
     result = _git("hook", "list", "pre-commit", cwd=synthetic_git_repo)
-    if result.returncode != 0 and "is not a git command" in result.stderr:
-        pytest.skip("git hook list not available on this git version")
+    # `git hook list` landed in Git 2.45; older Gits return "is not a git
+    # command" (no `git hook` at all) or "unknown subcommand: \`list'"
+    # (`git hook run` exists, list does not). Skip in both cases.
+    stderr = result.stderr or ""
+    if result.returncode != 0 and (
+        "is not a git command" in stderr
+        or "unknown subcommand" in stderr
+    ):
+        pytest.skip(f"git hook list not available on this git version: {stderr.strip()[:120]}")
     assert result.returncode == 0
     out = result.stdout + result.stderr
     assert "skills-mirror-check" in out, f"expected skills-mirror-check in:\n{out}"
