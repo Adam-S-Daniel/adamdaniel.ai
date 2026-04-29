@@ -1,0 +1,101 @@
+const { test, expect } = require("./base");
+const { execSync } = require("child_process");
+const fs = require("fs");
+const os = require("os");
+const path = require("path");
+
+// Build-output assertions for the CloudWatch RUM analytics include. Runs
+// `jekyll build` to throwaway destinations under three conditions and
+// inspects the resulting index.html. Single-project: the build cost would
+// otherwise multiply by every Playwright project.
+
+const REPO_ROOT = path.resolve(__dirname, "..");
+const TMP = fs.mkdtempSync(path.join(os.tmpdir(), "rum-test-"));
+const PROD_WITH_ID_DEST = path.join(TMP, "prod-with-id");
+const PROD_NO_ID_DEST = path.join(TMP, "prod-no-id");
+const NONPROD_DEST = path.join(TMP, "nonprod");
+const OVERRIDE_CONFIG = path.join(TMP, "config-override.yml");
+const FAKE_APP_MONITOR_ID = "11111111-2222-3333-4444-555555555555";
+const FAKE_IDENTITY_POOL = "us-east-1:aaaaaaaa-bbbb-cccc-dddd-eeeeeeeeeeee";
+
+function runBuild({ env, configOverride, destination }) {
+  const configs = ["_config.yml"];
+  if (configOverride) configs.push(configOverride);
+  const cmd = [
+    "bundle exec jekyll build --quiet",
+    `--config ${configs.join(",")}`,
+    `--destination ${destination}`,
+  ].join(" ");
+  execSync(cmd, {
+    cwd: REPO_ROOT,
+    env: { ...process.env, ...env },
+    stdio: ["ignore", "pipe", "pipe"],
+  });
+}
+
+function readIndex(destination) {
+  return fs.readFileSync(path.join(destination, "index.html"), "utf8");
+}
+
+test.describe("CloudWatch RUM include", () => {
+  test.describe.configure({ mode: "serial" });
+
+  test.beforeEach(() => {
+    if (test.info().project.name !== "chromium-desktop") {
+      test.skip(
+        true,
+        "build-output assertion only needs to run once per invocation",
+      );
+    }
+  });
+
+  test.beforeAll(() => {
+    if (test.info().project.name !== "chromium-desktop") return;
+    fs.writeFileSync(
+      OVERRIDE_CONFIG,
+      [
+        "analytics:",
+        "  cloudwatch_rum:",
+        `    app_monitor_id: "${FAKE_APP_MONITOR_ID}"`,
+        `    identity_pool_id: "${FAKE_IDENTITY_POOL}"`,
+        '    region: "us-east-1"',
+        "",
+      ].join("\n"),
+    );
+
+    runBuild({
+      env: { JEKYLL_ENV: "production" },
+      configOverride: OVERRIDE_CONFIG,
+      destination: PROD_WITH_ID_DEST,
+    });
+    runBuild({
+      env: { JEKYLL_ENV: "production" },
+      destination: PROD_NO_ID_DEST,
+    });
+    runBuild({
+      env: {},
+      configOverride: OVERRIDE_CONFIG,
+      destination: NONPROD_DEST,
+    });
+  });
+
+  test("emits snippet when JEKYLL_ENV=production AND app_monitor_id is set", () => {
+    const html = readIndex(PROD_WITH_ID_DEST);
+    expect(html).toContain("AwsRumClient");
+    expect(html).toContain(FAKE_APP_MONITOR_ID);
+    expect(html).toContain(FAKE_IDENTITY_POOL);
+    expect(html).toContain("client.rum.us-east-1.amazonaws.com");
+  });
+
+  test("silent when JEKYLL_ENV=production but app_monitor_id is empty", () => {
+    const html = readIndex(PROD_NO_ID_DEST);
+    expect(html).not.toContain("AwsRumClient");
+    expect(html).not.toContain("client.rum.");
+  });
+
+  test("silent when app_monitor_id is set but JEKYLL_ENV is not production", () => {
+    const html = readIndex(NONPROD_DEST);
+    expect(html).not.toContain("AwsRumClient");
+    expect(html).not.toContain(FAKE_APP_MONITOR_ID);
+  });
+});

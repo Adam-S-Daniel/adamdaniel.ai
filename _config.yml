@@ -47,6 +47,15 @@ plugins:
   - jekyll-feed
   - jekyll-sitemap
 
+# Analytics. Production-only; the snippet is emitted only when JEKYLL_ENV is
+# `production` AND app_monitor_id is non-empty. Populate from the CloudFormation
+# outputs in `infrastructure/rum/template.yaml` after deploying that stack.
+analytics:
+  cloudwatch_rum:
+    app_monitor_id: ""
+    identity_pool_id: ""
+    region: "us-east-1"
+
 # Exclude from build
 exclude:
   - Gemfile
