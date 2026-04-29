@@ -115,3 +115,4 @@ if ($errors -gt 0) {
 }
 
 Write-Host "skills mirror OK"
+exit 0

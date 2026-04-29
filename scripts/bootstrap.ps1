@@ -181,11 +181,15 @@ if ($gitAvailable) {
     }
 }
 
-# 4. Run verify if present.
+# 4. Run verify if present. Reset $LASTEXITCODE first so a benign earlier
+# git non-zero exit (e.g. `git rev-parse` outside a repo) doesn't pollute
+# the verify-result check.
 $verifyPs1 = Join-Path $ScriptDir 'verify-skills-mirror.ps1'
 if (Test-Path -LiteralPath $verifyPs1) {
+    $global:LASTEXITCODE = 0
     & $verifyPs1
     if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
 }
 
 Write-Bootstrap "OK"
+exit 0
