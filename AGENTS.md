@@ -345,6 +345,19 @@ Allowlist for known test fixtures lives in `.gitleaks.toml`. When a new test har
 
 The `scripts/scrub-secrets.js` helper (used by the e2e bot to redact failure summaries before commenting on PRs) runs the same `gitleaks` binary at runtime. The CI gate and the runtime scrubber share the same default ruleset.
 
+#### Local pre-commit guard
+
+`scripts/secrets-scan.sh` runs `gitleaks protect --staged --redact` against the index before every commit, so a secret never reaches local history (or the reflog, which survives a force-push). It uses the same `.gitleaks.toml` as CI, and parses `GITLEAKS_VERSION` out of `secrets-scan.yml` at runtime — bumping CI's pin auto-updates the version the hook recommends, so there's a single source of truth.
+
+The hook is registered through both supported pathways:
+
+- **Git ≥ 2.54** — `[hook "secrets-scan"]` in `.gitconfig-fragment`, alongside `skills-mirror-check`. `git hook list pre-commit` shows both.
+- **Git < 2.54** — chained inside `.githooks/pre-commit` after the skills-mirror check.
+
+`scripts/bootstrap.sh` / `bootstrap.ps1` pick the right path based on `git --version`; nothing extra to wire up after a fresh clone.
+
+If `gitleaks` isn't on `PATH`, the hook fails with install instructions for macOS / Linux / Windows. Bypass for emergencies via `SKIP_SECRETS_SCAN=1 git commit ...` (preferred over `--no-verify`, which also disables the skills-mirror guard). CI still scans the PR, so a bypassed commit won't merge with a real leak.
+
 ---
 
 ## E2E testing

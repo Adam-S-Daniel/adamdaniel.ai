@@ -1,6 +1,9 @@
 #!/usr/bin/env bash
-# Pre-commit guard for the skills mirror.
-# Used on Git < 2.54 via `git config --local core.hooksPath .githooks`,
-# wired up by scripts/bootstrap.sh / bootstrap.ps1.
+# Pre-commit guard chain for Git < 2.54 (no `[hook "<name>"]` config support).
+# Used via `git config --local core.hooksPath .githooks`, wired up by
+# scripts/bootstrap.sh / bootstrap.ps1. On Git >= 2.54 the same guards
+# are registered individually via .gitconfig-fragment.
 set -e
-exec "$(git rev-parse --show-toplevel)/scripts/verify-skills-mirror.sh" --staged
+ROOT="$(git rev-parse --show-toplevel)"
+"$ROOT/scripts/verify-skills-mirror.sh" --staged
+"$ROOT/scripts/secrets-scan.sh"
