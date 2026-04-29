@@ -1,0 +1,15 @@
+canary_skill: test-canary
+harnesses:
+  - name: claude-code
+    enabled: true
+    module: tests.harnesses.claude_code
+    class: ClaudeCodeHarness
+  # Stubs for future agents — uncomment + implement when adding:
+  # - name: codex
+  #   enabled: false
+  #   module: tests.harnesses.codex
+  #   class: CodexHarness
+  # - name: opencode
+  #   enabled: false
+  #   module: tests.harnesses.opencode
+  #   class: OpenCodeHarness
