@@ -268,6 +268,18 @@ The capture is no-op unless `MANUAL_CAPTURE=1`; normal CI runs aren't slowed dow
 
 If the manual looks wrong, the test that captured the wrong step is wrong — fix the `captureStep(...)` call, push, and the next regen run propagates the fix.
 
+### Reading PR diffs
+
+`git diff main...branch` (the **3-dot** form, "what's on `branch` since the merge-base with `main`") will keep showing already-squash-merged content as if it's still ahead. After auto-merge fires, the merge-base hasn't moved on the feature branch, so the 3-dot diff still includes every commit that was squashed into the squash-merge commit.
+
+For a fast "what's still actually pending?" check, use the **2-dot** form:
+
+```bash
+git diff main..branch --stat   # files different between the two tips, full stop
+```
+
+The 2-dot form compares tips directly — if a change has already landed on `main` (via squash-merge or otherwise), it disappears from this output. Use it when reviewing whether a long-lived feature branch is genuinely behind the work it shipped, vs. just bookkeeping-behind because git can't see through a squash.
+
 ### Branch protection (`main`)
 
 Required status checks (strict):
@@ -403,6 +415,29 @@ Every e2e test runs across a matrix of browsers, viewports, text sizes, and colo
 | `chromium-large-text` | Chromium | 1920×1080 | Root font 20px |
 | `chromium-light` | Chromium | 1920×1080 | `colorScheme: light` |
 | `chromium-forced-colors` | Chromium | 1920×1080 | `forcedColors: active` |
+
+#### iOS-anything is WebKit
+
+iOS Chrome, iOS Firefox, iOS Edge, and iOS Safari all share the same browser engine — Apple bans third-party rendering engines on iOS. Playwright's `webkit` project covers all of them. So "iOS Chrome === iOS Safari === WebKit" — they're a single data point, not three. When triaging an iOS-only render bug, reproduce it under `webkit-tablet` (or any local WebKit) and you've covered every iOS browser.
+
+#### `?notheme` kill-switch (admin)
+
+`admin/index.html` flips off the cobalt theme (the `<link rel="stylesheet" href="custom.css">` plus the inline `<style id="cobalt-inline-theme">`) when the URL contains a `notheme` query param. The script reads `URLSearchParams(location.search)` — i.e. the query string **before** the hash — so:
+
+- `https://adamdaniel.ai/admin/?notheme` works.
+- `https://adamdaniel.ai/admin/#/collections/posts?notheme` does **not** — Decap's hash-router puts that `?notheme` *inside* the hash fragment, where `location.search` can't see it.
+
+When triaging an iOS WebKit render bug that may be theme-induced, A/B with `/admin/?notheme` first, then navigate inside.
+
+#### Sandbox allowlist (Playwright browser downloads)
+
+Playwright fetches its browser binaries from a small set of CDNs the first time `npx playwright install` runs. Sandboxed shells need outbound network access to:
+
+- `cdn.playwright.dev`
+- `playwright.download.prss.microsoft.com`
+- `playwright.azureedge.net`
+
+If these are blocked, `npx playwright install` hangs or fails with a 403 / DNS-resolution error, and `e2e-tests.yml` won't bring up the matrix. CI uses `actions/cache` to cache downloads, but the *first* run after a Playwright bump still needs reachability.
 
 ### Custom fixture (`e2e/base.js`)
 

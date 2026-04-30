@@ -4,153 +4,13 @@
   <meta charset="utf-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1.0" />
   <title>Content Manager — Adam Daniel</title>
-  <!--
-    Cobalt-thermal theme. Kill-switch: append ?notheme to the URL to
-    disable this stylesheet (and the inline cobalt CSS below) so the
-    Decap default theme renders. Useful when triaging a render bug
-    that may be theme-induced — visit /admin/?notheme to A/B without
-    redeploying.
-  -->
-  <link rel="stylesheet" href="custom.css" id="cobalt-theme">
-  <script>
-    if (new URLSearchParams(location.search).has('notheme')) {
-      document.getElementById('cobalt-theme').media = 'not all';
-      document.documentElement.dataset.notheme = '1';
-      // The inline <style> below is parsed *after* this script runs, so
-      // patch its media attr the moment it appears.
-      var mo = new MutationObserver(function () {
-        var s = document.getElementById('cobalt-inline-theme');
-        if (s) { s.media = 'not all'; mo.disconnect(); }
-      });
-      mo.observe(document.documentElement, { childList: true, subtree: true });
-    }
-  </script>
-  <style id="cobalt-inline-theme">
-    /*
-     * Cobalt Thermal theme injected before Decap CMS loads.
-     * Design tokens flow into the CMS app via CSS variables.
-     * Disabled by the ?notheme kill-switch above.
+  <style>
+    /* Decap CMS ships its own UI styling — we only carry the minimum
+     * here for the floating-link affordances and the deployed-commit
+     * pill. The cobalt-thermal theme that used to live in admin/custom.css
+     * was retired; the live preview at /preview/?collection=<n> is the
+     * editor's WYSIWYG, so styling the form itself isn't useful.
      */
-
-    /* Force dark mode globally */
-    :root {
-      color-scheme: dark;
-
-      /* Design tokens — overlap with Decap's variable names */
-      --primary-color: #285aff;
-      --primary-color-dark: #1a3abf;
-      --primary-color-light: rgba(40, 90, 255, 0.15);
-
-      /* Background stack */
-      --bg-page: #04060f;
-      --bg-surface: #060d1f;
-      --bg-elevated: #0a1530;
-      --bg-overlay: #111e40;
-
-      /* Text */
-      --text-primary: #d8e4ff;
-      --text-secondary: #c8d4f0;
-      --text-muted: #8ab0e8;
-
-      /* Borders */
-      --border-subtle: #1a2a5e;
-      --border-default: #2a3a7e;
-
-      /* Accent */
-      --accent: #285aff;
-      --accent-glow: rgba(40, 90, 255, 0.28);
-    }
-
-    *, *::before, *::after {
-      box-sizing: border-box;
-    }
-
-    html, body {
-      height: 100%;
-      margin: 0;
-      padding: 0;
-      background: #04060f;
-      animation: thermal 40s ease-in-out infinite alternate;
-    }
-
-    @keyframes thermal {
-      0%   { background-color: #04060f; }
-      50%  { background-color: #060d1f; }
-      100% { background-color: #03040c; }
-    }
-
-    /*
-     * Ambient glow REMOVED: a `position: fixed` pseudo-element with a
-     * radial gradient and a `transform: scale` keyframe animation forces
-     * iOS WebKit to allocate a compositing layer that, in conjunction
-     * with Decap's emotion-CSS-in-JS, occluded the entry-edit form
-     * fields below the toolbar on real iPhone Safari and Chrome (Chrome
-     * iOS uses WebKit). Confirmed bisect: the cobalt theme as a whole
-     * caused empty forms; removing this rule + the toolbar's
-     * `backdrop-filter` (see custom.css) restores rendering.
-     * The static page background and the cobalt design tokens stay.
-     */
-
-    /* ── Loading screen ──────────────────────────── */
-    #cms-loading {
-      position: fixed;
-      inset: 0;
-      display: flex;
-      flex-direction: column;
-      align-items: center;
-      justify-content: center;
-      background: #04060f;
-      z-index: 9999;
-      gap: 1.5rem;
-      transition: opacity 0.4s ease;
-      font-family: 'Helvetica Neue', Arial, sans-serif;
-    }
-
-    #cms-loading.hidden {
-      opacity: 0;
-      pointer-events: none;
-    }
-
-    .cms-loading-name {
-      font-size: 1.8rem;
-      font-weight: 200;
-      letter-spacing: 0.08em;
-      color: #d8e4ff;
-    }
-
-    .cms-loading-sub {
-      font-size: 0.7rem;
-      letter-spacing: 0.2em;
-      text-transform: uppercase;
-      font-family: 'SF Mono', 'Fira Code', monospace;
-      color: #8ab0e8;
-      animation: text-pulse 2s ease-in-out infinite;
-    }
-
-    @keyframes text-pulse {
-      0%, 100% { opacity: 0.5; }
-      50%       { opacity: 1; }
-    }
-
-    .cms-loading-bar {
-      width: 200px;
-      height: 1px;
-      background: #1a2a5e;
-      border-radius: 1px;
-      overflow: hidden;
-    }
-
-    .cms-loading-bar-fill {
-      height: 100%;
-      background: linear-gradient(90deg, transparent, #285aff, transparent);
-      animation: scan 1.8s ease-in-out infinite;
-    }
-
-    @keyframes scan {
-      0%   { transform: translateX(-100%); }
-      100% { transform: translateX(300%); }
-    }
-
     .floating-link {
       position: fixed;
       right: 1.5rem;
@@ -159,18 +19,18 @@
       align-items: center;
       gap: 0.5rem;
       padding: 0.6rem 1rem;
-      background: #0a1530;
-      border: 1px solid #1a2a5e;
-      border-radius: 8px;
-      color: #c8d4f0;
-      font-family: 'Helvetica Neue', Arial, sans-serif;
-      font-size: 0.8rem;
+      background: #ffffff;
+      border: 1px solid #d0d7de;
+      border-radius: 6px;
+      color: #24292f;
+      font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif;
+      font-size: 0.85rem;
       text-decoration: none;
-      transition: border-color 0.2s, background 0.2s;
+      box-shadow: 0 1px 3px rgba(0, 0, 0, 0.08);
     }
     .floating-link:hover {
-      border-color: #285aff;
-      background: #111e40;
+      border-color: #0969da;
+      color: #0969da;
     }
     .floating-link svg {
       width: 16px;
@@ -183,20 +43,14 @@
   </style>
 </head>
 <body>
-
-  <!-- Custom loading screen shown while Decap CMS initialises -->
-  <div id="cms-loading">
-    <div class="cms-loading-name">Adam Daniel</div>
-    <div class="cms-loading-bar"><div class="cms-loading-bar-fill"></div></div>
-    <div class="cms-loading-sub">Content Manager</div>
-  </div>
-
   <!--
     Live Preview — opens /preview/?collection=<current> in a new tab.
-    The href is updated on every URL hash change so the link always
-    points at the collection of the entry the editor is on. Tip text
-    is intentionally explicit: the preview only updates *after* a
-    Save, so editors don't sit there waiting for it to fill.
+    The /preview/ page renders draft content with the real Jekyll
+    layouts and is the WYSIWYG surface for editors. The link's href
+    is updated on every URL hash change so it always points at the
+    collection of the entry currently open. Tip text is intentional:
+    /preview/ only updates after a Save, so editors don't sit there
+    waiting for it to fill.
   -->
   <a id="live-preview-link" class="floating-link"
      href="/preview/"
@@ -229,7 +83,7 @@
   </script>
 
   <!--
-    Decap CMS — pinned to a major version. Editorial workflow + the
+    Decap CMS — pinned to an exact version. Editorial workflow + the
     GitHub backend with our custom OAuth proxy (`base_url` +
     `auth_endpoint` in admin/config.yml) drive the cms/<branch> →
     PR → preview → merge pipeline documented in AGENTS.md.
@@ -244,36 +98,6 @@
        state from the DOM and renders a link (or placeholder when
        Published is OFF / no slug yet). -->
   <script src="live-url-banner.js" defer></script>
-
-  <script>
-    // Hide the loading overlay once Decap CMS fires its ready event
-    document.addEventListener('DOMContentLoaded', function () {
-      var loading = document.getElementById('cms-loading');
-
-      // Decap renders its app root into the body; watch for the
-      // first child element to appear and fade out the splash.
-      var observer = new MutationObserver(function (mutations) {
-        for (var m of mutations) {
-          for (var node of m.addedNodes) {
-            if (node.nodeType === 1) {
-              loading.classList.add('hidden');
-              setTimeout(function () { loading.remove(); }, 500);
-              observer.disconnect();
-              return;
-            }
-          }
-        }
-      });
-
-      observer.observe(document.body, { childList: true });
-
-      // Fallback: remove after 6 seconds regardless
-      setTimeout(function () {
-        loading.classList.add('hidden');
-        setTimeout(function () { loading.remove(); }, 500);
-      }, 6000);
-    });
-  </script>
 
   <!--
     Deployed-build commit indicator. Pinned to the top-right corner
@@ -306,7 +130,7 @@
           // name in amber so it's unmissable that this isn't production
           // and that any CMS edits made here stay on this branch.
           a.innerHTML = (isPreview
-            ? '<span style="color:#f5a623;font-weight:600;margin-right:0.5em">' +
+            ? '<span style="color:#bf8700;font-weight:600;margin-right:0.5em">' +
                 'PREVIEW: ' + escapeHTML(c.branch) +
               '</span>'
             : '') +
@@ -315,23 +139,24 @@
           a.style.cssText = [
             'position:fixed', 'top:60px', 'right:12px', 'z-index:10000',
             'padding:0.25rem 0.55rem',
-            'background:rgba(4,6,15,0.85)',
-            'border:1px solid ' + (isPreview ? '#f5a623' : '#1a2a5e'),
+            'background:rgba(255,255,255,0.95)',
+            'border:1px solid ' + (isPreview ? '#bf8700' : '#d0d7de'),
             'border-radius:4px',
-            'color:#8ab0e8',
-            'font-family:"SF Mono","Fira Code",monospace',
+            'color:#57606a',
+            'font-family:ui-monospace,SFMono-Regular,Menlo,monospace',
             'font-size:0.7rem',
             'letter-spacing:0.04em',
             'text-decoration:none',
-            'transition:border-color 0.2s,color 0.2s'
+            'box-shadow:0 1px 3px rgba(0,0,0,0.08)',
+            'transition:border-color 0.15s,color 0.15s'
           ].join(';') + ';';
           a.onmouseenter = function () {
-            a.style.borderColor = isPreview ? '#ffcb6b' : '#285aff';
-            a.style.color = '#d8e4ff';
+            a.style.borderColor = isPreview ? '#bf8700' : '#0969da';
+            a.style.color = '#24292f';
           };
           a.onmouseleave = function () {
-            a.style.borderColor = isPreview ? '#f5a623' : '#1a2a5e';
-            a.style.color = '#8ab0e8';
+            a.style.borderColor = isPreview ? '#bf8700' : '#d0d7de';
+            a.style.color = '#57606a';
           };
           document.body.appendChild(a);
         })
@@ -344,65 +169,5 @@
       }
     })();
   </script>
-
-  <!--
-    Cobalt popup tagger.
-
-    Decap's per-block field-settings popup (the floater that opens beside a
-    code block, image embed, etc. with "Field Settings" / "Global Settings"
-    sections) is generated by emotion-CSS-in-JS with hashed class names that
-    aren't stable across Decap versions. Class-substring selectors in
-    custom.css couldn't reliably match it, leaving the popup with its
-    default near-transparent background.
-
-    Instead of guessing classes, this observer watches body mutations,
-    finds any DOM subtree that contains both "Field Settings" and "Global
-    Settings" headers, walks up to the first absolute/fixed-positioned
-    ancestor, and tags it with `data-cobalt-popup`. The injected stylesheet
-    below paints those elements cobalt — robust against Decap class churn.
-  -->
-  <script>
-    (function () {
-      var style = document.createElement('style');
-      style.textContent = [
-        '[data-cobalt-popup]{background:#060d1f !important;border:1px solid #1a2a5e !important;box-shadow:0 16px 64px rgba(0,0,20,0.9) !important;border-radius:8px !important;color:#d8e4ff !important;}',
-        '[data-cobalt-popup] *{color:inherit !important;}',
-        '[data-cobalt-popup] select,[data-cobalt-popup] input,[data-cobalt-popup] textarea{background:#0a1530 !important;border:1px solid #1a2a5e !important;color:#d8e4ff !important;}',
-        '[data-cobalt-popup] option{background:#0a1530 !important;color:#d8e4ff !important;}',
-      ].join('\n');
-      document.head.appendChild(style);
-
-      function findAndTag() {
-        // Look for any container that holds BOTH Decap settings headers —
-        // distinctive enough to avoid false positives.
-        var candidates = document.querySelectorAll('div, section, aside, form');
-        for (var i = 0; i < candidates.length; i++) {
-          var el = candidates[i];
-          if (el.dataset.cobaltPopup) continue;
-          var text = el.textContent || '';
-          if (text.indexOf('Field Settings') === -1 || text.indexOf('Global Settings') === -1) continue;
-          // Walk up to the floating ancestor — that's the actual popup root.
-          var cur = el;
-          while (cur && cur !== document.body) {
-            var pos = getComputedStyle(cur).position;
-            if (pos === 'absolute' || pos === 'fixed') break;
-            cur = cur.parentElement;
-          }
-          (cur || el).dataset.cobaltPopup = '1';
-        }
-      }
-
-      var pending = false;
-      var observer = new MutationObserver(function () {
-        if (pending) return;
-        pending = true;
-        requestAnimationFrame(function () { pending = false; findAndTag(); });
-      });
-      observer.observe(document.body, { childList: true, subtree: true });
-      // Initial pass in case the popup is already in the DOM.
-      findAndTag();
-    })();
-  </script>
-
 </body>
 </html>

@@ -70,6 +70,12 @@ const SPEC_RULES = {
     /^e2e\/generate-video\.sh$/,
     /^\.github\/workflows\/visual-regression\.yml$/,
   ],
+  // Pure-node invariants on admin/index.html + admin/custom.css. Runs
+  // any time admin/ changes — guards the cobalt theme + ?notheme
+  // kill-switch contract documented in AGENTS.md.
+  "e2e/admin-theme-removed.test.js": [
+    /^admin\/(index\.html|custom\.css)$/,
+  ],
   "e2e/detect-changed-pages.test.js": [
     /^e2e\/detect-changed-pages\.js$/,
   ],
