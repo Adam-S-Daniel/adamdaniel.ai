@@ -146,37 +146,65 @@
     return b;
   }
 
+  // Cache the last-rendered markup so unchanged re-renders are no-ops.
+  // Without this, the MutationObserver on document.body would observe
+  // every `banner.innerHTML = …` write and schedule another render,
+  // detaching the anchor mid-click and producing a "click → element
+  // detached" flake against the very thing this banner is for.
+  var lastHTML = null;
+
   function render() {
     var banner = ensureBanner();
     if (!banner) return;
     var data = compute();
     if (!data) {
-      banner.style.display = "none";
+      if (banner.style.display !== "none") banner.style.display = "none";
       return;
     }
-    banner.style.display = "";
+    if (banner.style.display === "none") banner.style.display = "";
 
+    // Label span — same styling whether or not the row is wrapped in an
+    // anchor. Color stays even on the anchor case (the outer anchor uses
+    // `color:inherit` so children render their own colors).
     var labelHTML =
       '<span style="font-weight:600;color:#8ab0e8;text-transform:uppercase;letter-spacing:0.08em;font-size:0.7rem;font-family:\'SF Mono\',\'Fira Code\',monospace;">View page on site:</span>';
-    var bodyHTML;
 
+    var nextHTML;
     if (data.published === false) {
-      bodyHTML =
-        '<span style="font-style:italic;">Not yet published.</span>';
+      // No destination → render plain spans, no anchor. An anchor with
+      // no href would be misleading; the row is informational here.
+      nextHTML =
+        labelHTML + ' <span style="font-style:italic;">Not yet published.</span>';
     } else if (!data.url) {
-      bodyHTML =
-        '<span style="font-style:italic;">Set a title or slug to see the URL.</span>';
+      nextHTML =
+        labelHTML +
+        ' <span style="font-style:italic;">Set a title or slug to see the URL.</span>';
     } else {
+      // Live URL state: wrap the *entire row* in a single anchor so any
+      // click in the banner opens the live URL. The URL span keeps the
+      // accent color + underline so it still LOOKS like a link, but the
+      // label and any whitespace between them are part of the same
+      // clickable surface. data-testid is the contract e2e tests assert
+      // on.
       var safeURL = String(data.url).replace(/[<>"']/g, function (c) {
         return { "<": "&lt;", ">": "&gt;", '"': "&quot;", "'": "&#39;" }[c];
       });
-      bodyHTML =
-        '<a href="' + safeURL + '" target="_blank" rel="noopener" ' +
-        'style="color:#7bb3ff;text-decoration:underline;word-break:break-all;">' +
+      var urlSpanHTML =
+        '<span style="color:#7bb3ff;text-decoration:underline;word-break:break-all;">' +
         safeURL +
+        "</span>";
+      nextHTML =
+        '<a id="cms-live-url-banner-link" data-testid="cms-live-url-banner-link" ' +
+        'target="_blank" rel="noopener" href="' + safeURL + '" ' +
+        'style="display:flex;align-items:baseline;gap:0.5em;flex-wrap:wrap;color:inherit;text-decoration:none;width:100%;">' +
+        labelHTML + urlSpanHTML +
         "</a>";
     }
-    banner.innerHTML = labelHTML + " " + bodyHTML;
+
+    if (nextHTML !== lastHTML) {
+      banner.innerHTML = nextHTML;
+      lastHTML = nextHTML;
+    }
   }
 
   var pending = false;
