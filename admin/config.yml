@@ -23,9 +23,6 @@ site_url: https://adamdaniel.ai
 display_url: https://adamdaniel.ai
 logo_url: https://adamdaniel.ai/assets/images/logo.svg
 
-# Cobalt-thermal theme: Decap doesn't support a `custom_css` config key,
-# so admin/index.html and admin/index-local.html link `custom.css` directly.
-
 # Media library
 # Bucket uploads by year/month so the picker stays browsable as the archive
 # grows. `public_folder` stays at the root because Jekyll serves files from

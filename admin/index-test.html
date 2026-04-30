@@ -7,7 +7,6 @@
   <!--
     Self-verifying admin entrypoint.
 
-    Loads the production cobalt theme (admin/custom.css) on top of
     Decap's in-browser test-repo backend with publish_mode:
     editorial_workflow. No GitHub OAuth required — pre-seeded
     entries land in window.repoFiles before Decap mounts, so opening
@@ -29,23 +28,20 @@
     Anyone with this URL can verify the rendering path without a
     debugger. If the live admin's GitHub-backend path shows the
     read-only bug but this URL says EDITABLE, the issue is in the
-    GitHub-backend code path — not the form renderer or the theme.
+    GitHub-backend code path — not the form renderer.
   -->
-  <link rel="stylesheet" href="custom.css">
   <style>
-    html, body { height: 100%; margin: 0; padding: 0; background: #04060f; }
-
     #cms-diagnostic {
       position: fixed;
       bottom: 0; left: 0; right: 0;
       z-index: 100000;
       padding: 0.6rem 1rem;
-      font-family: 'SF Mono', 'Fira Code', monospace;
+      font-family: ui-monospace, SFMono-Regular, Menlo, monospace;
       font-size: 0.78rem;
-      letter-spacing: 0.06em;
-      color: #d8e4ff;
-      background: #060d1f;
-      border-top: 1px solid #1a2a5e;
+      letter-spacing: 0.04em;
+      color: #24292f;
+      background: #f6f8fa;
+      border-top: 1px solid #d0d7de;
       display: flex; align-items: center; gap: 1rem;
     }
     #cms-diagnostic .badge {
@@ -55,11 +51,11 @@
       letter-spacing: 0.1em;
       text-transform: uppercase;
     }
-    #cms-diagnostic .badge.pending { background: #1a2a5e; color: #c8d4f0; }
-    #cms-diagnostic .badge.green   { background: #1a8e54; color: #ffffff; }
-    #cms-diagnostic .badge.red     { background: #c2243d; color: #ffffff; }
-    #cms-diagnostic .detail        { color: #8ab0e8; flex: 1; }
-    #cms-diagnostic a { color: #d8e4ff; text-decoration: underline; }
+    #cms-diagnostic .badge.pending { background: #d0d7de; color: #24292f; }
+    #cms-diagnostic .badge.green   { background: #1a7f37; color: #ffffff; }
+    #cms-diagnostic .badge.red     { background: #cf222e; color: #ffffff; }
+    #cms-diagnostic .detail        { color: #57606a; flex: 1; }
+    #cms-diagnostic a { color: #0969da; text-decoration: underline; }
     /* Pad the bottom of Decap's app shell so the banner doesn't
      * occlude in-page content. The banner is bottom-pinned (NOT
      * top-pinned) because Decap's editor toolbar is itself
@@ -190,7 +186,7 @@
               "If this URL says EDITABLE on production but a real " +
               "<code>/admin/#/collections/...</code> URL shows fields disabled, " +
               "the bug is in the GitHub-backend code path (auth, workflow PR " +
-              "fetch, etc.) — not the form renderer or the theme."
+              "fetch, etc.) — not the form renderer."
           );
         } else {
           setStatus(
