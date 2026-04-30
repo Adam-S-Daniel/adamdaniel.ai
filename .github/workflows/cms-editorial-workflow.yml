@@ -133,9 +133,25 @@ jobs:
             });
 
   auto-merge-when-ready:
-    # When a PR is labeled 'cms/ready', enable auto-merge so it merges once
-    # all required status checks pass (e2e tests + visual regression approval).
-    if: github.event.action == 'labeled' && github.event.label.name == 'cms/ready'
+    # Fires when an editor promotes a draft to "Ready":
+    #
+    #   - `decap-cms/ready` is what Decap CMS itself applies when the
+    #     editor changes the Status dropdown from Draft / In Review to
+    #     Ready. This is the path 99% of edits take.
+    #   - `cms/ready` is the legacy bare-name label this workflow
+    #     applies on `opened` (so a manual label add still works) and
+    #     was the only label this job listened for before the Decap
+    #     namespacing landed. Keeping it as a synonym means a hand-
+    #     applied `cms/ready` from `gh pr edit --add-label` still
+    #     promotes the draft.
+    #
+    # If both fire (rare — Decap usually only sets its own), the second
+    # `labeled` event re-runs this job; `enablePullRequestAutoMerge` is
+    # idempotent so the duplicate is a no-op.
+    if: >
+      github.event.action == 'labeled' &&
+      (github.event.label.name == 'cms/ready' ||
+       github.event.label.name == 'decap-cms/ready')
     needs: validate-content
     runs-on: ubuntu-latest
     permissions:
