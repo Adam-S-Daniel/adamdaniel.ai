@@ -212,10 +212,40 @@ test.describe("@parity admin bundle byte-parity", () => {
       if (haveBothEtags && prod.etag === preview.etag) continue;
       if (prod.sha && preview.sha && prod.sha === preview.sha) continue;
 
+      // Bytes differ between prod and preview. Three cases:
+      //   - working-tree matches preview → preview is "ahead" of prod
+      //     because this branch (or a recently-merged one) changed the
+      //     file, and prod hasn't redeployed/cache-invalidated yet.
+      //     Deploy lag, not drift. Warn instead of failing.
+      //   - working-tree matches prod → preview is "ahead" of working
+      //     tree (preview wasn't built from this branch?), unusual but
+      //     not a drift signal. Warn.
+      //   - neither matches → real cross-environment drift. Fail.
+      let localSha = null;
+      try {
+        const buf = fs.readFileSync(path.join(adminDir, rel));
+        localSha = crypto.createHash("sha256").update(buf).digest("hex");
+      } catch (_) {
+        /* file missing locally — fall through to failure */
+      }
+      if (localSha && preview.sha === localSha) {
+        lagWarnings.push(
+          `${rel}: prod sha=${prod.sha?.slice(0, 12)}, preview sha=${preview.sha?.slice(0, 12)} (deploy lag — branch change hasn't reached prod yet)`,
+        );
+        continue;
+      }
+      if (localSha && prod.sha === localSha) {
+        lagWarnings.push(
+          `${rel}: prod sha=${prod.sha?.slice(0, 12)}, preview sha=${preview.sha?.slice(0, 12)} (preview ahead of working tree — likely stale preview build)`,
+        );
+        continue;
+      }
+
       failures.push(
         `${rel}: byte mismatch\n` +
           `      prod    etag=${prod.etag || "(none)"} sha=${prod.sha}\n` +
-          `      preview etag=${preview.etag || "(none)"} sha=${preview.sha}`,
+          `      preview etag=${preview.etag || "(none)"} sha=${preview.sha}\n` +
+          `      local   sha=${localSha || "(unreadable)"}`,
       );
     }
 
