@@ -12,5 +12,8 @@
         ]
       }
     ]
+  },
+  "worktree": {
+    "symlinkDirectories": ["vendor", "node_modules", ".bundle"]
   }
 }
