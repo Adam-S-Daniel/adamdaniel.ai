@@ -216,4 +216,105 @@ test.describe("/admin/reviews/ visual-diff stats", () => {
       page.locator(".review-card .stat-pages-loading"),
     ).toContainText(/not available/i);
   });
+
+  // Defensive lock-in for the cobalt theme: if the reviews dashboard ever
+  // grows a Decap-styled `ControlHint` (helper text under a form input),
+  // its colour MUST stay readable on the cobalt background. Decap's
+  // default `rgb(93, 98, 111)` is too dark and was the chat finding #12
+  // motivator. Today the dashboard uses its own form controls (no Decap),
+  // so the assertion skips when no `ControlHint` is visible — but if one
+  // ever appears, contrast gets enforced automatically.
+  test("any rendered ControlHint has ≥ 4.5:1 contrast on its background", async ({
+    page,
+  }, testInfo) => {
+    test.skip(
+      testInfo.project.name !== "chromium-desktop",
+      "Single project — contrast math is browser-agnostic",
+    );
+
+    await page.addInitScript((token) => {
+      localStorage.setItem("gh_reviews_token", token);
+    }, FAKE_TOKEN);
+
+    // Bare-bones GitHub mocks — we only need the dashboard to render.
+    await page.route("https://api.github.com/**", async (route) => {
+      const path = new URL(route.request().url()).pathname;
+      if (path === "/user") {
+        return route.fulfill({
+          status: 200,
+          contentType: "application/json",
+          body: JSON.stringify({ login: "controlhint-spec-user" }),
+        });
+      }
+      if (path.endsWith("/actions/runs")) {
+        return route.fulfill({
+          status: 200,
+          contentType: "application/json",
+          body: JSON.stringify({ workflow_runs: [] }),
+        });
+      }
+      return route.fulfill({ status: 404, body: "{}" });
+    });
+
+    await page.goto("/admin/reviews/");
+    await expect(page.locator("#dashboard")).toBeVisible();
+
+    // Look for any element whose class contains `ControlHint` (Decap's
+    // emotion-CSS-in-JS naming convention). The reviews dashboard
+    // currently doesn't ship Decap, so this is expected to be empty —
+    // but if a future change embeds a Decap widget (or copy-pastes
+    // its class names), we want the assertion to fire.
+    const hints = page.locator('[class*="ControlHint"]:visible');
+    const count = await hints.count();
+
+    test.skip(
+      count === 0,
+      "No ControlHint elements on /admin/reviews/ — skipping contrast assertion",
+    );
+
+    for (let i = 0; i < count; i++) {
+      const ratio = await hints.nth(i).evaluate((el) => {
+        // Walk to the first ancestor that has a non-transparent background
+        // colour — that's the surface this hint actually paints onto.
+        function rgbToLuma(rgb) {
+          // rgb / rgba string → 0..1 relative luminance per WCAG.
+          const m = rgb.match(/\d+(?:\.\d+)?/g);
+          if (!m || m.length < 3) return null;
+          const [r, g, b] = m.slice(0, 3).map(Number);
+          const norm = [r, g, b].map((c) => {
+            const v = c / 255;
+            return v <= 0.03928 ? v / 12.92 : Math.pow((v + 0.055) / 1.055, 2.4);
+          });
+          return 0.2126 * norm[0] + 0.7152 * norm[1] + 0.0722 * norm[2];
+        }
+        function isOpaque(rgb) {
+          const m = rgb.match(/[\d.]+/g);
+          if (!m) return false;
+          // rgb(...) → 3 values, opaque. rgba(...) with alpha 1 also opaque.
+          if (m.length === 3) return true;
+          return Number(m[3]) >= 0.999;
+        }
+        const fg = getComputedStyle(el).color;
+        let cur = el;
+        let bg = "";
+        while (cur && cur !== document.documentElement) {
+          const c = getComputedStyle(cur).backgroundColor;
+          if (c && isOpaque(c)) { bg = c; break; }
+          cur = cur.parentElement;
+        }
+        if (!bg) bg = getComputedStyle(document.body).backgroundColor || "rgb(4,6,15)";
+
+        const lFg = rgbToLuma(fg);
+        const lBg = rgbToLuma(bg);
+        if (lFg == null || lBg == null) return null;
+        const [lighter, darker] = lFg > lBg ? [lFg, lBg] : [lBg, lFg];
+        return (lighter + 0.05) / (darker + 0.05);
+      });
+
+      expect(
+        ratio,
+        `ControlHint #${i} contrast ratio against its background must be ≥ 4.5:1`,
+      ).toBeGreaterThanOrEqual(4.5);
+    }
+  });
 });
