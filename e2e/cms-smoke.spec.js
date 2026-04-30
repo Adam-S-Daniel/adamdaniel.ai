@@ -1,6 +1,7 @@
 const fs = require("node:fs");
 const path = require("node:path");
 const { test, expect } = require("./base");
+const { captureStep } = require("./manual-capture");
 
 // End-to-end smoke test for the Decap CMS bundle wired up against a
 // real `local_backend: true` (decap-server proxy on port 8081, started
@@ -61,6 +62,13 @@ test.describe("/admin/ Decap CMS smoke test", () => {
     // local_backend bypasses OAuth).
     const loginBtn = page.getByRole("button", { name: /login/i });
     await expect(loginBtn).toBeVisible({ timeout: 60_000 });
+    await captureStep(page, {
+      section: "Logging in",
+      step: "1.1",
+      title: "Open the admin",
+      body:
+        "Visit `/admin/` to open the editor. Decap shows a single login button — click it to start the OAuth flow against the small Lambda proxy. On a PR preview the URL is `https://preview-pr<N>.adamdaniel.ai/admin/`; on production it's `https://adamdaniel.ai/admin/`. Both flow through the same proxy and end up logged in as the same GitHub user.",
+    });
     await loginBtn.click();
 
     // ── Land on the collections page ──────────────────────────────────
@@ -70,9 +78,23 @@ test.describe("/admin/ Decap CMS smoke test", () => {
     await expect(page.getByRole("link", { name: /^tags$/i })).toBeVisible();
     await expect(page.getByRole("link", { name: /^projects$/i })).toBeVisible();
     await expect(page.getByRole("link", { name: /^pages$/i })).toBeVisible();
+    await captureStep(page, {
+      section: "Browsing collections",
+      step: "1.2",
+      title: "Land on the collections list",
+      body:
+        "After login, the sidebar lists every collection defined in `admin/config.yml` — Posts, Tags, Projects, Pages. Click any entry to drill into its index, or use the search box at the top to jump straight to a known entry by title.",
+    });
 
     // ── Open the Tags collection and start a new entry ───────────────
     await page.getByRole("link", { name: /^tags$/i }).click();
+    await captureStep(page, {
+      section: "Browsing collections",
+      step: "2.1",
+      title: "Open a collection",
+      body:
+        "Each collection lands on its own index page — a list of every entry on disk plus a New button. The Tags collection is the simplest schema (name + description) so it loads instantly; Posts and Projects can take a couple seconds on a cold cache.",
+    });
     await page
       .getByRole("link", { name: /new tag|new entry/i })
       .first()
@@ -108,6 +130,13 @@ test.describe("/admin/ Decap CMS smoke test", () => {
 
     const saved = fs.readFileSync(SMOKE_TAG_FILE, "utf8");
     expect(saved).toContain(`name: ${SMOKE_TAG_NAME}`);
+    await captureStep(page, {
+      section: "Verifying on the public site",
+      step: "7.1",
+      title: "Saved entry",
+      body:
+        "On the local backend the file is written straight into the working tree (here, `_tags/<slug>.md`) and the editor routes to the entry view. In production the same Save lands on a fresh `cms/<timestamp>` branch and opens a PR — and the `cms-editorial-workflow.yml` workflow then runs validate-content, publishes a `preview-pr<N>.adamdaniel.ai` build, and waits for you to set Status to Ready.",
+    });
 
     // ── Delete the entry through the editor ──────────────────────────
     // After Save, Decap routes from `#/collections/tags/new` to
@@ -117,6 +146,13 @@ test.describe("/admin/ Decap CMS smoke test", () => {
       .getByRole("button", { name: /^delete (entry|published entry)$/i })
       .first();
     await expect(deleteBtn).toBeVisible({ timeout: 30_000 });
+    await captureStep(page, {
+      section: "Deleting an entry",
+      step: "8.1",
+      title: "Delete entry button",
+      body:
+        "The toolbar's Delete button is only available once the entry exists on disk — the button label is **Delete entry** for unpublished drafts and **Delete published entry** for live posts. In production this opens a deletion PR; it does not bypass review.",
+    });
 
     // Auto-accept any browser-level confirm() Decap pops before deletion.
     page.on("dialog", (d) => d.accept());
@@ -134,6 +170,13 @@ test.describe("/admin/ Decap CMS smoke test", () => {
     await expect
       .poll(() => fs.existsSync(SMOKE_TAG_FILE), { timeout: 30_000 })
       .toBe(false);
+    await captureStep(page, {
+      section: "Deleting an entry",
+      step: "8.2",
+      title: "Entry removed",
+      body:
+        "Once the deletion lands, Decap routes back to the collection index and the entry is gone from the list. On the local backend the source file is also removed from disk; in production the deletion PR removes it from `main` once the workflow auto-merges.",
+    });
   });
 
   // Defence-in-depth against the failure mode that almost slipped through:
@@ -160,6 +203,13 @@ test.describe("/admin/ Decap CMS smoke test", () => {
     // and the test fails loudly.
     const titleField = page.getByLabel(/^Title$/);
     await expect(titleField).toBeVisible({ timeout: 60_000 });
+    await captureStep(page, {
+      section: "Editing a post",
+      step: "3.1",
+      title: "The Posts edit form",
+      body:
+        "The Posts edit form renders every field declared in `admin/config.yml`: Title, URL Slug, Date, Excerpt, Tags, Featured Image, Published, Publish Date, and the Body markdown editor. Edits are saved as a draft until you flip Status to Ready — a Save in the local backend writes straight to `_posts/`, but in production it opens a PR.",
+    });
 
     // Every declared label from the Posts schema in admin/config.yml
     // should appear in the rendered form. Decap doesn't always wire

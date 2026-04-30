@@ -65,11 +65,15 @@ function parseSimpleYaml(text) {
   let mode = null;
   let currentKey = null;
   let buffer = [];
+  // Block content must be indented STRICTLY MORE than the key that opened
+  // the block (the standard YAML rule). Keys live at 2 spaces, so block
+  // lines need ≥3. Without that gate, the parser treats a sibling key like
+  // `  Editing a post: |` as content of the previous block.
   for (let i = 0; i < lines.length; i++) {
     const raw = lines[i];
     const line = raw.replace(/\s+$/, "");
     if (line === "" || line.startsWith("#")) continue;
-    if (mode === "block" && /^\s{2,}\S/.test(raw) && !/^\S/.test(raw)) {
+    if (mode === "block" && /^\s{3,}\S/.test(raw) && !/^\S/.test(raw)) {
       buffer.push(raw.replace(/^\s{2,}/, ""));
       continue;
     } else if (mode === "block") {
@@ -89,13 +93,26 @@ function parseSimpleYaml(text) {
     }
     const intro = line.match(/^section_intros:/);
     if (intro) {
-      while (i + 1 < lines.length && /^\s{2}\S/.test(lines[i + 1])) {
+      // Inside section_intros, scan every line that is either a key
+      // (`  Foo: |`) or block content (≥3 spaces); stop at the first
+      // top-level token. Intermediate block content is handled by the
+      // outer-loop block branch on the next iteration, so we only need
+      // to detect new keys here.
+      while (
+        i + 1 < lines.length &&
+        (/^\s{2}\S/.test(lines[i + 1]) || /^\s{3,}\S/.test(lines[i + 1]))
+      ) {
         i++;
         const km = lines[i].match(/^\s{2}([^:]+):\s*\|/);
         if (km) {
+          if (mode === "block") {
+            obj.section_intros[currentKey] = buffer.join("\n");
+            buffer = [];
+          }
           mode = "block";
           currentKey = km[1].trim();
-          buffer = [];
+        } else if (mode === "block" && /^\s{3,}\S/.test(lines[i])) {
+          buffer.push(lines[i].replace(/^\s{2,}/, ""));
         }
       }
       continue;

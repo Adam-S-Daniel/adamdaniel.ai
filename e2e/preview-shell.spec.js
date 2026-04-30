@@ -1,4 +1,5 @@
 const { test, expect } = require("./base");
+const { captureStep } = require("./manual-capture");
 
 // The /preview/ page is the live-preview surface driven by the CMS. It
 // renders with the real Jekyll layouts so its styling is always identical
@@ -192,6 +193,13 @@ test.describe("Live preview shell at /preview/", () => {
       "python",
     ]);
     await expect(page.locator(".post-reading-time")).toContainText("min read");
+    await captureStep(page, {
+      section: "Real-layout preview",
+      step: "4.2",
+      title: "Post layout preview with all metadata",
+      body:
+        "The `/preview/` shell renders drafts inside the real post layout: featured image, date, reading time, and tags all show up exactly as they will on the live site. There is no theme-switching shortcut — what the preview shows is what the public page will look like.",
+    });
   });
 
   test("project layout: technology and url_link render", async ({ page }) => {

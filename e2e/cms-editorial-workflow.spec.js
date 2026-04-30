@@ -1,4 +1,5 @@
 const { test, expect } = require("./base");
+const { captureStep } = require("./manual-capture");
 
 // Editorial-workflow + GitHub-style backend e2e coverage.
 //
@@ -145,6 +146,13 @@ test.describe("Decap editorial workflow — existing-entry editor is editable", 
     await expect(titleField).toBeVisible({ timeout: 60_000 });
     await expect(titleField).toBeEnabled();
     await expect(titleField).toHaveValue(SEED_POST_TITLE);
+    await captureStep(page, {
+      section: "Editing a post",
+      step: "3.2",
+      title: "Open an existing post in the editorial workflow",
+      body:
+        "Editorial workflow mode loads the existing entry into a fully editable form. Every widget — Title, Slug, Date, Body, Tags, Featured Image — is enabled (no read-only state) and the toolbar shows a Status dropdown plus a Delete published entry button.",
+    });
 
     // ── Per-widget disabled-style audit ───────────────────────────────
     // Walk every widget wrapper in the form and assert NONE of them
@@ -226,6 +234,13 @@ test.describe("Decap editorial workflow — existing-entry editor is editable", 
     const NEW_TITLE = `${SEED_POST_TITLE} — edited by spec`;
     await titleField.fill(NEW_TITLE);
 
+    await captureStep(page, {
+      section: "Marking ready and publishing",
+      step: "5.1",
+      title: "Save in editorial workflow",
+      body:
+        "With `publish_mode: editorial_workflow`, the toolbar's primary action is **Save** rather than Publish. The first Save creates a `cms/posts/<slug>` branch and opens a PR; subsequent Saves push commits onto that branch. The PR appears with the `cms/draft` label and stays in draft until you change the Status.",
+    });
     // Save → with editorial_workflow on, Decap routes this into a
     // draft (Status: draft), NOT a publish. Button label is "Save"
     // not "Publish" in workflow mode.

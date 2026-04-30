@@ -4,10 +4,181 @@ This manual is **assembled by the test suite**: every screenshot and step descri
 
 If a step looks wrong, the test that captured it is wrong too. The fix is in the test file shown under each screenshot — open it, update the `captureStep(...)` call, push, and the manual regenerates on the next run of `.github/workflows/regenerate-manual.yml`.
 
-_Last regenerated: 2026-04-30T03:28:11.455Z_
+_Last regenerated: 2026-04-30T03:54:12.753Z_
 
 ---
 
 ## Sections
 
-> _No captured steps yet. The manual will populate as more `captureStep(...)` calls are added to e2e specs._
+1. [Logging in](#logging-in)
+2. [Browsing collections](#browsing-collections)
+3. [Editing a post](#editing-a-post)
+4. [Real-layout preview](#real-layout-preview)
+5. [Marking ready and publishing](#marking-ready-and-publishing)
+6. [Verifying on the public site](#verifying-on-the-public-site)
+7. [Deleting an entry](#deleting-an-entry)
+8. [Reviewing visual regressions](#reviewing-visual-regressions)
+
+## Logging in
+
+Decap CMS authenticates through a small Lambda OAuth proxy. Visit `/admin/`
+on either the production site or a PR preview subdomain — both go through
+the same proxy and end up logged in as the same GitHub user.
+
+### 1.1. Open the admin
+
+Visit `/admin/` to open the editor. Decap shows a single login button — click it to start the OAuth flow against the small Lambda proxy. On a PR preview the URL is `https://preview-pr<N>.adamdaniel.ai/admin/`; on production it's `https://adamdaniel.ai/admin/`. Both flow through the same proxy and end up logged in as the same GitHub user.
+
+![Open the admin](manual-screenshots/logging-in/1-1-open-the-admin.png)
+
+<sub>Captured by `e2e/cms-smoke.spec.js` → _admin loads, logs in, creates a tag, saves it, deletes it_ on `chromium-desktop` at 2026-04-30T03:50:59.641Z.</sub>
+
+---
+
+## Browsing collections
+
+### 1.2. Land on the collections list
+
+After login, the sidebar lists every collection defined in `admin/config.yml` — Posts, Tags, Projects, Pages. Click any entry to drill into its index, or use the search box at the top to jump straight to a known entry by title.
+
+![Land on the collections list](manual-screenshots/browsing-collections/1-2-land-on-the-collections-list.png)
+
+<sub>Captured by `e2e/cms-smoke.spec.js` → _admin loads, logs in, creates a tag, saves it, deletes it_ on `chromium-desktop` at 2026-04-30T03:51:07.984Z.</sub>
+
+### 2.1. Open a collection
+
+Each collection lands on its own index page — a list of every entry on disk plus a New button. The Tags collection is the simplest schema (name + description) so it loads instantly; Posts and Projects can take a couple seconds on a cold cache.
+
+![Open a collection](manual-screenshots/browsing-collections/2-1-open-a-collection.png)
+
+<sub>Captured by `e2e/cms-smoke.spec.js` → _admin loads, logs in, creates a tag, saves it, deletes it_ on `chromium-desktop` at 2026-04-30T03:51:08.233Z.</sub>
+
+---
+
+## Editing a post
+
+### 3.1. The Posts edit form
+
+The Posts edit form renders every field declared in `admin/config.yml`: Title, URL Slug, Date, Excerpt, Tags, Featured Image, Published, Publish Date, and the Body markdown editor. Edits are saved as a draft until you flip Status to Ready — a Save in the local backend writes straight to `_posts/`, but in production it opens a PR.
+
+![The Posts edit form](manual-screenshots/editing-a-post/3-1-the-posts-edit-form.png)
+
+<sub>Captured by `e2e/cms-smoke.spec.js` → _Posts edit form: every declared field renders with visible content_ on `chromium-desktop` at 2026-04-30T03:51:20.753Z.</sub>
+
+### 3.2. Open an existing post in the editorial workflow
+
+Editorial workflow mode loads the existing entry into a fully editable form. Every widget — Title, Slug, Date, Body, Tags, Featured Image — is enabled (no read-only state) and the toolbar shows a Status dropdown plus a Delete published entry button.
+
+![Open an existing post in the editorial workflow](manual-screenshots/editing-a-post/3-2-open-an-existing-post-in-the-editorial-workflow.png)
+
+<sub>Captured by `e2e/cms-editorial-workflow.spec.js` → _opening an existing post renders all fields editable + Delete button enabled_ on `chromium-desktop` at 2026-04-30T03:51:35.461Z.</sub>
+
+---
+
+## Real-layout preview
+
+### 4.1. Live preview tab receives an edit
+
+Open `/preview/` in a second tab while editing. The bridge in `admin/preview-bridge.js` forwards every Save (or in-progress edit) over a same-origin BroadcastChannel; the preview tab renders the draft using the real Jekyll layout, so what you see matches the published post by construction.
+
+![Live preview tab receives an edit](manual-screenshots/real-layout-preview/4-1-live-preview-tab-receives-an-edit.png)
+
+<sub>Captured by `e2e/preview-bridge.spec.js` → _postSave broadcasts entry data on the shared BroadcastChannel_ on `chromium-desktop` at 2026-04-30T03:50:27.747Z.</sub>
+
+### 4.2. Post layout preview with all metadata
+
+The `/preview/` shell renders drafts inside the real post layout: featured image, date, reading time, and tags all show up exactly as they will on the live site. There is no theme-switching shortcut — what the preview shows is what the public page will look like.
+
+![Post layout preview with all metadata](manual-screenshots/real-layout-preview/4-2-post-layout-preview-with-all-metadata.png)
+
+<sub>Captured by `e2e/preview-shell.spec.js` → _post layout: featured_image, date, reading_time, tags all render_ on `chromium-desktop` at 2026-04-30T03:50:35.756Z.</sub>
+
+---
+
+## Marking ready and publishing
+
+### 5.1. Save in editorial workflow
+
+With `publish_mode: editorial_workflow`, the toolbar's primary action is **Save** rather than Publish. The first Save creates a `cms/posts/<slug>` branch and opens a PR; subsequent Saves push commits onto that branch. The PR appears with the `cms/draft` label and stays in draft until you change the Status.
+
+![Save in editorial workflow](manual-screenshots/marking-ready-and-publishing/5-1-save-in-editorial-workflow.png)
+
+<sub>Captured by `e2e/cms-editorial-workflow.spec.js` → _editing an existing post and saving creates a workflow draft_ on `chromium-desktop` at 2026-04-30T03:51:39.833Z.</sub>
+
+### 6.1. Filled-out post ready to publish
+
+Title, slug, body, tags, and the Published toggle are all set. In editorial workflow mode (production), the toolbar shows **Save** and a separate Status dropdown; clicking Save opens a PR in draft. Setting the dropdown to **Ready** is what triggers the auto-merge.
+
+![Filled-out post ready to publish](manual-screenshots/marking-ready-and-publishing/6-1-filled-out-post-ready-to-publish.png)
+
+<sub>Captured by `e2e/cms-publish-flow.spec.js` → _create a post in Decap, rebuild, and assert /blog/<slug>/ renders it_ on `chromium-desktop` at 2026-04-30T03:52:22.513Z.</sub>
+
+### 6.2. Publish menu open
+
+Decap's primary button is a split control. Clicking the Publish trigger opens a menu — **Publish now** commits the entry; **Publish and create new** commits then routes you to a fresh blank entry. In editorial-workflow mode this is replaced with a Save → Status flow.
+
+![Publish menu open](manual-screenshots/marking-ready-and-publishing/6-2-publish-menu-open.png)
+
+<sub>Captured by `e2e/cms-publish-flow.spec.js` → _create a post in Decap, rebuild, and assert /blog/<slug>/ renders it_ on `chromium-desktop` at 2026-04-30T03:52:23.504Z.</sub>
+
+### 6.3. Published post live
+
+After the publish settles, the post is reachable at its public URL — here `/blog/<slug>/`. In production the same URL pattern is served by CloudFront once `deploy-production.yml` finishes its `aws s3 sync` and invalidation, typically within ~2 minutes of the merge.
+
+![Published post live](manual-screenshots/marking-ready-and-publishing/6-3-published-post-live.png)
+
+<sub>Captured by `e2e/cms-publish-flow.spec.js` → _create a post in Decap, rebuild, and assert /blog/<slug>/ renders it_ on `chromium-desktop` at 2026-04-30T03:52:29.197Z.</sub>
+
+---
+
+## Verifying on the public site
+
+### 7.1. Saved entry
+
+On the local backend the file is written straight into the working tree (here, `_tags/<slug>.md`) and the editor routes to the entry view. In production the same Save lands on a fresh `cms/<timestamp>` branch and opens a PR — and the `cms-editorial-workflow.yml` workflow then runs validate-content, publishes a `preview-pr<N>.adamdaniel.ai` build, and waits for you to set Status to Ready.
+
+![Saved entry](manual-screenshots/verifying-on-the-public-site/7-1-saved-entry.png)
+
+<sub>Captured by `e2e/cms-smoke.spec.js` → _admin loads, logs in, creates a tag, saves it, deletes it_ on `chromium-desktop` at 2026-04-30T03:51:09.016Z.</sub>
+
+---
+
+## Deleting an entry
+
+### 8.1. Delete entry button
+
+The toolbar's Delete button is only available once the entry exists on disk — the button label is **Delete entry** for unpublished drafts and **Delete published entry** for live posts. In production this opens a deletion PR; it does not bypass review.
+
+![Delete entry button](manual-screenshots/deleting-an-entry/8-1-delete-entry-button.png)
+
+<sub>Captured by `e2e/cms-smoke.spec.js` → _admin loads, logs in, creates a tag, saves it, deletes it_ on `chromium-desktop` at 2026-04-30T03:51:09.211Z.</sub>
+
+### 8.2. Entry removed
+
+Once the deletion lands, Decap routes back to the collection index and the entry is gone from the list. On the local backend the source file is also removed from disk; in production the deletion PR removes it from `main` once the workflow auto-merges.
+
+![Entry removed](manual-screenshots/deleting-an-entry/8-2-entry-removed.png)
+
+<sub>Captured by `e2e/cms-smoke.spec.js` → _admin loads, logs in, creates a tag, saves it, deletes it_ on `chromium-desktop` at 2026-04-30T03:51:09.572Z.</sub>
+
+---
+
+## Reviewing visual regressions
+
+### 11.1. Visual-diff dashboard
+
+The `/admin/reviews/` dashboard shows one card per open visual-regression review. The stat grid summarises how many pages are visually different vs. potentially affected vs. identical, and the per-page line lists every URL that changed — click through to compare the before/after on the preview deploy.
+
+![Visual-diff dashboard](manual-screenshots/reviewing-visual-regressions/11-1-visual-diff-dashboard.png)
+
+<sub>Captured by `e2e/admin-reviews-stats.spec.js` → _renders stat grid and per-page list from regression.json_ on `chromium-desktop` at 2026-04-30T03:50:24.445Z.</sub>
+
+### 11.2. Review card without regression data
+
+When a preview deploy hasn't published `regression.json` yet (or the file 404s for any other reason), the card still renders but the stats area shows a polite placeholder. Re-run the visual-regression workflow on the PR to repopulate the data.
+
+![Review card without regression data](manual-screenshots/reviewing-visual-regressions/11-2-review-card-without-regression-data.png)
+
+<sub>Captured by `e2e/admin-reviews-stats.spec.js` → _falls back gracefully when regression.json is unavailable_ on `chromium-desktop` at 2026-04-30T03:50:23.937Z.</sub>
+
+---

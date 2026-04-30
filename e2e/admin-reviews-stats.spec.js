@@ -1,4 +1,5 @@
 const { test, expect } = require("./base");
+const { captureStep } = require("./manual-capture");
 
 // Verifies that the /admin/reviews/ dashboard renders the visual-diff
 // stats (visuallyDifferent vs potentiallyAffected, plus the per-page
@@ -142,6 +143,13 @@ test.describe("/admin/reviews/ visual-diff stats", () => {
     const pagesText = await pagesLine.textContent();
     expect(pagesText.split(/\s·\s/)).not.toContain("/blog/");
     expect(pagesText.split(/\s·\s/)).not.toContain("/");
+    await captureStep(page, {
+      section: "Reviewing visual regressions",
+      step: "11.1",
+      title: "Visual-diff dashboard",
+      body:
+        "The `/admin/reviews/` dashboard shows one card per open visual-regression review. The stat grid summarises how many pages are visually different vs. potentially affected vs. identical, and the per-page line lists every URL that changed — click through to compare the before/after on the preview deploy.",
+    });
   });
 
   test("falls back gracefully when regression.json is unavailable", async ({
@@ -215,6 +223,13 @@ test.describe("/admin/reviews/ visual-diff stats", () => {
     await expect(
       page.locator(".review-card .stat-pages-loading"),
     ).toContainText(/not available/i);
+    await captureStep(page, {
+      section: "Reviewing visual regressions",
+      step: "11.2",
+      title: "Review card without regression data",
+      body:
+        "When a preview deploy hasn't published `regression.json` yet (or the file 404s for any other reason), the card still renders but the stats area shows a polite placeholder. Re-run the visual-regression workflow on the PR to repopulate the data.",
+    });
   });
 
   // Defensive lock-in for the cobalt theme: if the reviews dashboard ever

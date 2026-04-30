@@ -2,6 +2,7 @@ const fs = require("node:fs");
 const path = require("node:path");
 const { execFileSync } = require("node:child_process");
 const { test, expect } = require("./base");
+const { captureStep } = require("./manual-capture");
 
 // True end-to-end content loop: drive the live Decap admin to create a new
 // post, rebuild the site, then GET /blog/<slug>/ and assert the post is
@@ -152,9 +153,23 @@ test.describe("CMS publish flow: create → build → browse to live URL", () =>
     // immediate build.)
     const publishedToggle = page.getByLabel(/^Published$/).first();
     await publishedToggle.click();
+    await captureStep(page, {
+      section: "Marking ready and publishing",
+      step: "6.1",
+      title: "Filled-out post ready to publish",
+      body:
+        "Title, slug, body, tags, and the Published toggle are all set. In editorial workflow mode (production), the toolbar shows **Save** and a separate Status dropdown; clicking Save opens a PR in draft. Setting the dropdown to **Ready** is what triggers the auto-merge.",
+    });
 
     // Decap's split publish button: open menu, pick "Publish now".
     await page.getByRole("button", { name: /^publish$/i }).first().click();
+    await captureStep(page, {
+      section: "Marking ready and publishing",
+      step: "6.2",
+      title: "Publish menu open",
+      body:
+        "Decap's primary button is a split control. Clicking the Publish trigger opens a menu — **Publish now** commits the entry; **Publish and create new** commits then routes you to a fresh blank entry. In editorial-workflow mode this is replaced with a Save → Status flow.",
+    });
     await page
       .getByRole("menuitem", { name: /publish now/i })
       .first()
@@ -181,6 +196,13 @@ test.describe("CMS publish flow: create → build → browse to live URL", () =>
 
     await expect(page.locator(".post-header h1")).toHaveText(SMOKE_TITLE);
     await expect(page.locator(".post-content")).toContainText(SMOKE_BODY);
+    await captureStep(page, {
+      section: "Marking ready and publishing",
+      step: "6.3",
+      title: "Published post live",
+      body:
+        "After the publish settles, the post is reachable at its public URL — here `/blog/<slug>/`. In production the same URL pattern is served by CloudFront once `deploy-production.yml` finishes its `aws s3 sync` and invalidation, typically within ~2 minutes of the merge.",
+    });
 
     // ── Inline tag → auto-generated archive page ─────────────────────
     // The auto_tag_pages plugin should manufacture /tags/<slug>/ for

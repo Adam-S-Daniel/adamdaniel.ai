@@ -1,6 +1,7 @@
 const fs = require("node:fs");
 const path = require("node:path");
 const { test, expect } = require("./base");
+const { captureStep } = require("./manual-capture");
 
 // Unit-style tests for admin/preview-bridge.js against a stubbed window.CMS.
 // This covers the bridge's contract — "register a postSave listener, and
@@ -108,6 +109,13 @@ test.describe("admin preview bridge", () => {
     expect(msg.collection).toBe("posts");
     expect(msg.fields.title).toBe("Broadcast me");
     expect(msg.fields.body).toBe("A draft body.");
+    await captureStep(listener, {
+      section: "Real-layout preview",
+      step: "4.1",
+      title: "Live preview tab receives an edit",
+      body:
+        "Open `/preview/` in a second tab while editing. The bridge in `admin/preview-bridge.js` forwards every Save (or in-progress edit) over a same-origin BroadcastChannel; the preview tab renders the draft using the real Jekyll layout, so what you see matches the published post by construction.",
+    });
     await listener.close();
   });
 
