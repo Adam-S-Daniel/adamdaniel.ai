@@ -22,6 +22,11 @@ public_folder: /assets/images/uploads
 
 collections:
 
+  # ── Posts ─────────────────────────────────────────────────
+  # The `slug:` date prefix is required by Jekyll's `_posts/` folder; the
+  # divergence it introduces against `permalink: /blog/:slug/` is fixed at
+  # runtime by admin/native-preview-href.js. See admin/config.yml's Posts
+  # block for the long-form rationale.
   - name: posts
     label: Posts
     label_singular: Post
