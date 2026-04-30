@@ -4,6 +4,11 @@
  * (not just the `_e2e/` canary subset). G4 from the "happy hopper"
  * plan.
  *
+ * allowed: literal slug used for known fixture
+ *   The fixture is _posts/2099-01-01-e2e-mutation-canary.md and its
+ *   public URL `/blog/e2e-mutation-canary/` appears in step labels
+ *   and assertion messages throughout this spec.
+ *
  * Premise: while `prod` is a "full mutation playground" — i.e. nobody
  * is reading the site for SEO — exercising the publish loop against
  * the same paths a real contributor uses gives a stronger signal than
