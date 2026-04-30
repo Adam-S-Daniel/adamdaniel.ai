@@ -6,6 +6,10 @@ const { test, expect } = require("./base");
 // of the CloudFormation template, runs it in Node, and asserts each routing
 // case. Keeps the template as the single source of truth — no duplicate
 // copy of the function body to drift.
+//
+// blog-slug-literal-lint: allowed: literal slug used for known fixture —
+// the `/blog/foo/` strings are synthetic router-input fixtures, not refs
+// to real `_posts/*.md` content.
 
 const TEMPLATE_PATH = path.join(
   __dirname,

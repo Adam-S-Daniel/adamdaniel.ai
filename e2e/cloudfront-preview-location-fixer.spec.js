@@ -9,6 +9,9 @@ const { test, expect } = require("./base");
 //
 // Without this fixer, hitting https://preview-prN.adamdaniel.ai/admin
 // (no trailing slash) gets a 302 to /pr-N/admin/ which then 404s.
+//
+// blog-slug-literal-lint: allowed: literal slug used for known fixture —
+// the `/blog/foo/` strings are synthetic redirect-fixer inputs.
 
 const TEMPLATE_PATH = path.join(
   __dirname,

@@ -255,6 +255,52 @@ uploaded image:
 | `/preview/` tab isn't updating | The two tabs aren't on the same origin | Open the preview from `https://adamdaniel.ai/preview/...` (or the same `preview-pr<N>` host you logged into the CMS on), not localhost or a different subdomain |
 | Tag pill on a post doesn't link to a styled page | Either the tag is brand-new (auto-generated archive pages have an empty description) or there's a typo | Add a `_tags/<slug>.md` entry in the Tags collection if you want a description; otherwise the page works as-is |
 | Reviews dashboard hangs on "Completing authorisation…" | Old version of `admin/reviews/index.html` that doesn't echo back the OAuth handshake | Hard-refresh the dashboard tab; the fix landed in commit `50779fd` |
+| Editor opens a post but every field looks read-only / Delete is greyed out | Stale browser cache of an older Decap bundle, or an OAuth state mismatch (token returns no repo write access) | First, hard-refresh the admin tab (Cmd-Shift-R). If still broken, open <https://adamdaniel.ai/admin/index-test.html> — same CMS bundle against an in-browser test backend with no OAuth in the way. The status banner says **EDITABLE** if the renderer is healthy or **FIELDS DISABLED** if there's a bundle / theme regression. If the diagnostic says EDITABLE but the real admin still doesn't accept input, the issue is in the GitHub auth round-trip — sign out, clear cookies for the admin and the OAuth proxy domain, sign in again. |
+
+### Always-available verification: `/admin/index-test.html`
+
+`/admin/index-test.html` ships next to the real admin and uses Decap's
+in-browser `test-repo` backend — no GitHub round-trip, no OAuth, no
+network. It pre-seeds a sample post with the same edge-case
+front-matter shape the real admin saves (empty-string slug, empty
+publish_date, etc.), and a status banner at the top inspects every
+widget on every render and reports **EDITABLE** or **FIELDS DISABLED**.
+
+You can use it to quickly answer: "is the bundle / theme broken, or
+is something specific to the GitHub-backend code path broken?". It
+won't help you publish content — anything you save there lives only
+in your tab's memory — but it tells you immediately whether the form
+renderer is healthy.
+
+### Local-only authoring (escape hatch)
+
+If the live admin is unusable for any reason, you can edit and
+publish from your laptop. The repo's `local_backend` mode bypasses
+GitHub OAuth entirely and writes directly to your working tree:
+
+```bash
+# Terminal 1 — Jekyll dev server (so /admin/ has somewhere to load from)
+bundle exec jekyll serve --livereload
+
+# Terminal 2 — Decap proxy that turns Save into a real file write
+npx decap-server
+```
+
+Open <http://localhost:4000/admin/index-local.html>, click **Login**
+(no real auth — `local_backend: true` accepts any keystrokes), edit
+freely. Each Save lands as a real `_posts/<slug>.md` (or
+`_tags/<slug>.md`, etc.) on disk. When you're done:
+
+```bash
+git add _posts/ _tags/ _projects/ pages/  # whichever you touched
+git commit -m "publish: <what you wrote>"
+git push origin main                      # the deploy workflow takes it from here
+```
+
+This skips the editorial-workflow PR + visual-regression review, so
+use it only when the live admin is actively blocked. The `cms-smoke`
+and `cms-publish-flow` Playwright specs exercise this exact flow on
+every PR, so it's verified end-to-end.
 
 ## 9. What's happening behind the scenes
 

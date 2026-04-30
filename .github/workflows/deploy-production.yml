@@ -93,6 +93,11 @@ jobs:
           # by the Liquid templates, keeping the source Markdown unmodified.
           mkdir -p _data
           echo "# Auto-generated — do not edit" > _data/reading_times.yml
+          # `nullglob` expands an empty `_posts/*.md` to nothing rather
+          # than the literal pattern, so a brand-new repo with no posts
+          # doesn't try to read a file called `_posts/*.md` and emit a
+          # bogus reading-time entry.
+          shopt -s nullglob
           for f in _posts/*.md; do
             slug=$(basename "$f" .md)
             words=$(cat "$f" | sed '/^---/,/^---/d' | wc -w)

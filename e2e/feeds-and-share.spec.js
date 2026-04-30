@@ -11,6 +11,7 @@ const { test, expect } = require("./base");
 // these tests verify presence and intent URLs, not pixels.
 
 const ATOM_NS = 'xmlns="http://www.w3.org/2005/Atom"';
+// allowed: literal slug used for known fixture (_posts/2026-04-25-replacement-test-post-1.md)
 const POST_URL = "/blog/replacement-test-post-1/";
 const POST_TITLE = "Replacement test post 1";
 const TAG_SLUGS = ["best-practices", "python", "rag", "langchain"];
@@ -91,6 +92,33 @@ test.describe("Feed-link icons surface the feeds in the UI", () => {
       `head link[rel="alternate"][type="application/atom+xml"][href$="/tags/${slug}/feed.xml"]`,
     );
     await expect(alt).toHaveCount(1);
+  });
+});
+
+test.describe("Feed-link icon survives CSS load failure (webkit)", () => {
+  // SVG without CSS reverts to its default replaced-element size — Firefox
+  // and WebKit pick 300×150 if no width/height attributes survive on the
+  // element. Without `assets/css/main.css`, the RSS icon shouldn't blow
+  // up to that default. We exercise this on webkit projects because it's
+  // the engine that surfaced the regression originally.
+  test("RSS icon stays icon-sized when main.css fails to load", async ({
+    page,
+    browserName,
+  }) => {
+    test.skip(browserName !== "webkit", "webkit-only regression case");
+
+    // Abort every main.css request so the icon renders unstyled.
+    await page.route("**/main.css*", (route) => route.abort());
+
+    await page.goto("/");
+    const link = page.locator('.feed-link[href$="/feed.xml"]').first();
+    const svg = link.locator("svg");
+    await svg.waitFor({ state: "attached" });
+    const box = await svg.boundingBox();
+    expect(box, "svg must have a bounding box").not.toBeNull();
+    // 16px is the conventional inline-icon size; allow up to that. A bare
+    // SVG without width/height styling explodes to 300×150 — way over.
+    expect(box.width).toBeLessThanOrEqual(16);
   });
 });
 
