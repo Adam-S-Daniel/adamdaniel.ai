@@ -42,7 +42,7 @@
 const { test, expect } = require("./base");
 const { captureStep } = require("./manual-capture");
 const { seedDecapAuth, getPat, HOST_REPO } = require("./decap-pat");
-const { findCanary, makeMarker, REPO_ROOT } = require("./canary-content");
+const { CANARIES, findCanary, makeMarker, REPO_ROOT } = require("./canary-content");
 const {
   addLabel,
   fetchPublicUrl,
@@ -57,6 +57,26 @@ const CANARY = findCanary("post");
 const PROD_HOST = "https://adamdaniel.ai";
 const PROD_ADMIN = `${PROD_HOST}/admin/`;
 const PUBLIC_URL = `${PROD_HOST}${CANARY.publicPath}`;
+
+// E3 — `PROD_CANARY=1` gates a read-only daily canary probe (see
+// `.github/workflows/canary-prod.yml`). When the env var is set, the
+// mutating publish-loop test self-skips and a sibling read-only test
+// runs against the public canary URLs only — no Decap login, no PR open,
+// no label flip, no merge. The hard guard below makes that contract
+// machine-checked: any code path that tries to mutate state (write to
+// the Contents API, drive admin actions) calls assertNotProdCanary()
+// and throws immediately if the gate has been breached.
+const PROD_CANARY = process.env.PROD_CANARY === "1";
+
+function assertNotProdCanary(action) {
+  if (PROD_CANARY) {
+    throw new Error(
+      `PROD_CANARY=1 is read-only — refusing to ${action}. ` +
+        `Daily canary probes must NEVER mutate prod state. If you reached ` +
+        `this branch, the spec's read-only gate has been bypassed.`,
+    );
+  }
+}
 
 // The full pipeline (validate-content + auto-merge + deploy-production +
 // CloudFront invalidation + public URL propagation) is the worst case when
@@ -78,6 +98,7 @@ async function fetchCanaryFromMain() {
 
 /** Write a body to the canary file directly on main via the Contents API. */
 async function writeCanaryOnMain({ bodyText, message }) {
+  assertNotProdCanary("write to the canary file via the Contents API");
   const current = await fetchCanaryFromMain();
   const decoded = Buffer.from(current.content, "base64").toString("utf8");
   const fmEnd = decoded.indexOf("\n---\n", 4);
@@ -100,6 +121,10 @@ test("CMS publish loop — host repo, target main", async ({ page }, testInfo) =
   test.skip(
     testInfo.project.name !== "chromium-desktop",
     "Publish-loop is real-network and real-GitHub — runs once on chromium-desktop only.",
+  );
+  test.skip(
+    PROD_CANARY,
+    "PROD_CANARY=1 — daily canary probe runs the read-only @canary-readonly test instead.",
   );
   test.skip(
     !getPat(),
@@ -241,4 +266,67 @@ test("CMS publish loop — host repo, target main", async ({ page }, testInfo) =
       message: `test(canary): reset post baseline after publish-loop run ${runId}`,
     });
   });
+});
+
+// E3 — Daily production canary probe.
+//
+// Runs once a day under `.github/workflows/canary-prod.yml` against
+// TARGET=prod. The full publish-loop above is the gold-standard end-to-
+// end check, but it's heavyweight (~7 minutes and a real PR per run) and
+// only fires when CMS-affecting paths change. The canary probe is the
+// always-on smoke check: every morning, before US/EU work hours, assert
+// that the three `_e2e/canary-*` URLs are still serving their baseline
+// content. If any of them 404s, drifts, or stops resolving entirely,
+// the workflow opens an issue tagged `production-canary`.
+//
+// Read-only by construction:
+//   - No Decap login (no PAT, no admin navigation, no editor drive).
+//   - No PR open / label flip / merge.
+//   - No Contents-API write.
+//   - All three URLs are fetched via `page.request.get(...)` against the
+//     prod baseURL set by the TARGET=prod fixture in `e2e/base.js`.
+//
+// The hard guard at the top of this file (assertNotProdCanary) makes the
+// read-only contract machine-checked: if a future edit accidentally
+// routes through writeCanaryOnMain() while PROD_CANARY=1, the spec
+// throws immediately rather than silently mutating prod.
+test("@canary-readonly production canary URLs serve their baselines", async ({
+  page,
+}, testInfo) => {
+  test.skip(
+    !PROD_CANARY,
+    "PROD_CANARY=1 not set — canary-readonly probe is gated to the daily workflow.",
+  );
+  test.skip(
+    testInfo.project.name !== "chromium-desktop",
+    "Canary probe runs once on chromium-desktop only — read-only HTTP fetches don't need the matrix.",
+  );
+
+  // Hard guard: never expose the test runner to a CMS_E2E_PAT in this
+  // mode. The PROD_CANARY workflow does NOT set the secret, but a local
+  // shell that ran the publish-loop earlier may have it exported. Strip
+  // it from this process so even an accidental seedDecapAuth() call
+  // would be a no-op (it self-skips when getPat() returns undefined).
+  delete process.env.CMS_E2E_PAT;
+  expect(getPat(), "PROD_CANARY mode must run without a PAT").toBeFalsy();
+
+  for (const c of CANARIES) {
+    await test.step(`Fetch ${c.publicPath} and assert baseline`, async () => {
+      // `page.request.get(c.publicPath)` resolves against the TARGET=prod
+      // baseURL fixture (e2e/base.js → https://adamdaniel.ai). No DOM
+      // navigation needed — pure HTTP, fast and deterministic.
+      const res = await page.request.get(c.publicPath);
+      expect(
+        res.status(),
+        `${c.publicPath} should return 200 from prod`,
+      ).toBe(200);
+      const body = await res.text();
+      expect(
+        body,
+        `${c.publicPath} should still surface its baseline ("${c.baseline}"). ` +
+          `If this fails, the canary entry has drifted or the deploy pipeline ` +
+          `has stalled — check deploy-production.yml on main.`,
+      ).toContain(c.baseline);
+    });
+  }
 });
