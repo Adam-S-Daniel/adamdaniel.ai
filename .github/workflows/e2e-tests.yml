@@ -35,6 +35,7 @@ on:
       - '.github/dependabot.yml'
       - '.github/workflows/secrets-scan.yml'
       - '.github/workflows/publish-scheduled-posts.yml'
+      - '.github/workflows/cms-publish-loop-prod.yml'
       - '.github/workflows/claude.yml'
 
 permissions:
