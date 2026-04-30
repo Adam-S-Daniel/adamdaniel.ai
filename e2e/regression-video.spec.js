@@ -28,21 +28,14 @@ function safeFileName(pagePath) {
   return name || "index";
 }
 
-// Admin shells hide an SVG splash (#cms-loading) over the Decap bundle
-// during boot. The splash fades out via MutationObserver once Decap mounts.
-// Wait for it to detach before screenshotting — otherwise both the PR and
-// prod screenshots would just be "Adam Daniel · Content Manager" splash
-// art with no signal about whether the admin actually changed.
+// Admin shells need a brief settle window after navigation so the
+// Decap CMS bundle finishes mounting before we screenshot.
+// The custom #cms-loading splash that this used to wait for was
+// retired with the cobalt theme; Decap's own first paint is fast,
+// but a small fixed delay keeps screenshots deterministic.
 async function waitForAdminBootIfApplicable(page, pagePath) {
   if (!pagePath.startsWith("/admin/")) return;
-  try {
-    await page.locator("#cms-loading").waitFor({ state: "detached", timeout: 15_000 });
-  } catch {
-    // Splash didn't render or didn't detach — capture whatever is on screen,
-    // the comparison is still informative.
-  }
-  // Belt-and-braces beat for Decap's first paint after the splash detaches.
-  await page.waitForTimeout(800);
+  await page.waitForTimeout(1500);
 }
 
 test.describe("Regression video screenshots", () => {
