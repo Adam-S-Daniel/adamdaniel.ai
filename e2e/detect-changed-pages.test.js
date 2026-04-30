@@ -103,6 +103,21 @@ test.describe("classifyPages", () => {
     expect(r.changed).toEqual([]);
   });
 
+  test("new admin/ sibling file → /admin/ and /admin/reviews/ are changed, not new", () => {
+    // admin/config-test.yml is a brand-new file, but it maps to the
+    // always-included admin URLs which already exist on main. The
+    // URLs must be classified as `changed`, not `new` — otherwise
+    // regression-video.spec.js will draw a placeholder for the
+    // production side and the video will misrepresent the admin diff.
+    const r = classifyPages({
+      allPages: ALL_PAGES,
+      changedFiles: ["admin/config-test.yml"],
+      fileExistsOnMain: () => false,
+    });
+    expect(r.changed.sort()).toEqual(["/admin/", "/admin/reviews/"]);
+    expect(r.new).toEqual([]);
+  });
+
   test("fanout + post → fanout wins, every page is in changed", () => {
     const r = classifyPages({
       allPages: ALL_PAGES,
