@@ -211,5 +211,39 @@ test.describe("/admin/ Decap CMS smoke test", () => {
     expect(colors.color, "Title input color must differ from background").not.toBe(
       colors.bg,
     );
+
+    // ── Read-only / disabled regression guard ─────────────────────────
+    // Decap renders a per-field disabled state by inlining
+    // `pointer-events: none; opacity: 0.5` on every widget wrapper
+    // (see decap-cms-core's EditorControl.js styleStrings.disabled).
+    // If the form looks fine but every field opens read-only — the
+    // exact mode of the admin/#/collections/posts/entries/<slug> bug
+    // — the existing label / contrast checks above would still pass.
+    // This explicitly fails the test in that scenario.
+    await expect(titleField).toBeEnabled();
+    const widgetReport = await page.evaluate(() => {
+      const wrappers = Array.from(
+        document.querySelectorAll('[class*="ControlContainer"]'),
+      );
+      return wrappers.map((el) => {
+        const cs = getComputedStyle(el);
+        const labelEl = el.querySelector("label, h3, h4, legend");
+        return {
+          label: labelEl ? labelEl.textContent.trim() : "(unknown)",
+          pointerEvents: cs.pointerEvents,
+          opacity: parseFloat(cs.opacity),
+        };
+      });
+    });
+    for (const w of widgetReport) {
+      expect(
+        w.pointerEvents,
+        `Widget "${w.label}" must accept pointer events (got ${w.pointerEvents}); Decap's per-field disabled style is the only thing that injects pointer-events: none.`,
+      ).not.toBe("none");
+      expect(
+        w.opacity,
+        `Widget "${w.label}" must render opaque (got ${w.opacity}); Decap's disabled style halves opacity.`,
+      ).toBeGreaterThan(0.6);
+    }
   });
 });

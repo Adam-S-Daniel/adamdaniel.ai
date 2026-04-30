@@ -9,6 +9,12 @@ module.exports = defineConfig({
   testDir: "./e2e",
   testIgnore: /regression-video\.spec\.js/,
   fullyParallel: true,
+  // Single auto-retry on CI for the decap-server file-write race (and any
+  // similar transient flake). Local runs stay at 0 so a regression caught
+  // while iterating fails loudly the first time. A test that fails once
+  // and then passes lands in Playwright's report as "flaky" — visible,
+  // but doesn't block the merge gate.
+  retries: process.env.CI ? 1 : 0,
   webServer: [
     {
       command:

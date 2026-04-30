@@ -38,6 +38,7 @@ test.describe("select-specs", () => {
     const r = selectSpecs(["_posts/2026-04-25-something.md"]);
     expect(r.scope).toBe("subset");
     expect(r.files).toContain("e2e/cms-smoke.spec.js");
+    expect(r.files).toContain("e2e/cms-editorial-workflow.spec.js");
     expect(r.files).toContain("e2e/blog-post.spec.js");
     expect(r.files).toContain("e2e/visual-regression.spec.js");
     // CMS preview-url is post-specific
@@ -67,10 +68,18 @@ test.describe("select-specs", () => {
     const r = selectSpecs(["admin/config.yml"]);
     expect(r.scope).toBe("subset");
     expect(r.files).toContain("e2e/cms-smoke.spec.js");
+    expect(r.files).toContain("e2e/cms-editorial-workflow.spec.js");
     expect(r.files).toContain("e2e/cms-config.spec.js");
     expect(r.files).toContain("e2e/cms-preview-url.spec.js");
     // Layouts aren't touched, so no fanout to e.g. CloudFront specs.
     expect(r.files).not.toContain("e2e/cloudfront-preview-router.spec.js");
+  });
+
+  test("admin/config-test.yml change → editorial workflow + config specs", () => {
+    const r = selectSpecs(["admin/config-test.yml"]);
+    expect(r.scope).toBe("subset");
+    expect(r.files).toContain("e2e/cms-editorial-workflow.spec.js");
+    expect(r.files).toContain("e2e/cms-config.spec.js");
   });
 
   test("infrastructure change → cloudfront specs only", () => {

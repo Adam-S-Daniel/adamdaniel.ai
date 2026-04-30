@@ -79,6 +79,10 @@ const SPEC_RULES = {
     /^_projects\//,
     /^pages\//,
   ],
+  "e2e/cms-editorial-workflow.spec.js": [
+    /^admin\//,
+    /^_posts\//,
+  ],
   "e2e/cms-publish-flow.spec.js": [
     /^admin\//,
     /^_posts\//,

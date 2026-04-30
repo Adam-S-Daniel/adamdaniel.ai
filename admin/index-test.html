@@ -1,0 +1,35 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>Content Manager — Adam Daniel (Test)</title>
+  <!--
+    e2e harness for the editorial-workflow + GitHub-style backend
+    code path. Loads admin/config-test.yml which uses Decap's
+    in-browser `test-repo` backend (with editorial_workflow on).
+
+    Tests pre-seed `window.repoFiles` and `window.repoFilesUnpublished`
+    via Playwright's `page.addInitScript()` before Decap mounts.
+    See e2e/cms-editorial-workflow.spec.js.
+
+    The cobalt theme is intentionally NOT loaded here — the goal
+    of this entrypoint is to exercise Decap's editorial-workflow
+    behaviour without theme CSS in the way. Theme regressions are
+    covered by cms-smoke.spec.js against admin/index-local.html.
+  -->
+  <style>
+    html, body { height: 100%; margin: 0; padding: 0; background: #ffffff; }
+  </style>
+</head>
+<body>
+  <link rel="cms-config-url" type="text/yaml" href="config-test.yml">
+
+  <!--
+    Decap CMS — same pinned major as admin/index.html so we test
+    the same bundle the production admin loads. The test-repo
+    backend ships in this same package.
+  -->
+  <script src="https://unpkg.com/decap-cms@^3.12.0/dist/decap-cms.js"></script>
+</body>
+</html>

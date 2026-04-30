@@ -184,7 +184,19 @@ function classifyPages({ allPages, changedFiles, fileExistsOnMain = () => true }
         globalChange = true;
       } else {
         directlyChanged.add(url);
-        if (!fileExistsOnMain(file)) {
+        // The always-included admin URLs (/admin/, /admin/reviews/)
+        // always exist on main by construction — they're served from
+        // admin/index.html and admin/reviews/index.html, which are
+        // shipped in the repo. A new SIBLING file in admin/ (e.g.
+        // admin/config-test.yml) shouldn't mark those URLs as new;
+        // doing so makes regression-video.spec.js draw a "+ New Page"
+        // placeholder for the prod side instead of the real
+        // production admin, and the resulting video shows admin
+        // pages with the wrong reference image.
+        if (
+          !fileExistsOnMain(file) &&
+          !ALWAYS_INCLUDED_ADMIN_PAGES.includes(url)
+        ) {
           newPages.add(url);
         }
       }
