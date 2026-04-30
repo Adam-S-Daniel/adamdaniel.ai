@@ -288,6 +288,58 @@ test.describe("Decap editorial workflow — existing-entry editor is editable", 
       .toContain(`name: ${NEW_TAG_NAME}`);
   });
 
+  // ── Status dropdown drives Draft → In Review → Ready ──────────────
+  //
+  // Each pick rewrites the unpublished entry's `status` field — the
+  // same field the cms/draft / cms/ready PR labels are derived from in
+  // cms-editorial-workflow.yml. Decap's internal keys are
+  // "draft" | "pending_review" | "pending_publish".
+  test("Status dropdown cycles Draft → In Review → Ready on the saved draft", async ({
+    page,
+  }) => {
+    await loadAdmin(page);
+    await page.goto("/admin/index-test.html#/collections/tags/new");
+    const NEW_TAG_NAME = "Status Cycle Tag";
+    const NEW_TAG_SLUG = "status-cycle-tag";
+    const nameField = page.getByLabel(/^Name$/);
+    await expect(nameField).toBeVisible({ timeout: 60_000 });
+    await nameField.fill(NEW_TAG_NAME);
+    await page.getByRole("button", { name: /^save$/i }).first().click();
+
+    const readStatus = (slug) =>
+      page.evaluate(
+        (s) => window.repoFilesUnpublished?.[`tags/${s}`]?.status,
+        slug,
+      );
+
+    // Wait for the workflow draft to land — initial status is "draft".
+    await expect.poll(() => readStatus(NEW_TAG_SLUG), { timeout: 30_000 }).toBe(
+      "draft",
+    );
+
+    const STATUS_FLOW = [
+      { menuLabel: /in review/i, expected: "pending_review" },
+      { menuLabel: /ready/i, expected: "pending_publish" },
+      { menuLabel: /^draft$/i, expected: "draft" },
+    ];
+    for (const step of STATUS_FLOW) {
+      // Decap renders the Status control as a DropdownButton whose label
+      // is the i18n template "Status: %{status}". Match on the prefix so
+      // we don't have to know the current status before each click.
+      const trigger = page.getByText(/^Status:\s/i).first();
+      await expect(trigger).toBeVisible({ timeout: 15_000 });
+      await trigger.click();
+      const menuItem = page
+        .getByRole("menuitem", { name: step.menuLabel })
+        .first();
+      await expect(menuItem).toBeVisible({ timeout: 5_000 });
+      await menuItem.click();
+      await expect
+        .poll(() => readStatus(NEW_TAG_SLUG), { timeout: 10_000 })
+        .toBe(step.expected);
+    }
+  });
+
   // ── Diagnostic banner self-verification ────────────────────────────
   //
   // admin/index-test.html ships its own status banner that walks the
