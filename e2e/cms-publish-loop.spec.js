@@ -40,6 +40,7 @@
  *     .github/workflows/deploy-*, e2e/cms-*, _plugins/**).
  */
 const { test, expect } = require("./base");
+const { captureStep } = require("./manual-capture");
 const { seedDecapAuth, getPat, HOST_REPO } = require("./decap-pat");
 const { findCanary, makeMarker, REPO_ROOT } = require("./canary-content");
 const {
@@ -219,6 +220,14 @@ test("CMS publish loop — host repo, target main", async ({ page }, testInfo) =
     await fetchPublicUrl(PUBLIC_URL, {
       expectContent: marker,
       timeoutMs: 6 * 60 * 1000,
+    });
+    await page.goto(PUBLIC_URL, { waitUntil: "domcontentloaded" });
+    await captureStep(page, {
+      section: "Verifying on the public site",
+      step: "7.2",
+      title: "Marker live on the production canary URL",
+      body:
+        "After the PR auto-merges and `deploy-production.yml` finishes, the canary URL on `adamdaniel.ai` reflects the edit. CloudFront's invalidation typically completes within ~2 minutes of the merge — if you don't see your change after that, check the deploy run on GitHub Actions.",
     });
   });
 
