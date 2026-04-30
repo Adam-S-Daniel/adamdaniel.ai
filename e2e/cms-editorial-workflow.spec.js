@@ -287,4 +287,32 @@ test.describe("Decap editorial workflow — existing-entry editor is editable", 
       )
       .toContain(`name: ${NEW_TAG_NAME}`);
   });
+
+  // ── Diagnostic banner self-verification ────────────────────────────
+  //
+  // admin/index-test.html ships its own status banner that walks the
+  // rendered DOM and reports EDITABLE / FIELDS DISABLED. The whole
+  // point of that banner is letting a non-developer (the site owner)
+  // hit a single URL and immediately see whether the rendering path
+  // is healthy on their environment. If we ever ship a regression
+  // that visually appears fine but disables widgets — the exact
+  // mode of the read-only bug — the banner must catch it.
+  test("diagnostic banner reports EDITABLE on the seeded post", async ({
+    page,
+  }) => {
+    await loadAdmin(page);
+    await page.goto(
+      `/admin/index-test.html#/collections/posts/entries/${SEED_POST_SLUG}`,
+    );
+
+    const titleField = page.getByLabel(/^Title$/);
+    await expect(titleField).toBeVisible({ timeout: 60_000 });
+
+    // The banner inspects on every MutationObserver tick + every
+    // hashchange. Wait for it to settle on a non-PENDING verdict.
+    const badge = page.locator("#cms-diagnostic-status");
+    await expect(badge).toBeVisible();
+    await expect(badge).toHaveText(/^EDITABLE$/i, { timeout: 30_000 });
+    await expect(badge).toHaveClass(/green/);
+  });
 });
