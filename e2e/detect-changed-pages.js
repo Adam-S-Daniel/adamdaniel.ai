@@ -220,44 +220,53 @@ function classifyPages({ allPages, changedFiles, fileExistsOnMain = () => true }
   return { changed, new: newList, unchanged };
 }
 
+// CLI entrypoint as a pure function. Injectable runGit / runDiscover
+// so the failure path (truncated history, no merge base) can be
+// covered by unit tests without mutating the real repo.
+//
+// THROWS on git failure — silent fallback to "empty changeset" was the
+// exact bug that made visual-regression report `potentiallyAffected: 0`
+// on every PR (audit finding #2).
+function runDetect({
+  runGit = git,
+  runDiscover = discoverAllPages,
+  runFileExists = fileExistsOnMain,
+} = {}) {
+  // Best-effort fetch of origin/main so the diff below has a base to
+  // resolve against. Missing remote (offline dev) is fine — the diff
+  // is the real gate.
+  try {
+    runGit("git fetch origin main 2>/dev/null || true");
+  } catch {
+    // ignore — the diff below will surface any real problem
+  }
+
+  const changedFiles = runGit("git diff --name-only origin/main...HEAD")
+    .split("\n")
+    .filter(Boolean);
+
+  return classifyPages({
+    allPages: runDiscover(),
+    changedFiles,
+    fileExistsOnMain: runFileExists,
+  });
+}
+
 module.exports = {
   ALWAYS_INCLUDED_ADMIN_PAGES,
   classifyPages,
   discoverAllPages,
   fileExistsOnMain,
   mapFileToUrls,
+  runDetect,
 };
 
 if (require.main === module) {
-  // Best-effort fetch of origin/main so the diff below has a base to
-  // resolve against. `|| true` keeps a missing remote (offline dev) from
-  // killing the script — the next git command is the real gate.
-  //
-  // Historic gotcha: do NOT pass `--depth=1` here. The workflow checks
-  // out with `fetch-depth: 0` (full history); a depth-1 fetch on top of
-  // that converts the local clone to shallow and severs the merge base,
-  // which then causes the next `git diff origin/main...HEAD` to fail
-  // with "no merge base".
-  try {
-    git("git fetch origin main 2>/dev/null || true");
-  } catch {
-    // ignore — the diff below will surface any real problem
-  }
-
-  // No silent catch here — if git diff fails, the script must fail
-  // loudly. A previous version swallowed the error and treated it as
-  // an empty changeset, which made the visual-regression workflow
-  // report `potentiallyAffected: 0` on every PR regardless of what
-  // actually changed.
-  const changedFiles = git("git diff --name-only origin/main...HEAD")
-    .split("\n")
-    .filter(Boolean);
-
-  const allPages = discoverAllPages();
-  const result = classifyPages({
-    allPages,
-    changedFiles,
-    fileExistsOnMain,
-  });
+  // Historic gotcha: do NOT pass `--depth=1` to the fetch. The workflow
+  // checks out with `fetch-depth: 0` (full history); a depth-1 fetch on
+  // top of that converts the local clone to shallow and severs the
+  // merge base, which then causes `git diff origin/main...HEAD` to
+  // fail with "no merge base".
+  const result = runDetect();
   process.stdout.write(JSON.stringify(result, null, 2) + "\n");
 }
