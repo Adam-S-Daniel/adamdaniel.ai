@@ -68,6 +68,9 @@ jobs:
         # no extra gems. Keeps plugin behaviour covered even when no
         # Playwright spec exercises the same code path.
         run: |
+          # `nullglob` so the loop is a no-op (rather than passing the
+          # literal pattern to ruby) if the directory is ever emptied.
+          shopt -s nullglob
           for t in _plugins_test/*_test.rb; do
             echo "==> $t"
             bundle exec ruby "$t"
@@ -295,6 +298,10 @@ jobs:
       - name: Concatenate shard logs
         run: |
           : > /tmp/playwright-output.log
+          # `nullglob` so an empty `all-shard-logs/` (e.g. when every
+          # matrix shard was cancelled) leaves the loop body unrun
+          # rather than feeding the literal pattern to `basename`.
+          shopt -s nullglob
           for d in all-shard-logs/shard-log-*; do
             shard=$(basename "$d" | sed 's/shard-log-//')
             echo "===== shard $shard =====" >> /tmp/playwright-output.log
