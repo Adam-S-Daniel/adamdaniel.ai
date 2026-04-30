@@ -14,16 +14,15 @@ name: CMS Editorial Workflow
 on:
   pull_request:
     types: [opened, synchronize, labeled]
-    paths:
-      - '_posts/**'
-      - '_projects/**'
-      - '_tags/**'
-      - 'pages/**'
-      # Canary collection used by the publish-loop e2e tests. Without this,
-      # validate-content doesn't run on canary edits → no required check
-      # exists → auto-merge can't fire on feature-branch PRs (the PR #78
-      # unstable-rollup failure mode that issue #79 calls out).
-      - '_e2e/**'
+    # No `paths:` filter. The `cms-feature-branches` branch-protection ruleset
+    # makes `validate-content` a required check on every PR into a feature
+    # branch (cms/**, claude/**, feat/**, fix/**, …). If we gate this workflow
+    # by paths, a feature-branch PR that doesn't touch CMS content never
+    # produces the required check, the merge stays BLOCKED forever, and the
+    # auto-merge path that issue #79 was meant to unblock is right back where
+    # it started. validate-content takes <2 min when no CMS paths changed
+    # (front-matter loop is a no-op via `nullglob`; Jekyll build is the only
+    # real cost), so always-running it is cheap insurance.
 
 permissions:
   contents: read
