@@ -1,5 +1,6 @@
 const { test, expect } = require("./base");
 
+// allowed: literal slug used for known fixture (_posts/2026-04-25-replacement-test-post-1.md)
 const POST_URL = "/blog/replacement-test-post-1/";
 const POST_TITLE = "Replacement test post 1";
 

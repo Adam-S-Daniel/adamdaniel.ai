@@ -22,6 +22,7 @@ test.describe("Visual regression", () => {
   });
 
   test("blog post", async ({ page }) => {
+    // allowed: literal slug used for known fixture (_posts/2026-04-25-replacement-test-post-1.md)
     await page.goto("/blog/replacement-test-post-1/");
     await page.addStyleTag({ content: FREEZE_ANIMATIONS });
     await page.waitForTimeout(200);
