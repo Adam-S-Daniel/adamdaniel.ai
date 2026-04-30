@@ -4,7 +4,7 @@ This manual is **assembled by the test suite**: every screenshot and step descri
 
 If a step looks wrong, the test that captured it is wrong too. The fix is in the test file shown under each screenshot — open it, update the `captureStep(...)` call, push, and the manual regenerates on the next run of `.github/workflows/regenerate-manual.yml`.
 
-_Last regenerated: 2026-04-30T03:10:33.532Z_
+_Last regenerated: 2026-04-30T03:28:11.455Z_
 
 ---
 
