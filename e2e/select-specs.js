@@ -23,8 +23,8 @@
 // not an error). Non-zero only if git diff fails outright.
 //
 // Always-run baseline (cheap, no browser): compute-visual-diffs.test.js,
-// cms-config.spec.js, visual-change-guard.spec.js. If only those run,
-// CI is essentially a no-op smoke check.
+// cms-config.spec.js, visual-change-guard.spec.js, canary-content.test.js.
+// If only those run, CI is essentially a no-op smoke check.
 //
 // Rules are intentionally over-eager on the "include" side: when in
 // doubt, run the spec. Missing a relevant test is far more costly
@@ -37,6 +37,7 @@ const ALWAYS_RUN = [
   "e2e/compute-visual-diffs.test.js",
   "e2e/cms-config.spec.js",
   "e2e/visual-change-guard.spec.js",
+  "e2e/canary-content.test.js",
 ];
 
 // Files that fan out to "every spec is potentially affected". Includes
@@ -82,6 +83,37 @@ const SPEC_RULES = {
   "e2e/cms-editorial-workflow.spec.js": [
     /^admin\//,
     /^_posts\//,
+  ],
+  // Canary content invariants — fast, no browser. Cross-checks the
+  // _e2e/ collection wiring stays consistent across _config.yml,
+  // admin/config.yml, and the canary source files.
+  "e2e/canary-content.test.js": [
+    /^_e2e\//,
+    /^admin\//,
+    /^_config\.yml$/,
+    /^_layouts\/canary\.html$/,
+  ],
+  // Real-network publish-loop specs. Heavy and slow; run only when
+  // something contributor-relevant changed.
+  "e2e/cms-publish-loop.spec.js": [
+    /^admin\//,
+    /^_layouts\/(post|page|project|canary|default)\.html$/,
+    /^_layouts\/preview\.html$/,
+    /^_e2e\//,
+    /^scripts\/patch-preview-config\.sh$/,
+    /^\.github\/workflows\/cms-editorial-workflow\.yml$/,
+    /^\.github\/workflows\/deploy-production\.yml$/,
+    /^\.github\/workflows\/deploy-preview\.yml$/,
+    /^e2e\/(decap-pat|github-actions-poll|canary-content)\.js$/,
+  ],
+  "e2e/cms-publish-loop-preview.spec.js": [
+    /^admin\//,
+    /^_layouts\/(post|page|project|canary|default)\.html$/,
+    /^_e2e\//,
+    /^scripts\/patch-preview-config\.sh$/,
+    /^\.github\/workflows\/cms-editorial-workflow\.yml$/,
+    /^\.github\/workflows\/deploy-preview\.yml$/,
+    /^e2e\/(decap-pat|github-actions-poll|canary-content)\.js$/,
   ],
   "e2e/cms-publish-flow.spec.js": [
     /^admin\//,

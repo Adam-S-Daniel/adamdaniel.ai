@@ -1,0 +1,189 @@
+/*
+ * Helpers that wait on real GitHub PR / Actions state for the publish-loop
+ * end-to-end test. They poll the GitHub REST API directly (not via the
+ * `gh` CLI) so a host without `gh` can still run the spec.
+ *
+ * Auth: re-uses CMS_E2E_PAT — the same fine-grained token Decap is using
+ * for the publish dance — which already has `pull-requests: r/w` and
+ * `contents: r/w` permissions on the host repo.
+ *
+ * Each poll function:
+ *   - returns the resolved object on success
+ *   - throws with a clear `Timed out waiting for …` message on timeout
+ *   - sleeps with simple polynomial backoff so the API isn't hammered
+ */
+const { HOST_REPO, getPat } = require("./decap-pat");
+
+const API_ROOT = "https://api.github.com";
+
+function authHeaders() {
+  return {
+    Accept: "application/vnd.github+json",
+    Authorization: `Bearer ${getPat()}`,
+    "X-GitHub-Api-Version": "2022-11-28",
+    "User-Agent": "adamdaniel-ai-e2e-publish-loop",
+  };
+}
+
+async function gh(pathname, init = {}) {
+  const url = pathname.startsWith("http") ? pathname : `${API_ROOT}${pathname}`;
+  const res = await fetch(url, {
+    ...init,
+    headers: { ...authHeaders(), ...(init.headers || {}) },
+  });
+  if (!res.ok) {
+    const body = await res.text();
+    throw new Error(`GitHub API ${res.status} ${res.statusText} on ${url}: ${body.slice(0, 300)}`);
+  }
+  return res.json();
+}
+
+function sleep(ms) {
+  return new Promise((r) => setTimeout(r, ms));
+}
+
+/**
+ * Poll until a PR is opened by Decap on the configured branch. We match by
+ * head ref pattern (`cms/<slug>` per Decap's editorial-workflow convention)
+ * and the canary ID embedded in the body, since Decap doesn't tell us the
+ * PR number directly.
+ */
+async function waitForCmsPullRequest({
+  repo = HOST_REPO,
+  base,
+  headBranchPrefix = "cms/",
+  canaryMarker,
+  timeoutMs = 180_000,
+  pollMs = 4_000,
+} = {}) {
+  if (!canaryMarker) {
+    throw new Error("waitForCmsPullRequest needs a canaryMarker to disambiguate the PR.");
+  }
+  const deadline = Date.now() + timeoutMs;
+  while (Date.now() < deadline) {
+    const prs = await gh(`/repos/${repo}/pulls?state=open&base=${encodeURIComponent(base)}&per_page=50`);
+    const match = prs.find(
+      (pr) =>
+        pr.head &&
+        typeof pr.head.ref === "string" &&
+        pr.head.ref.startsWith(headBranchPrefix) &&
+        ((pr.body || "").includes(canaryMarker) || (pr.title || "").includes(canaryMarker)),
+    );
+    if (match) return match;
+    await sleep(pollMs);
+  }
+  throw new Error(`Timed out waiting for Decap to open a PR with marker ${canaryMarker}`);
+}
+
+async function addLabel({ repo = HOST_REPO, prNumber, label }) {
+  return gh(`/repos/${repo}/issues/${prNumber}/labels`, {
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify({ labels: [label] }),
+  });
+}
+
+async function getPullRequest({ repo = HOST_REPO, prNumber }) {
+  return gh(`/repos/${repo}/pulls/${prNumber}`);
+}
+
+async function waitForMerge({
+  repo = HOST_REPO,
+  prNumber,
+  timeoutMs = 480_000,
+  pollMs = 8_000,
+} = {}) {
+  const deadline = Date.now() + timeoutMs;
+  while (Date.now() < deadline) {
+    const pr = await getPullRequest({ repo, prNumber });
+    if (pr.merged) return pr;
+    if (pr.state === "closed" && !pr.merged) {
+      throw new Error(`PR #${prNumber} was closed without merging.`);
+    }
+    await sleep(pollMs);
+  }
+  throw new Error(`Timed out waiting for PR #${prNumber} to merge.`);
+}
+
+async function waitForAutoMergeEnabled({
+  repo = HOST_REPO,
+  prNumber,
+  timeoutMs = 90_000,
+  pollMs = 4_000,
+} = {}) {
+  const deadline = Date.now() + timeoutMs;
+  while (Date.now() < deadline) {
+    const pr = await getPullRequest({ repo, prNumber });
+    if (pr.auto_merge && pr.auto_merge.enabled_by) return pr;
+    await sleep(pollMs);
+  }
+  throw new Error(`Timed out waiting for auto-merge to be enabled on PR #${prNumber}.`);
+}
+
+async function waitForWorkflowRun({
+  repo = HOST_REPO,
+  workflow,
+  headSha,
+  branch,
+  timeoutMs = 600_000,
+  pollMs = 12_000,
+  expectedConclusion = "success",
+} = {}) {
+  const deadline = Date.now() + timeoutMs;
+  let lastSeen = null;
+  while (Date.now() < deadline) {
+    const params = new URLSearchParams();
+    if (branch) params.set("branch", branch);
+    if (headSha) params.set("head_sha", headSha);
+    params.set("per_page", "20");
+    const data = await gh(`/repos/${repo}/actions/workflows/${workflow}/runs?${params}`);
+    const runs = data.workflow_runs || [];
+    if (runs.length > 0) {
+      lastSeen = runs[0];
+      if (lastSeen.status === "completed") {
+        if (lastSeen.conclusion === expectedConclusion) return lastSeen;
+        throw new Error(
+          `Workflow ${workflow} on ${branch || headSha} completed with conclusion=${lastSeen.conclusion} (expected ${expectedConclusion}).`,
+        );
+      }
+    }
+    await sleep(pollMs);
+  }
+  throw new Error(
+    `Timed out waiting for ${workflow} on ${branch || headSha}; last seen ${
+      lastSeen ? `${lastSeen.status}/${lastSeen.conclusion}` : "no runs"
+    }.`,
+  );
+}
+
+async function fetchPublicUrl(url, { timeoutMs = 240_000, pollMs = 6_000, expectContent } = {}) {
+  const deadline = Date.now() + timeoutMs;
+  while (Date.now() < deadline) {
+    try {
+      const res = await fetch(url, { cache: "no-store" });
+      if (res.ok) {
+        const body = await res.text();
+        if (!expectContent || body.includes(expectContent)) return body;
+      }
+    } catch (_) { /* network blip — keep polling */ }
+    await sleep(pollMs);
+  }
+  throw new Error(`Timed out waiting for ${url} to expose ${expectContent ? JSON.stringify(expectContent) : "200 OK"}.`);
+}
+
+async function getDefaultBranchHeadSha({ repo = HOST_REPO, branch = "main" } = {}) {
+  const ref = await gh(`/repos/${repo}/git/refs/heads/${encodeURIComponent(branch)}`);
+  return ref.object && ref.object.sha;
+}
+
+module.exports = {
+  addLabel,
+  fetchPublicUrl,
+  getDefaultBranchHeadSha,
+  getPullRequest,
+  gh,
+  waitForAutoMergeEnabled,
+  waitForCmsPullRequest,
+  waitForMerge,
+  waitForWorkflowRun,
+};

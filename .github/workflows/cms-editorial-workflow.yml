@@ -19,6 +19,11 @@ on:
       - '_projects/**'
       - '_tags/**'
       - 'pages/**'
+      # Canary collection used by the publish-loop e2e tests. Without this,
+      # validate-content doesn't run on canary edits → no required check
+      # exists → auto-merge can't fire on feature-branch PRs (the PR #78
+      # unstable-rollup failure mode that issue #79 calls out).
+      - '_e2e/**'
 
 permissions:
   contents: read

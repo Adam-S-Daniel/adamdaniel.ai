@@ -1,0 +1,56 @@
+{
+  "name": "cms-feature-branches",
+  "_comment": "Applied via gh api repos/Adam-S-Daniel/adamdaniel.ai/rulesets — checked in here so the rule is reviewable in the repo. Pinning validate-content as a required check on every feature-branch PR target lets cms-editorial-workflow.yml's auto-merge mutation succeed: without a required check, GitHub's mergeable_state goes 'unstable' the moment any pending non-required check is queued (including the auto-merge job's own pending state — issue #79).",
+  "target": "branch",
+  "enforcement": "active",
+  "conditions": {
+    "ref_name": {
+      "include": [
+        "refs/heads/cms/**",
+        "refs/heads/claude/**",
+        "refs/heads/feat/**",
+        "refs/heads/fix/**",
+        "refs/heads/chore/**",
+        "refs/heads/test/**",
+        "refs/heads/ci/**",
+        "refs/heads/docs/**"
+      ],
+      "exclude": []
+    }
+  },
+  "rules": [
+    {
+      "type": "non_fast_forward"
+    },
+    {
+      "type": "pull_request",
+      "parameters": {
+        "required_approving_review_count": 0,
+        "dismiss_stale_reviews_on_push": false,
+        "require_code_owner_review": false,
+        "require_last_push_approval": false,
+        "required_review_thread_resolution": false,
+        "allowed_merge_methods": ["squash", "merge"]
+      }
+    },
+    {
+      "type": "required_status_checks",
+      "parameters": {
+        "strict_required_status_checks_policy": false,
+        "do_not_enforce_on_create": true,
+        "required_status_checks": [
+          {
+            "context": "validate-content"
+          }
+        ]
+      }
+    }
+  ],
+  "bypass_actors": [
+    {
+      "actor_id": 5,
+      "actor_type": "RepositoryRole",
+      "bypass_mode": "always"
+    }
+  ]
+}

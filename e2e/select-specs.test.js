@@ -150,4 +150,32 @@ test.describe("select-specs", () => {
     expect(r.scope).toBe("subset");
     expect(r.files).toEqual(ALWAYS_RUN.slice().sort());
   });
+
+  test("canary collection edit → canary invariants + publish-loop specs", () => {
+    const r = selectSpecs(["_e2e/canary-post.md"]);
+    expect(r.scope).toBe("subset");
+    expect(r.files).toContain("e2e/canary-content.test.js");
+    expect(r.files).toContain("e2e/cms-publish-loop.spec.js");
+    expect(r.files).toContain("e2e/cms-publish-loop-preview.spec.js");
+  });
+
+  test("canary layout change → canary invariants run", () => {
+    const r = selectSpecs(["_layouts/canary.html"]);
+    // _layouts/* is a fanout pattern, so we expect scope=all here.
+    expect(r.scope).toBe("all");
+  });
+
+  test("github-actions-poll helper change → publish-loop specs", () => {
+    const r = selectSpecs(["e2e/github-actions-poll.js"]);
+    expect(r.scope).toBe("subset");
+    expect(r.files).toContain("e2e/cms-publish-loop.spec.js");
+    expect(r.files).toContain("e2e/cms-publish-loop-preview.spec.js");
+  });
+
+  test("decap-pat helper change → publish-loop specs", () => {
+    const r = selectSpecs(["e2e/decap-pat.js"]);
+    expect(r.scope).toBe("subset");
+    expect(r.files).toContain("e2e/cms-publish-loop.spec.js");
+    expect(r.files).toContain("e2e/cms-publish-loop-preview.spec.js");
+  });
 });

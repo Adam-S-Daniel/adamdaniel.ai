@@ -268,3 +268,80 @@ collections:
         modes:
           - rich_text
           - raw
+
+  # ── E2E canaries (system collection) ──────────────────────
+  #
+  # The publish-loop end-to-end tests (e2e/cms-publish-loop*.spec.js)
+  # drive admin actions against these stable, unadvertised entries
+  # and assert the result on the public site. Between test runs the
+  # body is reset to a known baseline, so the URLs always render
+  # innocuous content.
+  #
+  # `create: false, delete: false` so contributors don't accidentally
+  # add or remove fixtures — the test harness depends on this exact
+  # set of canaries existing.
+  - name: e2e
+    label: "[E2E TEST FIXTURES — DO NOT EDIT]"
+    label_singular: "E2E Canary"
+    description: >-
+      System collection used by automated end-to-end tests. Editing these
+      entries by hand is not supported — the test harness resets them
+      between runs.
+    folder: _e2e
+    create: false
+    delete: false
+    slug: "{{slug}}"
+    preview_path: "/e2e/{{slug}}/"
+    summary: "{{title}}"
+    sortable_fields:
+      - title
+    fields:
+      - name: title
+        label: Title
+        widget: string
+        required: true
+      - name: layout
+        label: Layout
+        widget: hidden
+        default: canary
+      - name: permalink
+        label: Permalink
+        widget: hidden
+      - name: canary_baseline
+        label: Canary Baseline
+        widget: hidden
+      - name: canary_id
+        label: Canary ID
+        widget: hidden
+      - name: collection_label
+        label: Collection Label
+        widget: hidden
+      - name: slug
+        label: Slug
+        widget: hidden
+      - name: date
+        label: Date
+        widget: datetime
+        required: false
+        date_format: "YYYY-MM-DD"
+        time_format: "HH:mm"
+        format: "YYYY-MM-DD HH:mm:ss ZZ"
+      - name: technology
+        label: Technology
+        widget: string
+        required: false
+      - name: sitemap
+        label: Include in Sitemap
+        widget: hidden
+        default: false
+      - name: robots
+        label: Robots
+        widget: hidden
+        default: "noindex,nofollow"
+      - name: body
+        label: Body
+        widget: markdown
+        required: true
+        modes:
+          - rich_text
+          - raw

@@ -1,0 +1,22 @@
+---
+layout: canary
+title: "E2E Canary — Project"
+collection_label: project
+permalink: /e2e/canary-project/
+canary_baseline: "Adam Daniel — E2E canary project (do not edit by hand)"
+technology: "End-to-end testing harness"
+slug: canary-project
+sitemap: false
+robots: noindex,nofollow
+canary_id: project
+---
+
+Adam Daniel — E2E canary project (do not edit by hand).
+
+This URL exists so the automated end-to-end publish-loop tests have a stable
+target to assert against on both preview-pr&lt;N&gt;.adamdaniel.ai and
+adamdaniel.ai. The body is replaced during a test run and reset to this
+baseline in cleanup, so the public URL always renders innocuous content
+between runs.
+
+If this is the only thing you can see, no test is currently in progress.

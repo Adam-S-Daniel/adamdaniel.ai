@@ -48,6 +48,7 @@ npx playwright test e2e/glow-banding.spec.js       # single test file
 | `AWS_ROLE_ARN` | bootstrap stack output | deploy-production.yml, deploy-preview.yml |
 | `PRODUCTION_CLOUDFRONT_ID` | bootstrap stack output | deploy-production.yml |
 | `PREVIEW_CLOUDFRONT_ID` | bootstrap stack output | deploy-preview.yml |
+| `CMS_E2E_PAT` | fine-grained PAT, host repo only | `e2e/cms-publish-loop*.spec.js` (drives the full Decap → cms PR → auto-merge → deploy → public-URL loop). Token permissions: `Contents: r/w`, `Pull requests: r/w`, `Metadata: r`. |
 
 ## AWS resources (us-east-1)
 
@@ -72,6 +73,7 @@ npx playwright test e2e/glow-banding.spec.js       # single test file
 | Tags | `_tags/` | folder | name, description |
 | Projects | `_projects/` | folder | title, technology, url_link, featured, images (gallery) |
 | Pages | `pages/` | folder | title, body, permalink, published (was `files:` until PR #33) |
+| E2E Canaries | `_e2e/` | folder | system collection used only by `e2e/cms-publish-loop*.spec.js`; URLs at `/e2e/canary-{post,page,project}/`. Excluded from feeds, sitemap, and listings; rendered with `noindex,nofollow`. The publish-loop tests drive admin actions against these stable, unadvertised entries and assert the result on the public site. Between runs the body is reset to a baseline so the URLs always show innocuous content. `create: false, delete: false` — contributors must not edit them by hand. |
 
 Every folder collection in `admin/config*.yml` ships with **explicit** `create: true` AND `delete: true`. Decap defaults both to true, but spelling them out keeps editor capabilities visible in the YAML and survives any future major-version default change. The `cms-config.spec.js` invariants enforce this.
 
@@ -239,6 +241,32 @@ Uses `regression-review` GitHub Environment with required reviewers (all write-a
 | `_layouts/*`, `_includes/*`, `_config.yml`, `assets/css/*` | ALL pages marked changed |
 
 ---
+
+### `cms-publish-loop` (real-network end-to-end test)
+
+`e2e/cms-publish-loop.spec.js` and `e2e/cms-publish-loop-preview.spec.js` exercise the full Decap → GitHub Actions → AWS deploy → public URL loop on the host repo (`main` target) and on PR previews (`PR head` target). Both:
+
+1. Reset a canary entry in `_e2e/` to its known baseline via the Contents API.
+2. Drive `https://adamdaniel.ai/admin/` (or the preview admin) with a PAT-seeded Decap session.
+3. Edit the canary, hit Save — Decap opens a `cms/<...>` PR.
+4. Wait for `validate-content` to pass.
+5. Add the `cms/ready` label.
+6. Wait for `auto-merge-when-ready` to enable auto-merge, then for the PR to merge.
+7. Wait for `deploy-production.yml` (or `deploy-preview.yml`) to redeploy.
+8. Fetch the public canary URL and assert the new content is live.
+9. Reset the canary baseline asynchronously.
+
+**Gating:** path-based via `e2e/select-specs.js`. Triggers when something contributor-relevant changed: `admin/**`, `_layouts/{post,page,project,canary,default,preview}.html`, `_e2e/**`, `scripts/patch-preview-config.sh`, `.github/workflows/{cms,deploy}-*.yml`, `e2e/{cms,decap-pat,github-actions-poll,canary-content}.*`. Self-skips when `CMS_E2E_PAT` isn't set (so forks/Dependabot don't run it). Runs once on `chromium-desktop`.
+
+**Branch-protection ruleset:** `cms-feature-branches` (id 15756474, see `.github/rulesets/cms-feature-branches.json`) requires `validate-content` on PRs into `cms/**`, `claude/**`, `feat/**`, `fix/**`, `chore/**`, `test/**`, `ci/**`, `docs/**`. Without this required check, GitHub's mergeable_state goes "unstable" the moment the auto-merge job's own pending state is queued — which is exactly what bit PR #78 and motivated issue #79.
+
+### Contributor Manual
+
+`docs/CONTRIBUTOR_MANUAL.md` is **assembled by the e2e tests**. Specs call `captureStep(page, { section, step, title, body })` from `e2e/manual-capture.js` at meaningful moments. The collator at `scripts/build-contributor-manual.js` reads the `manual-capture/*.json` records and builds the manual with embedded screenshots from `docs/manual-screenshots/`.
+
+The capture is no-op unless `MANUAL_CAPTURE=1`; normal CI runs aren't slowed down. `.github/workflows/regenerate-manual.yml` flips the env var, runs the capture-instrumented specs, rebuilds the doc, and opens an auto-PR if the diff is non-empty.
+
+If the manual looks wrong, the test that captured the wrong step is wrong — fix the `captureStep(...)` call, push, and the next regen run propagates the fix.
 
 ### Branch protection (`main`)
 

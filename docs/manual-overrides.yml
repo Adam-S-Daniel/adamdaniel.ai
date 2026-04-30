@@ -1,0 +1,42 @@
+# Optional pre-section blurbs and ordering for docs/CONTRIBUTOR_MANUAL.md.
+# Read by scripts/build-contributor-manual.js.
+#
+# section_order:    Names listed here lead the manual, in this exact order.
+#                   Sections not listed appear alphabetically afterward.
+# section_intros:   Per-section markdown shown directly under the H2 heading.
+
+section_order:
+  - Logging in
+  - Browsing collections
+  - Editing a post
+  - Inserting media
+  - Real-layout preview
+  - Marking ready and publishing
+  - Verifying on the public site
+  - Deleting an entry
+  - Working from a PR preview
+  - Publishing on a schedule
+  - Reviewing visual regressions
+
+section_intros:
+  Logging in: |
+    Decap CMS authenticates through a small Lambda OAuth proxy. Visit `/admin/`
+    on either the production site or a PR preview subdomain — both go through
+    the same proxy and end up logged in as the same GitHub user.
+
+  Editing a post: |
+    Every Save lands on a new `cms/<timestamp>` branch and opens a PR — your
+    edit is a PR-backed draft, not a live commit. The PR triggers the standard
+    test matrix and a CloudFront-backed preview at
+    `preview-pr<N>.adamdaniel.ai`.
+
+  Marking ready and publishing: |
+    Setting the Status dropdown to **Ready** adds the `cms/ready` label, which
+    fires `auto-merge-when-ready` in `cms-editorial-workflow.yml`. The PR then
+    auto-merges as soon as the required checks (validate-content, e2e,
+    visual-regression / approve-regression) all go green.
+
+  Verifying on the public site: |
+    A successful merge to `main` triggers `deploy-production.yml`, which
+    `aws s3 sync`s the build into the production bucket and invalidates
+    CloudFront. Your edit goes live within ~2 minutes of the merge.

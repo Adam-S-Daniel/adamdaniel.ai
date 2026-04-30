@@ -19,6 +19,13 @@ collections:
   tags:
     output: true
     permalink: /tags/:slug/
+  # E2E canary collection. Reserved for the automated publish-loop tests
+  # (e2e/cms-publish-loop*.spec.js). Each entry has a stable, unadvertised
+  # public URL the tests can drive admin actions against and assert on.
+  # Excluded from listings, the site feed, the tag archives, and sitemap.
+  e2e:
+    output: true
+    permalink: /e2e/:slug/
 
 defaults:
   - scope:
@@ -40,6 +47,13 @@ defaults:
       path: "pages"
     values:
       layout: "page"
+  - scope:
+      path: ""
+      type: "e2e"
+    values:
+      layout: "canary"
+      sitemap: false
+      robots: "noindex,nofollow"
 
 # Plugins
 plugins:
