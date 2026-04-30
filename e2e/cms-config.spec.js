@@ -201,5 +201,132 @@ test.describe("Decap CMS config invariants", () => {
       const permalink = findField(pages, "permalink");
       expect(permalink).toMatch(/widget:\s*string/);
     });
+
+    // ── Audit finding #19: relation-widget creep ─────────────────────
+    //
+    // The Decap `relation` widget only picks from existing entries —
+    // it disables inline creation and would break the auto_tag_pages
+    // plugin's "manufacture an archive page for any string tag" loop.
+    // We've never had a relation widget in this repo; the invariant
+    // makes sure a future contributor doesn't slip one in (the
+    // posts.tags-specific check above would only catch the tags
+    // field).
+    test(`${label}: no widget: relation appears anywhere in the config`, () => {
+      const yml = readConfig(configPath);
+      expect(
+        yml,
+        "the relation widget is incompatible with the auto_tag_pages plugin (it requires every value to be a curated entry); use list/string instead",
+      ).not.toMatch(/widget:\s*relation\b/);
+    });
   }
+
+  // ── Audit finding #7: preview_path / permalink contract ─────────────
+  //
+  // Decap's "View on Live Site" button substitutes `{{slug}}` into the
+  // collection's `preview_path` and opens the result. Jekyll renders
+  // each entry at its `permalink:` template (`_config.yml`). When the
+  // two diverge, the button 404s — invisible to a routine spec, very
+  // visible to an editor mid-publish. This test rebuilds the URL Jekyll
+  // would emit from `_config.yml` and asserts it matches preview_path
+  // (with `{{slug}}` → a fixture slug).
+  //
+  // Pages are a special case: pages don't share a global Jekyll
+  // permalink template (each entry sets its own front-matter
+  // permalink). The contract is that pages.preview_path matches the
+  // PER-ENTRY permalink convention enforced by admin/config.yml's
+  // `pages.permalink.pattern` default ("/pages/<slug>/").
+
+  function permalinkFor(jekyllConfig, collection) {
+    // Top-level posts permalink lives at root; collection permalinks
+    // live nested under `collections: <name>: permalink:`. Trivial
+    // string parse — yaml is sufficiently regular for this single key.
+    if (collection === "posts") {
+      const m = jekyllConfig.match(/^permalink:\s*(\S+)\s*$/m);
+      return m ? m[1] : null;
+    }
+    // Match the collection block, then the permalink within it.
+    const re = new RegExp(
+      `^\\s{2}${collection}:\\s*$([\\s\\S]*?)(?=^\\S|^\\s{2}\\S)`,
+      "m",
+    );
+    const block = jekyllConfig.match(re);
+    if (!block) return null;
+    const m = block[1].match(/^\s+permalink:\s*(\S+)\s*$/m);
+    return m ? m[1] : null;
+  }
+
+  function previewPathFor(yml, collection) {
+    const chunk = findCollection(yml, collection);
+    if (!chunk) return null;
+    const m = chunk.match(/^\s{4}preview_path:\s*['"]?([^'"\n]+?)['"]?\s*$/m);
+    return m ? m[1] : null;
+  }
+
+  function jekyllUrlFromPermalink(permalink, slug) {
+    // Jekyll substitutes `:slug` (no braces) — replace + return.
+    return permalink.replace(/:slug/g, slug);
+  }
+
+  function decapUrlFromPreviewPath(previewPath, slug) {
+    // Decap substitutes `{{slug}}` — replace + return.
+    return previewPath.replace(/\{\{slug\}\}/g, slug);
+  }
+
+  // Posts / projects share the same shape: Decap's preview_path must
+  // resolve to the same URL Jekyll's permalink template produces for
+  // the same slug. Concrete `expected` value documents what each
+  // contract should produce — if either side drifts, the failure
+  // points at exactly which collection broke.
+  const PERMALINK_ROUND_TRIPS = [
+    { collection: "posts", slug: "foo-bar", expected: "/blog/foo-bar/" },
+    { collection: "projects", slug: "foo-bar", expected: "/projects/foo-bar/" },
+  ];
+  for (const { collection, slug, expected } of PERMALINK_ROUND_TRIPS) {
+    test(`${collection}.preview_path round-trips through _config.yml's permalink`, () => {
+      const adminYml = readConfig(path.join(REPO_ROOT, "admin/config.yml"));
+      const jekyllYml = fs.readFileSync(
+        path.join(REPO_ROOT, "_config.yml"),
+        "utf8",
+      );
+      const previewPath = previewPathFor(adminYml, collection);
+      const permalink = permalinkFor(jekyllYml, collection);
+      expect(previewPath, `admin ${collection}.preview_path must exist`).not.toBeNull();
+      expect(permalink, `_config.yml ${collection} permalink must exist`).not.toBeNull();
+
+      const decapURL = decapUrlFromPreviewPath(previewPath, slug);
+      const jekyllURL = jekyllUrlFromPermalink(permalink, slug);
+      expect(
+        decapURL,
+        `${collection} preview URL must match Jekyll's rendered URL. preview_path=${previewPath} permalink=${permalink}`,
+      ).toBe(jekyllURL);
+      expect(decapURL).toBe(expected);
+    });
+  }
+
+  test("pages.preview_path matches the permalink default editors are nudged toward", () => {
+    // Pages don't have a Jekyll-side global permalink template — each
+    // page's front matter sets its own. The contract here is that
+    // admin/config.yml's `pages.permalink.default` produces a path of
+    // the same shape preview_path generates, so an editor who accepts
+    // the default doesn't end up with a "View on Live Site" 404.
+    const adminYml = readConfig(path.join(REPO_ROOT, "admin/config.yml"));
+    const previewPath = previewPathFor(adminYml, "pages");
+    expect(previewPath).not.toBeNull();
+
+    const decapPreviewURL = decapUrlFromPreviewPath(previewPath, "foo-bar");
+    expect(decapPreviewURL).toBe("/pages/foo-bar/");
+
+    const permalinkField = findField(findCollection(adminYml, "pages"), "permalink");
+    const defaultMatch = permalinkField.match(
+      /^\s+default:\s*['"]?([^'"\n]+?)['"]?\s*$/m,
+    );
+    expect(
+      defaultMatch,
+      "pages.permalink should ship a `default:` so the New Page form pre-fills a sensible value",
+    ).not.toBeNull();
+    expect(
+      decapPreviewURL.startsWith(defaultMatch[1]),
+      `pages preview URL ${decapPreviewURL} must live under the permalink default ${defaultMatch[1]}`,
+    ).toBe(true);
+  });
 });
