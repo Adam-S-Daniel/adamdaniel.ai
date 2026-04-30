@@ -29,7 +29,7 @@
 (function () {
   "use strict";
 
-  var BANNER_ID = "cobalt-live-url";
+  var BANNER_ID = "cms-live-url";
 
   function getCollection() {
     var m = /#\/collections\/([^\/]+)/.exec(window.location.hash || "");

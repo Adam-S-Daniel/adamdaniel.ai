@@ -18,8 +18,10 @@ const REGRESSION_JSON = {
   pages: [
     { path: "/", status: "identical", diffRatio: 0 },
     { path: "/blog/", status: "identical", diffRatio: 0 },
+    // allowed: literal slug used for known fixture (synthetic regression-stats payload)
     { path: "/blog/test-post/", status: "different", diffRatio: 0.123 },
     { path: "/projects/foo/", status: "different", diffRatio: 0.05 },
+    // allowed: literal slug used for known fixture (synthetic regression-stats payload)
     { path: "/blog/brand-new/", status: "new", diffRatio: null },
   ],
 };
@@ -129,8 +131,10 @@ test.describe("/admin/reviews/ visual-diff stats", () => {
     // different + new entry. We don't assert order — the implementation
     // is free to reorder.
     const pagesLine = page.locator(".review-card .stat-pages");
+    // allowed: literal slug used for known fixture (matches the synthetic payload above)
     await expect(pagesLine).toContainText("/blog/test-post/");
     await expect(pagesLine).toContainText("/projects/foo/");
+    // allowed: literal slug used for known fixture (matches the synthetic payload above)
     await expect(pagesLine).toContainText("/blog/brand-new/");
     // Identical pages must NOT appear in the per-page list. Match on
     // the exact path (terminated by space-dot-space delimiter or end)

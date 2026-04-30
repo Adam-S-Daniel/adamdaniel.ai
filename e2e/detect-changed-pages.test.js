@@ -2,6 +2,7 @@ const { test, expect } = require("./base");
 const {
   classifyPages,
   mapFileToUrls,
+  runDetect,
 } = require("./detect-changed-pages");
 
 // Pure-function unit tests for the page-change classifier. No browser,
@@ -118,6 +119,20 @@ test.describe("classifyPages", () => {
     expect(r.new).toEqual([]);
   });
 
+  // Finding #22 — same shape, narrowed to admin/*.html. A new
+  // `admin/index-test.html` mapping to /admin/ must keep /admin/ in
+  // `changed`, not flip it to `new`.
+  test("new admin/index-test.html → /admin/ stays in changed, not new", () => {
+    const r = classifyPages({
+      allPages: ALL_PAGES,
+      changedFiles: ["admin/index-test.html"],
+      fileExistsOnMain: () => false,
+    });
+    expect(r.changed).toContain("/admin/");
+    expect(r.new).not.toContain("/admin/");
+    expect(r.new).not.toContain("/admin/reviews/");
+  });
+
   test("fanout + post → fanout wins, every page is in changed", () => {
     const r = classifyPages({
       allPages: ALL_PAGES,
@@ -164,5 +179,31 @@ test.describe("mapFileToUrls", () => {
     expect(mapFileToUrls("README.md")).toEqual([]);
     expect(mapFileToUrls("Gemfile.lock")).toEqual([]);
     expect(mapFileToUrls("package.json")).toEqual([]);
+  });
+});
+
+test.describe("runDetect (CLI integration)", () => {
+  // Finding #2 — a previous version swallowed `git diff` failures and
+  // returned an empty changeset. A truncated/shallow clone with no
+  // merge base is the exact failure mode that bug masked. runDetect
+  // must throw loudly so the workflow fails the run instead of
+  // shipping a `potentiallyAffected: 0` lie.
+  test("throws when git diff fails (truncated history, no merge base)", () => {
+    const fakeGit = (cmd) => {
+      // The fetch is best-effort and shouldn't throw — only the diff
+      // should. Mirrors the in-CI failure mode exactly.
+      if (cmd.startsWith("git fetch")) return "";
+      const err = new Error(
+        "fatal: no merge base found between origin/main and HEAD",
+      );
+      throw err;
+    };
+    expect(() =>
+      runDetect({
+        runGit: fakeGit,
+        runDiscover: () => new Set(["/"]),
+        runFileExists: () => true,
+      }),
+    ).toThrow();
   });
 });

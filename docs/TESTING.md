@@ -143,10 +143,12 @@ gated to chromium-desktop.
 | `blog-post` | Post layout — header, body, footer, prose typography |
 | `tags-index` | `/tags/` curation list |
 | `tag-archive` | `/tags/<slug>/` archive layout |
-| `admin-login` | Decap login screen with the cobalt-thermal background. Catches a Decap major-version DOM rewrite that breaks the splash-fadeout. |
-| `admin-posts-list` | Decap collection list — sidebar, header, sort/filter chrome. |
-| `admin-new-post` | The big one — every form field rendering at the right place. The screen this whole subsystem almost shipped broken. |
-| `admin-reviews-dashboard` | Unauthenticated state of `/admin/reviews/` — title, "Sign in with GitHub" button, cobalt glow. |
+
+Admin (Decap CMS) baselines were retired together with the cobalt-thermal
+theme. There is no theme to drift, and the editor's WYSIWYG surface is
+`/preview/?collection=<n>` rather than the form itself. The data plane
+is still covered by `cms-smoke.spec.js` and `cms-editorial-workflow.spec.js`
+(field render + load / save / delete round-trips).
 
 `scripts/generate-showcase.js` produces a side-by-side video of every
 snapshot when the `*-snapshots-before/` directory exists, used for PR
