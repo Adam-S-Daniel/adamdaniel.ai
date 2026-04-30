@@ -37,7 +37,7 @@
 
     #cms-diagnostic {
       position: fixed;
-      top: 0; left: 0; right: 0;
+      bottom: 0; left: 0; right: 0;
       z-index: 100000;
       padding: 0.6rem 1rem;
       font-family: 'SF Mono', 'Fira Code', monospace;
@@ -45,7 +45,7 @@
       letter-spacing: 0.06em;
       color: #d8e4ff;
       background: #060d1f;
-      border-bottom: 1px solid #1a2a5e;
+      border-top: 1px solid #1a2a5e;
       display: flex; align-items: center; gap: 1rem;
     }
     #cms-diagnostic .badge {
@@ -60,8 +60,13 @@
     #cms-diagnostic .badge.red     { background: #c2243d; color: #ffffff; }
     #cms-diagnostic .detail        { color: #8ab0e8; flex: 1; }
     #cms-diagnostic a { color: #d8e4ff; text-decoration: underline; }
-    /* Push Decap's app below the diagnostic banner. */
-    #nc-root, [class*="AppWrapper"] { padding-top: 38px !important; }
+    /* Pad the bottom of Decap's app shell so the banner doesn't
+     * occlude in-page content. The banner is bottom-pinned (NOT
+     * top-pinned) because Decap's editor toolbar is itself
+     * `position: fixed; top: 0` — a top-pinned banner intercepts
+     * pointer events on Save / Status / Delete and the editor
+     * stops working. */
+    #nc-root, [class*="AppWrapper"] { padding-bottom: 44px !important; }
   </style>
 </head>
 <body>
