@@ -22,6 +22,7 @@ const SEED_POST_SLUG = "2026-04-25-replacement-test-post-1";
 const SEED_POST_TITLE = "Replacement test post 1";
 // What both the banner and the override should resolve to for this entry.
 // `replacement-test-post-1` is what slugify("Replacement test post 1") produces.
+// allowed: literal slug used for known fixture (the seed canary post).
 const EXPECTED_PATH = "/blog/replacement-test-post-1/";
 
 const SEED_POST_CONTENT =

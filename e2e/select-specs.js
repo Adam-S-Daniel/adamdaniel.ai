@@ -64,6 +64,13 @@ const SPEC_RULES = {
     /^admin\/reviews\//,
     /^oauth-proxy\//,
   ],
+  // Live byte-parity probe: fetches every admin/ file from prod and
+  // from the latest open PR's preview, compares ETag/sha256. Triggers
+  // on any admin/ change so a CMS-shaped diff verifies it survives
+  // the deploy round-trip without drift.
+  "e2e/admin-bundle-parity.spec.js": [
+    /^admin\//,
+  ],
   "e2e/admin-reviews-stats.spec.js": [
     /^admin\/reviews\//,
     /^e2e\/compute-visual-diffs\.js$/,

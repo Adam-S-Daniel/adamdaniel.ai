@@ -69,7 +69,7 @@ collections:
     # by admin/native-preview-href.js so the date prefix here is harmless.
     slug: "{{year}}-{{month}}-{{day}}-{{slug}}"
     preview_path: "/blog/{{slug}}/"
-    summary: "{{title}} ({{date | date('MMM D, YYYY')}}){{publish_date | ternary(' — Scheduled', '')}}"
+    summary: "{{title}} ({{date | date('MMM D, YYYY')}}){{published | ternary('', ' — DRAFT')}}{{publish_date | ternary(' — Scheduled', '')}}"
     sortable_fields:
       - date
       - title
