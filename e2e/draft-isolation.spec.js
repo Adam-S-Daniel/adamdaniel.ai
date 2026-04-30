@@ -51,6 +51,7 @@ function jekyllBuild() {
   // Quiet build into the same `_site/` the playwright webServer is
   // serving from, so the deletion/non-creation of the draft is
   // picked up without restarting `npx serve`.
+  // @parity-lint-allow: only invoked from beforeAll's IS_LOCAL branch (G3).
   execFileSync("bundle", ["exec", "jekyll", "build", "--quiet"], {
     cwd: REPO_ROOT,
     stdio: "inherit",
@@ -58,6 +59,7 @@ function jekyllBuild() {
 }
 
 function writeDraft() {
+  // @parity-lint-allow: only invoked from beforeAll's IS_LOCAL branch (G3).
   fs.writeFileSync(DRAFT_PATH, DRAFT_BODY);
 }
 
@@ -67,6 +69,7 @@ function removeDraft() {
   // accidentally produced one. `_site/blog/<slug>/` would otherwise
   // be served by `npx serve` even though the source post is gone.
   const rendered = path.join(SITE_DIR, "blog", DRAFT_SLUG);
+  // @parity-lint-allow: only invoked from afterAll's IS_LOCAL branch (G3).
   if (fs.existsSync(rendered)) fs.rmSync(rendered, { recursive: true, force: true });
 }
 
