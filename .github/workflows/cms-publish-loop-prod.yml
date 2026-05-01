@@ -85,6 +85,15 @@ jobs:
           # scoped to the host repo with contents: r/w + pull_requests:
           # r/w + metadata: r. See AGENTS.md → "GitHub Actions secrets".
           CMS_E2E_PAT: ${{ secrets.CMS_E2E_PAT }}
+          # Tells playwright.config.js (via the G3 TARGET= switch) NOT
+          # to spin up the local Jekyll + decap-server webServer block
+          # — this spec hits adamdaniel.ai directly and the runner has
+          # no Ruby/bundler, so a webServer attempt would fail at
+          # `bundle: not found`. The spec hardcodes
+          # https://adamdaniel.ai for its own fetches, so the baseURL
+          # override TARGET=prod also installs is incidental but not
+          # relied on. Mirrors canary-prod.yml's pattern.
+          TARGET: prod
         run: |
           set -o pipefail
           npx playwright test \
