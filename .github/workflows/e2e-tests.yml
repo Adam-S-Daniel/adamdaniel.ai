@@ -199,6 +199,18 @@ jobs:
         # the test step's exit code visible to GHA's outcome.
         # `--reporter=blob,list` writes a blob report (for later merge
         # into a single HTML report) and prints to stdout for logs.
+        env:
+          # `cms-publish-loop.spec.js` and
+          # `cms-publish-loop-preview.spec.js` self-skip when this is
+          # empty (see e2e/decap-pat.js#getPat). Without exposing it,
+          # they silently skipped on every host-repo PR for months —
+          # `select-specs.js` was correctly *picking* them up but the
+          # specs no-op'd at runtime, so the editorial-workflow loop
+          # had no PR-time regression coverage. Forks don't see this
+          # value (GitHub strips secrets from `pull_request` events
+          # opened by external contributors), so the self-skip still
+          # protects against fork PRs running real prod mutations.
+          CMS_E2E_PAT: ${{ secrets.CMS_E2E_PAT }}
         run: |
           set -o pipefail
           npx playwright test \
@@ -209,6 +221,10 @@ jobs:
       - name: Run Playwright tests (selected subset, shard ${{ matrix.shard }}/${{ needs.select.outputs.shard_count }})
         if: needs.select.outputs.scope == 'subset'
         id: pw-subset
+        env:
+          # See the full-matrix step above for why this env line
+          # exists — same self-skip semantics, same fork-safety.
+          CMS_E2E_PAT: ${{ secrets.CMS_E2E_PAT }}
         run: |
           set -o pipefail
           npx playwright test ${{ needs.select.outputs.files }} \
