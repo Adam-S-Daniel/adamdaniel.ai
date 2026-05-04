@@ -107,6 +107,41 @@ Editors get a WYSIWYG preview of the page they're editing without publishing. Th
 
 Real-user monitoring is via Amazon CloudWatch RUM, deployed as a sibling CloudFormation stack `adamdaniel-ai-rum` (see `infrastructure/rum/`). The Jekyll snippet in `_includes/analytics/cloudwatch-rum.html` is a no-op unless **both** `JEKYLL_ENV=production` AND `site.analytics.cloudwatch_rum.app_monitor_id` are set, so local `jekyll serve` and PR previews stay silent. Identity-pool / app-monitor IDs are non-sensitive (visible in the rendered page source) so they live in `_config.yml`, not GitHub secrets. End-to-end test: `e2e/analytics-cloudwatch-rum.test.js`. Full deploy + tuning notes: [`ANALYTICS_SETUP.md`](ANALYTICS_SETUP.md).
 
+## Workflow path-filtering rule
+
+Every workflow that triggers on `pull_request` or `push` MUST filter on its salient paths — the files and directories whose changes can actually affect what the workflow does. The goal is "if nothing salient changed, the workflow either doesn't fire OR emits a green check immediately" — never burning runner minutes (or scheduler slots) on a no-op, never blocking a merge by being absent.
+
+**Rule of thumb when editing or adding a workflow:**
+
+1. Read what the workflow actually does — which files / directories does it consume, build, deploy, or test?
+2. Update `on.<event>.paths` (positive list) or `on.<event>.paths-ignore` (negative list) to match. Negative lists are usually shorter for site-wide workflows; positive lists are usually shorter for narrow workflows. Pick whichever expresses intent more clearly.
+3. When ADDING a step that touches a new part of the codebase, expand the path list. When RENAMING or MOVING files the workflow depends on, update the path list in the same commit.
+4. If the workflow is the *target* of a required status check, you can't drop it via workflow-level `paths:` — the check would go missing and block the merge. Use the **always-run + early skip** pattern instead: keep the trigger broad, detect salient changes in an early step, and gate every subsequent step on that step's output. The job still runs and reports success when nothing salient changed; the check is always present.
+
+The `cms-publish-loop-prod.yml` workflow uses the always-run pattern; `e2e-tests.yml`, `deploy-preview.yml`, `deploy-production.yml`, `regenerate-manual.yml`, `skills-mirror.yml`, and `visual-regression.yml` use workflow-level `paths`/`paths-ignore` filtering.
+
+### Salient paths per workflow
+
+Quick reference. When you change one of the listed paths, the workflow either runs or (for required-check workflows) does its real work; when you only change paths NOT listed, the workflow is skipped or self-skips with success.
+
+| Workflow | Trigger | Path-filtering mechanism | Salient paths |
+|---|---|---|---|
+| `canary-prod.yml` | `schedule`, `workflow_dispatch` | n/a (cron-only) | n/a |
+| `claude.yml` | `issue_comment`, `pull_request_review_comment`, `pull_request_review`, `issues` | n/a (event-driven, gated on `@claude` mention) | n/a |
+| `cms-editorial-workflow.yml` | `pull_request` | **none, intentionally** — required check on every feature-branch PR (see ruleset note); the validation is cheap (<2 min) so always-run is the right call | n/a |
+| `cms-publish-loop-prod.yml` | `pull_request`, `workflow_dispatch` | always-run + early skip (required check) | `e2e/cms-publish-loop-prod-mutate.spec.js`, `e2e/{decap-pat,github-actions-poll,base}.js`, `_posts/2099-01-01-e2e-mutation-canary.md`, `admin/**`, `playwright.config.js`, `package*.json`, `_config.yml`, `_layouts/post.html`, the workflow itself |
+| `dependabot-auto-merge.yml` | `pull_request` | n/a (job-level `if: github.actor == 'dependabot[bot]'` skips for everyone else) | n/a |
+| `deploy-preview.yml` | `pull_request` | `paths-ignore` | everything EXCEPT docs (README/AGENTS/CLAUDE/ANALYTICS_SETUP/`docs/**`/`.agents/**`), `e2e/**`, screenshots/recordings/test-results, playwright configs, `package*.json`, `_plugins_test/**`, `oauth-proxy/**`, `infrastructure/**`, `tests/**`, sibling workflows; the workflow itself and `scripts/patch-preview-config.sh` ARE salient |
+| `deploy-production.yml` | `push` to `main` | `paths-ignore` | everything EXCEPT docs, `.agents/**`, `_plugins_test/**`, `oauth-proxy/**`, `infrastructure/**`, `e2e/**`, screenshots/recordings/test-results, playwright configs, `package*.json`, license/lint files, dev-only scripts, sibling workflows; the workflow itself, `Gemfile*`, and `admin/**` ARE salient |
+| `e2e-tests.yml` | `pull_request` | `paths-ignore` (coarse) plus `e2e/select-specs.js` runtime cut (fine — picks which specs to run) | site source under `_layouts/`, `_includes/`, `_config.yml`, `assets/css/`, `_plugins/`, `_plugins_test/`, `package*.json`, `Gemfile*`, `e2e/base.js`, `playwright*.config.js` (fanout — run all specs); per-file matches in `SPEC_RULES` (subset); doc-only changes run a smoke baseline only |
+| `publish-scheduled-posts.yml` | `schedule`, `workflow_dispatch` | n/a (cron-only) | n/a |
+| `regenerate-manual.yml` | `push` to `main`, `workflow_dispatch` | `paths` (positive) | `admin/**`, `_layouts/**`, `_includes/**`, `assets/css/**`, `_config.yml`, `_e2e/**`, `e2e/manual-capture.js`, the manual-capturing specs (`cms-publish-loop*`, `cms-smoke`, `cms-publish-flow`, `cms-editorial-workflow`), `docs/manual-overrides.yml`, `scripts/build-contributor-manual.js`, the workflow itself |
+| `secrets-scan.yml` | `pull_request`, `push` to `main`, weekly `schedule`, `workflow_dispatch` | **none, intentionally** — gitleaks must scan the entire diff / history regardless of file type | n/a |
+| `skills-mirror.yml` | `push` and `pull_request` to `main` | `paths` (positive) | `.agents/skills/**`, `.claude/skills/**`, `scripts/{bootstrap,verify-skills-mirror,secrets-scan}.{sh,ps1}`, `tests/**`, the workflow itself, `secrets-scan.yml` |
+| `visual-regression.yml` | `pull_request` | `paths` (positive) | site source (`_posts/**`, `_tags/**`, `_projects/**`, `_layouts/**`, `_includes/**`, `_plugins/**`, `_data/**`, `pages/**`, `assets/**`, `admin/**`, `_config.yml`, `Gemfile*`, root `index.html` / `404.html` / `robots.txt` / `preview.md`); pipeline tools (`e2e/{detect-changed-pages,compute-visual-diffs,generate-video,regression-video}.{js,sh,spec.js}`, `playwright.regression.config.js`, the workflow itself) |
+
+When you add a new workflow, append it to this table in the same commit.
+
 ## Workflows
 
 ### `deploy-production.yml`
@@ -260,6 +295,22 @@ Uses `regression-review` GitHub Environment with required reviewers (all write-a
 
 **Branch-protection ruleset:** `cms-feature-branches` (id 15756474, see `.github/rulesets/cms-feature-branches.json`) requires `validate-content` on PRs into `cms/**`, `claude/**`, `feat/**`, `fix/**`, `chore/**`, `test/**`, `ci/**`, `docs/**`. Without this required check, GitHub's mergeable_state goes "unstable" the moment the auto-merge job's own pending state is queued — which is exactly what bit PR #78 and motivated issue #79.
 
+### `cms-publish-loop-prod.yml` (prod mutation playground)
+
+Sibling to the `cms-publish-loop` and `cms-publish-loop-preview` specs, but operates against a real `_posts/` entry on `main` rather than the `_e2e/` canary subset. See `e2e/cms-publish-loop-prod-mutate.spec.js` and the G4 plan for fixture details.
+
+**Trigger:** `pull_request` to `main` (always runs so the required check exists), plus `workflow_dispatch`. The single-job design uses the *always-run + early skip* pattern (see "Workflow path-filtering rule" above): an early step diffs `base..head` against the salient-paths regex, and every subsequent step gates on its output. PRs that don't touch the salient paths see the workflow finish in seconds with a green check.
+
+**Salient paths:** the spec, the e2e helpers it imports (`decap-pat.js`, `github-actions-poll.js`, `base.js`), the fixture post `_posts/2099-01-01-e2e-mutation-canary.md`, `admin/**`, `playwright.config.js`, `package*.json`, `_config.yml`, `_layouts/post.html`, and the workflow file itself.
+
+**Gating layers, in order:**
+
+1. Path-salience step (skip if no salient paths changed).
+2. Repo variable `PROD_PLAYGROUND_MODE` must equal `'true'` (set in repo Settings → Variables and secrets → Actions → Variables). Flipping it `false` instantly stops every PR from mutating prod with no code change. The fixture file stays in-tree as documentation.
+3. Per-PR concurrency (`group: cms-publish-loop-prod-${{ pull_request.number || ref }}`) so a force-push cancels the in-flight run.
+
+When all three pass, the spec runs against `https://adamdaniel.ai/admin/`: it resets the canary fixture to `published: false`, drives Decap to toggle Published → ON, waits for the cms/... PR Decap opens, waits for `validate-content` + auto-merge + `deploy-production.yml`, fetches `/blog/e2e-mutation-canary/`, asserts the run-unique marker is live, and resets the fixture back to `published: false`.
+
 ### Contributor Manual
 
 `docs/CONTRIBUTOR_MANUAL.md` is **assembled by the e2e tests**. Specs call `captureStep(page, { section, step, title, body })` from `e2e/manual-capture.js` at meaningful moments. The collator at `scripts/build-contributor-manual.js` reads the `manual-capture/*.json` records and builds the manual with embedded screenshots from `docs/manual-screenshots/`.
@@ -267,6 +318,22 @@ Uses `regression-review` GitHub Environment with required reviewers (all write-a
 The capture is no-op unless `MANUAL_CAPTURE=1`; normal CI runs aren't slowed down. `.github/workflows/regenerate-manual.yml` flips the env var, runs the capture-instrumented specs, rebuilds the doc, and opens an auto-PR if the diff is non-empty.
 
 If the manual looks wrong, the test that captured the wrong step is wrong — fix the `captureStep(...)` call, push, and the next regen run propagates the fix.
+
+### Branch hygiene before opening a PR
+
+Before staging changes or opening a PR, verify the branch contains ONLY the commits for the current task. Run:
+
+```bash
+git log origin/main..HEAD --oneline
+```
+
+If this lists anything beyond what you intend to ship, do NOT work on this branch. Cut a clean branch off `origin/main` and redo the work there:
+
+```bash
+git checkout -b <new-branch> origin/main
+```
+
+This matters most inside reusable git worktrees (`.claude/worktrees/<name>/`), where stale commits from previous tasks accumulate. A worktree's branch may already carry an unrelated WIP commit that would otherwise contaminate a focused PR — sometimes a commit that *deletes* files the current task needs to edit. Always verify before working. The same rule applies whenever you switch tasks on a long-lived feature branch.
 
 ### Reading PR diffs
 
@@ -282,13 +349,35 @@ The 2-dot form compares tips directly — if a change has already landed on `mai
 
 ### Branch protection (`main`)
 
-Required status checks (strict):
-- `e2e` (from `e2e-tests.yml`)
-- `visual-regression / approve-regression` (from `visual-regression.yml`)
+The `main` branch has required status checks enforced via a GitHub ruleset (id 13985217). The JSON is checked in at `.github/rulesets/main.json` for reviewability. **If you add a new CI job that must gate merges, update `.github/rulesets/main.json` and reapply.** Apply via:
+
+```bash
+gh api -X PUT repos/Adam-S-Daniel/adamdaniel.ai/rulesets/13985217 \
+  --input .github/rulesets/main.json
+```
+
+Verify what's actually live with:
+
+```bash
+gh api repos/Adam-S-Daniel/adamdaniel.ai/rulesets/13985217
+```
+
+Required status checks (current):
+
+| Check | Workflow | Notes |
+|---|---|---|
+| `validate-content` | `cms-editorial-workflow.yml` | Always fires (no path filter) — front-matter + Jekyll build sanity check |
+| `prod-mutate` | `cms-publish-loop-prod.yml` | Always fires; always-run + early-skip pattern emits success when no salient paths changed |
+| `scan` | `secrets-scan.yml` | Always fires (gitleaks must scan every PR diff) |
+| `select`, `unit`, `parity`, `e2e (1)` | `e2e-tests.yml` | Fire on every PR EXCEPT those whose entire diff matches `paths-ignore` (docs-only). Required checks block such PRs from merging — owner can override, or expand the PR with a small non-doc change to satisfy the gate |
+
+**Required status checks are the default.** Any CI job that runs on pull requests is assumed to be a required check and must be enforced via the `main` ruleset before a branch can merge. Do NOT leave checks optional unless this section documents a specific reason. When adding new workflow jobs, update `.github/rulesets/main.json` and reapply in the same commit.
+
+**Required-check + path-filter trap:** GitHub blocks the merge when a required check is *missing* (because path filtering prevented the workflow from running) — it doesn't auto-pass missing checks. Workflows promoted to required must therefore use the always-run + early-skip pattern (see `cms-publish-loop-prod.yml`) so the named check is always present. The `e2e-tests.yml` jobs above are accepted-as-blockers on truly doc-only PRs; if that becomes painful, convert e2e-tests.yml to the always-run pattern in a follow-up.
 
 Auto-merge is enabled in repository settings. Direct pushes to `main` are allowed for the repository owner only.
 
-The same required-checks list governs Dependabot's unattended-merge pipeline (`dependabot-auto-merge.yml`). When a Dependabot PR enables auto-merge, GitHub holds the merge until both checks above report success — so a vulnerable browser fixture, a regressed pixel, or a broken Jekyll build all block the bump.
+The same required-checks list governs Dependabot's unattended-merge pipeline (`dependabot-auto-merge.yml`). When a Dependabot PR enables auto-merge, GitHub holds the merge until every check above reports success — so a vulnerable browser fixture, a regressed pixel, or a broken Jekyll build all block the bump. The `prod-mutate` check is in scope too: a Dependabot bump that touches `package*.json` (which is salient for the publish-loop spec) makes the workflow do its real prod-mutation run before merge, surfacing any incompatibility with Decap or Playwright early.
 
 ---
 

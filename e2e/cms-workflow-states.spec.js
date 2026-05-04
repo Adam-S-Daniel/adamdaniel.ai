@@ -327,8 +327,14 @@ test.describe("Decap editorial workflow — state transitions (B5)", () => {
       // Acceptable shape B: button is rendered but inert. Try the
       // full split-button menu path (Publish now); if the menuitem
       // never appears or the click is a no-op, the entry stays
-      // exactly where it was.
-      await publishBtn.click().catch(() => {});
+      // exactly where it was. The catches here are deliberate — an
+      // inert split button is one of the two acceptable shapes the
+      // assertion below tolerates — so we surface the swallowed
+      // error instead of silently dropping it (silent-catch-lint
+      // bans `() => {}`).
+      await publishBtn
+        .click()
+        .catch((err) => console.warn("publishBtn click failed (likely inert):", err.message));
       const publishNow = page
         .getByRole("menuitem", { name: /publish now/i })
         .first();
@@ -336,11 +342,16 @@ test.describe("Decap editorial workflow — state transitions (B5)", () => {
         .isVisible({ timeout: 1_500 })
         .catch(() => false);
       if (menuVisible) {
-        await publishNow.click().catch(() => {});
+        await publishNow
+          .click()
+          .catch((err) => console.warn("publishNow click failed (no-op menu):", err.message));
       }
       // Close any half-open menu so subsequent state poll isn't racing
       // a transient overlay.
-      await page.keyboard.press("Escape").catch(() => {});
+      await page
+        .keyboard
+        .press("Escape")
+        .catch((err) => console.warn("Escape press failed:", err.message));
     }
 
     // Wait long enough that any in-flight publish would have committed

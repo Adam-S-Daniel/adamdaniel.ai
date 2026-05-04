@@ -1,6 +1,6 @@
 const fs = require("node:fs");
 const path = require("node:path");
-const { test, expect } = require("./base");
+const { test, expect, TARGET } = require("./base");
 const { captureStep } = require("./manual-capture");
 
 // C1 — Manual-driven walkthrough for the contributor manual.
@@ -270,6 +270,10 @@ test.describe("@parity Manual walkthrough — CONTRIBUTOR_MANUAL probes", () => 
     test.skip(
       info.project.name !== "chromium-desktop",
       "Heavy CMS setup — one project is enough for the manual probe.",
+    );
+    test.skip(
+      TARGET === "prod",
+      "Probes drive /admin/index-local.html (local_backend: true). prod has no local proxy, so login can't populate the sidebar.",
     );
     page.on("pageerror", (err) =>
       console.log(`[pageerror] ${err.name}: ${err.message}`),

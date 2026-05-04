@@ -1,0 +1,45 @@
+{
+  "name": "main",
+  "_comment": "Applied via `gh api -X PUT repos/Adam-S-Daniel/adamdaniel.ai/rulesets/13985217 --input .github/rulesets/main.json` — checked in here so the rule is reviewable in the repo. Required status checks block merges to main when CI fails. The list intentionally only includes checks that always fire on every PR (no workflow-level paths filtering): `validate-content`, `prod-mutate`, and `scan` self-skip with success when no salient paths changed; `select`, `unit`, `parity`, and `e2e (1)` come from e2e-tests.yml which has `paths-ignore` so they may not appear on truly doc-only PRs — when that happens, branch protection blocks the merge as designed; the owner can override or the PR can be expanded with a small site change. If you add a new required check that uses `paths`/`paths-ignore` filtering, convert it to the always-run + early-skip pattern first (see `cms-publish-loop-prod.yml`).",
+  "target": "branch",
+  "enforcement": "active",
+  "conditions": {
+    "ref_name": {
+      "exclude": [],
+      "include": ["refs/heads/main"]
+    }
+  },
+  "rules": [
+    { "type": "deletion" },
+    { "type": "non_fast_forward" },
+    {
+      "type": "pull_request",
+      "parameters": {
+        "required_approving_review_count": 0,
+        "dismiss_stale_reviews_on_push": false,
+        "required_reviewers": [],
+        "require_code_owner_review": false,
+        "require_last_push_approval": false,
+        "required_review_thread_resolution": false,
+        "allowed_merge_methods": ["merge", "squash", "rebase"]
+      }
+    },
+    {
+      "type": "required_status_checks",
+      "parameters": {
+        "strict_required_status_checks_policy": false,
+        "do_not_enforce_on_create": true,
+        "required_status_checks": [
+          { "context": "validate-content" },
+          { "context": "prod-mutate" },
+          { "context": "scan" },
+          { "context": "select" },
+          { "context": "unit" },
+          { "context": "parity" },
+          { "context": "e2e (1)" }
+        ]
+      }
+    }
+  ],
+  "bypass_actors": []
+}

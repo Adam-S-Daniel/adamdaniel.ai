@@ -130,6 +130,19 @@ test("CMS publish loop — host repo, target main", async ({ page }, testInfo) =
     !getPat(),
     "CMS_E2E_PAT not set — host-repo publish-loop disabled. (Forks and Dependabot are expected to land here.)",
   );
+  // Opt-in marker mirroring RUN_PROD_MUTATE_PLAYGROUND. Without it, the
+  // spec also runs inside e2e-tests.yml shard 1 on regular PRs — and
+  // the cms/ PR it opens against main triggers another e2e-tests run
+  // (whose shard 1 picks this same spec back up), force-pushing
+  // concurrent commits to cms/<col>/<slug> and cancelling each other's
+  // validate-content + auto-merge-when-ready labeled events. Until a
+  // dedicated workflow opts in (mirroring cms-publish-loop-prod.yml),
+  // self-skip on PRs and rely on the cms-publish-loop-prod-mutate
+  // playground + read-only @canary-readonly probe for coverage.
+  test.skip(
+    process.env.RUN_HOST_REPO_PUBLISH_LOOP !== "1",
+    "RUN_HOST_REPO_PUBLISH_LOOP not set — host-repo publish-loop spec is opt-in (avoids cms/* PR self-recursion in PR-time CI).",
+  );
 
   const runId = Date.now();
   const marker = makeMarker(CANARY.id, runId);
@@ -166,26 +179,36 @@ test("CMS publish loop — host repo, target main", async ({ page }, testInfo) =
 
   // ── 2. Open the canary entry ────────────────────────────────────
   await test.step("Navigate to canary entry", async () => {
-    await page.goto(`${PROD_ADMIN}#/collections/${CANARY.cmsCollection}`, { waitUntil: "domcontentloaded" });
-    const entry = page.getByRole("link", { name: /Canary/i }).first();
-    await expect(entry).toBeVisible({ timeout: 30_000 });
-    await entry.click();
+    // Go straight to the entry by slug instead of clicking the first
+    // /Canary/i link in the collection list — the e2e collection has
+    // page/post/project canaries and the sidebar's display order
+    // can't be relied on to land on the configured one (CANARY.id).
+    await page.goto(
+      `${PROD_ADMIN}#/collections/${CANARY.cmsCollection}/entries/${CANARY.slug}`,
+      { waitUntil: "domcontentloaded" },
+    );
     await expect(page.getByRole("textbox", { name: /^Title$/i })).toBeVisible({ timeout: 30_000 });
   });
 
   // ── 3. Edit body and save as draft ──────────────────────────────
   await test.step("Insert run marker into body and Save", async () => {
     // The body is a markdown widget. Append the marker; Decap's editor accepts
-    // plain text typing in either rich-text or raw modes.
-    const body = page.getByRole("textbox", { name: /Body|Content/i }).last();
+    // plain text typing in either rich-text or raw modes. The pinned Decap
+    // version no longer exposes "Body" as the textbox's accessible name —
+    // mirror cms-publish-flow.spec.js and grab the last contenteditable
+    // textbox on the page (the live preview iframe is not a textbox).
+    const body = page.locator('[role="textbox"][contenteditable="true"]').last();
     await body.click();
     await body.press("End");
     await body.pressSequentially(`\n\n${marker}\n`);
 
     // Save (writes the draft entry to a new cms/<...> branch + opens a PR).
     await page.getByRole("button", { name: /^Save$/i }).click();
-    // Decap shows a "Saving..." indicator briefly; wait for it to clear.
-    await expect(page.getByRole("button", { name: /^Save$/i })).toBeEnabled({ timeout: 60_000 });
+    // In editorial_workflow mode (prod admin), Save stays disabled
+    // after the save completes — the toolbar swaps to "Status: Draft"
+    // + a separate "Publish" button. Wait for the "Changes saved"
+    // status text instead of the (incorrect) toBeEnabled signal.
+    await expect(page.getByText(/Changes saved/i).first()).toBeVisible({ timeout: 60_000 });
   });
 
   // ── 4. Find the cms/... PR Decap opened ──────────────────────────
@@ -193,6 +216,7 @@ test("CMS publish loop — host repo, target main", async ({ page }, testInfo) =
   await test.step("Wait for Decap to open the cms/... PR", async () => {
     pr = await waitForCmsPullRequest({
       base: "main",
+      filePath: CANARY.path,
       canaryMarker: marker,
       timeoutMs: 5 * 60 * 1000,
     });

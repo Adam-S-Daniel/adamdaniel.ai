@@ -160,6 +160,15 @@ test("CMS publish loop — prod mutation playground (real _posts/ entry)", async
     !getPat(),
     "CMS_E2E_PAT not set — prod-mutation playground disabled.",
   );
+  // Only the dedicated cms-publish-loop-prod.yml workflow opts in via
+  // RUN_PROD_MUTATE_PLAYGROUND=1. Without this gate the spec also
+  // runs inside the e2e-tests.yml shard 1, force-pushing concurrent
+  // commits to the same cms/posts/2099-… branch and cancelling each
+  // other's validate-content runs.
+  test.skip(
+    process.env.RUN_PROD_MUTATE_PLAYGROUND !== "1",
+    "RUN_PROD_MUTATE_PLAYGROUND not set — only the cms-publish-loop-prod workflow runs this spec.",
+  );
 
   // ── Hard guards (run inside the test so failures show up in the
   // test report, not as silent worker bring-up errors) ───────────
@@ -259,7 +268,10 @@ test("CMS publish loop — prod mutation playground (real _posts/ entry)", async
     // The body widget is a markdown editor. Appending a run-unique
     // marker lets the assertion at the end confirm we're seeing
     // *this* run's output, not a stale cache hit from the previous.
-    const body = page.getByRole("textbox", { name: /Body|Content/i }).last();
+    // The pinned Decap version no longer exposes "Body" as the
+    // textbox's accessible name — mirror cms-publish-flow.spec.js
+    // and grab the last contenteditable textbox on the page.
+    const body = page.locator('[role="textbox"][contenteditable="true"]').last();
     await body.click();
     await body.press("End");
     await body.pressSequentially(`\n\n${marker}\n`);
@@ -282,7 +294,11 @@ test("CMS publish loop — prod mutation playground (real _posts/ entry)", async
 
   await test.step("Save (opens cms/... PR)", async () => {
     await page.getByRole("button", { name: /^Save$/i }).click();
-    await expect(page.getByRole("button", { name: /^Save$/i })).toBeEnabled({ timeout: 60_000 });
+    // In editorial_workflow mode (prod admin), Save stays disabled
+    // after the save completes — the toolbar swaps to "Status: Draft"
+    // + a separate "Publish" button. Wait for the "Changes saved"
+    // status text instead of the (incorrect) toBeEnabled signal.
+    await expect(page.getByText(/Changes saved/i).first()).toBeVisible({ timeout: 60_000 });
   });
 
   // ── 4. Find the cms/... PR Decap opened ─────────────────────────
@@ -290,6 +306,7 @@ test("CMS publish loop — prod mutation playground (real _posts/ entry)", async
   await test.step("Wait for Decap to open the cms/... PR", async () => {
     pr = await waitForCmsPullRequest({
       base: "main",
+      filePath: FIXTURE_PATH,
       canaryMarker: marker,
       timeoutMs: 5 * 60 * 1000,
     });
