@@ -1,0 +1,170 @@
+name: CMS Publish Loop — Host Repo (canary collection)
+
+# Runs the full Decap → cms PR → auto-merge → deploy-production loop
+# end-to-end against prod, mutating a `_e2e/` canary entry (default
+# canary-post). Mirrors cms-publish-loop-prod.yml's structure but
+# targets the canary collection instead of `_posts/`. The canary
+# collection is excluded from feeds/sitemap and uses its own layout,
+# so a churned `_e2e/canary-post.md` body has no public side-effect
+# beyond the canary URL itself.
+#
+# Trigger model:
+#   - schedule + workflow_dispatch always run (subject to job-level
+#     gating below).
+#   - pull_request runs with salient-path gating, identical to
+#     cms-publish-loop-prod.yml. The job ALSO self-skips on cms/*
+#     PRs to avoid recursion: the spec opens a `cms/e2e/canary-post`
+#     PR, which by salient-path filtering would re-trigger this same
+#     workflow on its own PR. Gate: `head_ref` does not start with
+#     `cms/`.
+#
+# Spec gating: e2e/cms-publish-loop.spec.js self-skips when
+# `RUN_HOST_REPO_PUBLISH_LOOP=1` is unset, so the spec only runs
+# inside this workflow (and not as part of e2e-tests.yml shard 1).
+
+on:
+  schedule:
+    # 12:00 UTC daily. Slotted an hour before
+    # cms-publish-loop-prod.yml (13:00) and two before
+    # publish-scheduled-posts (14:00) so the three daily mutations
+    # don't trip over each other on deploy-production's queued-run
+    # concurrency.
+    - cron: '0 12 * * *'
+  pull_request:
+    branches: [main]
+  workflow_dispatch:
+    # Manual trigger for debugging the spec or after sunsetting +
+    # un-sunsetting the workflow.
+
+permissions:
+  # The spec drives admin via a fine-grained PAT (CMS_E2E_PAT) — the
+  # workflow itself only needs to read the repo to install deps and
+  # check out source, so contents:read is sufficient. The PAT carries
+  # its own contents:rw / pull-requests:rw scope.
+  contents: read
+
+concurrency:
+  # Per-PR (or per-ref for cron/dispatch) concurrency. A second push
+  # to the same PR cancels the in-flight run; concurrent runs across
+  # different PRs would clash on the canary file's SHA in the
+  # Contents API and confuse the assertion that the URL shows *this*
+  # run's marker, so don't allow them.
+  group: cms-publish-loop-host-${{ github.event.pull_request.number || github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  host-loop:
+    runs-on: ubuntu-latest
+    timeout-minutes: 30
+    # Skip on cms/* PRs to prevent recursion: the spec itself opens a
+    # cms/e2e/<slug> PR that would otherwise re-trigger this workflow
+    # via the salient-path filter. github.head_ref is empty on cron
+    # and workflow_dispatch, so this only filters PR runs.
+    if: ${{ !startsWith(github.head_ref || '', 'cms/') }}
+    steps:
+      - name: Checkout
+        uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd  # v6.0.2 (2026-01-09)
+        with:
+          # Need the PR's full diff range (base..head) to detect
+          # whether any salient path changed. fetch-depth: 0 is the
+          # safest choice for a PR that may have many commits.
+          fetch-depth: 0
+
+      - name: Detect salient changes
+        id: salient
+        env:
+          BASE_SHA: ${{ github.event.pull_request.base.sha }}
+          HEAD_SHA: ${{ github.event.pull_request.head.sha }}
+          EVENT_NAME: ${{ github.event_name }}
+        run: |
+          set -euo pipefail
+          if [ "$EVENT_NAME" != "pull_request" ]; then
+            echo "Non-PR event ($EVENT_NAME) — forcing run."
+            echo "run=true" >> "$GITHUB_OUTPUT"
+            exit 0
+          fi
+          changed=$(git diff --name-only "$BASE_SHA" "$HEAD_SHA")
+          echo "Files changed in PR:"
+          echo "$changed" | sed 's/^/  /'
+          # Salient paths: the spec, the e2e helpers it imports, the
+          # canary fixtures, the admin shell the spec drives, the
+          # Playwright config, npm dep manifests, Jekyll config and
+          # the canary layout that renders the public page, and the
+          # workflows it depends on (editorial-workflow + deploy-
+          # production). A change to any of these can break the
+          # publish loop end-to-end.
+          if printf '%s\n' "$changed" | grep -qE '^(\.github/workflows/(cms-publish-loop-host|cms-editorial-workflow|deploy-production)\.yml|e2e/cms-publish-loop\.spec\.js|e2e/(decap-pat|github-actions-poll|canary-content|base)\.js|admin/|_e2e/canary-(post|page|project)\.md|playwright\.config\.js|package(-lock)?\.json|_config\.yml|_layouts/(canary|default)\.html)'; then
+            echo "Salient paths changed → running host-repo publish loop."
+            echo "run=true" >> "$GITHUB_OUTPUT"
+          else
+            echo "No salient paths changed → emitting success without running."
+            echo "run=false" >> "$GITHUB_OUTPUT"
+          fi
+
+      - name: Skip — not salient
+        if: steps.salient.outputs.run != 'true'
+        run: echo "::notice::No salient paths changed in this PR; reporting success without running host publish loop."
+
+      - name: Setup Node
+        if: steps.salient.outputs.run == 'true'
+        uses: actions/setup-node@48b55a011bda9f5d6aeb4c2d9c7362e8dae4041e  # v6.4.0 (2026-04-20)
+        with:
+          node-version: '20'
+          cache: 'npm'
+
+      - name: Install npm dependencies
+        if: steps.salient.outputs.run == 'true'
+        run: npm ci
+
+      - name: Cache Playwright browsers (chromium only)
+        if: steps.salient.outputs.run == 'true'
+        id: pw-cache
+        uses: actions/cache@27d5ce7f107fe9357f9df03efb73ab90386fccae  # v5.0.5 (2026-04-13)
+        with:
+          path: ~/.cache/ms-playwright
+          # `playwright-host-loop-` keeps this chromium-only cache
+          # distinct from cms-publish-loop-prod.yml's cache and the
+          # full-matrix cache used by e2e-tests.yml.
+          key: playwright-host-loop-${{ runner.os }}-${{ hashFiles('package-lock.json') }}
+
+      - name: Install Playwright chromium
+        if: steps.salient.outputs.run == 'true' && steps.pw-cache.outputs.cache-hit != 'true'
+        run: npx playwright install chromium --with-deps
+
+      - name: Install Playwright OS deps (chromium)
+        if: steps.salient.outputs.run == 'true' && steps.pw-cache.outputs.cache-hit == 'true'
+        run: npx playwright install-deps chromium
+
+      - name: Run host-repo publish loop spec
+        if: steps.salient.outputs.run == 'true'
+        env:
+          # Same PAT cms-publish-loop-prod.yml uses. Fine-grained,
+          # scoped to the host repo with contents: r/w + pull_requests:
+          # r/w + metadata: r. See AGENTS.md → "GitHub Actions secrets".
+          CMS_E2E_PAT: ${{ secrets.CMS_E2E_PAT }}
+          # Tells playwright.config.js (via the TARGET= switch) NOT
+          # to spin up the local Jekyll + decap-server webServer —
+          # this spec hits adamdaniel.ai directly. Mirrors
+          # cms-publish-loop-prod.yml.
+          TARGET: prod
+          # Opt-in marker the spec checks. Without this, the spec
+          # self-skips so it doesn't fire inside e2e-tests.yml shard 1
+          # on every PR (and recurse on its own cms/* PR).
+          RUN_HOST_REPO_PUBLISH_LOOP: "1"
+        run: |
+          set -o pipefail
+          npx playwright test \
+            e2e/cms-publish-loop.spec.js \
+            --project=chromium-desktop \
+            --reporter=list \
+            2>&1 | tee /tmp/host-loop.log
+
+      - name: Upload test results on failure
+        if: ${{ (failure() || cancelled()) && steps.salient.outputs.run == 'true' }}
+        uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a  # v7.0.1 (2026-04-10)
+        with:
+          name: host-loop-results
+          path: |
+            test-results/
+            /tmp/host-loop.log
+          retention-days: 14
