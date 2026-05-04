@@ -279,7 +279,7 @@ test.describe("Manual walkthrough — docs/CONTENT_GUIDE.md @parity", () => {
     );
     test.skip(
       TARGET === "prod",
-      "Probes drive /admin/index-local.html (local_backend: true). prod has no decap-server proxy, so login can't populate the sidebar.",
+      "Probes drive /admin/index-local.html (local_backend: true). prod has no local proxy, so login can't populate the sidebar.",
     );
     page.on("pageerror", (err) =>
       console.log(`[pageerror] ${err.name}: ${err.message}`),

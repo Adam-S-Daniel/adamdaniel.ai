@@ -10,10 +10,10 @@ const { test, expect, TARGET } = require("./base");
 //
 // Tagged @parity so the cross-target matrix (G3) lifts this against
 // preview-pr* — but NOT prod. The crawler drives /admin/index-local.html,
-// which has `local_backend: true` and only mounts when decap-server is
-// reachable on localhost:8081. On prod that proxy doesn't exist, so the
-// Login click never populates the sidebar. The TARGET=prod skip below
-// keeps the parity matrix green without losing local coverage.
+// which has `local_backend: true` and only mounts when the local proxy
+// is reachable on localhost:8081. On prod that proxy doesn't exist, so
+// the Login click never populates the sidebar. The TARGET=prod skip
+// below keeps the parity matrix green without losing local coverage.
 //
 // SPA routes are skipped: Decap is hash-routed (`/admin/index-local.html#/…`),
 // and a HEAD against the index path is what actually matters — the hash
@@ -124,7 +124,7 @@ test.describe("@parity admin link crawler", () => {
     );
     test.skip(
       TARGET === "prod",
-      "Crawler drives /admin/index-local.html (local_backend: true). prod has no decap-server proxy, so login can't populate the sidebar.",
+      "Crawler drives /admin/index-local.html (local_backend: true). prod has no local proxy, so login can't populate the sidebar.",
     );
     page.on("pageerror", (err) =>
       console.log(`[pageerror] ${err.name}: ${err.message}`),
