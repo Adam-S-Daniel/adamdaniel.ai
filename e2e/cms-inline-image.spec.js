@@ -133,11 +133,20 @@ test.describe("Inline markdown image renders on the live post", () => {
     const slugField = page.getByLabel(/^URL Slug/);
     await slugField.fill(SMOKE_SLUG);
 
-    // The markdown widget's contenteditable surface accepts plain text in
-    // either rich-text or raw mode (cms-publish-loop.spec.js:154). Type
-    // the markdown image reference verbatim — Decap's serializer round-
-    // trips it back into the saved markdown as `![alt](src)`, which is
-    // what kramdown needs to emit an <img>.
+    // The body widget supports two modes (`admin/config.yml`:
+    // `body.modes: [rich_text, raw]`). Rich-text mode treats typed text
+    // through the WYSIWYG editor and escapes markdown-special chars on
+    // serialize — `!` typed before `[` round-trips as literal `!\[`,
+    // which kramdown then renders as text, not an `<img>`. Switching
+    // to raw / Markdown mode first preserves the typed markdown atom
+    // verbatim. The mode switch exposes a toggle labelled "Markdown"
+    // (the inverse of "Rich Text"); click it before typing.
+    const markdownModeBtn = page
+      .getByRole("button", { name: /^markdown$/i })
+      .first();
+    await expect(markdownModeBtn).toBeVisible({ timeout: 30_000 });
+    await markdownModeBtn.click();
+
     const bodyEditor = page
       .locator('[role="textbox"][contenteditable="true"]')
       .last();
