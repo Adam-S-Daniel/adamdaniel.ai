@@ -143,11 +143,16 @@ test.describe("Projects gallery: multi-image list widget", () => {
     // click Add → open the new item's "Choose an Image" → setInputFiles
     // on the hidden file input → confirm via "Choose selected"/"Insert".
     for (let i = 0; i < FIXTURES.length; i++) {
-      // The list-widget Add button is labelled by the inner field's
-      // label. With `field.label: Image`, Decap renders "Add Image".
-      // Older themes fell back to "Add Item" — accept either.
+      // Decap's list-widget Add button renders the i18n template
+      // `Add %{item}` — `%{item}` is filled by either the outer list
+      // label ("Images" in this collection) or the inner field label
+      // ("Image"), depending on Decap version. We've also seen "Add"
+      // bare, "Add more images" (with files), "Add Item" on older
+      // themes. Match anything that starts with "Add " to absorb the
+      // drift; `.first()` keeps us bound to the only list widget on
+      // the New Project form.
       const addBtn = page
-        .getByRole("button", { name: /^add (image|item)$/i })
+        .getByRole("button", { name: /^add\b/i })
         .first();
       await expect(
         addBtn,
