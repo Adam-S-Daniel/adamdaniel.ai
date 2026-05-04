@@ -297,6 +297,7 @@ test("CMS publish loop — prod mutation playground (real _posts/ entry)", async
   await test.step("Wait for Decap to open the cms/... PR", async () => {
     pr = await waitForCmsPullRequest({
       base: "main",
+      filePath: FIXTURE_PATH,
       canaryMarker: marker,
       timeoutMs: 5 * 60 * 1000,
     });

@@ -199,6 +199,7 @@ test("CMS publish loop — host repo, target main", async ({ page }, testInfo) =
   await test.step("Wait for Decap to open the cms/... PR", async () => {
     pr = await waitForCmsPullRequest({
       base: "main",
+      filePath: CANARY.path,
       canaryMarker: marker,
       timeoutMs: 5 * 60 * 1000,
     });
