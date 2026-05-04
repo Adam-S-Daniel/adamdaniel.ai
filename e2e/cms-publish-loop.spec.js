@@ -187,8 +187,11 @@ test("CMS publish loop — host repo, target main", async ({ page }, testInfo) =
 
     // Save (writes the draft entry to a new cms/<...> branch + opens a PR).
     await page.getByRole("button", { name: /^Save$/i }).click();
-    // Decap shows a "Saving..." indicator briefly; wait for it to clear.
-    await expect(page.getByRole("button", { name: /^Save$/i })).toBeEnabled({ timeout: 60_000 });
+    // In editorial_workflow mode (prod admin), Save stays disabled
+    // after the save completes — the toolbar swaps to "Status: Draft"
+    // + a separate "Publish" button. Wait for the "Changes saved"
+    // status text instead of the (incorrect) toBeEnabled signal.
+    await expect(page.getByText(/Changes saved/i).first()).toBeVisible({ timeout: 60_000 });
   });
 
   // ── 4. Find the cms/... PR Decap opened ──────────────────────────
