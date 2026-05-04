@@ -93,7 +93,7 @@ jobs:
           # workflows it depends on (editorial-workflow + deploy-
           # production). A change to any of these can break the
           # publish loop end-to-end.
-          if printf '%s\n' "$changed" | grep -qE '^(\.github/workflows/(cms-publish-loop-host|cms-editorial-workflow|deploy-production)\.yml|e2e/cms-publish-loop\.spec\.js|e2e/(decap-pat|github-actions-poll|canary-content|base)\.js|admin/|_e2e/canary-(post|page|project)\.md|playwright\.config\.js|package(-lock)?\.json|_config\.yml|_layouts/(canary|default)\.html)'; then
+          if printf '%s\n' "$changed" | grep -qE '^(\.github/workflows/(cms-publish-loop-host|cms-editorial-workflow|deploy-production|delete-via-pr)\.yml|e2e/cms-publish-loop\.spec\.js|e2e/cms-delete-published\.spec\.js|e2e/(decap-pat|github-actions-poll|canary-content|base)\.js|admin/|_e2e/canary-(post|page|project)\.md|playwright\.config\.js|package(-lock)?\.json|_config\.yml|_layouts/(canary|default)\.html)'; then
             echo "Salient paths changed → running host-repo publish loop."
             echo "run=true" >> "$GITHUB_OUTPUT"
           else
@@ -135,7 +135,7 @@ jobs:
         if: steps.salient.outputs.run == 'true' && steps.pw-cache.outputs.cache-hit == 'true'
         run: npx playwright install-deps chromium
 
-      - name: Run host-repo publish loop spec
+      - name: Run host-repo publish loop + delete-published specs
         if: steps.salient.outputs.run == 'true'
         env:
           # Same PAT cms-publish-loop-prod.yml uses. Fine-grained,
@@ -144,17 +144,19 @@ jobs:
           CMS_E2E_PAT: ${{ secrets.CMS_E2E_PAT }}
           # Tells playwright.config.js (via the TARGET= switch) NOT
           # to spin up the local Jekyll + decap-server webServer —
-          # this spec hits adamdaniel.ai directly. Mirrors
+          # the specs hit adamdaniel.ai directly. Mirrors
           # cms-publish-loop-prod.yml.
           TARGET: prod
-          # Opt-in marker the spec checks. Without this, the spec
-          # self-skips so it doesn't fire inside e2e-tests.yml shard 1
-          # on every PR (and recurse on its own cms/* PR).
+          # Opt-in marker the specs check. Without this, both
+          # cms-publish-loop.spec.js and cms-delete-published.spec.js
+          # self-skip so they don't fire inside e2e-tests.yml shard 1
+          # on every PR (and recurse on their own cms/* PRs).
           RUN_HOST_REPO_PUBLISH_LOOP: "1"
         run: |
           set -o pipefail
           npx playwright test \
             e2e/cms-publish-loop.spec.js \
+            e2e/cms-delete-published.spec.js \
             --project=chromium-desktop \
             --reporter=list \
             2>&1 | tee /tmp/host-loop.log

@@ -83,6 +83,18 @@
   </script>
 
   <!--
+    publish-via-auto-merge shim. MUST load before decap-cms.js so the
+    window.fetch wrap is in place before Decap captures any reference
+    to the original. Catches the 422 "rule violations" responses from
+    the main-branch ruleset (`pull_request` + required-status-checks)
+    that Decap's "Publish Now" and "Delete published entry" buttons
+    hit, and rewrites them onto the cms/ready-label / delete-via-pr
+    paths so the editorial-workflow auto-merge can do the actual
+    merge once required checks finish.
+  -->
+  <script src="publish-via-auto-merge.js"></script>
+
+  <!--
     Decap CMS — pinned to an exact version. Editorial workflow + the
     GitHub backend with our custom OAuth proxy (`base_url` +
     `auth_endpoint` in admin/config.yml) drive the cms/<branch> →

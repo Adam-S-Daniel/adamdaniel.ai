@@ -44,7 +44,6 @@ const { captureStep } = require("./manual-capture");
 const { seedDecapAuth, getPat, HOST_REPO } = require("./decap-pat");
 const { CANARIES, findCanary, makeMarker, REPO_ROOT } = require("./canary-content");
 const {
-  addLabel,
   fetchPublicUrl,
   gh,
   waitForAutoMergeEnabled,
@@ -237,18 +236,55 @@ test("CMS publish loop — host repo, target main", async ({ page }, testInfo) =
     });
   });
 
-  // ── 6. Add cms/ready label to drive auto-merge ──────────────────
-  // The user's note in #79 explicitly calls out that Decap emits the
-  // `decap-cms/...` namespace from the Status dropdown — that surface lacks
-  // a stable contract test. Going through the API here keeps THIS spec
-  // focused on the publish loop. The label-name contract is asserted in
-  // e2e/cms-label-contract.spec.js (audit finding #1).
-  await test.step("Label PR cms/ready", async () => {
-    await addLabel({ prNumber: pr.number, label: "cms/ready" });
+  // ── 6. Drive Status: Ready via the UI dropdown ──────────────────
+  // Editorial workflow: click the "Status: Draft" button, pick
+  // "Ready" from the menu. Decap applies the `decap-cms/ready` label,
+  // which cms-editorial-workflow.yml's auto-merge-when-ready job
+  // accepts as a synonym for cms/ready and uses to enable auto-merge.
+  // This replaces an earlier `addLabel({ label: "cms/ready" })` API
+  // shortcut — the shortcut never exercised the dropdown handler that
+  // a real operator triggers, which is exactly the surface area the
+  // shim has to interoperate with.
+  await test.step("Set Status: Ready via UI dropdown", async () => {
+    await page.getByRole("button", { name: /^Status:\s*Draft$/i }).click();
+    await page.getByRole("menuitem", { name: /^Ready$/i }).click();
+    // The toolbar reflects the new status — the button text flips.
+    await expect(
+      page.getByRole("button", { name: /^Status:\s*Ready$/i }),
+    ).toBeVisible({ timeout: 30_000 });
   });
 
   await test.step("Wait for auto-merge to be enabled", async () => {
     await waitForAutoMergeEnabled({ prNumber: pr.number });
+  });
+
+  // ── 6b. Drive Publish → Publish Now via the UI ──────────────────
+  // Without admin/publish-via-auto-merge.js this clicks calls the
+  // merge API synchronously, which the main-branch ruleset rejects
+  // with 422. The shim catches that, adds the cms/ready label
+  // (idempotent — already set above), returns a synthetic merged: true
+  // response, and surfaces a toast explaining the actual merge
+  // happens once required checks finish.
+  await test.step("Click Publish → Publish Now via UI", async () => {
+    await page.getByRole("button", { name: /^Publish$/i }).click();
+    await page
+      .getByRole("menuitem", { name: /publish now/i })
+      .first()
+      .click();
+    // The shim's toast carries the literal string "auto-merge"; the
+    // race vs. a Decap-native success notification covers both the
+    // shim-fired path (expected on prod) and any edge case where the
+    // merge actually succeeded synchronously (no rule violation).
+    await Promise.race([
+      page
+        .locator("[data-publish-via-auto-merge-toast]")
+        .first()
+        .waitFor({ timeout: 30_000 }),
+      page
+        .getByText(/successfully published|published successfully/i)
+        .first()
+        .waitFor({ timeout: 30_000 }),
+    ]);
   });
 
   await test.step("Wait for PR to merge into main", async () => {

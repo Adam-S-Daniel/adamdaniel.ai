@@ -119,6 +119,19 @@ const SPEC_RULES = {
     /^\.github\/workflows\/deploy-preview\.yml$/,
     /^e2e\/(decap-pat|github-actions-poll|canary-content)\.js$/,
   ],
+  // Delete-published-entry flow exercising admin/publish-via-auto-merge.js
+  // and .github/workflows/delete-via-pr.yml. Same shape as the publish-
+  // loop spec — both opt into RUN_HOST_REPO_PUBLISH_LOOP and run
+  // exclusively under the dedicated cms-publish-loop-host workflow,
+  // but we still want PR-time selection so changes to the shim or
+  // delete workflow trigger a coverage refresh.
+  "e2e/cms-delete-published.spec.js": [
+    /^admin\//,
+    /^_e2e\//,
+    /^_layouts\/canary\.html$/,
+    /^\.github\/workflows\/(cms-editorial-workflow|deploy-production|delete-via-pr|cms-publish-loop-host)\.yml$/,
+    /^e2e\/(decap-pat|github-actions-poll|canary-content)\.js$/,
+  ],
   "e2e/cms-publish-loop-preview.spec.js": [
     /^admin\//,
     /^_layouts\/(post|page|project|canary|default)\.html$/,
@@ -185,6 +198,18 @@ const SPEC_RULES = {
   ],
   "e2e/cloudfront-preview-location-fixer.spec.js": [
     /^infrastructure\//,
+  ],
+  // publish-via-auto-merge shim: pure-node matcher tests + browser-
+  // context route-mocked tests. Trigger on any change to the shim
+  // itself, the admin shell that loads it, or the delete-via-PR
+  // workflow it dispatches into.
+  "e2e/publish-via-auto-merge.test.js": [
+    /^admin\/publish-via-auto-merge\.js$/,
+  ],
+  "e2e/publish-via-auto-merge-browser.spec.js": [
+    /^admin\/publish-via-auto-merge\.js$/,
+    /^admin\/index\.html$/,
+    /^\.github\/workflows\/delete-via-pr\.yml$/,
   ],
   "e2e/visual-regression.spec.js": [
     // Master visual gate — always include when *anything* visual could

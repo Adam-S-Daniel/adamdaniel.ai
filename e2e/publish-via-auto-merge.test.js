@@ -1,0 +1,261 @@
+/*
+ * Unit tests for admin/publish-via-auto-merge.js. Pure-Node, no browser:
+ * we load the shim source as a string, run it inside a minimal sandbox
+ * that fakes `window`, `document`, and `fetch`, then drive the wrapped
+ * fetch with synthetic GitHub responses and assert the recovery path.
+ *
+ * This catches matcher regressions (URL/method/status filters) and
+ * recovery-call shape errors without paying for the browser-driving
+ * specs. The browser-driving coverage lives in:
+ *
+ *   - e2e/publish-via-auto-merge-mocked.spec.js     (non-prod, Decap test-repo backend with route mocks)
+ *   - e2e/cms-publish-loop.spec.js                  (prod, real GitHub, RUN_HOST_REPO_PUBLISH_LOOP gate)
+ */
+const fs = require("node:fs");
+const path = require("node:path");
+const vm = require("node:vm");
+const { test, expect } = require("./base");
+
+const SHIM_PATH = path.resolve(__dirname, "../admin/publish-via-auto-merge.js");
+const SHIM_SOURCE = fs.readFileSync(SHIM_PATH, "utf8");
+
+/** Build a fresh sandbox + load the shim into it; returns helpers. */
+function bootShim() {
+  const calls = [];
+  let nextResponses = [];
+
+  // A minimal Response stand-in matching the bits the shim and tests
+  // touch: status, ok, json(), text(), and clone(). The real browser
+  // Response would also expose .body etc., but we don't read those.
+  function makeResponse(body, init) {
+    const status = (init && init.status) || 200;
+    const headers = (init && init.headers) || {};
+    const text = typeof body === "string" ? body : JSON.stringify(body);
+    return {
+      status,
+      ok: status >= 200 && status < 300,
+      headers,
+      json: () => Promise.resolve(JSON.parse(text || "null")),
+      text: () => Promise.resolve(text),
+      clone() { return makeResponse(text, init); },
+    };
+  }
+
+  const fakeFetch = (url, init) => {
+    const u = typeof url === "string" ? url : url.url;
+    const method = (init && init.method) || (url && url.method) || "GET";
+    calls.push({ url: u, method: method.toUpperCase(), body: init && init.body, headers: init && init.headers });
+    if (nextResponses.length === 0) {
+      throw new Error(`fake fetch out of canned responses for ${method} ${u}`);
+    }
+    return Promise.resolve(nextResponses.shift());
+  };
+
+  const sandbox = {
+    console: {
+      info: () => {},
+      warn: () => {},
+      error: () => {},
+      log: () => {},
+    },
+    setTimeout: (fn) => fn,
+    document: {
+      createElement: () => ({
+        textContent: "",
+        setAttribute: () => {},
+        style: { cssText: "" },
+        remove: () => {},
+      }),
+      body: { appendChild: () => {} },
+    },
+    window: {
+      fetch: fakeFetch,
+    },
+  };
+  sandbox.window.window = sandbox.window;
+  // Mirror common globals onto the sandbox itself so `fetch`, `Response`,
+  // etc., resolve when the shim references them via either path.
+  sandbox.fetch = fakeFetch;
+
+  // The shim does `new Response(...)`. Provide a constructor-shaped
+  // shim that produces our fake-Response objects.
+  function FakeResponseCtor(body, init) {
+    return makeResponse(body, init);
+  }
+  sandbox.window.Response = FakeResponseCtor;
+  sandbox.Response = FakeResponseCtor;
+
+  // The shim references Object.assign(...) and JSON — both already on
+  // sandbox via vm's default global proxy. No more setup needed.
+
+  vm.createContext(sandbox);
+  vm.runInContext(SHIM_SOURCE, sandbox);
+
+  return {
+    sandbox,
+    calls,
+    queueResponse: (body, init) => nextResponses.push(makeResponse(body, init)),
+    fetch: (url, init) => sandbox.window.fetch(url, init),
+  };
+}
+
+test.describe("publish-via-auto-merge.js (unit)", () => {
+  test("installs by setting window.__publishViaAutoMergeInstalled", () => {
+    const { sandbox } = bootShim();
+    expect(sandbox.window.__publishViaAutoMergeInstalled).toBe(true);
+    expect(sandbox.window.__publishViaAutoMerge.installed).toBe(true);
+    expect(sandbox.window.__publishViaAutoMerge.matchers).toEqual(["merge", "delete"]);
+  });
+
+  test("re-invocation is a no-op (idempotent install)", () => {
+    const ctx = bootShim();
+    const fetchAfterFirst = ctx.sandbox.window.fetch;
+    // Re-run the shim source against the same sandbox.
+    vm.runInContext(SHIM_SOURCE, ctx.sandbox);
+    expect(ctx.sandbox.window.fetch).toBe(fetchAfterFirst);
+  });
+
+  test("non-targeted requests pass through untouched", async () => {
+    const { fetch, queueResponse, calls } = bootShim();
+    queueResponse({ ok: 1 }, { status: 200 });
+    const res = await fetch("https://api.github.com/repos/Adam-S-Daniel/adamdaniel.ai/contents/_posts/x.md", { method: "GET" });
+    expect(res.status).toBe(200);
+    expect(calls).toHaveLength(1);
+    expect(calls[0].method).toBe("GET");
+  });
+
+  test("PR merge that returns 200 passes through (no recovery)", async () => {
+    const { fetch, queueResponse, calls } = bootShim();
+    queueResponse({ merged: true, sha: "abc" }, { status: 200 });
+    const res = await fetch(
+      "https://api.github.com/repos/Adam-S-Daniel/adamdaniel.ai/pulls/42/merge",
+      { method: "PUT", headers: { Authorization: "Bearer t" } },
+    );
+    expect(res.status).toBe(200);
+    expect(calls).toHaveLength(1);
+  });
+
+  test("PR merge 422 with rule-violations triggers cms/ready label add + synthetic merged response", async () => {
+    const { fetch, queueResponse, calls } = bootShim();
+    queueResponse({ message: "Repository rule violations found" }, { status: 422 });
+    queueResponse({ id: 1 }, { status: 200 }); // labels response
+    const res = await fetch(
+      "https://api.github.com/repos/Adam-S-Daniel/adamdaniel.ai/pulls/42/merge",
+      { method: "PUT", headers: { Authorization: "Bearer t" } },
+    );
+    expect(res.status).toBe(200);
+    const body = await res.json();
+    expect(body.merged).toBe(true);
+    expect(body.sha).toBe("pending-auto-merge");
+    expect(calls).toHaveLength(2);
+    expect(calls[0].method).toBe("PUT");
+    expect(calls[1].method).toBe("POST");
+    expect(calls[1].url).toBe(
+      "https://api.github.com/repos/Adam-S-Daniel/adamdaniel.ai/issues/42/labels",
+    );
+    expect(JSON.parse(calls[1].body)).toEqual({ labels: ["cms/ready"] });
+    expect(calls[1].headers.Authorization).toBe("Bearer t");
+  });
+
+  test("PR merge 422 with non-ruleset message does NOT recover", async () => {
+    const { fetch, queueResponse, calls } = bootShim();
+    queueResponse({ message: "Pull request is in unstable state" }, { status: 422 });
+    const res = await fetch(
+      "https://api.github.com/repos/Adam-S-Daniel/adamdaniel.ai/pulls/42/merge",
+      { method: "PUT", headers: { Authorization: "Bearer t" } },
+    );
+    expect(res.status).toBe(422);
+    expect(calls).toHaveLength(1);
+  });
+
+  test("PR merge 422 + label-add fails → original error propagates", async () => {
+    const { fetch, queueResponse, calls } = bootShim();
+    queueResponse({ message: "Repository rule violations found" }, { status: 422 });
+    queueResponse({ message: "Bad credentials" }, { status: 401 });
+    const res = await fetch(
+      "https://api.github.com/repos/Adam-S-Daniel/adamdaniel.ai/pulls/42/merge",
+      { method: "PUT", headers: { Authorization: "Bearer t" } },
+    );
+    expect(res.status).toBe(422);
+    expect(calls).toHaveLength(2);
+  });
+
+  test("DELETE contents 422 dispatches delete-via-pr workflow + returns synthetic 200", async () => {
+    const { fetch, queueResponse, calls } = bootShim();
+    queueResponse({ message: "Repository rule violations found" }, { status: 422 });
+    queueResponse(null, { status: 204 }); // workflow dispatch returns 204
+    const res = await fetch(
+      "https://api.github.com/repos/Adam-S-Daniel/adamdaniel.ai/contents/_posts/2026-04-25-replacement-test-post-1.md",
+      { method: "DELETE", headers: { Authorization: "Bearer t" } },
+    );
+    expect(res.status).toBe(200);
+    const body = await res.json();
+    expect(body.commit.sha).toBe("pending-delete-pr");
+    expect(body.content).toBeNull();
+    expect(calls).toHaveLength(2);
+    expect(calls[1].method).toBe("POST");
+    expect(calls[1].url).toBe(
+      "https://api.github.com/repos/Adam-S-Daniel/adamdaniel.ai/actions/workflows/delete-via-pr.yml/dispatches",
+    );
+    const dispatchBody = JSON.parse(calls[1].body);
+    expect(dispatchBody.ref).toBe("main");
+    expect(dispatchBody.inputs.path).toBe("_posts/2026-04-25-replacement-test-post-1.md");
+  });
+
+  test("DELETE contents URL-encoded path round-trips through decode", async () => {
+    const { fetch, queueResponse, calls } = bootShim();
+    queueResponse({ message: "Repository rule violations found" }, { status: 422 });
+    queueResponse(null, { status: 204 });
+    await fetch(
+      "https://api.github.com/repos/Adam-S-Daniel/adamdaniel.ai/contents/_posts%2F2026-04-25-replacement-test-post-1.md",
+      { method: "DELETE", headers: { Authorization: "Bearer t" } },
+    );
+    expect(JSON.parse(calls[1].body).inputs.path).toBe(
+      "_posts/2026-04-25-replacement-test-post-1.md",
+    );
+  });
+
+  test("DELETE contents 422 + workflow dispatch fails → original 422 surfaces", async () => {
+    const { fetch, queueResponse } = bootShim();
+    queueResponse({ message: "Repository rule violations found" }, { status: 422 });
+    queueResponse({ message: "Resource not accessible by integration" }, { status: 403 });
+    const res = await fetch(
+      "https://api.github.com/repos/Adam-S-Daniel/adamdaniel.ai/contents/_posts/x.md",
+      { method: "DELETE", headers: { Authorization: "Bearer t" } },
+    );
+    expect(res.status).toBe(422);
+  });
+
+  test("URL with query string after /merge does NOT match (defends against PUT to /pulls/N/merge?foo=bar)", async () => {
+    // Practical reality: GitHub's merge endpoint never takes a query
+    // string, but if Decap ever appended one we want to noisy-fail
+    // rather than silently pass through. Today the regex anchors `/merge$`
+    // so query strings would slip through. This test pins that
+    // behaviour so a future refactor knows what was intentional.
+    const { fetch, queueResponse, calls } = bootShim();
+    queueResponse({ message: "Repository rule violations found" }, { status: 422 });
+    const res = await fetch(
+      "https://api.github.com/repos/Adam-S-Daniel/adamdaniel.ai/pulls/42/merge?foo=bar",
+      { method: "PUT", headers: { Authorization: "Bearer t" } },
+    );
+    expect(res.status).toBe(422);
+    expect(calls).toHaveLength(1); // no recovery
+  });
+
+  test("Authorization header is forwarded as-is to the recovery call (Headers instance variant)", async () => {
+    const { fetch, queueResponse, calls } = bootShim();
+    queueResponse({ message: "Repository rule violations found" }, { status: 422 });
+    queueResponse({ id: 1 }, { status: 200 });
+    // Pass a Headers-like object exposing .get(...).
+    const headers = {
+      _store: { authorization: "token gho_xyz", "x-github-api-version": "2022-11-28" },
+      get(k) { return this._store[k.toLowerCase()] || null; },
+    };
+    await fetch(
+      "https://api.github.com/repos/Adam-S-Daniel/adamdaniel.ai/pulls/7/merge",
+      { method: "PUT", headers },
+    );
+    expect(calls[1].headers.Authorization).toBe("token gho_xyz");
+    expect(calls[1].headers["X-GitHub-Api-Version"]).toBe("2022-11-28");
+  });
+});
