@@ -130,6 +130,19 @@ test("CMS publish loop — host repo, target main", async ({ page }, testInfo) =
     !getPat(),
     "CMS_E2E_PAT not set — host-repo publish-loop disabled. (Forks and Dependabot are expected to land here.)",
   );
+  // Opt-in marker mirroring RUN_PROD_MUTATE_PLAYGROUND. Without it, the
+  // spec also runs inside e2e-tests.yml shard 1 on regular PRs — and
+  // the cms/ PR it opens against main triggers another e2e-tests run
+  // (whose shard 1 picks this same spec back up), force-pushing
+  // concurrent commits to cms/<col>/<slug> and cancelling each other's
+  // validate-content + auto-merge-when-ready labeled events. Until a
+  // dedicated workflow opts in (mirroring cms-publish-loop-prod.yml),
+  // self-skip on PRs and rely on the cms-publish-loop-prod-mutate
+  // playground + read-only @canary-readonly probe for coverage.
+  test.skip(
+    process.env.RUN_HOST_REPO_PUBLISH_LOOP !== "1",
+    "RUN_HOST_REPO_PUBLISH_LOOP not set — host-repo publish-loop spec is opt-in (avoids cms/* PR self-recursion in PR-time CI).",
+  );
 
   const runId = Date.now();
   const marker = makeMarker(CANARY.id, runId);
