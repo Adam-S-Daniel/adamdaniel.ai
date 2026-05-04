@@ -161,11 +161,16 @@ test.describe("Projects gallery: multi-image list widget", () => {
       await addBtn.click();
 
       // After Add, a new "Choose an Image" picker becomes available for
-      // the freshly-appended item. The newest one is the last in DOM
-      // order — pick `.nth(i)` to bind to it deterministically.
-      const choosers = page.getByRole("button", { name: /choose (an )?image/i });
-      await expect(choosers.nth(i)).toBeVisible({ timeout: 15_000 });
-      await choosers.nth(i).click();
+      // the freshly-appended item. Already-filled items show "Choose
+      // different image" instead. The regex below matches *both* labels
+      // so the count of choosers === number of list items, and `.last()`
+      // always binds to the newest (just-added) item — it's appended at
+      // the end of the list in DOM order.
+      const choosers = page.getByRole("button", {
+        name: /choose (an |different )?image/i,
+      });
+      await expect(choosers.last()).toBeVisible({ timeout: 15_000 });
+      await choosers.last().click();
 
       // Decap's media library shares one hidden <input type="file"> per
       // open dialog — same pattern as cms-image-upload.spec.js.
