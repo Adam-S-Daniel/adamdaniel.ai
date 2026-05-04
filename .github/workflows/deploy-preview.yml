@@ -5,6 +5,55 @@ on:
     types: [opened, synchronize, reopened, closed]
     branches:
       - main
+    # Skip when the PR can't change Jekyll output and doesn't touch
+    # this workflow or the patch-preview-config script. Same shape as
+    # e2e-tests.yml's paths-ignore: docs and tooling that don't affect
+    # what gets served from the preview bucket.
+    #
+    # `closed` semantics: when paths-ignore matches the PR's net
+    # base..head diff, the workflow doesn't fire on close either —
+    # but a doc-only PR also never built a preview, so there's
+    # nothing to tear down. (A PR that revert-collapses back to
+    # doc-only at close would orphan S3 files; in practice nobody
+    # does that, and the next teardown sweep would still catch it.)
+    paths-ignore:
+      - 'README.md'
+      - 'AGENTS.md'
+      - 'CLAUDE.md'
+      - 'ANALYTICS_SETUP.md'
+      - 'docs/**'
+      - '.agents/**'
+      - '.github/rulesets/**'
+      - 'e2e/**'
+      - 'screenshots/**'
+      - 'recordings/**'
+      - 'test-results/**'
+      - 'playwright.config.js'
+      - 'playwright.regression.config.js'
+      - 'package.json'
+      - 'package-lock.json'
+      - 'LICENSE'
+      - '.gitignore'
+      - '.gitleaks.toml'
+      - '.editorconfig'
+      - '.bundle/**'
+      - '_plugins_test/**'
+      - 'oauth-proxy/**'
+      - 'infrastructure/**'
+      - 'tests/**'
+      - '.github/dependabot.yml'
+      - '.github/workflows/cms-editorial-workflow.yml'
+      - '.github/workflows/cms-publish-loop-prod.yml'
+      - '.github/workflows/canary-prod.yml'
+      - '.github/workflows/claude.yml'
+      - '.github/workflows/dependabot-auto-merge.yml'
+      - '.github/workflows/deploy-production.yml'
+      - '.github/workflows/e2e-tests.yml'
+      - '.github/workflows/publish-scheduled-posts.yml'
+      - '.github/workflows/regenerate-manual.yml'
+      - '.github/workflows/secrets-scan.yml'
+      - '.github/workflows/skills-mirror.yml'
+      - '.github/workflows/visual-regression.yml'
 
 permissions:
   contents: read
