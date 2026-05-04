@@ -1,27 +1,30 @@
 name: CMS Publish Loop — Prod Mutation Playground
 
-# Nightly real-network mutation of a real `_posts/` entry on prod, to
-# exercise the full Decap → cms PR → auto-merge → deploy-production
-# loop end-to-end. See plan G4 + e2e/cms-publish-loop-prod-mutate.spec.js
-# for the rationale and fixture details.
+# Runs the full Decap → cms PR → auto-merge → deploy-production loop
+# end-to-end against prod. See plan G4 +
+# e2e/cms-publish-loop-prod-mutate.spec.js for the rationale and
+# fixture details.
 #
-# Sunset path: this workflow is gated on the repo variable
+# Trigger model: required-status-check on PRs into `main`. The
+# workflow always runs on every PR so the named check exists; an
+# early step decides whether the salient parts of the codebase
+# changed. When nothing salient changed, every subsequent step
+# self-skips and the check reports success immediately. Manual
+# `workflow_dispatch` always forces a real run.
+#
+# Sunset path: the actual mutation is gated on the repo variable
 # `PROD_PLAYGROUND_MODE`. While prod is a "full mutation playground",
 # set it to `true` (Repo Settings → Variables and secrets → Actions →
 # Variables). When prod stops being a playground, set it to `false`
-# (or unset it) — the cron tick still fires but the job no-ops, and
-# the fixture file `_posts/2099-01-01-e2e-mutation-canary.md` stays
-# in-tree as documentation.
+# (or unset it) — the workflow keeps reporting success on PRs (no
+# real mutation), and the fixture file
+# `_posts/2099-01-01-e2e-mutation-canary.md` stays in-tree as
+# documentation.
 
 on:
-  schedule:
-    # 13:00 UTC daily. Slotted an hour before publish-scheduled-posts
-    # (14:00 UTC) so the two daily mutations don't trip over each
-    # other on `deploy-production.yml`'s queued-run concurrency.
-    - cron: '0 13 * * *'
+  pull_request:
+    branches: [main]
   workflow_dispatch:
-    # Manual trigger for debugging the spec or bringing the playground
-    # back online after a sunset/un-sunset cycle.
 
 permissions:
   # The spec drives admin via a fine-grained PAT (CMS_E2E_PAT) — the
@@ -31,38 +34,78 @@ permissions:
   contents: read
 
 concurrency:
-  # Only one prod-mutation run at a time. A second run starting while
-  # the first is still mid-deploy would clash on the canary file's SHA
-  # in the Contents API and confuse the assertion that the URL shows
-  # *this* run's marker.
-  group: cms-publish-loop-prod
-  cancel-in-progress: false
+  # Per-PR concurrency. A second push to the same PR cancels the
+  # in-flight run; concurrent runs across different PRs would clash
+  # on the canary file's SHA in the Contents API and confuse the
+  # assertion that the URL shows *this* run's marker, so don't allow
+  # them.
+  group: cms-publish-loop-prod-${{ github.event.pull_request.number || github.ref }}
+  cancel-in-progress: true
 
 jobs:
   prod-mutate:
-    # The whole job is gated on the repo variable so that flipping the
-    # variable to `false` (or clearing it) in repo Settings instantly
-    # stops the workflow, with no code change needed. The cron tick
-    # still fires — GitHub doesn't honor variable-driven `on:` filters
-    # — but the job evaluates `if:` to false and skips, costing zero
-    # billable minutes.
-    if: vars.PROD_PLAYGROUND_MODE == 'true'
     runs-on: ubuntu-latest
     timeout-minutes: 30
     steps:
       - name: Checkout
         uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd  # v6.0.2 (2026-01-09)
+        with:
+          # Need the PR's full diff range (base..head) to detect
+          # whether any salient path changed. fetch-depth: 0 is the
+          # safest choice for a PR that may have many commits.
+          fetch-depth: 0
+
+      - name: Detect salient changes
+        id: salient
+        env:
+          BASE_SHA: ${{ github.event.pull_request.base.sha }}
+          HEAD_SHA: ${{ github.event.pull_request.head.sha }}
+          EVENT_NAME: ${{ github.event_name }}
+        run: |
+          set -euo pipefail
+          if [ "$EVENT_NAME" = "workflow_dispatch" ]; then
+            echo "Manual dispatch — forcing run."
+            echo "run=true" >> "$GITHUB_OUTPUT"
+            exit 0
+          fi
+          changed=$(git diff --name-only "$BASE_SHA" "$HEAD_SHA")
+          echo "Files changed in PR:"
+          echo "$changed" | sed 's/^/  /'
+          # Salient paths: the spec, the e2e helpers it imports, the
+          # fixture post, the admin shell the spec drives, the
+          # Playwright config, npm dep manifests, Jekyll config and
+          # the post layout that renders the public page, and the
+          # workflow file itself. A change to any of these can break
+          # the publish loop end-to-end.
+          if printf '%s\n' "$changed" | grep -qE '^(\.github/workflows/cms-publish-loop-prod\.yml|e2e/cms-publish-loop-prod-mutate\.spec\.js|e2e/decap-pat\.js|e2e/github-actions-poll\.js|e2e/base\.js|admin/|_posts/2099-01-01-e2e-mutation-canary\.md|playwright\.config\.js|package(-lock)?\.json|_config\.yml|_layouts/post\.html)'; then
+            echo "Salient paths changed → running prod mutation."
+            echo "run=true" >> "$GITHUB_OUTPUT"
+          else
+            echo "No salient paths changed → emitting success without running."
+            echo "run=false" >> "$GITHUB_OUTPUT"
+          fi
+
+      - name: Skip — not salient
+        if: steps.salient.outputs.run != 'true'
+        run: echo "::notice::No salient paths changed in this PR; reporting success without running prod mutation."
+
+      - name: Skip — playground mode disabled
+        if: steps.salient.outputs.run == 'true' && vars.PROD_PLAYGROUND_MODE != 'true'
+        run: echo "::notice::PROD_PLAYGROUND_MODE is not 'true'; skipping prod mutation."
 
       - name: Setup Node
+        if: steps.salient.outputs.run == 'true' && vars.PROD_PLAYGROUND_MODE == 'true'
         uses: actions/setup-node@48b55a011bda9f5d6aeb4c2d9c7362e8dae4041e  # v6.4.0 (2026-04-20)
         with:
           node-version: '20'
           cache: 'npm'
 
       - name: Install npm dependencies
+        if: steps.salient.outputs.run == 'true' && vars.PROD_PLAYGROUND_MODE == 'true'
         run: npm ci
 
       - name: Cache Playwright browsers (chromium only)
+        if: steps.salient.outputs.run == 'true' && vars.PROD_PLAYGROUND_MODE == 'true'
         id: pw-cache
         uses: actions/cache@27d5ce7f107fe9357f9df03efb73ab90386fccae  # v5.0.5 (2026-04-13)
         with:
@@ -72,14 +115,15 @@ jobs:
           key: playwright-prod-mutate-${{ runner.os }}-${{ hashFiles('package-lock.json') }}
 
       - name: Install Playwright chromium
-        if: steps.pw-cache.outputs.cache-hit != 'true'
+        if: steps.salient.outputs.run == 'true' && vars.PROD_PLAYGROUND_MODE == 'true' && steps.pw-cache.outputs.cache-hit != 'true'
         run: npx playwright install chromium --with-deps
 
       - name: Install Playwright OS deps (chromium)
-        if: steps.pw-cache.outputs.cache-hit == 'true'
+        if: steps.salient.outputs.run == 'true' && vars.PROD_PLAYGROUND_MODE == 'true' && steps.pw-cache.outputs.cache-hit == 'true'
         run: npx playwright install-deps chromium
 
       - name: Run prod mutation playground spec
+        if: steps.salient.outputs.run == 'true' && vars.PROD_PLAYGROUND_MODE == 'true'
         env:
           # Same PAT the existing publish-loop tests use. Fine-grained,
           # scoped to the host repo with contents: r/w + pull_requests:
@@ -103,7 +147,7 @@ jobs:
             2>&1 | tee /tmp/prod-mutate.log
 
       - name: Upload test results on failure
-        if: ${{ failure() || cancelled() }}
+        if: ${{ (failure() || cancelled()) && steps.salient.outputs.run == 'true' && vars.PROD_PLAYGROUND_MODE == 'true' }}
         uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a  # v7.0.1 (2026-04-10)
         with:
           name: prod-mutate-results
