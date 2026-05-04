@@ -166,10 +166,14 @@ test("CMS publish loop — host repo, target main", async ({ page }, testInfo) =
 
   // ── 2. Open the canary entry ────────────────────────────────────
   await test.step("Navigate to canary entry", async () => {
-    await page.goto(`${PROD_ADMIN}#/collections/${CANARY.cmsCollection}`, { waitUntil: "domcontentloaded" });
-    const entry = page.getByRole("link", { name: /Canary/i }).first();
-    await expect(entry).toBeVisible({ timeout: 30_000 });
-    await entry.click();
+    // Go straight to the entry by slug instead of clicking the first
+    // /Canary/i link in the collection list — the e2e collection has
+    // page/post/project canaries and the sidebar's display order
+    // can't be relied on to land on the configured one (CANARY.id).
+    await page.goto(
+      `${PROD_ADMIN}#/collections/${CANARY.cmsCollection}/entries/${CANARY.slug}`,
+      { waitUntil: "domcontentloaded" },
+    );
     await expect(page.getByRole("textbox", { name: /^Title$/i })).toBeVisible({ timeout: 30_000 });
   });
 

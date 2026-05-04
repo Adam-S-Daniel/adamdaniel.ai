@@ -138,6 +138,12 @@ jobs:
           # override TARGET=prod also installs is incidental but not
           # relied on. Mirrors canary-prod.yml's pattern.
           TARGET: prod
+          # Opt-in marker the spec checks before running. Without this,
+          # it also fires inside e2e-tests.yml shard 1, force-pushing
+          # concurrent commits to the same cms/posts/… branch and
+          # cancelling each other's validate-content runs. Setting it
+          # here scopes the prod mutation to this dedicated workflow.
+          RUN_PROD_MUTATE_PLAYGROUND: "1"
         run: |
           set -o pipefail
           npx playwright test \

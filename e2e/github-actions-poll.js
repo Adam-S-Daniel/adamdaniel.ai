@@ -134,7 +134,12 @@ async function waitForMerge({
 async function waitForAutoMergeEnabled({
   repo = HOST_REPO,
   prNumber,
-  timeoutMs = 90_000,
+  // The cms-editorial-workflow.yml `auto-merge-when-ready` job runs in
+  // response to the `labeled` event we fire via addLabel. Cold-start
+  // (runner allocation + checkout + npm install for the
+  // `enablePullRequestAutoMerge` step) regularly exceeds 90s, so give
+  // it 3 minutes before declaring the label-driven path broken.
+  timeoutMs = 180_000,
   pollMs = 4_000,
 } = {}) {
   const deadline = Date.now() + timeoutMs;

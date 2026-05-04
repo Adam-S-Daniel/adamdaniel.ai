@@ -160,6 +160,15 @@ test("CMS publish loop — prod mutation playground (real _posts/ entry)", async
     !getPat(),
     "CMS_E2E_PAT not set — prod-mutation playground disabled.",
   );
+  // Only the dedicated cms-publish-loop-prod.yml workflow opts in via
+  // RUN_PROD_MUTATE_PLAYGROUND=1. Without this gate the spec also
+  // runs inside the e2e-tests.yml shard 1, force-pushing concurrent
+  // commits to the same cms/posts/2099-… branch and cancelling each
+  // other's validate-content runs.
+  test.skip(
+    process.env.RUN_PROD_MUTATE_PLAYGROUND !== "1",
+    "RUN_PROD_MUTATE_PLAYGROUND not set — only the cms-publish-loop-prod workflow runs this spec.",
+  );
 
   // ── Hard guards (run inside the test so failures show up in the
   // test report, not as silent worker bring-up errors) ───────────
