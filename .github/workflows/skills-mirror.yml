@@ -3,8 +3,30 @@ name: skills-mirror
 on:
   push:
     branches: [main]
+    paths:
+      - '.agents/skills/**'
+      - '.claude/skills/**'
+      - 'scripts/bootstrap.sh'
+      - 'scripts/bootstrap.ps1'
+      - 'scripts/verify-skills-mirror.sh'
+      - 'scripts/verify-skills-mirror.ps1'
+      - 'scripts/secrets-scan.sh'
+      - 'tests/**'
+      - '.github/workflows/skills-mirror.yml'
+      - '.github/workflows/secrets-scan.yml'
   pull_request:
     branches: [main]
+    paths:
+      - '.agents/skills/**'
+      - '.claude/skills/**'
+      - 'scripts/bootstrap.sh'
+      - 'scripts/bootstrap.ps1'
+      - 'scripts/verify-skills-mirror.sh'
+      - 'scripts/verify-skills-mirror.ps1'
+      - 'scripts/secrets-scan.sh'
+      - 'tests/**'
+      - '.github/workflows/skills-mirror.yml'
+      - '.github/workflows/secrets-scan.yml'
 
 # Skills-mirror CI is structural / offline only. It must not invoke `claude`,
 # nor reference ANTHROPIC_API_KEY anywhere — auth in this project is
