@@ -1,0 +1,135 @@
+name: Delete via PR
+
+# Companion workflow to admin/publish-via-auto-merge.js. Decap's
+# "Delete published entry" button commits straight to main, which the
+# branch ruleset (`pull_request` rule) rejects. The shim catches that
+# 422 and dispatches this workflow with the file path; we open a
+# `cms/delete/<basename>` PR with the cms/ready label, after which
+# cms-editorial-workflow.yml's auto-merge-when-ready job takes over.
+#
+# Trigger: workflow_dispatch only. The shim only fires this when a
+# direct delete has *already* failed against the ruleset, so the
+# end-to-end flow is: Decap delete click → 422 → shim →
+# workflow_dispatch → this workflow → labelled PR → auto-merge → main.
+
+on:
+  workflow_dispatch:
+    inputs:
+      path:
+        description: >-
+          Repo-relative path of the entry to delete (e.g.,
+          "_posts/2026-04-25-replacement-test-post-1.md"). Must point
+          at a file inside one of the Decap-managed collection roots
+          and must already exist on main.
+        required: true
+        type: string
+
+permissions:
+  contents: write
+  pull-requests: write
+
+concurrency:
+  # One delete-via-PR per path at a time. If two clicks land within a
+  # second of each other the second one shouldn't try to push to the
+  # same branch concurrently.
+  group: delete-via-pr-${{ inputs.path }}
+  cancel-in-progress: false
+
+jobs:
+  open-delete-pr:
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    steps:
+      - name: Validate path
+        env:
+          INPUT_PATH: ${{ inputs.path }}
+        run: |
+          set -euo pipefail
+          # Reject anything outside the collection roots. The list
+          # mirrors admin/config.yml's collection `folder:` settings.
+          # Any new collection there should be reflected here.
+          case "$INPUT_PATH" in
+            _posts/*.md|_e2e/*.md|_tags/*.md|_projects/*.md|pages/*.md)
+              ;;
+            *)
+              echo "::error::path '$INPUT_PATH' is outside the allowed Decap collection roots."
+              exit 1
+              ;;
+          esac
+          # Reject path-traversal segments outright.
+          case "$INPUT_PATH" in
+            *..*|*'~'*|*$'\n'*)
+              echo "::error::path '$INPUT_PATH' contains a disallowed segment."
+              exit 1
+              ;;
+          esac
+
+      - name: Checkout
+        uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd  # v6.0.2 (2026-01-09)
+        with:
+          # Use a token that can push branches and open PRs on this
+          # repo. The default GITHUB_TOKEN is fine because we only
+          # write to a non-main branch and call gh pr create.
+          token: ${{ secrets.GITHUB_TOKEN }}
+
+      - name: Verify target file exists
+        env:
+          INPUT_PATH: ${{ inputs.path }}
+        run: |
+          set -euo pipefail
+          if [[ ! -f "$INPUT_PATH" ]]; then
+            echo "::error::path '$INPUT_PATH' does not exist on main; nothing to delete."
+            exit 1
+          fi
+
+      - name: Open delete-via-PR
+        env:
+          INPUT_PATH: ${{ inputs.path }}
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: |
+          set -euo pipefail
+          # Derive a branch name from the file's basename. We use a
+          # cms/delete/ prefix so the cms-editorial-workflow.yml
+          # `cms/draft` labeller (which keys off `cms/`) still applies,
+          # but the path is distinct from Decap's own cms/<col>/<slug>
+          # so it never collides with an open Decap edit PR.
+          base="$(basename "$INPUT_PATH" .md)"
+          branch="cms/delete/${base}"
+
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+
+          # If the branch already exists from a prior dispatch, reuse
+          # it — the shim is idempotent on Decap's side, and this
+          # workflow should be too.
+          if git ls-remote --exit-code --heads origin "$branch" >/dev/null 2>&1; then
+            git fetch origin "$branch":"$branch"
+            git checkout "$branch"
+          else
+            git checkout -b "$branch"
+          fi
+
+          # No-op if the file's already gone (idempotent re-run).
+          if [[ -f "$INPUT_PATH" ]]; then
+            git rm "$INPUT_PATH"
+            git commit -m "Delete ${base} (via delete-via-pr)"
+            git push origin "$branch"
+          else
+            echo "::notice::file '$INPUT_PATH' already absent on $branch; skipping commit."
+          fi
+
+          # Open the PR if one isn't already open. `gh pr create`
+          # errors if the branch already has an open PR, so probe
+          # first.
+          existing="$(gh pr list --head "$branch" --state open --json number --jq '.[0].number' || true)"
+          if [[ -z "$existing" ]]; then
+            gh pr create \
+              --base main \
+              --head "$branch" \
+              --title "Delete \"${base}\"" \
+              --body "Triggered from Decap admin → Delete published entry. The file at \`${INPUT_PATH}\` will be removed when this PR's required checks pass and auto-merge fires." \
+              --label "cms/ready"
+          else
+            echo "::notice::PR #${existing} already open for $branch; ensuring cms/ready label is set."
+            gh pr edit "$existing" --add-label "cms/ready"
+          fi
