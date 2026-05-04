@@ -100,7 +100,14 @@ function cleanup() {
 }
 
 function jekyllBuild() {
-  execFileSync("bundle", ["exec", "jekyll", "build", "--quiet"], {
+  // `--future` is mandatory: the fixture post is dated 2099-01-02 so the
+  // on-disk filename stays deterministic across runs, but Jekyll's
+  // default `future: false` then skips the post and the public URL
+  // 404s. C3's first-post sim got away without this because it uses
+  // today's date (Decap's default); B7 can't, because the filename
+  // round-trips through `_posts/YYYY-MM-DD-<slug>.md` and the test
+  // pins YYYY-MM-DD to keep the path predictable.
+  execFileSync("bundle", ["exec", "jekyll", "build", "--quiet", "--future"], {
     cwd: REPO_ROOT,
     stdio: "inherit",
   });
