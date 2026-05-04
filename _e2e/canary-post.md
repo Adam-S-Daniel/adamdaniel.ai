@@ -1,21 +1,26 @@
 ---
+title: E2E Canary — Post
 layout: canary
-title: "E2E Canary — Post"
-collection_label: post
 permalink: /e2e/canary-post/
-canary_baseline: "Adam Daniel — E2E canary post (do not edit by hand)"
+canary_baseline: Adam Daniel — E2E canary post (do not edit by hand)
+canary_id: post
+collection_label: post
 slug: canary-post
 date: 2026-01-01 00:00:00 +0000
 sitemap: false
 robots: noindex,nofollow
-canary_id: post
 ---
-
 Adam Daniel — E2E canary post (do not edit by hand).
 
 This URL exists so the automated end-to-end publish-loop tests have a stable
 target to assert against on both preview-pr&lt;N&gt;.adamdaniel.ai and
 adamdaniel.ai. The body is replaced during a test run and reset to this
+
+
+
+e2e-publish-loop:post:1777923844457
+
+
 baseline in cleanup, so the public URL always renders innocuous content
 between runs.
 
