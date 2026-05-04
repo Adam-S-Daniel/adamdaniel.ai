@@ -262,46 +262,14 @@ test.describe("Decap CMS config invariants", () => {
     return m ? m[1] : null;
   }
 
-  function jekyllUrlFromPermalink(permalink, slug) {
-    // Jekyll substitutes `:slug` (no braces) — replace + return.
-    return permalink.replace(/:slug/g, slug);
-  }
-
-  function decapUrlFromPreviewPath(previewPath, slug) {
-    // Decap substitutes `{{slug}}` — replace + return.
-    return previewPath.replace(/\{\{slug\}\}/g, slug);
-  }
-
-  // Posts / projects share the same shape: Decap's preview_path must
-  // resolve to the same URL Jekyll's permalink template produces for
-  // the same slug. Concrete `expected` value documents what each
-  // contract should produce — if either side drifts, the failure
-  // points at exactly which collection broke.
-  const PERMALINK_ROUND_TRIPS = [
-    { collection: "posts", slug: "foo-bar", expected: "/blog/foo-bar/" },
-    { collection: "projects", slug: "foo-bar", expected: "/projects/foo-bar/" },
-  ];
-  for (const { collection, slug, expected } of PERMALINK_ROUND_TRIPS) {
-    test(`${collection}.preview_path round-trips through _config.yml's permalink`, () => {
-      const adminYml = readConfig(path.join(REPO_ROOT, "admin/config.yml"));
-      const jekyllYml = fs.readFileSync(
-        path.join(REPO_ROOT, "_config.yml"),
-        "utf8",
-      );
-      const previewPath = previewPathFor(adminYml, collection);
-      const permalink = permalinkFor(jekyllYml, collection);
-      expect(previewPath, `admin ${collection}.preview_path must exist`).not.toBeNull();
-      expect(permalink, `_config.yml ${collection} permalink must exist`).not.toBeNull();
-
-      const decapURL = decapUrlFromPreviewPath(previewPath, slug);
-      const jekyllURL = jekyllUrlFromPermalink(permalink, slug);
-      expect(
-        decapURL,
-        `${collection} preview URL must match Jekyll's rendered URL. preview_path=${previewPath} permalink=${permalink}`,
-      ).toBe(jekyllURL);
-      expect(decapURL).toBe(expected);
-    });
-  }
+  // The earlier "preview_path round-trips" test that lived here substituted
+  // `{{slug}}` → "foo-bar" on Decap's side and `:slug` → "foo-bar" on
+  // Jekyll's side and asserted equality. That passed tautologically because
+  // it didn't model Decap's TWO-PASS expansion — for posts, the `slug:`
+  // template runs first and fills `{{slug}}` in `preview_path` with the
+  // FILE slug (`YYYY-MM-DD-foo-bar`), not the field slug. The real contract
+  // (and the divergence between Decap and Jekyll for posts) is now modelled
+  // properly in `e2e/cms-permalink-contract.spec.js`.
 
   test("pages.preview_path matches the permalink default editors are nudged toward", () => {
     // Pages don't have a Jekyll-side global permalink template — each
@@ -313,7 +281,7 @@ test.describe("Decap CMS config invariants", () => {
     const previewPath = previewPathFor(adminYml, "pages");
     expect(previewPath).not.toBeNull();
 
-    const decapPreviewURL = decapUrlFromPreviewPath(previewPath, "foo-bar");
+    const decapPreviewURL = previewPath.replace(/\{\{slug\}\}/g, "foo-bar");
     expect(decapPreviewURL).toBe("/pages/foo-bar/");
 
     const permalinkField = findField(findCollection(adminYml, "pages"), "permalink");
