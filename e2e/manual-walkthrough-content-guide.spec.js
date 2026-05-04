@@ -1,6 +1,6 @@
 const fs = require("node:fs");
 const path = require("node:path");
-const { test, expect } = require("./base");
+const { test, expect, TARGET } = require("./base");
 const { captureStep } = require("./manual-capture");
 
 // Plan unit C2: every documented affordance in `docs/CONTENT_GUIDE.md` should
@@ -276,6 +276,10 @@ test.describe("Manual walkthrough — docs/CONTENT_GUIDE.md @parity", () => {
     test.skip(
       testInfo.project.name !== "chromium-desktop",
       "Single project — manual walkthrough probes drive Decap, which is heavy and not safe in parallel.",
+    );
+    test.skip(
+      TARGET === "prod",
+      "Probes drive /admin/index-local.html (local_backend: true). prod has no decap-server proxy, so login can't populate the sidebar.",
     );
     page.on("pageerror", (err) =>
       console.log(`[pageerror] ${err.name}: ${err.message}`),

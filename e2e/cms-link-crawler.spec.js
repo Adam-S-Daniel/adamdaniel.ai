@@ -1,4 +1,4 @@
-const { test, expect } = require("./base");
+const { test, expect, TARGET } = require("./base");
 
 // E1 — Admin link crawler.
 //
@@ -8,10 +8,12 @@ const { test, expect } = require("./base");
 // the "the toolbar grew a link to a /thing that 404s" regression class
 // before an editor finds it by clicking.
 //
-// Tagged @parity so a future cross-target run (G3) can lift this against
-// the live admin on preview-pr* and adamdaniel.ai. Runs against
-// /admin/index-local.html locally — the local backend mounts without an
-// OAuth round-trip, so no auth flow is needed beyond the Login button.
+// Tagged @parity so the cross-target matrix (G3) lifts this against
+// preview-pr* — but NOT prod. The crawler drives /admin/index-local.html,
+// which has `local_backend: true` and only mounts when decap-server is
+// reachable on localhost:8081. On prod that proxy doesn't exist, so the
+// Login click never populates the sidebar. The TARGET=prod skip below
+// keeps the parity matrix green without losing local coverage.
 //
 // SPA routes are skipped: Decap is hash-routed (`/admin/index-local.html#/…`),
 // and a HEAD against the index path is what actually matters — the hash
@@ -119,6 +121,10 @@ test.describe("@parity admin link crawler", () => {
     test.skip(
       testInfo.project.name !== "chromium-desktop",
       "Heavy admin walk — one project is enough.",
+    );
+    test.skip(
+      TARGET === "prod",
+      "Crawler drives /admin/index-local.html (local_backend: true). prod has no decap-server proxy, so login can't populate the sidebar.",
     );
     page.on("pageerror", (err) =>
       console.log(`[pageerror] ${err.name}: ${err.message}`),
