@@ -3,10 +3,11 @@
  * without going through the OAuth-proxy popup dance.
  *
  * Decap's GitHub backend persists its auth in localStorage under
- * `netlify-cms-user` (the project's GitHub fork-history reason — Decap is
- * the maintained fork of Netlify CMS, but the storage key was kept stable
- * for migration). Pre-seeding the same record makes the editor mount
- * already-logged-in, which is what we want for unattended e2e runs:
+ * `decap-cms-user` (the key was `netlify-cms-user` in early 2.x; v3
+ * renamed it. Decap 3.x has zero references to the legacy key, so
+ * seeding the old name silently falls through to the login screen).
+ * Pre-seeding the live key makes the editor mount already-logged-in,
+ * which is what we want for unattended e2e runs:
  *
  *   { backendName: "github", token: "<PAT>", login: "<user>", name: "..." }
  *
@@ -17,7 +18,17 @@
  * Used by `e2e/cms-publish-loop.spec.js` (host repo, target main) and
  * `e2e/cms-publish-loop-preview.spec.js` (preview env, target PR head).
  */
-const NETLIFY_CMS_USER_KEY = "netlify-cms-user";
+// Live key as of Decap CMS 3.12.2. If a future major bump renames it
+// again, the cms-publish-loop specs will get stuck on Decap's login
+// screen — re-run e2e/debug-decap-auth.spec.js (or grep the bundle:
+// `curl -s https://unpkg.com/decap-cms@<v>/dist/decap-cms.js |
+//  grep -oE '"[a-z-]*[-._]user[a-z._-]*"' | sort -u`) to find the
+// new key.
+const DECAP_CMS_USER_KEY = "decap-cms-user";
+
+// Legacy alias retained so an old reference in archived code doesn't
+// break imports. Will be removed in a follow-up cleanup.
+const NETLIFY_CMS_USER_KEY = DECAP_CMS_USER_KEY;
 
 const HOST_REPO = "Adam-S-Daniel/adamdaniel.ai";
 
@@ -59,11 +70,12 @@ async function seedDecapAuth(page, { token = getPat(), login = getLogin() } = {}
     } catch (_) {
       /* private mode etc — let Decap surface the resulting error */
     }
-  }, { key: NETLIFY_CMS_USER_KEY, value: record });
+  }, { key: DECAP_CMS_USER_KEY, value: record });
 }
 
 module.exports = {
   HOST_REPO,
+  DECAP_CMS_USER_KEY,
   NETLIFY_CMS_USER_KEY,
   buildAuthRecord,
   getLogin,
