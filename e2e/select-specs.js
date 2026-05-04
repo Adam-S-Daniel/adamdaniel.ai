@@ -64,6 +64,13 @@ const SPEC_RULES = {
     /^admin\/reviews\//,
     /^oauth-proxy\//,
   ],
+  // Live byte-parity probe: fetches every admin/ file from prod and
+  // from the latest open PR's preview, compares ETag/sha256. Triggers
+  // on any admin/ change so a CMS-shaped diff verifies it survives
+  // the deploy round-trip without drift.
+  "e2e/admin-bundle-parity.spec.js": [
+    /^admin\//,
+  ],
   "e2e/admin-reviews-stats.spec.js": [
     /^admin\/reviews\//,
     /^e2e\/compute-visual-diffs\.js$/,
@@ -120,6 +127,20 @@ const SPEC_RULES = {
     /^\.github\/workflows\/cms-editorial-workflow\.yml$/,
     /^\.github\/workflows\/deploy-preview\.yml$/,
     /^e2e\/(decap-pat|github-actions-poll|canary-content)\.js$/,
+  ],
+  // Prod-mutation playground (G4). Skips itself unless CMS_E2E_PAT is
+  // set, so PR runs are safe — the spec just emits a skip and exits.
+  // Selecting it on its own infra changes here keeps the PR matrix
+  // exercising the skip path so a regression in the gating doesn't
+  // ride to prod silently.
+  "e2e/cms-publish-loop-prod-mutate.spec.js": [
+    /^admin\//,
+    /^_layouts\/(post|default)\.html$/,
+    /^_posts\/2099-01-01-e2e-mutation-canary\.md$/,
+    /^\.github\/workflows\/cms-editorial-workflow\.yml$/,
+    /^\.github\/workflows\/deploy-production\.yml$/,
+    /^\.github\/workflows\/cms-publish-loop-prod\.yml$/,
+    /^e2e\/(decap-pat|github-actions-poll)\.js$/,
   ],
   "e2e/cms-publish-flow.spec.js": [
     /^admin\//,

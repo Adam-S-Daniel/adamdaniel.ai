@@ -94,10 +94,23 @@
        open /preview/ tab. Loads after Decap so `window.CMS` exists. -->
   <script src="preview-bridge.js" defer></script>
 
+  <!-- Single source of truth for "what URL does the currently-edited
+       Decap entry resolve to on the live site?" — exposes
+       window.LiveURL.compute() consumed by the banner and the native
+       toolbar override below. MUST load before either consumer. -->
+  <script src="live-url-derive.js" defer></script>
+
   <!-- "View page on site:" banner above the entry form. Reads form
        state from the DOM and renders a link (or placeholder when
        Published is OFF / no slug yet). -->
   <script src="live-url-banner.js" defer></script>
+
+  <!-- Rewrites Decap's native "View Live" toolbar anchor href so it
+       matches the banner's URL. Required because Decap's two-pass
+       `preview_path` substitution diverges from Jekyll's `:slug` for
+       collections whose `slug:` template includes a date prefix
+       (Posts). See admin/config.yml's Posts comment block + AGENTS.md. -->
+  <script src="native-preview-href.js" defer></script>
 
   <!--
     Deployed-build commit indicator. Pinned to the top-right corner
