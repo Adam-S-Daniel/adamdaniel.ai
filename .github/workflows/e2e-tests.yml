@@ -35,7 +35,6 @@ on:
       - '.github/dependabot.yml'
       - '.github/workflows/secrets-scan.yml'
       - '.github/workflows/publish-scheduled-posts.yml'
-      - '.github/workflows/claude.yml'
 
 permissions:
   contents: read
