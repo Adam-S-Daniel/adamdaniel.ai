@@ -123,6 +123,17 @@
 
   <script src="https://unpkg.com/decap-cms@3.12.2/dist/decap-cms.js"></script>
 
+  <!-- Single source of truth for the live URL — see admin/index.html.
+       Required so the native preview-href override below produces the
+       same URL as the banner. -->
+  <script src="live-url-derive.js" defer></script>
+
+  <!-- "View page on site:" banner — see admin/index.html for rationale. -->
+  <script src="live-url-banner.js" defer></script>
+
+  <!-- Native "View Live" toolbar override — see admin/index.html. -->
+  <script src="native-preview-href.js" defer></script>
+
   <!--
     Status banner updater. Once the user navigates to the seeded
     Posts entry, walk every Decap widget wrapper and inspect its

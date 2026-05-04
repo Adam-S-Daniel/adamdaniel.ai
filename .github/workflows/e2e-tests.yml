@@ -35,6 +35,7 @@ on:
       - '.github/dependabot.yml'
       - '.github/workflows/secrets-scan.yml'
       - '.github/workflows/publish-scheduled-posts.yml'
+      - '.github/workflows/cms-publish-loop-prod.yml'
       - '.github/workflows/claude.yml'
 
 permissions:
@@ -198,6 +199,18 @@ jobs:
         # the test step's exit code visible to GHA's outcome.
         # `--reporter=blob,list` writes a blob report (for later merge
         # into a single HTML report) and prints to stdout for logs.
+        env:
+          # `cms-publish-loop.spec.js` and
+          # `cms-publish-loop-preview.spec.js` self-skip when this is
+          # empty (see e2e/decap-pat.js#getPat). Without exposing it,
+          # they silently skipped on every host-repo PR for months —
+          # `select-specs.js` was correctly *picking* them up but the
+          # specs no-op'd at runtime, so the editorial-workflow loop
+          # had no PR-time regression coverage. Forks don't see this
+          # value (GitHub strips secrets from `pull_request` events
+          # opened by external contributors), so the self-skip still
+          # protects against fork PRs running real prod mutations.
+          CMS_E2E_PAT: ${{ secrets.CMS_E2E_PAT }}
         run: |
           set -o pipefail
           npx playwright test \
@@ -208,6 +221,10 @@ jobs:
       - name: Run Playwright tests (selected subset, shard ${{ matrix.shard }}/${{ needs.select.outputs.shard_count }})
         if: needs.select.outputs.scope == 'subset'
         id: pw-subset
+        env:
+          # See the full-matrix step above for why this env line
+          # exists — same self-skip semantics, same fork-safety.
+          CMS_E2E_PAT: ${{ secrets.CMS_E2E_PAT }}
         run: |
           set -o pipefail
           npx playwright test ${{ needs.select.outputs.files }} \
@@ -253,6 +270,80 @@ jobs:
         with:
           name: test-results-shard-${{ matrix.shard }}
           path: test-results/
+          retention-days: 7
+
+  # G3 — `@parity` subset against prod, on every PR.
+  #
+  # The `TARGET=prod` env switch (e2e/base.js) overrides Playwright's
+  # `baseURL` fixture so every `page.goto("/foo")` and
+  # `page.request.get("/foo")` routes against https://adamdaniel.ai. The
+  # `@parity` static lint (e2e/parity-tag-lint.test.js) guarantees every
+  # spec we run here is read-only, so this job cannot mutate prod even
+  # if a regression sneaks past local. Single project (chromium-desktop)
+  # keeps the network footprint tight; the matrix multiplier adds
+  # nothing for read-only HTTP/DOM probes.
+  #
+  # Non-blocking: this job is purely informational while @parity coverage
+  # grows. It does NOT carry `needs:` from `select` or `e2e`, so a stuck
+  # selector can't block parity, and a parity failure can't block the
+  # merge gate. Branch protection can promote it to required later.
+  parity:
+    runs-on: ubuntu-latest
+    # Run against the latest commit of every PR. Forks don't block on
+    # this — the parity probe is read-only and uses no secrets.
+    steps:
+      - name: Checkout
+        uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd  # v6.0.2 (2026-01-09)
+
+      - name: Setup Node
+        uses: actions/setup-node@48b55a011bda9f5d6aeb4c2d9c7362e8dae4041e  # v6.4.0 (2026-04-20)
+        with:
+          node-version: '20'
+          cache: 'npm'
+
+      - name: Install npm dependencies
+        run: npm ci
+
+      - name: Cache Playwright browsers (chromium only)
+        id: pw-cache
+        uses: actions/cache@27d5ce7f107fe9357f9df03efb73ab90386fccae  # v5.0.5 (2026-04-13)
+        with:
+          path: ~/.cache/ms-playwright
+          # `playwright-parity-` keeps this chromium-only cache distinct
+          # from the full triple-browser cache used by the `e2e` matrix.
+          key: playwright-parity-${{ runner.os }}-${{ hashFiles('package-lock.json') }}
+
+      - name: Install Playwright chromium
+        if: steps.pw-cache.outputs.cache-hit != 'true'
+        run: npx playwright install chromium --with-deps
+
+      - name: Install Playwright OS deps (chromium)
+        if: steps.pw-cache.outputs.cache-hit == 'true'
+        run: npx playwright install-deps chromium
+
+      - name: Run @parity subset against prod
+        env:
+          TARGET: prod
+        # `--grep @parity` selects every test/describe with the tag in its
+        # title. The static lint (e2e/parity-tag-lint.test.js) ships in the
+        # same matrix so a violating tag-grab fails *here* before doing any
+        # remote IO.
+        run: |
+          set -o pipefail
+          npx playwright test \
+            --grep @parity \
+            --project=chromium-desktop \
+            --reporter=list \
+            2>&1 | tee /tmp/parity-output.log
+
+      - name: Upload parity test results
+        if: ${{ !cancelled() }}
+        uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a  # v7.0.1 (2026-04-10)
+        with:
+          name: test-results-parity-prod
+          path: |
+            test-results/
+            /tmp/parity-output.log
           retention-days: 7
 
   finalize:
