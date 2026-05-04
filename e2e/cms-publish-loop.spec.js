@@ -176,8 +176,11 @@ test("CMS publish loop — host repo, target main", async ({ page }, testInfo) =
   // ── 3. Edit body and save as draft ──────────────────────────────
   await test.step("Insert run marker into body and Save", async () => {
     // The body is a markdown widget. Append the marker; Decap's editor accepts
-    // plain text typing in either rich-text or raw modes.
-    const body = page.getByRole("textbox", { name: /Body|Content/i }).last();
+    // plain text typing in either rich-text or raw modes. The pinned Decap
+    // version no longer exposes "Body" as the textbox's accessible name —
+    // mirror cms-publish-flow.spec.js and grab the last contenteditable
+    // textbox on the page (the live preview iframe is not a textbox).
+    const body = page.locator('[role="textbox"][contenteditable="true"]').last();
     await body.click();
     await body.press("End");
     await body.pressSequentially(`\n\n${marker}\n`);

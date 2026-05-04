@@ -259,7 +259,10 @@ test("CMS publish loop — prod mutation playground (real _posts/ entry)", async
     // The body widget is a markdown editor. Appending a run-unique
     // marker lets the assertion at the end confirm we're seeing
     // *this* run's output, not a stale cache hit from the previous.
-    const body = page.getByRole("textbox", { name: /Body|Content/i }).last();
+    // The pinned Decap version no longer exposes "Body" as the
+    // textbox's accessible name — mirror cms-publish-flow.spec.js
+    // and grab the last contenteditable textbox on the page.
+    const body = page.locator('[role="textbox"][contenteditable="true"]').last();
     await body.click();
     await body.press("End");
     await body.pressSequentially(`\n\n${marker}\n`);
