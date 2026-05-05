@@ -203,8 +203,17 @@ test("Delete published entry — UI click → shim → delete-via-pr workflow �
         .getByRole("button", { name: /^(delete|confirm|yes)$/i })
         .first()
         .click()
-        .catch(() => {
-          /* native confirm() — already accepted via dialog handler */
+        .catch((err) => {
+          // Decap may use a native confirm() instead of an in-page
+          // button — the dialog handler above accepts it and the
+          // button query then has nothing to click. The click
+          // rejecting is the success signal here. Log at debug level
+          // so silent-catch-lint stays happy and grep finds this
+          // branch if behaviour changes.
+          console.debug(
+            "[cms-delete-published] confirm-button click rejected (likely native dialog already handled):",
+            err && err.message,
+          );
         });
 
       // Shim's synthetic 200 → Decap reports success. The shim toast
