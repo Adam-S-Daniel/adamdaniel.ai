@@ -13,10 +13,11 @@ All e2e tests run across 8 Playwright projects covering browsers, viewports, tex
 | File | Purpose |
 |---|---|
 | `playwright.config.js` | Matrix definition, webServer config, parallelism |
-| `e2e/base.js` | Custom fixture — extends `test` with `rootFontSize` option |
+| `e2e/base.js` | Custom fixture — extends `test` with `rootFontSize` option, plus the per-test screenshot capture hook (`attachPerTestCapture`) |
 | `e2e/*.spec.js` | Test files — import `{ test, expect }` from `./base` |
-| `e2e/select-specs.js` | Diff-aware spec selector — maps changed files to relevant specs so a content-only PR doesn't pay for the full e2e matrix |
-| `.github/workflows/e2e-tests.yml` | CI — installs chromium + firefox + webkit, runs the selector on PRs, full matrix on push to main |
+| `e2e/select-specs.js` | Diff-aware spec selector — maps changed files to relevant specs and emits a `shard_count` envelope so a small subset doesn't pay for the full 4-way fanout |
+| `e2e/generate-test-videos.js` | Assembles per-test screenshot frames into `<safe-test-id>.mp4` + `_combined.mp4` with a 96px banner via ImageMagick + ffmpeg |
+| `.github/workflows/e2e-tests.yml` | CI — runs the selector on PRs, then the e2e/parity/finalize jobs inside the prebuilt `mcr.microsoft.com/playwright:v<version>-noble` container (browsers + apt deps baked in), full matrix on push to main |
 
 ## Matrix projects
 
@@ -179,6 +180,44 @@ Always-run baseline (cheap, no browser): `compute-visual-diffs.test.js`, `cms-co
 Push to main bypasses the selector and runs the full matrix, since "the diff" for a merge commit covers everything anyway.
 
 `e2e/select-specs.test.js` covers each rule.
+
+### Dynamic shard count
+
+The selector also returns a `shard_count` field — `1` for tiny baseline-only runs, `2` for mid-sized subsets, `4` for full-matrix and large subsets. `e2e-tests.yml` reads this and builds a `[1..shard_count]` matrix array, so a baseline-only PR no longer pays the 4× container bring-up cost. The `e2e (1)` required check is always present because the matrix array always starts at 1.
+
+### Spec-header opt-out: `@select-skip-when-head-ref-prefix:`
+
+A spec can declare a top-of-file directive to skip itself when the PR's head ref starts with a given prefix:
+
+```js
+// @select-skip-when-head-ref-prefix: cms/
+const { test, expect } = require("./base");
+```
+
+Comma-separated prefixes are allowed (`cms/, claude/`). The selector reads `GITHUB_HEAD_REF` and drops matching specs from the rule-matched set; the `ALWAYS_RUN` baseline is exempt. Used to shave bring-up time on cms-bot PRs that don't need most browser specs.
+
+## CI container image
+
+Every Playwright job in `.github/workflows/` runs inside `mcr.microsoft.com/playwright:v<version>-noble` (currently `v1.59.1-noble`). The image bakes in chromium + firefox + webkit binaries and their apt dependencies, so workflows do NOT call `playwright install` or `playwright install-deps` on the matrix — those steps are obsolete. The `select` job's "Verify Playwright image version matches lockfile" step fails the build if any workflow's image tag drifts from `package-lock.json`'s `@playwright/test` version, and prints a one-line `sed` fix-up. To bump:
+
+```bash
+sed -i 's|mcr.microsoft.com/playwright:v[^"[:space:]]*-noble|mcr.microsoft.com/playwright:v<NEW>-noble|g' .github/workflows/*.yml
+```
+
+Inside the container, `ruby/setup-ruby` still needs `libyaml-0-2` + `build-essential` (not in the noble image); the e2e and parity jobs apt-install them in their first step.
+
+## Per-test screenshot videos (`per-test-videos` artifact)
+
+Every browser-based test captures one full-page screenshot per `framenavigated` event. The `finalize` job composites each frame with a 96px metadata banner above the screenshot via ImageMagick `convert`, concatenates the resulting PNG sequence per test into `<safe-test-id>.mp4`, and stitches them all together as `_combined.mp4`. The output ships as the `per-test-videos` artifact (separate from `playwright-report`, 7-day retention).
+
+- Capture fixture: `attachPerTestCapture` in `e2e/base.js`.
+- Frame storage: `test-results/per-test-frames/<safe-test-id>/{NNNN.png,meta.json}`.
+- Assembly: `e2e/generate-test-videos.js`.
+- Banner shape: `PR #<n> · Test X of Y · <file>::<title>` / `Step x of y: <name> · <status>` / `project: <name> · <date> <time US/Eastern>`.
+- Frame rate: `2/3` fps, capped at 50 frames per test.
+- Disable per-run: `DISABLE_PER_TEST_VIDEOS=1`.
+
+The assembly step is non-blocking — it never fails the build, and it's not a required check. Pure-node tests that don't request the `page` fixture are unaffected (no capture hook fires).
 
 ## Visual showcase
 

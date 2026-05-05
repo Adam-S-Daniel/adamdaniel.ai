@@ -55,7 +55,7 @@ Things almost never salient (good `paths-ignore` candidates):
 
 ### 3. Pick the right pattern
 
-**Workflow-level `paths:` (positive list)** — when the salient list is short and self-contained. Example: `visual-regression.yml` only cares about Jekyll site source plus a few pipeline scripts.
+**Workflow-level `paths:` (positive list)** — when the salient list is short and self-contained. Example: `visual-regression.yml` only cares about Jekyll site source plus a few pipeline scripts. Also the right pattern for **non-required** checks where you'd rather just skip the runner allocation entirely than spend ~20 s booting a job to emit a green check. Cheaper than always-run + early-skip whenever the named check isn't gating merges. Example in this repo: `cms-publish-loop-host.yml` and `cms-publish-loop-prod.yml` both moved from always-run + self-skip to workflow-level `paths:` once it was confirmed they weren't required-status-checks (verified live via `gh api repos/<owner>/<repo>/rules/branches/main`).
 
 **Workflow-level `paths-ignore:` (negative list)** — when the workflow cares about *almost everything* and only a small set of paths are clearly irrelevant. Example: `deploy-production.yml` deploys whatever Jekyll builds, so the negative list is shorter than enumerating every site path.
 
