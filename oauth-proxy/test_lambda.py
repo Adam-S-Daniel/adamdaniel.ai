@@ -57,6 +57,24 @@ class TestAuthRedirect(unittest.TestCase):
         resp = handler_module.handler(_event("/auth"), None)
         location = resp["headers"]["Location"]
         self.assertIn("scope=", location)
+        # `workflow` is required by the publish-via-auto-merge shim so
+        # Decap's "Delete published entry" can dispatch the
+        # delete-via-pr.yml workflow. Without it the dispatch endpoint
+        # 404s, the shim falls back to the original 422, and the user
+        # sees the Delete button silently do nothing. Assert the
+        # required scopes survive any future edits.
+        self.assertIn("repo", location)
+        self.assertIn("workflow", location)
+
+    def test_proxy_forces_scope_ignoring_cms_request(self):
+        # Decap CMS hardcodes `repo,user` in its OAuth request. The
+        # proxy must override that and always grant `workflow` too,
+        # otherwise the shim's delete-via-pr dispatch returns 404. This
+        # test pins that the proxy ignores the CMS's narrower scope.
+        evt = _event("/auth", {"scope": "repo,user"})
+        resp = handler_module.handler(evt, None)
+        location = resp["headers"]["Location"]
+        self.assertIn("workflow", location)
 
     def test_cors_header_present(self):
         resp = handler_module.handler(_event("/auth"), None)

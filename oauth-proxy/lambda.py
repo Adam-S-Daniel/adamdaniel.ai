@@ -31,8 +31,18 @@ logger.setLevel(logging.INFO)
 # ── Environment variables (set in SAM template / Lambda console) ────────────
 GITHUB_CLIENT_ID     = os.environ["GITHUB_CLIENT_ID"]
 GITHUB_CLIENT_SECRET = os.environ["GITHUB_CLIENT_SECRET"]
-# Scope requested from GitHub — 'repo' lets the CMS read/write repo contents
-GITHUB_SCOPE         = os.environ.get("GITHUB_SCOPE", "repo,user")
+# Scope requested from GitHub:
+#   - `repo`     read/write repo contents (PRs, labels, content API)
+#   - `user`     basic user info for Decap's "Logged in as ..." UI
+#   - `workflow` dispatch GitHub Actions workflows. REQUIRED by the
+#                publish-via-auto-merge.js shim's "Delete published
+#                entry" recovery path: when the user clicks Delete on
+#                a published post, Decap calls DELETE /contents/{path};
+#                main's branch ruleset rejects with 422; the shim
+#                catches the 422 and dispatches `delete-via-pr.yml` —
+#                that POST returns 404 if the token lacks `workflow`.
+#                Without it, the Delete button silently does nothing.
+GITHUB_SCOPE         = os.environ.get("GITHUB_SCOPE", "repo,user,workflow")
 # Allowed origins for the postMessage call (comma-separated list of CMS URLs).
 # Set to * during initial setup, then tighten to https://adamdaniel.ai
 ALLOWED_ORIGINS      = os.environ.get("ALLOWED_ORIGINS", "https://adamdaniel.ai")
@@ -179,7 +189,13 @@ def handle_auth(params: dict, origin: str | None) -> dict:
     callback (CSRF protection).
     """
     state  = params.get("state", "")
-    scope  = params.get("scope", GITHUB_SCOPE)
+    # IGNORE the CMS's scope param. Decap CMS hardcodes `repo,user` in
+    # its OAuth request; that's missing `workflow`, which the shim
+    # (admin/publish-via-auto-merge.js) needs to dispatch the
+    # delete-via-pr workflow. Force the proxy's GITHUB_SCOPE so the
+    # token GitHub issues has every scope the admin actually exercises,
+    # not just the subset Decap thinks it needs.
+    scope  = GITHUB_SCOPE
 
     github_auth_url = (
         "https://github.com/login/oauth/authorize"
