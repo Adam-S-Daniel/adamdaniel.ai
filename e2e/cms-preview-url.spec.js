@@ -39,7 +39,23 @@ const publishedPosts = fs
   .readdirSync(POSTS_DIR)
   .filter((f) => f.endsWith(".md"))
   .map((file) => ({ file, fm: parseFrontMatter(path.join(POSTS_DIR, file)) }))
-  .filter(({ fm }) => fm && fm.published === "true");
+  .filter(({ fm }) => fm && fm.published === "true")
+  // Skip internal fixtures: they carry `sitemap: false` (and usually
+  // `robots: noindex,nofollow`) to mark them as not part of the public
+  // site. The prod-mutation playground spec flips
+  // `_posts/2099-01-01-e2e-mutation-canary.md` to `published: true`
+  // mid-cycle (and a cleanup commit flips it back), and Jekyll's
+  // default `future: false` means a 2099-dated post won't render at
+  // its permalink anyway. Either way, this test verifying the public
+  // preview-URL contract shouldn't iterate over them.
+  .filter(({ fm }) => fm.sitemap !== "false")
+  // Skip future-dated posts: Jekyll's default config drops them from
+  // the build, so the URL legitimately 404s. Defence-in-depth in case
+  // a real post slips past with a future date.
+  .filter(({ fm }) => {
+    const d = new Date(fm.date);
+    return Number.isFinite(d.getTime()) && d.getTime() <= Date.now();
+  });
 
 test.describe("CMS preview URL round-trip", () => {
   test("admin/config.yml and admin/config-local.yml share the Posts preview_path", () => {
