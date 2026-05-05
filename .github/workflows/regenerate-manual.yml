@@ -105,10 +105,20 @@ jobs:
 
       - name: Open PR with regenerated manual
         if: steps.diff.outputs.changed == 'true'
+        # Branch name lives outside `refs/heads/docs/**` so the
+        # `cms-feature-branches` ruleset (which protects `docs/**`
+        # along with cms/feat/fix/etc.) doesn't reject the
+        # force-push peter-evans uses to update an existing branch.
+        # The ruleset's `non_fast_forward` rule was blocking every
+        # subsequent run — observed since 2026-04-30 with the same
+        # GH013 rejection on every push to main. The PR itself still
+        # targets `main`, so the `main` ruleset's required-checks
+        # (validate-content, scan, select, unit, parity, e2e (1),
+        # finalize) still gate the merge.
         uses: peter-evans/create-pull-request@5f6978faf089d4d20b00c7766989d076bb2fc7f1  # v7.0.8 (2025-04-22)
         with:
           token: ${{ secrets.GITHUB_TOKEN }}
-          branch: docs/regenerate-contributor-manual
+          branch: automated/regenerate-contributor-manual
           delete-branch: true
           title: 'docs: regenerate Contributor Manual'
           commit-message: 'docs: regenerate Contributor Manual from latest captureStep records'
