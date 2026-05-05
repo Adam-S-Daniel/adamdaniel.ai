@@ -1,5 +1,12 @@
 const { test, expect } = require("./base");
-const { selectSpecs, ALWAYS_RUN } = require("./select-specs");
+const fs = require("node:fs");
+const os = require("node:os");
+const path = require("node:path");
+const {
+  selectSpecs,
+  ALWAYS_RUN,
+  parseSpecDirectives,
+} = require("./select-specs");
 
 // Pure-function unit tests for the e2e spec selector. No browser, no
 // git — just verify each rule fires correctly.
@@ -177,5 +184,188 @@ test.describe("select-specs", () => {
     expect(r.scope).toBe("subset");
     expect(r.files).toContain("e2e/cms-publish-loop.spec.js");
     expect(r.files).toContain("e2e/cms-publish-loop-preview.spec.js");
+  });
+
+  // ── Spec-header directives (Layer 3.A) ──────────────────────────────
+  // The directive parser reads ~500 bytes from the head of a spec file
+  // and extracts `// @key: value` lines. The select-skip-when-head-ref-
+  // prefix directive lets a spec opt out of selection on certain branch
+  // prefixes (e.g. `cms/*` Decap-opened editorial PRs), eliminating the
+  // bring-up cost of specs that self-skip at runtime anyway.
+
+  test("parseSpecDirectives extracts skipWhenHeadRefPrefix from a spec header", () => {
+    // Use a tmp fixture rather than depending on the real spec files —
+    // keeps the test stable when the in-tree directive list changes.
+    const tmp = fs.mkdtempSync(path.join(os.tmpdir(), "select-directives-"));
+    try {
+      const fixture = path.join(tmp, "fixture.spec.js");
+      fs.writeFileSync(
+        fixture,
+        [
+          "// @select-skip-when-head-ref-prefix: cms/, dependabot/",
+          "//",
+          "// Stub spec used by select-specs.test.js.",
+          "const { test } = require('./base');",
+          "test('noop', () => {});",
+          "",
+        ].join("\n"),
+      );
+      const d = parseSpecDirectives(fixture);
+      expect(d.skipWhenHeadRefPrefix).toEqual(["cms/", "dependabot/"]);
+    } finally {
+      fs.rmSync(tmp, { recursive: true, force: true });
+    }
+  });
+
+  test("parseSpecDirectives also matches inside a JSDoc-style block comment", () => {
+    // Real spec files in this repo use leading `/* ... */` blocks.
+    // The parser must recognise ` * @key: value` lines as well.
+    const tmp = fs.mkdtempSync(path.join(os.tmpdir(), "select-directives-"));
+    try {
+      const fixture = path.join(tmp, "fixture-block.spec.js");
+      fs.writeFileSync(
+        fixture,
+        [
+          "/*",
+          " * Block-comment header.",
+          " * @select-skip-when-head-ref-prefix: cms/",
+          " */",
+          "const x = 1;",
+          "",
+        ].join("\n"),
+      );
+      const d = parseSpecDirectives(fixture);
+      expect(d.skipWhenHeadRefPrefix).toEqual(["cms/"]);
+    } finally {
+      fs.rmSync(tmp, { recursive: true, force: true });
+    }
+  });
+
+  test("parseSpecDirectives returns {} when no directives are present", () => {
+    const tmp = fs.mkdtempSync(path.join(os.tmpdir(), "select-directives-"));
+    try {
+      const fixture = path.join(tmp, "fixture-empty.spec.js");
+      fs.writeFileSync(fixture, "const x = 1;\n");
+      const d = parseSpecDirectives(fixture);
+      expect(d).toEqual({});
+    } finally {
+      fs.rmSync(tmp, { recursive: true, force: true });
+    }
+  });
+
+  test("selectSpecs with headRef='cms/foo' excludes annotated CMS publish-loop specs", () => {
+    // Use an admin/ change so non-annotated specs also hit the rule
+    // pass (otherwise filtering away the publish-loop specs collapses
+    // the result to baseline-only → scope=skip, which is the correct
+    // but less interesting outcome — see the next test).
+    const r = selectSpecs(["admin/index.html"], { headRef: "cms/foo" });
+    expect(r.scope).toBe("subset");
+    expect(r.files).not.toContain("e2e/cms-publish-loop.spec.js");
+    expect(r.files).not.toContain("e2e/cms-publish-loop-preview.spec.js");
+    expect(r.files).not.toContain("e2e/cms-publish-loop-prod-mutate.spec.js");
+    expect(r.files).not.toContain("e2e/cms-delete-published.spec.js");
+    // Non-annotated specs that ALSO match the rule pass survive.
+    expect(r.files).toContain("e2e/admin-bundle-parity.spec.js");
+    expect(r.files).toContain("e2e/cms-smoke.spec.js");
+    // Traceability output records what got dropped.
+    expect(Array.isArray(r.skippedByDirective)).toBe(true);
+    expect(r.skippedByDirective).toContain("e2e/cms-publish-loop.spec.js");
+    expect(r.skippedByDirective).toContain("e2e/cms-delete-published.spec.js");
+  });
+
+  test("cms/* head ref + canary-only changeset collapses to skip after directive filtering", () => {
+    // Editing only `_e2e/canary-post.md` matches the publish-loop +
+    // delete + canary-content specs. canary-content.test.js is in
+    // ALWAYS_RUN and stays; the publish-loop specs are filtered out
+    // by the directive. Result: only baseline remains → scope=skip,
+    // which is exactly the outcome we want for this PR-shape on a
+    // cms/* branch (the publish-loop workflow runs them nightly).
+    const r = selectSpecs(["_e2e/canary-post.md"], { headRef: "cms/foo" });
+    expect(r.scope).toBe("skip");
+  });
+
+  test("selectSpecs with headRef='cms/foo' also excludes cms-delete-published spec", () => {
+    // admin/ change selects cms-delete-published.spec.js; the directive
+    // takes it back out on cms/* head refs.
+    const r = selectSpecs(["admin/index.html"], { headRef: "cms/foo" });
+    expect(r.scope).toBe("subset");
+    expect(r.files).not.toContain("e2e/cms-delete-published.spec.js");
+    expect(r.files).not.toContain("e2e/cms-publish-loop.spec.js");
+    // admin-bundle-parity carries no directive, so it stays.
+    expect(r.files).toContain("e2e/admin-bundle-parity.spec.js");
+  });
+
+  test("selectSpecs with headRef='main' includes annotated specs", () => {
+    // Non-cms head ref (e.g. a maintenance branch off main) → directive
+    // doesn't fire.
+    const r = selectSpecs(["_e2e/canary-post.md"], { headRef: "main" });
+    expect(r.scope).toBe("subset");
+    expect(r.files).toContain("e2e/cms-publish-loop.spec.js");
+    expect(r.files).toContain("e2e/cms-publish-loop-preview.spec.js");
+    expect(r.skippedByDirective).toBeUndefined();
+  });
+
+  test("selectSpecs with empty headRef includes annotated specs (cron / dispatch)", () => {
+    // GITHUB_HEAD_REF is empty for `schedule` and `workflow_dispatch`;
+    // the selector treats empty as "no filtering" so cron runs still
+    // get full coverage of the annotated specs.
+    const r = selectSpecs(["_e2e/canary-post.md"], { headRef: "" });
+    expect(r.scope).toBe("subset");
+    expect(r.files).toContain("e2e/cms-publish-loop.spec.js");
+    expect(r.skippedByDirective).toBeUndefined();
+  });
+
+  test("selectSpecs without headRef option falls back to GITHUB_HEAD_REF env var", () => {
+    // The CLI block at the bottom of select-specs.js wires
+    // process.env.GITHUB_HEAD_REF as the headRef option, but for
+    // library callers the same fallback applies when the option is
+    // omitted entirely.
+    const prev = process.env.GITHUB_HEAD_REF;
+    try {
+      process.env.GITHUB_HEAD_REF = "cms/some-branch";
+      const r = selectSpecs(["admin/index.html"]);
+      expect(r.scope).toBe("subset");
+      expect(r.files).not.toContain("e2e/cms-publish-loop.spec.js");
+      expect(r.files).not.toContain("e2e/cms-delete-published.spec.js");
+    } finally {
+      if (prev === undefined) delete process.env.GITHUB_HEAD_REF;
+      else process.env.GITHUB_HEAD_REF = prev;
+    }
+  });
+
+  test("selectSpecs without headRef option and no env var includes annotated specs", () => {
+    const prev = process.env.GITHUB_HEAD_REF;
+    try {
+      delete process.env.GITHUB_HEAD_REF;
+      const r = selectSpecs(["admin/index.html"]);
+      expect(r.scope).toBe("subset");
+      expect(r.files).toContain("e2e/cms-publish-loop.spec.js");
+      expect(r.files).toContain("e2e/cms-delete-published.spec.js");
+    } finally {
+      if (prev === undefined) delete process.env.GITHUB_HEAD_REF;
+      else process.env.GITHUB_HEAD_REF = prev;
+    }
+  });
+
+  test("selectSpecs with headRef='dependabot/foo' (unmatched prefix) keeps cms-only directives", () => {
+    // Annotated specs only declare `cms/`; a dependabot/* head ref
+    // shouldn't accidentally drop them.
+    const r = selectSpecs(["_e2e/canary-post.md"], {
+      headRef: "dependabot/npm/playwright-1.60",
+    });
+    expect(r.scope).toBe("subset");
+    expect(r.files).toContain("e2e/cms-publish-loop.spec.js");
+    expect(r.skippedByDirective).toBeUndefined();
+  });
+
+  test("ALWAYS_RUN baseline is exempt from directive filtering", () => {
+    // Even on a cms/* head ref, the baseline survives — those tests
+    // are tiny and the directive only filters rule-matched specs.
+    // Use admin/ so non-baseline rule-matched specs survive too,
+    // keeping scope=subset (otherwise the baseline-only collapse
+    // converts to skip).
+    const r = selectSpecs(["admin/index.html"], { headRef: "cms/foo" });
+    expect(r.scope).toBe("subset");
+    for (const a of ALWAYS_RUN) expect(r.files).toContain(a);
   });
 });

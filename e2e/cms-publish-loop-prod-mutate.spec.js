@@ -1,3 +1,10 @@
+// @select-skip-when-head-ref-prefix: cms/
+//
+// On `cms/*` PRs (Decap-opened editorial PRs) this spec self-skips at
+// runtime — CMS_E2E_PAT and PROD_PLAYGROUND_MODE aren't wired into the
+// standard PR matrix — so selecting + bringing it up just to no-op is
+// pure waste. The dedicated cms-publish-loop-prod workflow runs it.
+
 /*
  * Real-browser, real-HTTP, real-GitHub end-to-end test for the full
  * Decap CMS publish loop on prod, but mutating a REAL `_posts/` entry

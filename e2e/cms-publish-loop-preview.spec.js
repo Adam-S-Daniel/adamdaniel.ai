@@ -1,3 +1,10 @@
+// @select-skip-when-head-ref-prefix: cms/
+//
+// On `cms/*` PRs (Decap-opened editorial PRs) this spec self-skips at
+// runtime — PR_NUMBER / PR_HEAD_REF / CMS_E2E_PAT aren't wired into the
+// standard PR matrix — so selecting + bringing it up just to no-op is
+// pure waste. The dedicated preview workflow exercises this path.
+
 /*
  * Real-browser end-to-end test for the CMS publish loop driven through a
  * PR-preview environment (preview-pr<N>.adamdaniel.ai/admin/), targeting
