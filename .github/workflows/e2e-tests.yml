@@ -493,6 +493,28 @@ jobs:
             /tmp/parity-output.log
           retention-days: 7
 
+  # ─── DO NOT WEAKEN WITHOUT READING THE FOLLOWING ────────────────────
+  #
+  # `finalize` is the merge gate for the entire e2e matrix. Only `e2e
+  # (1)` is also a required check; `e2e (2)`, `e2e (3)`, `e2e (4)` are
+  # NOT required (the matrix is dynamically sized — see Layer 2 in
+  # `e2e/select-specs.js` — and required-status-checks can't depend on
+  # contexts that may not fire). Coverage on shards 2-4 is enforced
+  # solely by the "Re-fail if any shard failed" step at the bottom of
+  # this job: it greps `needs.e2e.result == 'failure'` and exits 1,
+  # making `finalize` itself fail and blocking the merge.
+  #
+  # If you weaken or delete that step, the matrix's shards-2-4 verdict
+  # silently stops gating merges. The lint at
+  # `_plugins_test/finalize_gate_test.rb` will fail the build if you
+  # try, but the lint can be sidestepped — please do not.
+  #
+  # The lint also asserts:
+  #   - finalize remains in .github/rulesets/main.json's required list
+  #   - finalize keeps `if: !cancelled()` (otherwise GHA skips it on
+  #     shard failure and the gate evaporates differently)
+  #   - finalize keeps `needs: [e2e]` (no propagation without the
+  #     dependency)
   finalize:
     if: ${{ !cancelled() }}
     needs: [e2e]
@@ -767,6 +789,20 @@ jobs:
               });
             }
 
+      # ─── DO NOT REMOVE OR SOFTEN — this step IS the merge gate ─────────
+      # `e2e (1)` is required, but `e2e (2..4)` are not (dynamic shard
+      # count would create the missing-check trap). This step's `exit 1`
+      # is the only thing that converts a shard-2/3/4 failure into a
+      # `finalize` failure, which IS required, and therefore blocks the
+      # merge. Removing this step (or replacing `exit 1` with `exit 0`,
+      # or inverting the `if`, or dropping the `needs.e2e.result ==
+      # 'failure'` predicate) silently opens the gate for any shard-2-4
+      # failure to land on main.
+      #
+      # `_plugins_test/finalize_gate_test.rb` enforces the structural
+      # invariants here. If you have a real reason to change this step,
+      # update the lint in the same PR and put the rationale in the
+      # commit message.
       - name: Re-fail if any shard failed
         if: needs.e2e.result == 'failure'
         run: |
