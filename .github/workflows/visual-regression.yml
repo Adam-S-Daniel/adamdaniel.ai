@@ -105,6 +105,12 @@ jobs:
 
       - name: Install Playwright OS deps (browsers cached)
         if: steps.pw-cache.outputs.cache-hit == 'true'
+        # Same sizing rationale as e2e-tests.yml's matching step:
+        # 435-run sample showed p99=179s, max=554s, with apt-mirror
+        # latency in the long tail. 5 minutes is comfortably above
+        # p99 and clips the rare outlier instead of paying the
+        # 6-hour default for a stuck apt.
+        timeout-minutes: 5
         run: npx playwright install-deps chromium
 
       - name: Install ffmpeg
