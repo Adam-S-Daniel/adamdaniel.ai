@@ -509,6 +509,83 @@ jobs:
           path: playwright-report
           retention-days: 7
 
+      # ── Per-test screenshot videos ───────────────────────────────
+      # The capture fixture in `e2e/base.js` writes one full-page
+      # screenshot per main-frame navigation under
+      # `test-results/per-test-frames/<safe-test-id>/NNNN.png`,
+      # alongside a `meta.json` sidecar. Each shard uploaded its
+      # `test-results/` dir as `test-results-shard-<N>`; merge them
+      # into a single tree and run the assembly script to:
+      #   - build one video per test directory (banner above frames)
+      #   - concatenate them all into `_combined.mp4`
+      #   - emit `_combined.txt` manifest
+      # Then upload the videos as a separate artifact. This is
+      # informational — not a required check.
+      - name: Download per-shard test-results
+        if: ${{ !cancelled() }}
+        uses: actions/download-artifact@3e5f45b2cfb9172054b4087a40e8e0b5a5461e7c  # v8.0.1 (2026-03-11)
+        with:
+          path: all-test-results
+          pattern: test-results-shard-*
+
+      - name: Merge per-shard frames into single tree
+        if: ${{ !cancelled() }}
+        run: |
+          mkdir -p test-results/per-test-frames
+          shopt -s nullglob
+          for d in all-test-results/test-results-shard-*/per-test-frames/*/; do
+            name=$(basename "$d")
+            target="test-results/per-test-frames/$name"
+            # Multiple shards shouldn't produce the same safe-test-id
+            # (project + file + title + repeat), but if they do, the
+            # later one wins. The test-results dir is informational; a
+            # rare collision drops one frame set, not a CI signal.
+            mkdir -p "$target"
+            cp -a "$d"/. "$target/"
+          done
+          # Quick visibility — count tests with frames so a future
+          # regression in the capture fixture lights up here.
+          count=$(find test-results/per-test-frames -mindepth 1 -maxdepth 1 -type d 2>/dev/null | wc -l)
+          echo "Per-test frame directories collected: $count"
+
+      - name: Install ffmpeg + ImageMagick for banner rendering
+        if: ${{ !cancelled() }}
+        # The Playwright container ships a stripped-down internal
+        # ffmpeg under /ms-playwright/ffmpeg-1011/ that lacks the
+        # filters we'd otherwise need. We install the full ffmpeg for
+        # frame concat and `imagemagick` (the `convert` binary) for
+        # the per-frame banner+screenshot composite. Each frame's
+        # banner line 2 changes per frame ("Step <x> of <y>: <step
+        # name / URL fallback>"), so a single static drawtext can no
+        # longer carry it — see e2e/generate-test-videos.js.
+        # Combined apt cost: ~80 MB, ~15 s on a warm mirror.
+        run: |
+          apt-get update -qq
+          apt-get install -y -qq --no-install-recommends \
+            ffmpeg imagemagick fonts-liberation
+
+      - name: Assemble per-test videos with banner
+        if: ${{ !cancelled() }}
+        env:
+          PR_NUMBER: ${{ github.event.pull_request.number || 'local' }}
+        run: |
+          # Skip cleanly when no shard produced any frames (e.g. every
+          # shard was the baseline-only smoke run or every test was
+          # pure-node). The script no-ops in that case.
+          node e2e/generate-test-videos.js
+
+      - name: Upload per-test videos artifact
+        if: ${{ !cancelled() }}
+        uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a  # v7.0.1 (2026-04-10)
+        with:
+          name: per-test-videos
+          path: |
+            test-results/per-test-videos/_combined.mp4
+            test-results/per-test-videos/_combined.txt
+            test-results/per-test-videos/*.mp4
+          if-no-files-found: ignore
+          retention-days: 7
+
       - name: Download shard logs
         uses: actions/download-artifact@3e5f45b2cfb9172054b4087a40e8e0b5a5461e7c  # v8.0.1 (2026-03-11)
         with:

@@ -457,6 +457,34 @@ Cheap, deterministic, no browser:
 - `e2e/cms-config.spec.js` — YAML structural invariants for the Decap config (editorial workflow on, every folder collection has explicit create + delete, all required fields present, etc.)
 - `e2e/visual-change-guard.spec.js` — guards against unintended visual changes
 
+#### Per-test screenshot videos
+
+Every browser-based test in the suite captures one full-page screenshot per main-frame navigation while it runs. The `finalize` job assembles these per-test frame sequences into individual videos with a 96px-tall metadata banner above the screenshot, and concatenates them into a master `_combined.mp4` for the run.
+
+**Where things live:**
+- Capture fixture: `e2e/base.js` (`attachPerTestCapture`, hooks `page.on("framenavigated")`).
+- Frames during a run: `test-results/per-test-frames/<safe-test-id>/{NNNN.png,meta.json}`.
+- Assembly script: `e2e/generate-test-videos.js`.
+- Output: `test-results/per-test-videos/<safe-test-id>.mp4`, `_combined.mp4`, `_combined.txt`.
+- CI artifact: `per-test-videos` (separate from `playwright-report`; 7-day retention).
+
+**Banner content** — three monospace lines, white on a 96px black strip ABOVE the screenshot:
+1. `PR #<n> · Test <X> of <Y> · <file>::<title>` — disambiguates runs and locates this test in the combined run.
+2. `Step <x> of <y>: <step name / URL fallback> · <status>` — frame-by-frame label. `x` is the 1-indexed frame within the test, `y` is the total frame count for that test. The label prefers the active `test.step()` title; for frames captured outside any `test.step()`, it falls back to the URL path of the `framenavigated` event that fired the capture. Truncated to ~110 chars to fit the banner.
+3. `project: <projectName> · <YYYY-MM-DD HH:MM:SS TZ>` — the date/time is each test's own `endTime` formatted in `America/New_York` with the TZ abbreviation (`EDT` or `EST`), NOT a single run-wide stamp.
+
+The screenshot itself is **never overlaid** — each frame is composited by ImageMagick `convert` against a fresh canvas (1920×(1080+96)) with the banner drawn into the top 96px strip; the screenshot pixels stay untouched. Per-test videos are normalised to 1920×(1080+96) so the master concat works with stream-copy (no re-encode).
+
+**Per-frame banner**: line 2 changes per frame, so the assembly script pre-renders each frame as a banner+screenshot composite (PNG → PNG via ImageMagick) and feeds the composites to ffmpeg as an `image2` sequence. The `finalize` job apt-installs both `ffmpeg` and `imagemagick`.
+
+**Bounds:** capped at 50 frames per test (PER_TEST_MAX_FRAMES) to defend against runaway navigation loops. Frame rate is `2/3` fps (one frame every 1.5 s) so a 30-frame test plays in 45 s.
+
+**v1 scope:** only the test fixture's primary `page` is captured. Secondary pages opened via `browserContext.newPage()` are not instrumented. Pure-node tests (`e2e/*.test.js` files that don't request the `page` fixture) are unaffected — the capture hook never runs for them.
+
+**Escape hatch:** set `DISABLE_PER_TEST_VIDEOS=1` to fully disable the capture. The assembly step is non-blocking; it never fails the run.
+
+**Not a required check** — purely informational. Lives alongside the `visual-regression.yml` pipeline (which does page-by-page diffs against prod), not on top of it.
+
 ---
 
 ### `secrets-scan.yml`
