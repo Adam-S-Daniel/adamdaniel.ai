@@ -31,6 +31,7 @@
 // than running an irrelevant one.
 
 const { execSync } = require("node:child_process");
+const fs = require("node:fs");
 const path = require("node:path");
 
 const ALWAYS_RUN = [
@@ -39,6 +40,20 @@ const ALWAYS_RUN = [
   "e2e/visual-change-guard.spec.js",
   "e2e/canary-content.test.js",
 ];
+
+// Publish-loop browser specs that self-skip on PR runs because they're
+// gated to RUN_HOST_REPO_PUBLISH_LOOP / RUN_PROD_MUTATE_PLAYGROUND. They
+// do show up in the selector's `files` list (so the dedicated host-repo
+// workflow can pick them up), but for shard-budget purposes they're
+// effectively no-ops on a normal PR — we don't want to spin up a 4-way
+// matrix because the selector returned three publish-loop specs that
+// won't actually do any browser work.
+const HEAVY = new Set([
+  "e2e/cms-publish-loop.spec.js",
+  "e2e/cms-publish-loop-preview.spec.js",
+  "e2e/cms-publish-loop-prod-mutate.spec.js",
+  "e2e/cms-delete-published.spec.js",
+]);
 
 // Files that fan out to "every spec is potentially affected". Includes
 // shared infrastructure (layouts/css/plugins), test infrastructure
@@ -241,6 +256,65 @@ function getChangedFiles(baseRef) {
   }
 }
 
+// Parse `// @<key>: <value>` style directives from the head of a spec
+// file. Reads ~500 bytes only — directives must live near the top of
+// the file (above first import or under the leading comment block).
+//
+// Currently implements `@select-skip-when-head-ref-prefix:` (returned
+// as `skipWhenHeadRefPrefix`). Designed to be extended: add a new case
+// to the switch and return the value on the directive record.
+//
+// Multi-value directives are comma-separated. Whitespace around values
+// is trimmed; empty entries are dropped.
+//
+// Errors swallow to {} so a missing/unreadable file never breaks the
+// selector — directives are an additive opt-out, not a contract.
+function parseSpecDirectives(absPath) {
+  const directives = {};
+  let head = "";
+  try {
+    const fd = fs.openSync(absPath, "r");
+    try {
+      const buf = Buffer.alloc(500);
+      const n = fs.readSync(fd, buf, 0, 500, 0);
+      head = buf.slice(0, n).toString("utf8");
+    } finally {
+      fs.closeSync(fd);
+    }
+  } catch {
+    return directives;
+  }
+
+  // Match `// @key: value` directives. Allows leading whitespace inside
+  // a `/* ... */` block (e.g. ` * @key: value`) so specs whose header
+  // is a JSDoc-style block comment can also carry directives.
+  const re = /^[\s/*]*@([a-z][a-z0-9-]*):[ \t]*([^\n\r]*)/gim;
+  let m;
+  while ((m = re.exec(head)) !== null) {
+    const key = m[1].toLowerCase();
+    const rawValue = m[2].trim();
+    switch (key) {
+      case "select-skip-when-head-ref-prefix": {
+        const values = rawValue
+          .split(",")
+          .map((v) => v.trim())
+          .filter(Boolean);
+        if (values.length > 0) {
+          directives.skipWhenHeadRefPrefix = (
+            directives.skipWhenHeadRefPrefix || []
+          ).concat(values);
+        }
+        break;
+      }
+      // Future directives slot in here. Unknown keys are ignored
+      // silently so old selectors don't fail on newer spec headers.
+      default:
+        break;
+    }
+  }
+  return directives;
+}
+
 function selectSpecs(changedFiles, options = {}) {
   if (changedFiles.length === 0) {
     return {
@@ -279,6 +353,30 @@ function selectSpecs(changedFiles, options = {}) {
     }
   }
 
+  // Spec-header directives. After rule matching, give each spec a
+  // chance to opt OUT of selection on certain branches via its
+  // `// @select-skip-when-head-ref-prefix:` header. Only filters the
+  // rule-matched specs; the ALWAYS_RUN baseline is intentionally
+  // exempt (those are tiny and self-document the change).
+  const headRef =
+    options.headRef !== undefined
+      ? options.headRef
+      : process.env.GITHUB_HEAD_REF || "";
+  const skippedByDirective = [];
+  if (headRef) {
+    const baseline = new Set(ALWAYS_RUN);
+    const repoRoot = options.repoRoot || path.resolve(__dirname, "..");
+    for (const spec of [...specs]) {
+      if (baseline.has(spec)) continue;
+      const directives = parseSpecDirectives(path.join(repoRoot, spec));
+      const prefixes = directives.skipWhenHeadRefPrefix;
+      if (Array.isArray(prefixes) && prefixes.some((p) => headRef.startsWith(p))) {
+        specs.delete(spec);
+        skippedByDirective.push(spec);
+      }
+    }
+  }
+
   // Quirk: changes ONLY to docs / READMEs / AGENTS.md don't need any
   // browser specs at all. Detect this by checking if everything outside
   // ALWAYS_RUN stayed unselected after the rule pass.
@@ -306,19 +404,50 @@ function selectSpecs(changedFiles, options = {}) {
     };
   }
 
-  return {
+  const result = {
     scope: "subset",
     files: [...specs].sort(),
     reason: `Matched ${specs.size} spec(s) from ${changedFiles.length} changed file(s).`,
   };
+  if (skippedByDirective.length > 0) {
+    result.skippedByDirective = skippedByDirective.slice().sort();
+  }
+  return result;
+}
+
+// Decide how many parallel matrix shards the e2e job should fan out to,
+// given the selector's verdict. The full 4-way matrix exists for the
+// scope=all path (every spec, three browsers, four viewports = ~80 test
+// minutes); paying that bring-up cost for a 30-test invariant subset is
+// pure overhead. Heuristic, not measurement-driven — once we have data
+// we can replace this with a duration-based bucket. The required check
+// is `e2e (1)`, so this function MUST always include shard 1; the
+// downstream workflow turns shard_count=N into the matrix [1..N], which
+// guarantees that.
+function pickShardCount(scope, files) {
+  if (scope === "skip") return 1;
+  if (scope === "all") return 4;
+  if (scope === "subset") {
+    const browser = (files || []).filter(
+      (f) => f.endsWith(".spec.js") && !HEAVY.has(f),
+    );
+    if (browser.length <= 2) return 1;
+    if (browser.length <= 6) return 2;
+    return 4;
+  }
+  // Unknown scope — fail safe to the full matrix.
+  return 4;
 }
 
 module.exports = {
   ALWAYS_RUN,
   FANOUT_PATTERNS,
   SPEC_RULES,
+  HEAVY,
   selectSpecs,
   getChangedFiles,
+  parseSpecDirectives,
+  pickShardCount,
 };
 
 if (require.main === module) {
@@ -326,9 +455,20 @@ if (require.main === module) {
   const baseIdx = args.indexOf("--base");
   const baseRef = baseIdx >= 0 ? args[baseIdx + 1] : "origin/main";
   const changed = getChangedFiles(baseRef);
-  const result = selectSpecs(changed);
+  // GITHUB_HEAD_REF is set by GHA on `pull_request` events; empty for
+  // `schedule` / `workflow_dispatch` / `push` (cron, manual, main-push).
+  // An empty headRef disables directive filtering — every annotated
+  // spec stays selected, matching pre-Layer-3.A behaviour.
+  const result = selectSpecs(changed, {
+    headRef: process.env.GITHUB_HEAD_REF || "",
+  });
   // Make output stable across CI runs by sorting and including the
   // changed-files list for traceability.
   result.changedFiles = changed;
+  // Layer 2: emit a recommended shard count so the workflow can scale
+  // the matrix to the subset's actual size. The workflow turns this
+  // into a [1..N] array; downstream the required check (`e2e (1)`)
+  // continues to fire because shard 1 is always in the array.
+  result.shard_count = pickShardCount(result.scope, result.files);
   process.stdout.write(JSON.stringify(result, null, 2) + "\n");
 }

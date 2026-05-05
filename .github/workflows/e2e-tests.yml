@@ -84,6 +84,12 @@ jobs:
             bundle exec ruby "$t"
           done
 
+      - name: Run sync-action-pin-comments tests
+        # Pure-bash test for the action-pin comment-syncer. Stubs
+        # `gh` via a path-shadowing wrapper, so this runs offline
+        # and never hits the GitHub API. Sub-second.
+        run: bash scripts/sync-action-pin-comments.test.sh
+
   # Decide what e2e work is actually needed for this commit, and how
   # many shards to spin up. Hoisted out of the e2e matrix so the
   # selector runs once (not 4×) and so a baseline-only run can scale
@@ -177,36 +183,64 @@ jobs:
         # Diff-aware subset against the base branch tip. The selector
         # itself has no npm deps — `node e2e/select-specs.js` runs
         # with the runner's stock Node, so we can skip `npm ci` here.
+        #
+        # Layer 2: shard count comes from the selector's envelope
+        # (`shard_count`), which scales the matrix to the subset's
+        # size — small subsets (≤2 light browser specs) collapse to
+        # a single shard, mid-sized subsets to 2, and the rest pay
+        # the full 4-way fanout. The required check is `e2e (1)`,
+        # and the matrix array is built `[1..shard_count]`, so shard
+        # 1 always fires. If the selector blows up, we fall through
+        # to the 4-way matrix so a broken selector can never lose
+        # coverage.
+        env:
+          # GHA does NOT auto-populate GITHUB_HEAD_REF inside `step.env`;
+          # it's only available via the `github.head_ref` context. Pass
+          # it through explicitly so select-specs.js can honour the
+          # `@select-skip-when-head-ref-prefix:` directive (Layer 3.A) —
+          # specs that self-skip on `cms/*` PRs are filtered out of the
+          # selection envelope, eliminating their bring-up cost. Empty
+          # for non-PR triggers (cron / dispatch); selector treats empty
+          # as "no filtering".
+          GITHUB_HEAD_REF: ${{ github.head_ref }}
         run: |
           git fetch origin main --depth=500 || true
-          # Fall back gracefully if the selector or git diff fails —
-          # a broken selector should never block the PR. Run full
-          # matrix.
           if ! node e2e/select-specs.js --base origin/main > /tmp/select.json 2>/tmp/select.err; then
             echo "Selector failed:"
             cat /tmp/select.err || true
             scope=all
             files=
+            shard_count=4
           else
             cat /tmp/select.json
             scope=$(node -e "console.log(JSON.parse(require('fs').readFileSync('/tmp/select.json')).scope)")
             files=$(node -e "const j=JSON.parse(require('fs').readFileSync('/tmp/select.json'));console.log((j.files||[]).join(' '))")
+            # `|| 4` defends against a future selector version that
+            # forgets the field — keep coverage even if the envelope
+            # contract drifts.
+            shard_count=$(node -e "const j=JSON.parse(require('fs').readFileSync('/tmp/select.json'));console.log(j.shard_count || 4)")
           fi
-          # Baseline-only runs (scope=skip) are pure file-comparison
-          # tests with no browser work — sharding them is overhead
-          # only. Collapse to a single job in that case.
-          if [ "$scope" = "skip" ]; then
-            shards='[1]'
-            shard_count=1
-          else
-            shards='[1,2,3,4]'
-            shard_count=4
-          fi
+          # Build the matrix array as [1..shard_count]. Hardcoded
+          # cases keep the bash trivial (no `seq` / `jq` dep) and
+          # cover every value pickShardCount() can return today.
+          case "$shard_count" in
+            1) shards='[1]' ;;
+            2) shards='[1,2]' ;;
+            3) shards='[1,2,3]' ;;
+            4) shards='[1,2,3,4]' ;;
+            *)
+              # Unknown count — fall back to the full matrix so the
+              # required check (`e2e (1)`) still fires and we don't
+              # silently skip shards.
+              shards='[1,2,3,4]'
+              shard_count=4
+              ;;
+          esac
           echo "scope=$scope" >> "$GITHUB_OUTPUT"
           echo "files=$files" >> "$GITHUB_OUTPUT"
           echo "shards=$shards" >> "$GITHUB_OUTPUT"
           echo "shard_count=$shard_count" >> "$GITHUB_OUTPUT"
-          echo "Resolved: scope=$scope shard_count=$shard_count"
+          echo "Resolved: scope=$scope shard_count=$shard_count shards=$shards"
 
   e2e:
     needs: select
