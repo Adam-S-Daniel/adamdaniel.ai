@@ -437,19 +437,22 @@ Located at `/admin/reviews/` (separate from Decap CMS). Linked from a floating b
 
 **Trigger:** pull request targeting `main`. The PR run is required by branch protection, so the merge commit on `main` is already covered — no post-merge re-run.
 
-**Jobs:** `e2e`
+**Jobs:** `unit`, `select`, `e2e` (sharded matrix), `parity`, `finalize`
 
-1. Checkout (full history — `e2e/select-specs.js` needs it), setup Ruby 3.2 + Node 20
-2. Run `_plugins_test/*_test.rb` — plain-Ruby unit tests for the Jekyll plugins
-3. `npm ci` → install test dependencies
-4. `npx playwright install chromium firefox webkit --with-deps`
-5. **Diff-aware spec selection** — `e2e/select-specs.js --base $BASE_REF` returns one of three scopes:
+1. **`unit`** — runs Jekyll plugin tests (`_plugins_test/*_test.rb`) and the pure-bash `scripts/sync-action-pin-comments.test.sh`. Ubuntu runner, no container.
+2. **`select`** — checks out the diff, runs `e2e/select-specs.js --base origin/main`, and decides the scope + shard count. Also runs the **Playwright image drift guard**: every `mcr.microsoft.com/playwright:v<version>-noble` tag in `.github/workflows/*.yml` must match `package-lock.json`'s `@playwright/test` version, otherwise the build fails with a one-line `sed` fix-up command.
+3. **`e2e`** — sharded Playwright matrix. Runs inside `mcr.microsoft.com/playwright:v1.59.1-noble`, so browsers + their apt deps are baked in (no `playwright install` / `install-deps` step). Installs `libyaml-0-2` + `build-essential` for Ruby `bundler-cache`, sets up Ruby 3.2 + Node 20, runs `npm ci`, then runs Playwright with `--shard=<n>/<count>`. The selector decides the scope:
    - `all` — fanout files changed (`_layouts/`, `_includes/`, `_config.yml`, `assets/css/`, `_plugins/`, `package*.json`, `Gemfile*`, `e2e/base.js`, `playwright*.config.js`). Run the full matrix.
    - `subset` — match each changed file against `SPEC_RULES` and run only the resulting list (always-run baseline included).
    - `skip` — only docs (`README.md`, `AGENTS.md`, `docs/`, `.agents/skills/`) changed. Run the always-run baseline only as a smoke check.
-6. Upload `test-results/` artifact (7-day retention)
+4. **`parity`** — `--grep @parity` subset against `TARGET=prod`, single project (`chromium-desktop`), same Playwright container. Non-blocking informational gate.
+5. **`finalize`** — merges per-shard blob reports into a single HTML report, assembles the per-test screenshot videos (see below), uploads the `playwright-report`, `per-test-videos`, and per-shard log artifacts, and posts the failure-summary PR comment.
 
-Tests run with `fullyParallel: true` — all 8 projects execute concurrently.
+**Dynamic shard count.** `e2e/select-specs.js` returns a `shard_count` field in its envelope (1, 2, 3, or 4). Small subsets — `≤2` light browser specs — collapse to a single shard; mid-sized subsets to 2; the rest fan out to 4. The required check is `e2e (1)`, and the matrix array is built `[1..shard_count]`, so shard 1 always fires.
+
+**Spec-header directive.** A spec can opt OUT of selection on specific branches by adding `// @select-skip-when-head-ref-prefix: cms/` (or any comma-separated prefix list) to its head. The selector reads `GITHUB_HEAD_REF` and drops matching specs from the rule-matched set — the `ALWAYS_RUN` baseline is exempt. Used to shave bring-up cost on cms-bot PRs that don't need most browser specs.
+
+Tests run with `fullyParallel: true` — all 8 projects execute concurrently within each shard.
 
 #### Always-run baseline
 
@@ -551,13 +554,15 @@ When triaging an iOS WebKit render bug that may be theme-induced, A/B with `/adm
 
 #### Sandbox allowlist (Playwright browser downloads)
 
-Playwright fetches its browser binaries from a small set of CDNs the first time `npx playwright install` runs. Sandboxed shells need outbound network access to:
+Playwright fetches its browser binaries from a small set of CDNs the first time `npx playwright install` runs. Sandboxed shells (and any local environment running `npx playwright install`) need outbound network access to:
 
 - `cdn.playwright.dev`
 - `playwright.download.prss.microsoft.com`
 - `playwright.azureedge.net`
 
-If these are blocked, `npx playwright install` hangs or fails with a 403 / DNS-resolution error, and `e2e-tests.yml` won't bring up the matrix. CI uses `actions/cache` to cache downloads, but the *first* run after a Playwright bump still needs reachability.
+If these are blocked, `npx playwright install` hangs or fails with a 403 / DNS-resolution error.
+
+CI does NOT hit these CDNs — the e2e matrix, parity, finalize, canary-prod, and cms-publish-loop-{host,prod} jobs all run inside `mcr.microsoft.com/playwright:v<version>-noble`, which ships the browsers + apt deps prebaked. The image tag is enforced to match `package-lock.json`'s `@playwright/test` version by the `select` job's drift-guard step. The CDNs only matter for fresh local clones and the rare workflow that still calls `playwright install` (e.g. `visual-regression.yml`, `regenerate-manual.yml`).
 
 ### Custom fixture (`e2e/base.js`)
 
