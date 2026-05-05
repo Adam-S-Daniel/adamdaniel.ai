@@ -115,7 +115,7 @@ jobs:
         # a GitHub App to create or update workflow ... without
         # workflows permission". Skip cleanly with a notice rather
         # than fail loudly on every Dependabot PR.
-        if: ${{ secrets.ADAMDANIELAI_WORKFLOW_SHA_COMMENT_PAT == '' }}
+        if: github.event.pull_request.user.login == 'dependabot[bot]' && secrets.ADAMDANIELAI_WORKFLOW_SHA_COMMENT_PAT == ''
         run: |
           echo "::notice::ADAMDANIELAI_WORKFLOW_SHA_COMMENT_PAT secret is not configured. Skipping comment-sync — see this workflow's header for setup instructions."
           exit 0
@@ -128,7 +128,7 @@ jobs:
         # is the same as the base repo — but spell it out so a
         # future tweak to support fork PRs doesn't silently break
         # this workflow.
-        if: ${{ secrets.ADAMDANIELAI_WORKFLOW_SHA_COMMENT_PAT != '' }}
+        if: github.event.pull_request.user.login == 'dependabot[bot]' && secrets.ADAMDANIELAI_WORKFLOW_SHA_COMMENT_PAT != ''
         uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd  # v6.0.2 (2026-01-09)
         with:
           ref: ${{ github.event.pull_request.head.ref }}
@@ -147,7 +147,7 @@ jobs:
         # authored by Dependabot or by the PR creator) keeps
         # working. The 49699333+ ID is Dependabot's official
         # noreply email per https://api.github.com/users/dependabot%5Bbot%5D.
-        if: ${{ secrets.ADAMDANIELAI_WORKFLOW_SHA_COMMENT_PAT != '' }}
+        if: github.event.pull_request.user.login == 'dependabot[bot]' && secrets.ADAMDANIELAI_WORKFLOW_SHA_COMMENT_PAT != ''
         run: |
           git config user.name "dependabot[bot]"
           git config user.email "49699333+dependabot[bot]@users.noreply.github.com"
@@ -158,13 +158,13 @@ jobs:
         # is fine for the read-only API calls the script makes
         # (listing tags, resolving commits) — only the push needs
         # the workflow-scoped PAT.
-        if: ${{ secrets.ADAMDANIELAI_WORKFLOW_SHA_COMMENT_PAT != '' }}
+        if: github.event.pull_request.user.login == 'dependabot[bot]' && secrets.ADAMDANIELAI_WORKFLOW_SHA_COMMENT_PAT != ''
         env:
           GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
         run: bash scripts/sync-action-pin-comments.sh
 
       - name: Commit and push if changes
-        if: ${{ secrets.ADAMDANIELAI_WORKFLOW_SHA_COMMENT_PAT != '' }}
+        if: github.event.pull_request.user.login == 'dependabot[bot]' && secrets.ADAMDANIELAI_WORKFLOW_SHA_COMMENT_PAT != ''
         # No-op when the script left the tree clean. When it did
         # rewrite something, commit as Dependabot and push back
         # to the PR branch. The commit becomes part of the same
