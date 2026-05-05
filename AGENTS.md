@@ -369,9 +369,10 @@ Required status checks (current):
 | Check | Workflow | Notes |
 |---|---|---|
 | `validate-content` | `cms-editorial-workflow.yml` | Always fires (no path filter) — front-matter + Jekyll build sanity check |
-| `prod-mutate` | `cms-publish-loop-prod.yml` | Listed here historically; the live `main` ruleset no longer enforces it (see `gh api repos/.../rules/branches/main`). The workflow now uses workflow-level `paths:` filtering, so the check only appears when a salient path changed — re-promoting it to required would require reverting to the always-run + early-skip pattern |
 | `scan` | `secrets-scan.yml` | Always fires (gitleaks must scan every PR diff) |
-| `select`, `unit`, `parity`, `e2e (1)` | `e2e-tests.yml` | Fire on every PR EXCEPT those whose entire diff matches `paths-ignore` (docs-only). Required checks block such PRs from merging — owner can override, or expand the PR with a small non-doc change to satisfy the gate |
+| `select`, `unit`, `parity`, `e2e (1)`, `finalize` | `e2e-tests.yml` | Fire on every PR EXCEPT those whose entire diff matches `paths-ignore` (docs-only). Required checks block such PRs from merging — owner can override, or expand the PR with a small non-doc change to satisfy the gate. `e2e (1)` is shard 1 of the dynamic matrix (always present per `pickShardCount()` + the workflow's `case "$shard_count"` block); `finalize` is the matrix roll-up (`if: !cancelled()`, `needs: [e2e]`, last step re-fails on any shard failure) — keeping both gives shard-name resilience plus a single roll-up signal |
+
+`prod-mutate` (`cms-publish-loop-prod.yml`) was historically required but is not anymore — the workflow uses workflow-level `paths:` filtering, so the check only appears on salient PRs (the missing-check trap). `host-loop`, `deploy-preview`, and `approve-regression` are excluded for the same reason. Re-promoting any of them would require converting to the always-run + early-skip pattern first.
 
 **Required status checks are the default.** Any CI job that runs on pull requests is assumed to be a required check and must be enforced via the `main` ruleset before a branch can merge. Do NOT leave checks optional unless this section documents a specific reason. When adding new workflow jobs, update `.github/rulesets/main.json` and reapply in the same commit.
 
@@ -379,7 +380,7 @@ Required status checks (current):
 
 Auto-merge is enabled in repository settings. Direct pushes to `main` are allowed for the repository owner only.
 
-The same required-checks list governs Dependabot's unattended-merge pipeline (`dependabot-auto-merge.yml`). When a Dependabot PR enables auto-merge, GitHub holds the merge until every check above reports success — so a vulnerable browser fixture, a regressed pixel, or a broken Jekyll build all block the bump. The `prod-mutate` check is in scope too: a Dependabot bump that touches `package*.json` (which is salient for the publish-loop spec) makes the workflow do its real prod-mutation run before merge, surfacing any incompatibility with Decap or Playwright early.
+The same required-checks list governs Dependabot's unattended-merge pipeline (`dependabot-auto-merge.yml`). When a Dependabot PR enables auto-merge, GitHub holds the merge until every check above reports success — so a vulnerable browser fixture, a regressed pixel, or a broken Jekyll build all block the bump. `prod-mutate` is no longer required (workflow-level `paths:` filtering would make it miss on most Dependabot PRs), but `e2e-tests.yml`'s subset selector still picks up the publish-loop spec for Dependabot bumps that touch `package*.json` — so the matrix still surfaces Decap/Playwright incompatibilities before merge, just under the `e2e (1)` / `finalize` umbrella rather than its own dedicated check.
 
 ---
 
