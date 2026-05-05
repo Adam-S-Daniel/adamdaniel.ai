@@ -132,7 +132,7 @@ const SPEC_RULES = {
     /^\.github\/workflows\/cms-editorial-workflow\.yml$/,
     /^\.github\/workflows\/deploy-production\.yml$/,
     /^\.github\/workflows\/deploy-preview\.yml$/,
-    /^e2e\/(decap-pat|github-actions-poll|canary-content)\.js$/,
+    /^e2e\/(decap-pat|github-actions-poll|canary-content|cms-fixture-pr)\.js$/,
   ],
   // Delete-published-entry flow exercising admin/publish-via-auto-merge.js
   // and .github/workflows/delete-via-pr.yml. Same shape as the publish-
@@ -145,7 +145,7 @@ const SPEC_RULES = {
     /^_e2e\//,
     /^_layouts\/canary\.html$/,
     /^\.github\/workflows\/(cms-editorial-workflow|deploy-production|delete-via-pr|cms-publish-loop-host)\.yml$/,
-    /^e2e\/(decap-pat|github-actions-poll|canary-content)\.js$/,
+    /^e2e\/(decap-pat|github-actions-poll|canary-content|cms-fixture-pr)\.js$/,
   ],
   "e2e/cms-publish-loop-preview.spec.js": [
     /^admin\//,

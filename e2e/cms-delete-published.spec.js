@@ -28,14 +28,18 @@
  * loop nightly.
  *
  * Fixture model: this spec creates and then deletes its own throw-
- * away `_e2e/canary-delete-<runId>.md` file via the Contents API
- * (so a crash mid-flow leaves a recognisable, dated stub rather
- * than damaging a checked-in fixture). The file is committed
- * directly to main via the API at the start; the delete itself
- * goes through Decap's UI to exercise the shim. Cleanup attempts to
- * remove the file again on failure so subsequent runs aren't blocked.
+ * away `_e2e/canary-delete-<runId>.md` file. A crash mid-flow leaves
+ * a recognisable, dated stub on main rather than damaging a checked-
+ * in fixture. The seed itself can't go directly to main — the
+ * `pull_request` rule on `.github/rulesets/main.json` rejects every
+ * direct write — so we route it through a `cms/e2e-fixture/seed-…`
+ * PR labelled `cms/ready` and let cms-editorial-workflow.yml's
+ * auto-merge-when-ready land it. Once on main and deployed, the
+ * delete itself goes through Decap's UI to exercise the shim
+ * (admin/publish-via-auto-merge.js → delete-via-pr.yml). On test
+ * failure, the cleanup helper opens a parallel
+ * `cms/e2e-fixture/remove-…` PR so the next run starts clean.
  */
-const path = require("node:path");
 const { test, expect } = require("./base");
 const { seedDecapAuth, getPat, HOST_REPO } = require("./decap-pat");
 const {
@@ -46,25 +50,25 @@ const {
   waitForMerge,
   waitForWorkflowRun,
 } = require("./github-actions-poll");
+const { seedFixtureViaPr, removeFixtureViaPr } = require("./cms-fixture-pr");
 
 const PROD_HOST = "https://adamdaniel.ai";
 const PROD_ADMIN = `${PROD_HOST}/admin/`;
 
-// 15 minutes — same envelope as the publish-loop. Delete needs to:
-// (1) wait for the workflow_dispatch run to finish (~1m),
-// (2) wait for the cms/delete/<slug> PR to pick up validate-content
-//     + auto-merge (~6m),
-// (3) wait for deploy-production on main (~3m).
-const TEST_TIMEOUT_MS = 15 * 60 * 1000;
+// The delete spec runs two labelled-PR auto-merge cycles end to end:
+//   1. The setup PR that seeds `_e2e/canary-delete-<runId>.md` on main
+//      (necessary because direct Contents-API writes to main are
+//      blocked by the ruleset).
+//   2. The cms/delete/<slug> PR opened by delete-via-pr.yml after the
+//      shim catches the 422 — this is the real subject of the test.
+// Each cycle waits on the full required-check suite + deploy. Allow
+// ~40 min total so a stuck pipeline fails rather than hanging.
+const TEST_TIMEOUT_MS = 40 * 60 * 1000;
 
 test.describe.configure({ mode: "serial", timeout: TEST_TIMEOUT_MS });
 
-function toContentBase64(text) {
-  return Buffer.from(text, "utf8").toString("base64");
-}
-
-async function createTempCanary({ filePath, slug, title, runId }) {
-  const body = [
+function buildCanaryBody({ slug, title, runId }) {
+  return [
     "---",
     "layout: canary",
     `title: "${title}"`,
@@ -79,15 +83,31 @@ async function createTempCanary({ filePath, slug, title, runId }) {
     "Will be deleted by cms-delete-published.spec.js.",
     "",
   ].join("\n");
+}
 
-  return gh(`/repos/${HOST_REPO}/contents/${filePath}`, {
-    method: "PUT",
-    headers: { "Content-Type": "application/json" },
-    body: JSON.stringify({
-      message: `test(canary): seed throw-away delete fixture run ${runId}`,
-      content: toContentBase64(body),
-      branch: "main",
-    }),
+/**
+ * Seed the throw-away canary file on main via a labelled PR.
+ *
+ * Direct PUT /contents/{path} on main is blocked by the `pull_request`
+ * rule on .github/rulesets/main.json (returns 409 "Repository rule
+ * violations found"). We open a `cms/e2e-fixture/seed-<slug>-<runId>`
+ * PR, label it `cms/ready` to engage cms-editorial-workflow.yml's
+ * auto-merge-when-ready job, and block until the merge lands. Once on
+ * main, deploy-production.yml publishes the canary URL.
+ */
+async function createTempCanary({ filePath, slug, title, runId }) {
+  return seedFixtureViaPr({
+    slug,
+    runId,
+    filePath,
+    bodyText: buildCanaryBody({ slug, title, runId }),
+    message: `test(canary): seed throw-away delete fixture run ${runId}`,
+    prTitle: `test(canary): seed throw-away delete fixture run ${runId}`,
+    prBody:
+      `Throw-away fixture for the delete-published e2e spec (run \`${runId}\`).\n\n` +
+      `Auto-merges via the \`cms/ready\` label. The fixture is deleted by ` +
+      `the spec itself in a later step, then \`deploy-production.yml\` removes ` +
+      `the public URL.`,
   });
 }
 
@@ -101,21 +121,27 @@ async function fileExistsOnMain(filePath) {
   }
 }
 
-async function tryHardDelete(filePath, message) {
-  // Best-effort cleanup: pull the latest sha + DELETE via the Contents API.
-  // Used only on test failure when the shim/workflow path didn't get the
-  // file removed. Skipped silently if the ruleset blocks the direct
-  // delete (which is the steady state — that's the whole reason this
-  // spec exists).
+async function tryHardDelete(filePath, slug, runId, message) {
+  // Best-effort cleanup. The shim / delete-via-pr workflow normally
+  // removes the fixture as part of the test flow; this fallback runs
+  // only on test failure when the file is still on main. Direct
+  // DELETE /contents/{path} on main is blocked by the ruleset, so we
+  // open a labelled fixture-removal PR and let auto-merge land it
+  // (same path the success case uses, just initiated from cleanup).
   try {
-    const cur = await gh(`/repos/${HOST_REPO}/contents/${filePath}?ref=main`);
-    await gh(`/repos/${HOST_REPO}/contents/${filePath}`, {
-      method: "DELETE",
-      headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({ message, sha: cur.sha, branch: "main" }),
+    await removeFixtureViaPr({
+      slug,
+      runId,
+      filePath,
+      message,
+      prTitle: message,
+      prBody:
+        `Cleanup PR opened by \`cms-delete-published.spec.js\` after a test ` +
+        `failure left the throw-away fixture on main. Auto-merges via ` +
+        `\`cms/ready\`.`,
     });
     // eslint-disable-next-line no-console
-    console.warn(`[cleanup] hard-deleted ${filePath} via Contents API`);
+    console.warn(`[cleanup] removed ${filePath} via fixture-cleanup PR`);
   } catch (e) {
     // eslint-disable-next-line no-console
     console.warn(`[cleanup] could not remove ${filePath}: ${e.message}`);
@@ -303,11 +329,15 @@ test("Delete published entry — UI click → shim → delete-via-pr workflow �
     });
   } finally {
     // Best-effort cleanup. If the shim/workflow path didn't actually
-    // remove the file (test failed before the merge), drop it via the
-    // Contents API directly so subsequent runs start clean.
+    // remove the file (test failed before the merge), open a
+    // fixture-cleanup PR + auto-merge to drop it. Direct deletes to
+    // main are blocked by the ruleset; the cleanup mirrors the success
+    // path so subsequent runs start clean.
     if (await fileExistsOnMain(filePath).catch(() => false)) {
       await tryHardDelete(
         filePath,
+        slug,
+        runId,
         `test(canary): cleanup throw-away delete fixture run ${runId}`,
       );
     }

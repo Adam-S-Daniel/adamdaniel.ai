@@ -43,6 +43,7 @@ on:
       - .github/workflows/delete-via-pr.yml
       - e2e/cms-publish-loop.spec.js
       - e2e/cms-delete-published.spec.js
+      - e2e/cms-fixture-pr.js
       - e2e/decap-pat.js
       - e2e/github-actions-poll.js
       - e2e/canary-content.js
@@ -76,13 +77,19 @@ defaults:
     shell: bash
 
 concurrency:
-  # Per-PR (or per-ref for cron/dispatch) concurrency. A second push
-  # to the same PR cancels the in-flight run; concurrent runs across
-  # different PRs would clash on the canary file's SHA in the
-  # Contents API and confuse the assertion that the URL shows *this*
-  # run's marker, so don't allow them.
-  group: cms-publish-loop-host-${{ github.event.pull_request.number || github.ref }}
-  cancel-in-progress: true
+  # Repo-global serialisation. Two host-loop runs cannot share the
+  # repo: both edit the same `_e2e/canary-post.md` file via a
+  # `cms/e2e/canary-post` Decap branch (the branch name is keyed on
+  # the entry, not per-test-run), so a parallel pair force-push each
+  # other and the cms-editorial-workflow.yml validate-content runs
+  # cancel themselves out of existence. Group key is a constant so
+  # cron + PR + workflow_dispatch all converge on the same lane;
+  # cancel-in-progress=false queues incoming runs instead of killing
+  # the in-flight one. A stuck run blocks the queue for at most
+  # `timeout-minutes` (90), which is well under the daily cron's
+  # cadence.
+  group: cms-publish-loop-host
+  cancel-in-progress: false
 
 jobs:
   host-loop:
@@ -106,7 +113,13 @@ jobs:
       HOME: /root
     container:
       image: mcr.microsoft.com/playwright:v1.59.1-noble
-    timeout-minutes: 30
+    # Two specs run serially in this job: cms-publish-loop (~30 min
+    # worst case — three labelled-PR auto-merge cycles) and
+    # cms-delete-published (~30 min worst case — two cycles). Each
+    # spec's internal timeout is 40 min; bump the job ceiling to 90 min
+    # so the job-level kill doesn't fire before the per-spec timeouts
+    # surface a useful failure message.
+    timeout-minutes: 90
     # Skip on cms/* PRs to prevent recursion: the spec itself opens a
     # cms/e2e/<slug> PR that would otherwise re-trigger this workflow
     # via the salient-path filter. github.head_ref is empty on cron
