@@ -53,6 +53,12 @@ concurrency:
 jobs:
   probe:
     runs-on: ubuntu-latest
+    # Prebuilt Playwright image — browsers + their apt deps baked in,
+    # avoiding the apt-mirror tail latency the prior `playwright
+    # install-deps` step paid on every run. Tag is enforced to match
+    # `package-lock.json` by e2e-tests.yml's `select` job drift-guard.
+    container:
+      image: mcr.microsoft.com/playwright:v1.59.1-noble
     timeout-minutes: 10
     steps:
       - name: Checkout
@@ -66,24 +72,6 @@ jobs:
 
       - name: Install npm dependencies
         run: npm ci
-
-      - name: Cache Playwright browsers (chromium only)
-        id: pw-cache
-        uses: actions/cache@27d5ce7f107fe9357f9df03efb73ab90386fccae  # v5.0.5 (2026-04-13)
-        with:
-          path: ~/.cache/ms-playwright
-          # `playwright-canary-` keeps this chromium-only cache distinct
-          # from the full triple-browser cache (e2e-tests.yml) and the
-          # parity chromium-only cache.
-          key: playwright-canary-${{ runner.os }}-${{ hashFiles('package-lock.json') }}
-
-      - name: Install Playwright chromium
-        if: steps.pw-cache.outputs.cache-hit != 'true'
-        run: npx playwright install chromium --with-deps
-
-      - name: Install Playwright OS deps (chromium)
-        if: steps.pw-cache.outputs.cache-hit == 'true'
-        run: npx playwright install-deps chromium
 
       - name: Run @canary-readonly probe against prod
         id: probe
@@ -106,6 +94,32 @@ jobs:
           name: canary-prod-log
           path: /tmp/canary-output.log
           retention-days: 14
+
+      - name: Install GitHub CLI
+        # Hosted ubuntu-latest runners ship `gh` preinstalled; the
+        # Playwright container doesn't. Install it via the upstream
+        # apt repo only when the probe failed and we'll actually use
+        # it — keeps the success path fast.
+        if: failure() && steps.probe.outcome == 'failure'
+        run: |
+          set -euo pipefail
+          # Same install recipe as cli.github.com/manual/installation —
+          # adds the upstream signing key + repo, then installs `gh`.
+          # No `sudo` because the container runs as root.
+          apt-get update -qq
+          apt-get install -y -qq --no-install-recommends curl ca-certificates gpg
+          # `mkdir -p` then `chmod` instead of the `-p -m` shorthand,
+          # which only applies the mode to the deepest leaf (SC2174).
+          mkdir -p /etc/apt/keyrings
+          chmod 755 /etc/apt/keyrings
+          curl -fsSL https://cli.github.com/packages/githubcli-archive-keyring.gpg \
+            | tee /etc/apt/keyrings/githubcli-archive-keyring.gpg > /dev/null
+          chmod go+r /etc/apt/keyrings/githubcli-archive-keyring.gpg
+          echo "deb [arch=$(dpkg --print-architecture) signed-by=/etc/apt/keyrings/githubcli-archive-keyring.gpg] https://cli.github.com/packages stable main" \
+            | tee /etc/apt/sources.list.d/github-cli.list > /dev/null
+          apt-get update -qq
+          apt-get install -y -qq --no-install-recommends gh
+          gh --version
 
       - name: Open issue on canary failure
         if: failure() && steps.probe.outcome == 'failure'
