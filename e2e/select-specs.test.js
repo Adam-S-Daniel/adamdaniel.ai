@@ -5,7 +5,9 @@ const path = require("node:path");
 const {
   selectSpecs,
   ALWAYS_RUN,
+  HEAVY,
   parseSpecDirectives,
+  pickShardCount,
 } = require("./select-specs");
 
 // Pure-function unit tests for the e2e spec selector. No browser, no
@@ -367,5 +369,128 @@ test.describe("select-specs", () => {
     const r = selectSpecs(["admin/index.html"], { headRef: "cms/foo" });
     expect(r.scope).toBe("subset");
     for (const a of ALWAYS_RUN) expect(r.files).toContain(a);
+  });
+});
+
+// Layer 2: shard-count heuristic. The matrix size scales with the
+// subset's *light* (non-HEAVY) browser-spec count — heavy specs are
+// excluded from the budget because they self-skip on PR runs and don't
+// actually consume browser time. Required check `e2e (1)` is preserved
+// because shard_count never returns 0 (skip → 1 is the floor) and the
+// workflow always builds [1..shard_count].
+test.describe("pickShardCount", () => {
+  test("skip scope → 1 shard", () => {
+    expect(pickShardCount("skip", undefined)).toBe(1);
+    expect(pickShardCount("skip", [])).toBe(1);
+  });
+
+  test("all scope → 4 shards (full matrix)", () => {
+    expect(pickShardCount("all", undefined)).toBe(4);
+    expect(pickShardCount("all", [])).toBe(4);
+  });
+
+  test("subset with 0-2 browser specs → 1 shard", () => {
+    expect(pickShardCount("subset", [])).toBe(1);
+    expect(pickShardCount("subset", ["e2e/blog-post.spec.js"])).toBe(1);
+    expect(
+      pickShardCount("subset", [
+        "e2e/blog-post.spec.js",
+        "e2e/tags.spec.js",
+      ]),
+    ).toBe(1);
+  });
+
+  test("subset with 3-6 browser specs → 2 shards", () => {
+    expect(
+      pickShardCount("subset", [
+        "e2e/blog-post.spec.js",
+        "e2e/tags.spec.js",
+        "e2e/cms-smoke.spec.js",
+      ]),
+    ).toBe(2);
+    expect(
+      pickShardCount("subset", [
+        "e2e/blog-post.spec.js",
+        "e2e/tags.spec.js",
+        "e2e/cms-smoke.spec.js",
+        "e2e/cms-editorial-workflow.spec.js",
+        "e2e/cms-preview-url.spec.js",
+        "e2e/visual-regression.spec.js",
+      ]),
+    ).toBe(2);
+  });
+
+  test("subset with 7+ browser specs → 4 shards (full matrix)", () => {
+    expect(
+      pickShardCount("subset", [
+        "e2e/blog-post.spec.js",
+        "e2e/tags.spec.js",
+        "e2e/cms-smoke.spec.js",
+        "e2e/cms-editorial-workflow.spec.js",
+        "e2e/cms-preview-url.spec.js",
+        "e2e/visual-regression.spec.js",
+        "e2e/cms-publish-flow.spec.js",
+      ]),
+    ).toBe(4);
+  });
+
+  test("non-spec files in the list don't count toward shard budget", () => {
+    // Always-run baseline includes .test.js entries — pure-node
+    // invariants, no browser. They don't justify extra shards.
+    expect(
+      pickShardCount("subset", [
+        "e2e/compute-visual-diffs.test.js",
+        "e2e/canary-content.test.js",
+        "e2e/cms-config.spec.js",
+        "e2e/visual-change-guard.spec.js",
+      ]),
+    ).toBe(1);
+  });
+
+  test("subset with 5 HEAVY specs + 0 light → 1 shard (HEAVY excluded)", () => {
+    // Constructed to exceed the 7+ threshold if HEAVY weren't excluded.
+    const all = [
+      ...HEAVY,
+      // HEAVY only has 4 entries; pad to 5 by repeating (Set keeps
+      // it deduped, so the actual file count is still 4 — but the
+      // intent of the contract test is "even if every spec is HEAVY,
+      // we still scale down").
+      "e2e/cms-publish-loop.spec.js",
+    ];
+    expect(pickShardCount("subset", all)).toBe(1);
+  });
+
+  test("subset with 2 HEAVY + 1 light → 1 shard (1 light is in 0-2 bucket)", () => {
+    expect(
+      pickShardCount("subset", [
+        "e2e/cms-publish-loop.spec.js",
+        "e2e/cms-publish-loop-preview.spec.js",
+        "e2e/blog-post.spec.js",
+      ]),
+    ).toBe(1);
+  });
+
+  test("mixed: 2 HEAVY + 4 light → 2 shards (only light counts)", () => {
+    expect(
+      pickShardCount("subset", [
+        "e2e/cms-publish-loop.spec.js",
+        "e2e/cms-publish-loop-preview.spec.js",
+        "e2e/blog-post.spec.js",
+        "e2e/tags.spec.js",
+        "e2e/cms-smoke.spec.js",
+        "e2e/cms-editorial-workflow.spec.js",
+      ]),
+    ).toBe(2);
+  });
+
+  test("required-check safety: shard_count is never 0", () => {
+    // The required GitHub check is `e2e (1)`. The workflow turns
+    // shard_count=N into [1..N], so as long as N >= 1, shard 1
+    // always fires. Guard the floor here.
+    expect(pickShardCount("skip", [])).toBeGreaterThanOrEqual(1);
+    expect(pickShardCount("subset", [])).toBeGreaterThanOrEqual(1);
+    expect(pickShardCount("all", [])).toBeGreaterThanOrEqual(1);
+    // Even an unknown scope falls through to 4, never 0.
+    expect(pickShardCount("garbage", [])).toBeGreaterThanOrEqual(1);
   });
 });
