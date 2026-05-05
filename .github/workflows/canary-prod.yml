@@ -64,19 +64,21 @@ jobs:
     # avoiding the apt-mirror tail latency the prior `playwright
     # install-deps` step paid on every run. Tag is enforced to match
     # `package-lock.json` by e2e-tests.yml's `select` job drift-guard.
+    env:
+      # Firefox refuses to launch when $HOME is owned by a different
+      # user. Inside GHA's container jobs the runner injects
+      # `-e HOME=/github/home` at `docker create` time (owned by the
+      # image's `pwuser`); attempting to override that via
+      # `container.env` is a no-op because GHA's injection wins. The
+      # runner DOES honour job-level `env:` — it `export`s those into
+      # every step's shell after `docker exec`, so HOME=/root takes
+      # effect by the time `npx playwright test` runs. Firefox bails
+      # with "Running Nightly as root in a regular user's session is
+      # not supported" without this. Chromium and WebKit are
+      # unaffected; setting it uniformly keeps configuration simple.
+      HOME: /root
     container:
       image: mcr.microsoft.com/playwright:v1.59.1-noble
-      # Firefox refuses to launch when $HOME is owned by a different
-      # user. Inside GHA's container jobs the runner sets HOME=
-      # /github/home, owned by the image's `pwuser`, but the container
-      # actually runs as root — so Firefox bails with "Running Nightly
-      # as root in a regular user's session is not supported". Setting
-      # HOME=/root inside the container keeps Firefox happy without
-      # chowning the workspace. Chromium and WebKit are unaffected;
-      # setting it for the whole container keeps the configuration
-      # uniform.
-      env:
-        HOME: /root
     timeout-minutes: 10
     steps:
       - name: Checkout
