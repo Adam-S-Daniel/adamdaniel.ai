@@ -72,6 +72,17 @@ jobs:
     # `package-lock.json` by e2e-tests.yml's `select` job drift-guard.
     container:
       image: mcr.microsoft.com/playwright:v1.59.1-noble
+      # Firefox refuses to launch when $HOME is owned by a different
+      # user. Inside GHA's container jobs the runner sets HOME=
+      # /github/home, owned by the image's `pwuser`, but the container
+      # actually runs as root — so Firefox bails with "Running Nightly
+      # as root in a regular user's session is not supported". Setting
+      # HOME=/root inside the container keeps Firefox happy without
+      # chowning the workspace. Chromium and WebKit are unaffected;
+      # setting it for the whole container keeps the configuration
+      # uniform.
+      env:
+        HOME: /root
     timeout-minutes: 30
     steps:
       - name: Checkout
