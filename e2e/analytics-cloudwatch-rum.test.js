@@ -15,6 +15,7 @@ const PROD_WITH_ID_DEST = path.join(TMP, "prod-with-id");
 const PROD_NO_ID_DEST = path.join(TMP, "prod-no-id");
 const NONPROD_DEST = path.join(TMP, "nonprod");
 const OVERRIDE_CONFIG = path.join(TMP, "config-override.yml");
+const EMPTY_OVERRIDE_CONFIG = path.join(TMP, "config-empty-override.yml");
 const FAKE_APP_MONITOR_ID = "11111111-2222-3333-4444-555555555555";
 const FAKE_IDENTITY_POOL = "us-east-1:aaaaaaaa-bbbb-cccc-dddd-eeeeeeeeeeee";
 
@@ -62,6 +63,23 @@ test.describe("CloudWatch RUM include", () => {
         "",
       ].join("\n"),
     );
+    // Force-empty the IDs for the "no ID" build. Without this, the
+    // build inherits whatever `_config.yml` ships on this branch — and
+    // once the real production IDs land in `_config.yml` (so the JS
+    // emits on adamdaniel.ai), this test's "silent when empty"
+    // assertion sees the real IDs and fails. Overriding to empty
+    // keeps the test independent of the main config's runtime values.
+    fs.writeFileSync(
+      EMPTY_OVERRIDE_CONFIG,
+      [
+        "analytics:",
+        "  cloudwatch_rum:",
+        '    app_monitor_id: ""',
+        '    identity_pool_id: ""',
+        '    region: "us-east-1"',
+        "",
+      ].join("\n"),
+    );
 
     runBuild({
       env: { JEKYLL_ENV: "production" },
@@ -70,6 +88,7 @@ test.describe("CloudWatch RUM include", () => {
     });
     runBuild({
       env: { JEKYLL_ENV: "production" },
+      configOverride: EMPTY_OVERRIDE_CONFIG,
       destination: PROD_NO_ID_DEST,
     });
     runBuild({
