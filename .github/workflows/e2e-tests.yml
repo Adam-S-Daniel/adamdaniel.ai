@@ -578,10 +578,17 @@ jobs:
       # `test-results/` dir as `test-results-shard-<N>`; merge them
       # into a single tree and run the assembly script to:
       #   - build one video per test directory (banner above frames)
-      #   - concatenate them all into `_combined.mp4`
-      #   - emit `_combined.txt` manifest
+      #   - subdivide the combined stream into per-target-env buckets:
+      #     `_combined-local.mp4`, `_combined-preview.mp4`,
+      #     `_combined-prod.mp4`, `_combined-other.mp4` (only when
+      #     non-empty; bucket assigned by FIRST captured frame's host)
+      #   - emit `_combined.txt` manifest with each test's bucket
       # Then upload the videos as a separate artifact. This is
       # informational — not a required check.
+      #
+      # v2 (PR follow-up to #143): the master `_combined.mp4` is gone
+      # — replaced by the four per-bucket files so reviewers can
+      # scrub one target env without scrolling past the rest.
       - name: Download per-shard test-results
         if: ${{ !cancelled() }}
         uses: actions/download-artifact@3e5f45b2cfb9172054b4087a40e8e0b5a5461e7c  # v8.0.1 (2026-03-11)
@@ -640,8 +647,12 @@ jobs:
         uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a  # v7.0.1 (2026-04-10)
         with:
           name: per-test-videos
+          # The wildcard `*.mp4` already covers the four per-bucket
+          # combined files (`_combined-{local,preview,prod,other}.mp4`)
+          # alongside the per-test `<safe-test-id>.mp4` files. Empty
+          # buckets emit nothing on disk so `if-no-files-found: ignore`
+          # is enough — we don't need to enumerate paths individually.
           path: |
-            test-results/per-test-videos/_combined.mp4
             test-results/per-test-videos/_combined.txt
             test-results/per-test-videos/*.mp4
           if-no-files-found: ignore

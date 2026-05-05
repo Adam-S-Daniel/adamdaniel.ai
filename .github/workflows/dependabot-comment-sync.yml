@@ -87,6 +87,22 @@ name: Dependabot comment sync
 # triggers the workflow (workflow self-validation).
 
 on:
+  # `workflow_dispatch` is here for two reasons:
+  #
+  # 1. Manual debugging — when investigating why an opened Dependabot
+  #    PR didn't get its action-pin comments refreshed, you can dispatch
+  #    against the PR head ref to re-run the sync.
+  #
+  # 2. Suppresses GitHub Actions' phantom failure runs. Workflows that
+  #    have ONLY `pull_request_target` triggers get a recorded run with
+  #    `event=push`, `conclusion=failure`, and zero jobs on every push
+  #    to `main`, because GHA's runner-allocator records a check_suite
+  #    even when no trigger actually matches the event. Adding any
+  #    second trigger (workflow_dispatch is the cheapest — it doesn't
+  #    fire automatically) routes the evaluation through a different
+  #    path that produces a clean `success`/`skipped` outcome instead.
+  #    Tracked as a known GHA quirk; this is the documented workaround.
+  workflow_dispatch:
   pull_request_target:
     types: [opened, synchronize, reopened]
     paths:
@@ -104,11 +120,41 @@ concurrency:
 
 jobs:
   sync:
-    # Job-level (not workflow-level) `if:` so non-Dependabot PRs
-    # don't show up as "skipped" runs in the PR's check list.
-    if: github.event.pull_request.user.login == 'dependabot[bot]'
+    # NOTE on the dependabot-only gate:
+    #
+    # We previously had a job-level `if: github.event.pull_request.user
+    # .login == 'dependabot[bot]'`. That made the runner skip entirely
+    # for non-Dependabot PRs — but it ALSO caused GHA to record the run
+    # as `conclusion=failure` (a workflow whose only job is fully
+    # skipped via `if:` reaches the run-conclusion path with no
+    # successful jobs and is recorded as failed in the Actions UI).
+    # The PR's required-checks list didn't include this workflow so it
+    # never blocked merges, but it left a trail of red rows.
+    #
+    # Fix: move the gate to the FIRST step. The runner is allocated
+    # for every PR with a workflow-file change — cheap, ~3 seconds of
+    # stub-job time — and the workflow run conclusion is `success` in
+    # every case, leaving the Actions tab clean.
     runs-on: ubuntu-latest
     steps:
+      - name: Skip non-Dependabot context
+        # Two early-exit paths so GHA records the run as `success`
+        # rather than `failure`:
+        #
+        # 1. Non-Dependabot `pull_request_target` (a contributor edited
+        #    a workflow file): notice + exit 0.
+        # 2. `workflow_dispatch` (manual): there's no PR head ref to
+        #    sync against, so this is purely a no-op anchor for the
+        #    registration-quirk fix described in the `on:` comment.
+        if: github.event_name == 'workflow_dispatch' || (github.event_name == 'pull_request_target' && github.event.pull_request.user.login != 'dependabot[bot]')
+        run: |
+          if [ "${{ github.event_name }}" = "workflow_dispatch" ]; then
+            echo "::notice::Manual dispatch — comment-sync is dependabot-only; nothing to do. Skipping cleanly."
+          else
+            echo "::notice::PR is from ${{ github.event.pull_request.user.login }}, not dependabot[bot]; comment-sync is dependabot-only — skipping cleanly."
+          fi
+          exit 0
+
       - name: Bail early if ADAMDANIELAI_WORKFLOW_SHA_COMMENT_PAT is unset
         # Without a PAT carrying the `workflows` permission, pushing
         # back a Dependabot action-bump fails with "refusing to allow

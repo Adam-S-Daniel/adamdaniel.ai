@@ -5,9 +5,12 @@
  * Reads frames + meta.json sidecars produced by the per-test capture
  * fixture in `e2e/base.js`, then builds:
  *
- *   test-results/per-test-videos/<safe-test-id>.mp4    (one per test)
- *   test-results/per-test-videos/_combined.mp4         (concat of all)
- *   test-results/per-test-videos/_combined.txt         (manifest)
+ *   test-results/per-test-videos/<safe-test-id>.mp4       (one per test)
+ *   test-results/per-test-videos/_combined-local.mp4      (per-bucket concat)
+ *   test-results/per-test-videos/_combined-preview.mp4
+ *   test-results/per-test-videos/_combined-prod.mp4
+ *   test-results/per-test-videos/_combined-other.mp4      (only if non-empty)
+ *   test-results/per-test-videos/_combined.txt            (manifest)
  *
  * Layout:
  *   test-results/
@@ -19,8 +22,14 @@
  *         meta.json
  *     per-test-videos/
  *       <safe-test-id>.mp4
- *       _combined.mp4
- *       _combined.txt
+ *       _combined-<bucket>.mp4    (one per non-empty bucket)
+ *       _combined.txt             (lists each test under its bucket)
+ *
+ * v2 (PR #143 follow-up): the master `_combined.mp4` is gone. Instead
+ * the combined-aggregation stage subdivides the run by target
+ * environment ("local" / "preview" / "prod" / "other") so reviewers
+ * can scrub one bucket without scrolling through the rest. Per-test
+ * mp4 shape is unchanged.
  *
  * Usage:
  *   node e2e/generate-test-videos.js
@@ -35,6 +44,9 @@
  * Banner shape (3 monospace lines, 96px black strip ABOVE the screenshot):
  *   1) `PR #<n> · Test <X> of <Y> · <file>::<title>`
  *   2) `Step <x> of <y>: <step name / URL fallback> · <status>`
+ *      The URL fallback (when no `test.step()` was active) prefixes the
+ *      hostname so the env is unambiguous, e.g. `adamdaniel.ai/admin/`
+ *      or `localhost/admin/` (port stripped — it changes per run).
  *   3) `project: <projectName> · <YYYY-MM-DD HH:MM:SS TZ>` (in America/New_York,
  *      with EDT or EST suffix; based on each test's own end time recorded by
  *      the capture fixture)
@@ -215,24 +227,112 @@ function formatEastern(date) {
 
 // Pull a "step name / URL fallback" string for a single frame. If
 // the capture fixture recorded a `stepTitle`, use it; otherwise fall
-// back to the URL's pathname so the banner still has something
-// human-meaningful instead of empty space.
+// back to the URL's host+pathname so the banner still has something
+// human-meaningful instead of an ambiguous bare path.
+//
+// URL-fallback rendering rules (no stepTitle):
+//   - `localhost` and `127.0.0.1` (any port): host is rendered as
+//     `localhost` (port stripped — it changes per run and adds noise)
+//     followed by the pathname, e.g.
+//     `http://localhost:4000/admin/` → `localhost/admin/`.
+//   - Any other hostname: rendered as `<host><pathname>`, e.g.
+//     `https://adamdaniel.ai/admin/` → `adamdaniel.ai/admin/`. Dropping
+//     the host here would render `/admin/` ambiguously.
+//   - `about:blank` is left alone (no host to extract).
+//   - `data:` / `blob:` URLs are truncated to the first ~32 chars + `…`
+//     so the banner doesn't blow up from a multi-kB inline payload.
+//
+// When a stepTitle is present we never prefix it with the hostname —
+// the step author chose the title and we respect it verbatim.
+const URL_FALLBACK_DATA_BLOB_PREFIX_LEN = 32;
+
 function frameStepLabel(frame) {
   const t = frame && frame.stepTitle;
   if (t && String(t).trim().length > 0) return String(t);
   const url = frame && frame.url;
   if (!url) return "(no navigation)";
+  // about:blank — render as-is, no host extraction.
+  if (url === "about:blank") return "about:blank";
+  // data: / blob: — opaque payloads, just show a truncated prefix.
+  if (/^(data|blob):/i.test(url)) {
+    if (url.length <= URL_FALLBACK_DATA_BLOB_PREFIX_LEN) return url;
+    return url.slice(0, URL_FALLBACK_DATA_BLOB_PREFIX_LEN) + "…";
+  }
   try {
     const u = new URL(url);
-    // Path-only — full URL is too long for the banner and clutters
-    // the per-frame step line. The hostname/protocol are constant
-    // across the whole run anyway.
+    // Always render hostname-only (no port). For localhost the port
+    // is the one piece of noise that changes per run (Jekyll picks 4000,
+    // CI may pick something else); dropping it keeps banners stable
+    // across reruns. For prod-style hosts there's no port anyway. We
+    // always render hostname-only because a bare `/admin/` is
+    // ambiguous about which environment is being exercised.
+    const hostname = u.hostname || "";
     const path_ = u.pathname || "/";
-    return path_ + (u.search || "");
+    return hostname + path_ + (u.search || "");
   } catch {
-    // Non-parseable URL (unusual but possible for data: / about: ).
+    // Non-parseable URL (unusual but possible for malformed inputs).
     return String(url);
   }
+}
+
+// ── Bucketing by target environment ────────────────────────────────
+//
+// A CI run today produces a single `_combined.mp4` master that
+// concatenates every per-test video. With dozens of tests across
+// localhost-fake-backend, preview-PR, and prod targets, scrubbing
+// for "all the local-fake-backend tests" means scrolling past the
+// rest. Instead, subdivide the combined stream by target environment
+// so reviewers can pull just the bucket they care about.
+//
+// Buckets (precedence — first match wins):
+//   1. `local`   — host is `localhost` or `127.0.0.1`
+//                  (regardless of port).
+//   2. `preview` — host matches `^preview-pr\d+\.adamdaniel\.ai$`.
+//   3. `prod`    — host is exactly `adamdaniel.ai` (apex; no
+//                  subdomain, since `preview-pr*` is its own bucket).
+//   4. `other`   — catch-all (about:blank, data:/blob:, third-party
+//                  hosts, malformed URLs).
+//
+// Per-test bucket assignment uses the FIRST captured frame's host.
+// One rule beats per-frame fragmentation; tests that traverse hosts
+// are rare and the first navigation typically identifies the harness
+// (e.g. a localhost smoke that pops out to GitHub OAuth still belongs
+// in `local`). The `_combined.txt` manifest records each test's
+// assigned bucket so reviewers can sanity-check the mapping.
+const BUCKETS = ["local", "preview", "prod", "other"];
+
+function bucketFor(host) {
+  if (host === "localhost" || host === "127.0.0.1") return "local";
+  if (typeof host === "string" && /^preview-pr\d+\.adamdaniel\.ai$/.test(host)) {
+    return "preview";
+  }
+  if (host === "adamdaniel.ai") return "prod";
+  return "other";
+}
+
+// Pull the host (no port) from a URL string. Returns "" for inputs
+// without an extractable hostname (about:blank, data:, blob:, malformed).
+function hostFromUrl(url) {
+  if (!url || typeof url !== "string") return "";
+  if (url === "about:blank") return "";
+  if (/^(data|blob):/i.test(url)) return "";
+  try {
+    const u = new URL(url);
+    return u.hostname || "";
+  } catch {
+    return "";
+  }
+}
+
+// Resolve a per-test bucket from its meta record. Looks at the FIRST
+// captured frame's URL; tests with no frames (zero-navigation specs)
+// fall through to `other`.
+function bucketForEntry(entry) {
+  const frames = entry && entry.meta && Array.isArray(entry.meta.frames)
+    ? entry.meta.frames
+    : [];
+  const firstUrl = frames.length > 0 ? frames[0].url : "";
+  return bucketFor(hostFromUrl(firstUrl));
 }
 
 // Build the three banner lines for a single frame. Pure: no env or
@@ -485,9 +585,17 @@ function buildPerTestVideo({
   return outputPath;
 }
 
-function buildCombinedVideo(perTestPaths) {
+// Concat a list of per-test mp4 paths into a single output mp4. Used
+// once per non-empty bucket. Stream-copies because every per-test video
+// already shares the same canvas, codec, and pixel format. Returns the
+// output path on success, throws on failure.
+function concatPerTestVideos(perTestPaths, output, tag) {
   if (perTestPaths.length === 0) return null;
-  const concatList = path.join(VIDEOS_ROOT, ".tmp", "concat.txt");
+  const concatList = path.join(
+    VIDEOS_ROOT,
+    ".tmp",
+    `concat-${tag || "all"}.txt`,
+  );
   ensureDir(path.dirname(concatList));
   const lines = perTestPaths.map((p) => {
     // ffmpeg concat demuxer requires single-quoted paths and only
@@ -496,8 +604,6 @@ function buildCombinedVideo(perTestPaths) {
     return `file '${escaped}'`;
   });
   fs.writeFileSync(concatList, lines.join("\n") + "\n");
-
-  const output = path.join(VIDEOS_ROOT, "_combined.mp4");
 
   // Stream-copy concat — every per-test video uses the same canvas,
   // codec (libx264), profile, and pixel format, so this works without
@@ -521,39 +627,97 @@ function buildCombinedVideo(perTestPaths) {
 
   try {
     fs.unlinkSync(concatList);
-    fs.rmdirSync(path.dirname(concatList));
   } catch {
     /* ignore */
   }
-
   return output;
 }
 
-function writeManifest(orderedEntries, perTestPaths, prNumber) {
+// Build per-bucket combined videos from a list of {entry, perTestPath}
+// records. Each non-empty bucket emits `_combined-<bucket>.mp4`.
+// Empty buckets are silently skipped (no point in a 0-byte file).
+// Returns a map { bucket → outputPath } for the buckets that emitted.
+function buildBucketedCombinedVideos(records) {
+  /** @type {Record<string, string[]>} */
+  const byBucket = {};
+  for (const b of BUCKETS) byBucket[b] = [];
+  for (const r of records) {
+    const b = r.bucket;
+    if (!byBucket[b]) byBucket[b] = [];
+    byBucket[b].push(r.perTestPath);
+  }
+
+  const emitted = {};
+  for (const bucket of BUCKETS) {
+    const list = byBucket[bucket];
+    if (!list || list.length === 0) {
+      console.log(`Bucket ${bucket}: 0 tests — skipping combined video.`);
+      continue;
+    }
+    const output = path.join(VIDEOS_ROOT, `_combined-${bucket}.mp4`);
+    concatPerTestVideos(list, output, bucket);
+    emitted[bucket] = output;
+  }
+
+  // Cleanup empty .tmp dir if it's no longer needed.
+  try {
+    fs.rmdirSync(path.join(VIDEOS_ROOT, ".tmp"));
+  } catch {
+    /* ignore — only succeeds when empty */
+  }
+  return emitted;
+}
+
+function writeManifest(records, prNumber, emittedBuckets) {
   const manifest = path.join(VIDEOS_ROOT, "_combined.txt");
-  const Y = orderedEntries.length;
-  const rows = orderedEntries.map((e, i) => {
-    const meta = e.meta;
-    const endLocal = meta.endTime ? formatEastern(new Date(meta.endTime)) : "";
-    return [
-      `[${i + 1} of ${Y}] ${path.basename(perTestPaths[i])}`,
-      `    file:    ${meta.file || ""}`,
-      `    title:   ${meta.title || ""}`,
-      `    project: ${meta.projectName || ""}`,
-      `    repeat:  ${meta.repeatEachIndex || 0}`,
-      `    status:  ${meta.status || ""}`,
-      `    frames:  ${e.frames.length}`,
-      `    end:     ${endLocal}`,
-    ].join("\n");
-  });
+  const Y = records.length;
+  // Group rows by bucket so the manifest reads as a stack of bucket
+  // sections. Within a bucket, records were already sorted by
+  // (file, title, project, repeatEachIndex) before bucket assignment.
+  /** @type {Record<string, typeof records>} */
+  const byBucket = {};
+  for (const b of BUCKETS) byBucket[b] = [];
+  for (const r of records) byBucket[r.bucket].push(r);
+
+  const sections = [];
+  for (const bucket of BUCKETS) {
+    const list = byBucket[bucket];
+    const bucketOutput = emittedBuckets[bucket];
+    const head = bucketOutput
+      ? `Bucket ${bucket} → ${path.basename(bucketOutput)} (${list.length} test${list.length === 1 ? "" : "s"})`
+      : `Bucket ${bucket} → (empty — no combined video emitted)`;
+    if (list.length === 0) {
+      sections.push(head);
+      continue;
+    }
+    const rows = list.map((r, i) => {
+      const meta = r.entry.meta;
+      const endLocal = meta.endTime
+        ? formatEastern(new Date(meta.endTime))
+        : "";
+      return [
+        `  [${bucket} ${i + 1} of ${list.length}] ${path.basename(r.perTestPath)}`,
+        `      file:    ${meta.file || ""}`,
+        `      title:   ${meta.title || ""}`,
+        `      project: ${meta.projectName || ""}`,
+        `      repeat:  ${meta.repeatEachIndex || 0}`,
+        `      status:  ${meta.status || ""}`,
+        `      frames:  ${r.entry.frames.length}`,
+        `      end:     ${endLocal}`,
+      ].join("\n");
+    });
+    sections.push(head + "\n" + rows.join("\n\n"));
+  }
+
   const header = [
     "Per-test screenshot videos — manifest",
     `PR:        #${prNumber}`,
     `Tests:     ${Y}`,
-    `Order:     (file, title, project, repeatEachIndex)`,
+    `Order:     (file, title, project, repeatEachIndex) within each bucket`,
+    `Buckets:   local | preview | prod | other (assigned by FIRST frame's host)`,
     "",
   ].join("\n");
-  fs.writeFileSync(manifest, header + rows.join("\n\n") + "\n");
+  fs.writeFileSync(manifest, header + sections.join("\n\n") + "\n");
   return manifest;
 }
 
@@ -627,20 +791,37 @@ function main() {
     return failed > 0 ? 1 : 0;
   }
 
-  const orderedEntries = entries.filter((_, i) => perTestPaths[i]);
-  let combined = null;
+  // Build per-test records carrying their bucket assignment. Each
+  // entry's bucket is the bucket of its FIRST captured frame's host
+  // (see bucketForEntry / bucketFor for precedence + edge cases).
+  const records = [];
+  for (let idx = 0; idx < entries.length; idx++) {
+    if (!perTestPaths[idx]) continue;
+    const entry = entries[idx];
+    const bucket = bucketForEntry(entry);
+    records.push({ entry, perTestPath: perTestPaths[idx], bucket });
+  }
+
+  let emittedBuckets = {};
   try {
-    combined = buildCombinedVideo(perTestPaths);
-    console.log(
-      `Combined video → ${path.relative(REPO_ROOT, combined)} (${perTestPaths.length} segments)`,
-    );
+    emittedBuckets = buildBucketedCombinedVideos(records);
+    const emittedNames = Object.keys(emittedBuckets);
+    if (emittedNames.length === 0) {
+      console.log("No bucket emitted a combined video.");
+    } else {
+      for (const b of emittedNames) {
+        console.log(
+          `Combined video → ${path.relative(REPO_ROOT, emittedBuckets[b])}`,
+        );
+      }
+    }
   } catch (err) {
-    console.error(`Combined video failed: ${err.message}`);
+    console.error(`Bucketed combined videos failed: ${err.message}`);
     failed += 1;
   }
 
   try {
-    const manifest = writeManifest(orderedEntries, perTestPaths, PR_NUMBER);
+    const manifest = writeManifest(records, PR_NUMBER, emittedBuckets);
     console.log(`Manifest → ${path.relative(REPO_ROOT, manifest)}`);
   } catch (err) {
     console.error(`Manifest write failed: ${err.message}`);
@@ -657,11 +838,17 @@ if (require.main === module) {
 }
 
 module.exports = {
+  buildBucketedCombinedVideos,
   buildFrameBannerLines,
+  bucketFor,
+  bucketForEntry,
   compareEntries,
   formatEastern,
   frameStepLabel,
+  hostFromUrl,
   listFrameDirs,
   sanitizeBannerText,
+  writeManifest,
   BANNER_MAX_CHARS,
+  BUCKETS,
 };
