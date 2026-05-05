@@ -46,10 +46,18 @@ jobs:
     timeout-minutes: 25
     steps:
       - name: Checkout
+        # Use CMS_E2E_PAT (contents:rw + pull-requests:rw + metadata:r)
+        # so peter-evans/create-pull-request below inherits the right
+        # credentials. The default GITHUB_TOKEN can't create PRs in
+        # this repo: "GitHub Actions is not permitted to create or
+        # approve pull requests" is a repo-level Settings → Actions →
+        # General → Workflow permissions toggle that's currently OFF
+        # (and the user has chosen to keep it that way for safety).
+        # CMS_E2E_PAT bypasses the toggle.
         uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd  # v6.0.2 (2026-01-09)
         with:
           fetch-depth: 0
-          token: ${{ secrets.GITHUB_TOKEN }}
+          token: ${{ secrets.CMS_E2E_PAT }}
 
       - name: Setup Ruby
         uses: ruby/setup-ruby@c4e5b1316158f92e3d49443a9d58b31d25ac0f8f  # v1.302.0 (2026-04-15)
@@ -117,7 +125,10 @@ jobs:
         # finalize) still gate the merge.
         uses: peter-evans/create-pull-request@5f6978faf089d4d20b00c7766989d076bb2fc7f1  # v7.0.8 (2025-04-22)
         with:
-          token: ${{ secrets.GITHUB_TOKEN }}
+          # CMS_E2E_PAT instead of GITHUB_TOKEN: see the Checkout
+          # step above for why (repo's Workflow-permissions toggle
+          # blocks github-actions[bot] from creating PRs).
+          token: ${{ secrets.CMS_E2E_PAT }}
           branch: automated/regenerate-contributor-manual
           delete-branch: true
           title: 'docs: regenerate Contributor Manual'
