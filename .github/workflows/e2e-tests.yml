@@ -177,6 +177,16 @@ jobs:
         # Diff-aware subset against the base branch tip. The selector
         # itself has no npm deps — `node e2e/select-specs.js` runs
         # with the runner's stock Node, so we can skip `npm ci` here.
+        env:
+          # GHA does NOT auto-populate GITHUB_HEAD_REF inside `step.env`;
+          # it's only available via the `github.head_ref` context. Pass
+          # it through explicitly so select-specs.js can honour the
+          # `@select-skip-when-head-ref-prefix:` directive (Layer 3.A) —
+          # specs that self-skip on `cms/*` PRs are filtered out of the
+          # selection envelope, eliminating their bring-up cost. Empty
+          # for non-PR triggers (cron / dispatch); selector treats empty
+          # as "no filtering".
+          GITHUB_HEAD_REF: ${{ github.head_ref }}
         run: |
           git fetch origin main --depth=500 || true
           # Fall back gracefully if the selector or git diff fails —

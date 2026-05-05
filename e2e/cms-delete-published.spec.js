@@ -1,3 +1,10 @@
+// @select-skip-when-head-ref-prefix: cms/
+//
+// On `cms/*` PRs (Decap-opened editorial PRs) this spec self-skips at
+// runtime — RUN_HOST_REPO_PUBLISH_LOOP is unset on the standard PR
+// matrix — so selecting + bringing it up just to no-op is pure waste.
+// The dedicated cms-publish-loop-host workflow runs it nightly.
+
 /*
  * UI-driven coverage for the "Delete published entry" path. Decap's
  * delete button calls DELETE /repos/.../contents/{path} synchronously,

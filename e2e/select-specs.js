@@ -31,6 +31,7 @@
 // than running an irrelevant one.
 
 const { execSync } = require("node:child_process");
+const fs = require("node:fs");
 const path = require("node:path");
 
 const ALWAYS_RUN = [
@@ -241,6 +242,65 @@ function getChangedFiles(baseRef) {
   }
 }
 
+// Parse `// @<key>: <value>` style directives from the head of a spec
+// file. Reads ~500 bytes only — directives must live near the top of
+// the file (above first import or under the leading comment block).
+//
+// Currently implements `@select-skip-when-head-ref-prefix:` (returned
+// as `skipWhenHeadRefPrefix`). Designed to be extended: add a new case
+// to the switch and return the value on the directive record.
+//
+// Multi-value directives are comma-separated. Whitespace around values
+// is trimmed; empty entries are dropped.
+//
+// Errors swallow to {} so a missing/unreadable file never breaks the
+// selector — directives are an additive opt-out, not a contract.
+function parseSpecDirectives(absPath) {
+  const directives = {};
+  let head = "";
+  try {
+    const fd = fs.openSync(absPath, "r");
+    try {
+      const buf = Buffer.alloc(500);
+      const n = fs.readSync(fd, buf, 0, 500, 0);
+      head = buf.slice(0, n).toString("utf8");
+    } finally {
+      fs.closeSync(fd);
+    }
+  } catch {
+    return directives;
+  }
+
+  // Match `// @key: value` directives. Allows leading whitespace inside
+  // a `/* ... */` block (e.g. ` * @key: value`) so specs whose header
+  // is a JSDoc-style block comment can also carry directives.
+  const re = /^[\s/*]*@([a-z][a-z0-9-]*):[ \t]*([^\n\r]*)/gim;
+  let m;
+  while ((m = re.exec(head)) !== null) {
+    const key = m[1].toLowerCase();
+    const rawValue = m[2].trim();
+    switch (key) {
+      case "select-skip-when-head-ref-prefix": {
+        const values = rawValue
+          .split(",")
+          .map((v) => v.trim())
+          .filter(Boolean);
+        if (values.length > 0) {
+          directives.skipWhenHeadRefPrefix = (
+            directives.skipWhenHeadRefPrefix || []
+          ).concat(values);
+        }
+        break;
+      }
+      // Future directives slot in here. Unknown keys are ignored
+      // silently so old selectors don't fail on newer spec headers.
+      default:
+        break;
+    }
+  }
+  return directives;
+}
+
 function selectSpecs(changedFiles, options = {}) {
   if (changedFiles.length === 0) {
     return {
@@ -279,6 +339,30 @@ function selectSpecs(changedFiles, options = {}) {
     }
   }
 
+  // Spec-header directives. After rule matching, give each spec a
+  // chance to opt OUT of selection on certain branches via its
+  // `// @select-skip-when-head-ref-prefix:` header. Only filters the
+  // rule-matched specs; the ALWAYS_RUN baseline is intentionally
+  // exempt (those are tiny and self-document the change).
+  const headRef =
+    options.headRef !== undefined
+      ? options.headRef
+      : process.env.GITHUB_HEAD_REF || "";
+  const skippedByDirective = [];
+  if (headRef) {
+    const baseline = new Set(ALWAYS_RUN);
+    const repoRoot = options.repoRoot || path.resolve(__dirname, "..");
+    for (const spec of [...specs]) {
+      if (baseline.has(spec)) continue;
+      const directives = parseSpecDirectives(path.join(repoRoot, spec));
+      const prefixes = directives.skipWhenHeadRefPrefix;
+      if (Array.isArray(prefixes) && prefixes.some((p) => headRef.startsWith(p))) {
+        specs.delete(spec);
+        skippedByDirective.push(spec);
+      }
+    }
+  }
+
   // Quirk: changes ONLY to docs / READMEs / AGENTS.md don't need any
   // browser specs at all. Detect this by checking if everything outside
   // ALWAYS_RUN stayed unselected after the rule pass.
@@ -306,11 +390,15 @@ function selectSpecs(changedFiles, options = {}) {
     };
   }
 
-  return {
+  const result = {
     scope: "subset",
     files: [...specs].sort(),
     reason: `Matched ${specs.size} spec(s) from ${changedFiles.length} changed file(s).`,
   };
+  if (skippedByDirective.length > 0) {
+    result.skippedByDirective = skippedByDirective.slice().sort();
+  }
+  return result;
 }
 
 module.exports = {
@@ -319,6 +407,7 @@ module.exports = {
   SPEC_RULES,
   selectSpecs,
   getChangedFiles,
+  parseSpecDirectives,
 };
 
 if (require.main === module) {
@@ -326,7 +415,13 @@ if (require.main === module) {
   const baseIdx = args.indexOf("--base");
   const baseRef = baseIdx >= 0 ? args[baseIdx + 1] : "origin/main";
   const changed = getChangedFiles(baseRef);
-  const result = selectSpecs(changed);
+  // GITHUB_HEAD_REF is set by GHA on `pull_request` events; empty for
+  // `schedule` / `workflow_dispatch` / `push` (cron, manual, main-push).
+  // An empty headRef disables directive filtering — every annotated
+  // spec stays selected, matching pre-Layer-3.A behaviour.
+  const result = selectSpecs(changed, {
+    headRef: process.env.GITHUB_HEAD_REF || "",
+  });
   // Make output stable across CI runs by sorting and including the
   // changed-files list for traceability.
   result.changedFiles = changed;
