@@ -45,6 +45,13 @@ permissions:
   # permissions block.
   issues: write
 
+defaults:
+  run:
+    # GHA defaults the shell to `sh -e {0}` inside `container:` jobs,
+    # but our run-blocks use `set -o pipefail` and other bash-isms.
+    # Force bash so those scripts work inside the Playwright container.
+    shell: bash
+
 concurrency:
   # Don't pile up cron runs if a previous one is still polling.
   group: canary-prod

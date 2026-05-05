@@ -43,6 +43,13 @@ permissions:
   # its own contents:rw / pull-requests:rw scope.
   contents: read
 
+defaults:
+  run:
+    # GHA defaults the shell to `sh -e {0}` inside `container:` jobs,
+    # but our run-blocks use `set -o pipefail` and other bash-isms.
+    # Force bash so those scripts work inside the Playwright container.
+    shell: bash
+
 concurrency:
   # Per-PR (or per-ref for cron/dispatch) concurrency. A second push
   # to the same PR cancels the in-flight run; concurrent runs across

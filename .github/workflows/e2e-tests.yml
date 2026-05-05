@@ -44,6 +44,14 @@ permissions:
   # contents stays in place.
   pull-requests: write
 
+defaults:
+  run:
+    # GHA defaults the shell to `sh -e {0}` inside `container:` jobs,
+    # but several of our run-blocks use `set -o pipefail` and other
+    # bash-isms. Force bash workflow-wide so the same scripts work
+    # both inside the Playwright container and on stock ubuntu-latest.
+    shell: bash
+
 concurrency:
   # Cancel any in-flight run for the same PR — saves minutes on
   # rapid-push spam.
