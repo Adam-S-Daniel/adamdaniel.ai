@@ -542,15 +542,21 @@ jobs:
           count=$(find test-results/per-test-frames -mindepth 1 -maxdepth 1 -type d 2>/dev/null | wc -l)
           echo "Per-test frame directories collected: $count"
 
-      - name: Install ffmpeg for banner rendering
+      - name: Install ffmpeg + ImageMagick for banner rendering
         if: ${{ !cancelled() }}
         # The Playwright container ships a stripped-down internal
         # ffmpeg under /ms-playwright/ffmpeg-1011/ that lacks the
-        # `drawtext` filter we need for the banner. Install the full
-        # ffmpeg package; ~50 MB, ~10 s on a warm apt mirror.
+        # filters we'd otherwise need. We install the full ffmpeg for
+        # frame concat and `imagemagick` (the `convert` binary) for
+        # the per-frame banner+screenshot composite. Each frame's
+        # banner line 2 changes per frame ("Step <x> of <y>: <step
+        # name / URL fallback>"), so a single static drawtext can no
+        # longer carry it — see e2e/generate-test-videos.js.
+        # Combined apt cost: ~80 MB, ~15 s on a warm mirror.
         run: |
           apt-get update -qq
-          apt-get install -y -qq --no-install-recommends ffmpeg fonts-liberation
+          apt-get install -y -qq --no-install-recommends \
+            ffmpeg imagemagick fonts-liberation
 
       - name: Assemble per-test videos with banner
         if: ${{ !cancelled() }}

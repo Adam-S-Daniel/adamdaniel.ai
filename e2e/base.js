@@ -85,10 +85,25 @@ function resolvePreviewBaseURL() {
 //
 //   test-results/per-test-frames/<safe-test-id>/NNNN.png
 //
-// alongside a sidecar `meta.json` describing the run. The
-// `e2e/generate-test-videos.js` script (run in the `finalize` job)
-// assembles these into per-test videos with a metadata banner and
-// concatenates them into a master video for the CI run.
+// alongside a sidecar `meta.json` describing the run. Each frame
+// record carries:
+//   - `path`     — relative to repo root
+//   - `url`      — committed URL of the navigation that fired the capture
+//   - `stepTitle`— title of the innermost active `test.step()` at the
+//                  moment of the navigation, or `null` when the
+//                  navigation happened outside any `test.step()`. The
+//                  assembly script (`e2e/generate-test-videos.js`)
+//                  reads this to render the banner's per-frame "Step
+//                  <x> of <y>: <step name / URL fallback>" line.
+//   - `capturedAt` — ISO-8601 wall-clock at capture
+//
+// `meta.json` also records `endTime` (ISO-8601) so the assembly
+// script can render each test's own end-time on the banner, formatted
+// in America/New_York with TZ abbreviation.
+//
+// The assembly script in the `finalize` job assembles these into
+// per-test videos with a metadata banner and concatenates them into a
+// master video for the CI run.
 //
 // This fixture only triggers for tests that request the `page` fixture.
 // Pure-node tests (e2e/*.test.js) never instantiate `page`, so they
@@ -132,6 +147,56 @@ function ensureFrameDir(testInfo) {
   return dir;
 }
 
+// Per-worker stack of currently-active `test.step()` titles. The
+// banner spec asks line 2 to read "Step <x> of <y>: <step name / URL
+// fallback>", so we record the title of the innermost step that's
+// active at the moment a `framenavigated` capture fires. Playwright
+// runs tests serially within a worker, so a single module-level stack
+// is safe — a fresh test in this worker only starts after the prior
+// test's afterEach has drained.
+const _stepTitleStack = [];
+
+function _currentStepTitle() {
+  return _stepTitleStack.length === 0
+    ? null
+    : _stepTitleStack[_stepTitleStack.length - 1];
+}
+
+// Build a patched `step` method that pushes the active title onto the
+// per-worker stack before running the body and pops it after — even
+// if the body throws. The wrapper preserves the original (title,
+// body, options) contract so specs don't need any change: existing
+// `await test.step("…", async () => { … })` calls just work.
+function _wrapStep(originalStep, owner) {
+  const patched = function patchedStep(title, body, options) {
+    const wrappedBody = async (stepInfo) => {
+      _stepTitleStack.push(String(title || ""));
+      try {
+        return await body(stepInfo);
+      } finally {
+        // Remove the matching title; falling back to a plain pop()
+        // protects against re-entrancy weirdness if a name collides
+        // (rare — step titles are usually unique within a test).
+        const last = _stepTitleStack.lastIndexOf(String(title || ""));
+        if (last !== -1) _stepTitleStack.splice(last, 1);
+        else _stepTitleStack.pop();
+      }
+    };
+    return originalStep.call(owner, title, wrappedBody, options);
+  };
+  // Pass through any aux properties (e.g. `step.skip`) untouched —
+  // we only intercept the main call form, which is the only one
+  // emitting events salient for the banner.
+  for (const key of Object.keys(originalStep)) {
+    try {
+      patched[key] = originalStep[key];
+    } catch (_) {
+      /* read-only property — skip */
+    }
+  }
+  return patched;
+}
+
 async function attachPerTestCapture(page, testInfo) {
   const frameDir = ensureFrameDir(testInfo);
   const captured = [];
@@ -164,6 +229,13 @@ async function attachPerTestCapture(page, testInfo) {
     const seq = String(counter).padStart(4, "0");
     counter += 1;
     const file = path.join(frameDir, `${seq}.png`);
+    // Snapshot the active step title at the moment the navigation
+    // event fires. By the time the (deferred) screenshot completes,
+    // the test may have already moved on to a sibling step — but the
+    // captured frame visually reflects the URL transition that
+    // happened *during* this step, so the step title sampled at event
+    // time is the right label for the banner.
+    const stepTitle = _currentStepTitle();
     // Serialize captures so we don't fire concurrent screenshots on a
     // page that's still loading the next nav. Failures are swallowed:
     // a torn-down page (post-test) shouldn't fail the run.
@@ -173,6 +245,7 @@ async function attachPerTestCapture(page, testInfo) {
         captured.push({
           path: file,
           url,
+          stepTitle,
           capturedAt: new Date().toISOString(),
         });
       } catch (_err) {
@@ -199,6 +272,7 @@ async function attachPerTestCapture(page, testInfo) {
       meta.frames = captured.map((c) => ({
         path: path.relative(REPO_ROOT, c.path),
         url: c.url,
+        stepTitle: c.stepTitle || null,
         capturedAt: c.capturedAt,
       }));
       meta.status = (() => {
@@ -259,6 +333,13 @@ exports.test = base.extend({
     }
   },
 });
+
+// Patch `test.step` on the exported (extended) test object so every
+// `await test.step("name", async () => { ... })` call records its
+// title on the active-step stack while running. Doing this *after*
+// `base.extend({...})` is important — `extend()` returns a new test
+// object whose `step` property is independent of `base.test.step`.
+exports.test.step = _wrapStep(exports.test.step, exports.test);
 
 exports.expect = expect;
 exports.TARGET = TARGET;

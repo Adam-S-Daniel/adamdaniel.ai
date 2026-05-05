@@ -467,12 +467,14 @@ Every browser-based test in the suite captures one full-page screenshot per main
 - Output: `test-results/per-test-videos/<safe-test-id>.mp4`, `_combined.mp4`, `_combined.txt`.
 - CI artifact: `per-test-videos` (separate from `playwright-report`; 7-day retention).
 
-**Banner content** — three monospace lines on a black-with-85%-opacity box:
-1. `<file>::<title>` — the test identity.
-2. `PR #<n> · <date> <time> UTC` — disambiguates runs.
-3. `project: <projectName> · status: <status>` — and `· repeat: <repeatEachIndex>` if (file, title, project, PR) collides (e.g. a `repeatEach` retry).
+**Banner content** — three monospace lines, white on a 96px black strip ABOVE the screenshot:
+1. `PR #<n> · Test <X> of <Y> · <file>::<title>` — disambiguates runs and locates this test in the combined run.
+2. `Step <x> of <y>: <step name / URL fallback> · <status>` — frame-by-frame label. `x` is the 1-indexed frame within the test, `y` is the total frame count for that test. The label prefers the active `test.step()` title; for frames captured outside any `test.step()`, it falls back to the URL path of the `framenavigated` event that fired the capture. Truncated to ~110 chars to fit the banner.
+3. `project: <projectName> · <YYYY-MM-DD HH:MM:SS TZ>` — the date/time is each test's own `endTime` formatted in `America/New_York` with the TZ abbreviation (`EDT` or `EST`), NOT a single run-wide stamp.
 
-The screenshot itself is **never overlaid** — the banner sits in a black strip padded above the source via `pad=iw:ih+96:0:96:black`. Per-test videos are normalised to 1920×(1080+96) so the master concat works with stream-copy (no re-encode).
+The screenshot itself is **never overlaid** — each frame is composited by ImageMagick `convert` against a fresh canvas (1920×(1080+96)) with the banner drawn into the top 96px strip; the screenshot pixels stay untouched. Per-test videos are normalised to 1920×(1080+96) so the master concat works with stream-copy (no re-encode).
+
+**Per-frame banner**: line 2 changes per frame, so the assembly script pre-renders each frame as a banner+screenshot composite (PNG → PNG via ImageMagick) and feeds the composites to ffmpeg as an `image2` sequence. The `finalize` job apt-installs both `ffmpeg` and `imagemagick`.
 
 **Bounds:** capped at 50 frames per test (PER_TEST_MAX_FRAMES) to defend against runaway navigation loops. Frame rate is `2/3` fps (one frame every 1.5 s) so a 30-frame test plays in 45 s.
 

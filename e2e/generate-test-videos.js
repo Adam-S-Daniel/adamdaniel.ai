@@ -27,10 +27,25 @@
  *
  * Env:
  *   PR_NUMBER          — PR number to show in the banner (defaults to "local")
- *   TIMESTAMP_UTC      — ISO-8601 UTC timestamp for the banner (defaults to now)
  *   FFMPEG             — override path to ffmpeg binary
+ *   IMAGEMAGICK        — override path to ImageMagick `convert`
  *   FRAMES_ROOT        — override input dir (defaults to test-results/per-test-frames)
  *   VIDEOS_ROOT        — override output dir (defaults to test-results/per-test-videos)
+ *
+ * Banner shape (3 monospace lines, 96px black strip ABOVE the screenshot):
+ *   1) `PR #<n> · Test <X> of <Y> · <file>::<title>`
+ *   2) `Step <x> of <y>: <step name / URL fallback> · <status>`
+ *   3) `project: <projectName> · <YYYY-MM-DD HH:MM:SS TZ>` (in America/New_York,
+ *      with EDT or EST suffix; based on each test's own end time recorded by
+ *      the capture fixture)
+ *
+ * Why per-frame: line 2 changes per frame (Step <x> of <y>, plus the
+ * step name pinned to the URL transition that fired *that* frame),
+ * so a static ffmpeg `drawtext` filter no longer suffices. We use
+ * ImageMagick `convert` to bake the banner+screenshot composite per
+ * frame, then ffmpeg concatenates the composites into the per-test
+ * mp4. The screenshot pixels themselves are never touched — the
+ * banner sits in the padded strip above.
  *
  * Caveats:
  *   - Only the test fixture's primary `page` is captured. Secondary pages
@@ -44,7 +59,7 @@
 
 const fs = require("node:fs");
 const path = require("node:path");
-const { execFileSync, spawnSync } = require("node:child_process");
+const { spawnSync } = require("node:child_process");
 
 const REPO_ROOT = path.resolve(__dirname, "..");
 const FRAMES_ROOT =
@@ -54,6 +69,7 @@ const VIDEOS_ROOT =
   process.env.VIDEOS_ROOT ||
   path.join(REPO_ROOT, "test-results", "per-test-videos");
 const FFMPEG = process.env.FFMPEG || "ffmpeg";
+const IMAGEMAGICK = process.env.IMAGEMAGICK || "convert";
 
 // Frame display rate. 1 frame per 1.5 seconds — slow enough for a
 // human to scan, fast enough that a 30-frame test fits in 45s.
@@ -70,17 +86,24 @@ const TOTAL_HEIGHT = CANVAS_HEIGHT + BANNER_HEIGHT;
 // Monospace font baked into the Playwright noble image. LiberationMono
 // is a Helvetica-compatible alternative to DejaVuSansMono and is the
 // default Ubuntu monospace font.
-const MONO_FONT = "/usr/share/fonts/truetype/liberation/LiberationMono-Regular.ttf";
-const MONO_FONT_BOLD = "/usr/share/fonts/truetype/liberation/LiberationMono-Bold.ttf";
+const MONO_FONT =
+  "/usr/share/fonts/truetype/liberation/LiberationMono-Regular.ttf";
 
 const PR_NUMBER = process.env.PR_NUMBER || "local";
-const TIMESTAMP_UTC = process.env.TIMESTAMP_UTC || formatUTC(new Date());
 
-function formatUTC(d) {
-  const iso = d.toISOString();
-  // Render as `YYYY-MM-DD HH:MM` for compactness in the banner.
-  return iso.replace("T", " ").replace(/:\d\d\.\d+Z$/, " UTC");
-}
+// Banner typography. fontSize × 3 lines + 2 line-spacings must fit in
+// BANNER_HEIGHT. With fontSize 22 and lineSpacing 6, total is
+// 22*3 + 6*2 = 78px → centered in 96px with 9px top/bottom padding.
+const BANNER_FONT_SIZE = 22;
+const BANNER_LINE_SPACING = 6;
+const BANNER_LEFT_PAD = 20;
+
+// Maximum chars per banner line before we truncate. ~110 was given in
+// the spec; LiberationMono at 22pt is ~13.2px wide per char, so 110
+// chars ≈ 1452px — comfortably inside 1920 minus the 20px gutter.
+const BANNER_MAX_CHARS = 110;
+
+// ── Helpers ─────────────────────────────────────────────────────────
 
 function ensureDir(p) {
   fs.mkdirSync(p, { recursive: true });
@@ -118,8 +141,9 @@ function listFrameDirs(root) {
 
 function findFontFile() {
   if (fs.existsSync(MONO_FONT)) return MONO_FONT;
-  // Best-effort fallback. ffmpeg drawtext fails gracefully if no font
-  // is found by name lookup, so we always pass an explicit fontfile.
+  // Best-effort fallback. ImageMagick's font lookup can name-resolve
+  // many fonts via fontconfig, but explicit paths are the most
+  // portable.
   const candidates = [
     "/usr/share/fonts/truetype/dejavu/DejaVuSansMono.ttf",
     "/usr/share/fonts/truetype/liberation/LiberationMono-Bold.ttf",
@@ -132,32 +156,116 @@ function findFontFile() {
   return null;
 }
 
-function buildBannerLines(meta, idCount) {
-  const file = meta.file || "unknown";
-  const title = meta.title || "untitled";
-  const project = meta.projectName || "unknown-project";
-  const status = meta.status || "unknown";
-
-  const line1 = `${file}::${title}`;
-  const line2 = `PR #${PR_NUMBER} · ${TIMESTAMP_UTC}`;
-  let line3 = `project: ${project} · status: ${status}`;
-
-  // Uniqueness rule: if the (file, title, project, PR) tuple repeats
-  // (e.g. a repeatEach retry produced two records), append the
-  // repeatEachIndex so the banner uniquely identifies the run.
-  if (idCount > 1 && typeof meta.repeatEachIndex === "number") {
-    line3 += ` · repeat: ${meta.repeatEachIndex}`;
+function detectFontFile() {
+  const f = findFontFile();
+  if (!f) {
+    throw new Error(
+      "No monospace TTF font found. Install fonts-liberation (apt) " +
+        "or DejaVu Sans Mono and re-run.",
+    );
   }
+  return f;
+}
 
+// Sanitize a banner string. Strip all control chars (incl. NUL/DEL)
+// and squeeze whitespace, then truncate. ImageMagick's `-annotate`
+// reads the value as a single string; embedded newlines or NULs
+// would terminate the option early.
+function sanitizeBannerText(s, maxChars = BANNER_MAX_CHARS) {
+  const cleaned = String(s == null ? "" : s)
+    .replace(/[\x00-\x1f\x7f]+/g, " ") // eslint-disable-line no-control-regex
+    .replace(/\s{2,}/g, " ")
+    .trim();
+  if (cleaned.length <= maxChars) return cleaned;
+  // Truncate with an ellipsis-equivalent. Use plain "…" since the
+  // font ships with U+2026 in its Latin coverage.
+  return cleaned.slice(0, maxChars - 1) + "…";
+}
+
+// Format a date in America/New_York (EDT / EST) as
+// `YYYY-MM-DD HH:MM:SS TZ`. Uses Intl.DateTimeFormat with timeZone +
+// timeZoneName; the Playwright noble image has full ICU baked in
+// (verified at startup).
+function formatEastern(date) {
+  if (!(date instanceof Date) || Number.isNaN(date.getTime())) {
+    return "unknown-time";
+  }
+  const fmt = new Intl.DateTimeFormat("en-US", {
+    timeZone: "America/New_York",
+    timeZoneName: "short",
+    year: "numeric",
+    month: "2-digit",
+    day: "2-digit",
+    hour: "2-digit",
+    minute: "2-digit",
+    second: "2-digit",
+    hour12: false,
+  });
+  const parts = fmt.formatToParts(date);
+  const get = (type) => {
+    const p = parts.find((x) => x.type === type);
+    return p ? p.value : "";
+  };
+  // Intl with hour12: false occasionally emits "24" for midnight on
+  // some platforms; normalise.
+  let hour = get("hour");
+  if (hour === "24") hour = "00";
+  return `${get("year")}-${get("month")}-${get("day")} ${hour}:${get("minute")}:${get("second")} ${get("timeZoneName")}`;
+}
+
+// Pull a "step name / URL fallback" string for a single frame. If
+// the capture fixture recorded a `stepTitle`, use it; otherwise fall
+// back to the URL's pathname so the banner still has something
+// human-meaningful instead of empty space.
+function frameStepLabel(frame) {
+  const t = frame && frame.stepTitle;
+  if (t && String(t).trim().length > 0) return String(t);
+  const url = frame && frame.url;
+  if (!url) return "(no navigation)";
+  try {
+    const u = new URL(url);
+    // Path-only — full URL is too long for the banner and clutters
+    // the per-frame step line. The hostname/protocol are constant
+    // across the whole run anyway.
+    const path_ = u.pathname || "/";
+    return path_ + (u.search || "");
+  } catch {
+    // Non-parseable URL (unusual but possible for data: / about: ).
+    return String(url);
+  }
+}
+
+// Build the three banner lines for a single frame. Pure: no env or
+// disk IO. Centralised so the test suite can assert the exact shape.
+function buildFrameBannerLines({
+  prNumber,
+  testIndex,
+  testCount,
+  file,
+  title,
+  stepIndex,
+  stepCount,
+  stepLabel,
+  status,
+  projectName,
+  endTime,
+}) {
+  const line1 = sanitizeBannerText(
+    `PR #${prNumber} · Test ${testIndex} of ${testCount} · ${file || "unknown"}::${title || "untitled"}`,
+  );
+  const line2 = sanitizeBannerText(
+    `Step ${stepIndex} of ${stepCount}: ${stepLabel} · ${status || "unknown"}`,
+  );
+  const easternTime = formatEastern(
+    endTime instanceof Date ? endTime : endTime ? new Date(endTime) : new Date(),
+  );
+  const line3 = sanitizeBannerText(
+    `project: ${projectName || "unknown-project"} · ${easternTime}`,
+  );
   return [line1, line2, line3];
 }
 
-function escapeForTextfile(s) {
-  // ffmpeg drawtext `textfile=` reads literal bytes, no escaping needed
-  // for : and = and ' — these are only problematic in inline text=...
-  // expressions. We still strip control characters (incl. DEL) for safety.
-  return String(s).replace(/[\x00-\x1f\x7f]/g, " ");
-}
+// ── External tools ──────────────────────────────────────────────────
 
 function runFfmpeg(args, opts = {}) {
   const result = spawnSync(FFMPEG, args, {
@@ -173,76 +281,168 @@ function runFfmpeg(args, opts = {}) {
   return result;
 }
 
-function detectFontFile() {
-  const f = findFontFile();
-  if (!f) {
+function runConvert(args) {
+  const result = spawnSync(IMAGEMAGICK, args, {
+    stdio: ["ignore", "pipe", "pipe"],
+    encoding: "utf8",
+  });
+  if (result.status !== 0) {
+    const tail = (result.stderr || "").split("\n").slice(-30).join("\n");
     throw new Error(
-      "No monospace TTF font found. Install fonts-liberation (apt) " +
-        "or DejaVu Sans Mono and re-run.",
+      `convert failed (exit ${result.status}):\n  args: ${args.join(" ")}\n${tail}`,
     );
   }
-  return f;
+  return result;
 }
 
-function buildPerTestVideo(entry, fontFile) {
+function checkConvertAvailable() {
+  const r = spawnSync(IMAGEMAGICK, ["-version"], {
+    stdio: ["ignore", "pipe", "pipe"],
+    encoding: "utf8",
+  });
+  if (r.status !== 0) {
+    throw new Error(
+      `ImageMagick \`convert\` not found at "${IMAGEMAGICK}". Install ` +
+        "the `imagemagick` apt package (already pinned in the e2e " +
+        "finalize job) or set the IMAGEMAGICK env var.",
+    );
+  }
+}
+
+// Compose a single frame: scale-down-only the source PNG to fit
+// CANVAS_WIDTH×CANVAS_HEIGHT, paint a black 96px banner above, and
+// draw the three sanitized banner lines. Output is exactly
+// CANVAS_WIDTH×TOTAL_HEIGHT pixels so the per-test mp4 has uniform
+// dimensions and the master concat step works with `-c copy`.
+//
+// Two-step pipeline (one `convert` invocation):
+//   1) Generate the 96px black banner with three white text lines as
+//      a "label:" sub-image.
+//   2) Stack the banner on top of the rescaled source via `-append`.
+//
+// This avoids an ImageMagick quirk where `-annotate` after `-splice`
+// applies a vertical offset that shifts all text down by ~19px,
+// pushing line 3 off the bottom of the banner. Building the banner
+// against a fresh empty canvas (size + xc:black) and then using
+// `-append` to stack keeps the y math exactly as the human would
+// expect.
+function composeFrame({ inputFrame, outputFrame, fontFile, lines }) {
+  // Vertical layout: text baseline ascender ≈ pointsize - 4. For
+  // pointsize 22, cap top sits at baseline-15 and descenders fall
+  // ~4px below baseline. Centering N lines in BANNER_HEIGHT:
+  //   total = N*pointsize + (N-1)*spacing
+  //   topPad = (banner - total) / 2
+  // We position each line's baseline at:
+  //   topPad + (i+1)*pointsize + i*spacing
+  const N = lines.length;
+  const totalLineHeight =
+    N * BANNER_FONT_SIZE + (N - 1) * BANNER_LINE_SPACING;
+  const topPad = Math.max(
+    4,
+    Math.floor((BANNER_HEIGHT - totalLineHeight) / 2),
+  );
+
+  // Build two convert sub-commands chained via the parenthesis
+  // syntax (`(` `)` ImageMagick image stack). The first parenthesised
+  // block creates the banner: a `xc:black` of (CANVAS_WIDTH x
+  // BANNER_HEIGHT), with three -annotate calls drawing each line at
+  // its computed baseline. The second block reads the source frame,
+  // scales+pads to the canvas. Then `-append` stacks them vertically
+  // (banner on top because it was first on the stack).
+  const args = [
+    // ── Banner image (built first, ends up on top after -append) ──
+    "(",
+    "-size",
+    `${CANVAS_WIDTH}x${BANNER_HEIGHT}`,
+    "xc:black",
+    "-font",
+    fontFile,
+    "-pointsize",
+    String(BANNER_FONT_SIZE),
+    "-fill",
+    "white",
+  ];
+  for (let i = 0; i < lines.length; i++) {
+    const y = topPad + (i + 1) * BANNER_FONT_SIZE + i * BANNER_LINE_SPACING;
+    args.push("-annotate", `+${BANNER_LEFT_PAD}+${y}`, lines[i]);
+  }
+  args.push(")");
+  // ── Source image (scaled + padded to CANVAS_WIDTH × CANVAS_HEIGHT) ──
+  args.push(
+    "(",
+    inputFrame,
+    "-background",
+    "black",
+    "-gravity",
+    "center",
+    "-resize",
+    `${CANVAS_WIDTH}x${CANVAS_HEIGHT}>`,
+    "-extent",
+    `${CANVAS_WIDTH}x${CANVAS_HEIGHT}`,
+    ")",
+  );
+  // Stack: banner on top (the first parenthesised sub-image).
+  args.push("-append", outputFrame);
+  runConvert(args);
+}
+
+// ── Per-test video build ────────────────────────────────────────────
+
+function buildPerTestVideo({
+  entry,
+  fontFile,
+  testIndex,
+  testCount,
+  prNumber,
+}) {
   const { dir, frames, meta } = entry;
   const safeId = entry.name;
   const outputPath = path.join(VIDEOS_ROOT, `${safeId}.mp4`);
 
-  // Banner text: write the three lines to a text file so we don't have
-  // to escape colons/equals in inline drawtext expressions. Each line
-  // is rendered with its own drawtext filter so we can stack them.
-  const bannerLines = buildBannerLines(meta, 1);
+  const frameCount = frames.length;
+  const status = meta.status || "unknown";
+  const file = meta.file || "unknown";
+  const title = meta.title || "untitled";
+  const projectName = meta.projectName || "unknown-project";
+  const endTime = meta.endTime ? new Date(meta.endTime) : new Date();
+
+  // Pre-render each frame's banner+composite to a per-test temp dir.
   const tmpDir = path.join(VIDEOS_ROOT, ".tmp", safeId);
   ensureDir(tmpDir);
-  const lineFiles = bannerLines.map((line, idx) => {
-    const p = path.join(tmpDir, `line${idx}.txt`);
-    fs.writeFileSync(p, escapeForTextfile(line));
-    return p;
-  });
 
-  // Filter chain:
-  //   1. Pad source image to CANVAS_WIDTH×CANVAS_HEIGHT (centered).
-  //      Source images vary by project viewport; padding to a fixed
-  //      canvas means concat works with stream-copy.
-  //   2. Pad vertically to add BANNER_HEIGHT of black on top.
-  //   3. Three drawtext filters writing the banner lines.
-  //
-  // Banner text is rendered with `box=1:boxcolor=black@0.85:boxborderw=12`
-  // and a moderate fontsize so it stays readable while not overflowing.
-  const fontSize = 22;
-  const lineSpacing = 6;
-  const totalLineHeight = fontSize * 3 + lineSpacing * 2;
-  const startY = Math.max(
-    8,
-    Math.floor((BANNER_HEIGHT - totalLineHeight) / 2),
-  );
+  // The capture fixture records `meta.frames[]` aligned 1:1 with the
+  // NNNN.png on disk. If the meta got out of sync (frame written but
+  // capture record dropped due to navigation race), use the URL/step
+  // fallback `(no navigation)` so the slot still has a label.
+  const metaFrames = Array.isArray(meta.frames) ? meta.frames : [];
+  const composites = [];
+  for (let i = 0; i < frames.length; i++) {
+    const inputFrame = path.join(dir, frames[i]);
+    const compositeName = `composite-${String(i).padStart(4, "0")}.png`;
+    const outputFrame = path.join(tmpDir, compositeName);
+    const frameMeta = metaFrames[i] || null;
+    const stepLabel = frameStepLabel(frameMeta);
+    const lines = buildFrameBannerLines({
+      prNumber,
+      testIndex,
+      testCount,
+      file,
+      title,
+      stepIndex: i + 1,
+      stepCount: frameCount,
+      stepLabel,
+      status,
+      projectName,
+      endTime,
+    });
+    composeFrame({ inputFrame, outputFrame, fontFile, lines });
+    composites.push(outputFrame);
+  }
 
-  const drawtexts = lineFiles
-    .map((file, idx) => {
-      const y = startY + idx * (fontSize + lineSpacing);
-      return [
-        `drawtext=fontfile=${fontFile}`,
-        `textfile=${file}`,
-        `fontcolor=white`,
-        `fontsize=${fontSize}`,
-        `box=1:boxcolor=black@0.85:boxborderw=12`,
-        `x=20`,
-        `y=${y}`,
-      ].join(":");
-    })
-    .join(",");
-
-  const filter = [
-    // Scale-down-only: if the source is larger than the canvas, fit it
-    // (preserve aspect ratio); never upscale a smaller mobile shot.
-    `scale=w='min(iw,${CANVAS_WIDTH})':h='min(ih,${CANVAS_HEIGHT})':force_original_aspect_ratio=decrease`,
-    `pad=${CANVAS_WIDTH}:${CANVAS_HEIGHT}:(ow-iw)/2:(oh-ih)/2:color=black`,
-    `pad=${CANVAS_WIDTH}:${TOTAL_HEIGHT}:0:${BANNER_HEIGHT}:color=black`,
-    drawtexts,
-  ].join(",");
-
-  const inputPattern = path.join(dir, "%04d.png");
+  // Ask ffmpeg to read the composites as an image2 sequence. The
+  // tmpDir's filenames are zero-padded `composite-NNNN.png`, so we
+  // pass an exact pattern.
+  const inputPattern = path.join(tmpDir, "composite-%04d.png");
   const args = [
     "-y",
     "-loglevel",
@@ -251,8 +451,6 @@ function buildPerTestVideo(entry, fontFile) {
     FRAME_RATE,
     "-i",
     inputPattern,
-    "-vf",
-    filter,
     "-c:v",
     "libx264",
     "-preset",
@@ -270,9 +468,8 @@ function buildPerTestVideo(entry, fontFile) {
 
   runFfmpeg(args);
 
-  // Clean up the per-test temp files; the master concat step rebuilds
-  // its own list.
-  for (const f of lineFiles) {
+  // Cleanup: drop composites + tmpDir.
+  for (const f of composites) {
     try {
       fs.unlinkSync(f);
     } catch {
@@ -332,25 +529,27 @@ function buildCombinedVideo(perTestPaths) {
   return output;
 }
 
-function writeManifest(orderedEntries, perTestPaths) {
+function writeManifest(orderedEntries, perTestPaths, prNumber) {
   const manifest = path.join(VIDEOS_ROOT, "_combined.txt");
+  const Y = orderedEntries.length;
   const rows = orderedEntries.map((e, i) => {
     const meta = e.meta;
+    const endLocal = meta.endTime ? formatEastern(new Date(meta.endTime)) : "";
     return [
-      `[${i}] ${path.basename(perTestPaths[i])}`,
+      `[${i + 1} of ${Y}] ${path.basename(perTestPaths[i])}`,
       `    file:    ${meta.file || ""}`,
       `    title:   ${meta.title || ""}`,
       `    project: ${meta.projectName || ""}`,
       `    repeat:  ${meta.repeatEachIndex || 0}`,
       `    status:  ${meta.status || ""}`,
       `    frames:  ${e.frames.length}`,
+      `    end:     ${endLocal}`,
     ].join("\n");
   });
   const header = [
     "Per-test screenshot videos — manifest",
-    `PR:        #${PR_NUMBER}`,
-    `Generated: ${TIMESTAMP_UTC}`,
-    `Tests:     ${orderedEntries.length}`,
+    `PR:        #${prNumber}`,
+    `Tests:     ${Y}`,
     `Order:     (file, title, project, repeatEachIndex)`,
     "",
   ].join("\n");
@@ -387,23 +586,36 @@ function main() {
   entries.sort(compareEntries);
 
   const fontFile = detectFontFile();
+  checkConvertAvailable();
+  const Y = entries.length;
   console.log(
-    `Generating ${entries.length} per-test video(s) → ${path.relative(REPO_ROOT, VIDEOS_ROOT)}/`,
+    `Generating ${Y} per-test video(s) → ${path.relative(REPO_ROOT, VIDEOS_ROOT)}/`,
   );
   console.log(`  font:      ${fontFile}`);
   console.log(`  PR:        #${PR_NUMBER}`);
-  console.log(`  timestamp: ${TIMESTAMP_UTC}`);
+  console.log(`  convert:   ${IMAGEMAGICK}`);
+  console.log(`  ffmpeg:    ${FFMPEG}`);
 
   const perTestPaths = [];
   let succeeded = 0;
   let failed = 0;
-  for (const entry of entries) {
+  for (let idx = 0; idx < entries.length; idx++) {
+    const entry = entries[idx];
+    const testIndex = idx + 1; // 1-indexed for the banner
     const label = `${entry.meta.projectName || "?"} / ${entry.meta.file || "?"} / ${entry.meta.title || "?"}`;
     try {
-      const out = buildPerTestVideo(entry, fontFile);
+      const out = buildPerTestVideo({
+        entry,
+        fontFile,
+        testIndex,
+        testCount: Y,
+        prNumber: PR_NUMBER,
+      });
       perTestPaths.push(out);
       succeeded += 1;
-      console.log(`  ok   [${entry.frames.length} frames] ${label}`);
+      console.log(
+        `  ok   [Test ${testIndex} of ${Y}, ${entry.frames.length} frames] ${label}`,
+      );
     } catch (err) {
       failed += 1;
       console.error(`  FAIL ${label}: ${err.message}`);
@@ -428,7 +640,7 @@ function main() {
   }
 
   try {
-    const manifest = writeManifest(orderedEntries, perTestPaths);
+    const manifest = writeManifest(orderedEntries, perTestPaths, PR_NUMBER);
     console.log(`Manifest → ${path.relative(REPO_ROOT, manifest)}`);
   } catch (err) {
     console.error(`Manifest write failed: ${err.message}`);
@@ -445,8 +657,11 @@ if (require.main === module) {
 }
 
 module.exports = {
-  buildBannerLines,
+  buildFrameBannerLines,
   compareEntries,
+  formatEastern,
+  frameStepLabel,
   listFrameDirs,
-  formatUTC,
+  sanitizeBannerText,
+  BANNER_MAX_CHARS,
 };
