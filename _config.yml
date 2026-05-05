@@ -66,8 +66,8 @@ plugins:
 # outputs in `infrastructure/rum/template.yaml` after deploying that stack.
 analytics:
   cloudwatch_rum:
-    app_monitor_id: ""
-    identity_pool_id: ""
+    app_monitor_id: "4e93b4d4-3e43-4905-85aa-c4db00998c26"
+    identity_pool_id: "us-east-1:72e4fbc1-8512-4b03-a159-499411e45c1c"
     region: "us-east-1"
 
 # Exclude from build
