@@ -33,8 +33,12 @@ Parameters:
 
   GitHubScope:
     Type: String
-    Default: "repo,user"
-    Description: "GitHub OAuth scopes requested by the CMS"
+    Default: "repo,user,workflow"
+    Description: >
+      GitHub OAuth scopes requested by the CMS. `workflow` is required
+      by the publish-via-auto-merge shim's "Delete published entry"
+      recovery (it dispatches `delete-via-pr.yml` and the dispatch
+      endpoint 404s on tokens that lack the `workflow` scope).
 
   StageName:
     Type: String
