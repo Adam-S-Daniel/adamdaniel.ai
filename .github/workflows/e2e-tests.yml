@@ -185,6 +185,15 @@ jobs:
         # Browser binaries are cached, but the apt-installed system
         # libraries (libnss3, libnspr4, fonts, …) aren't — re-install
         # those without redownloading the browser tarballs.
+        #
+        # Timeout sized off 435 historical runs (E2E Tests + Visual
+        # Regression, last 100 each as of 2026-05-05): success
+        # distribution was p50=35s, p90=47s, p95=66s, p99=179s,
+        # max=554s. Almost everything finishes inside 60s; the long
+        # tail is apt-mirror outages. 5 minutes catches a stuck mirror
+        # before it eats the full 6-hour GHA default while only
+        # killing ~0.5% of historical successes (2 of 385).
+        timeout-minutes: 5
         run: npx playwright install-deps chromium firefox webkit
 
       - name: Prepare shard output dir
