@@ -20,10 +20,12 @@
  *
  * Flow:
  *
- *   0. (Setup) Write the canary baseline directly via the Contents API so the
- *      run starts from a known-good state, then wait for the public URL to
- *      reflect it. This also acts as a smoke check that the auth and deploy
- *      pipeline are alive before we commit to a longer test.
+ *   0. (Setup) If the canary baseline isn't already on main from the
+ *      previous cleanup, open a `cms/e2e-fixture/seed-…` PR that
+ *      writes it back, label it `cms/ready`, and wait for auto-merge.
+ *      Direct Contents-API writes to main are blocked by the branch
+ *      ruleset (`pull_request` rule), so even setup has to flow
+ *      through the same auto-merge path the test exercises.
  *
  *   1. Drive the production admin URL with a pre-seeded PAT session.
  *   2. Open the e2e collection → canary entry.
@@ -35,7 +37,9 @@
  *   8. Assert the PR merges into main.
  *   9. Assert deploy-production.yml runs on main and completes successfully.
  *  10. Assert the public adamdaniel.ai canary URL contains the marker.
- *  11. (Cleanup) Reset canary baseline via the Contents API.
+ *  11. (Cleanup) Open a second `cms/e2e-fixture/cleanup-…` PR that
+ *      resets the canary baseline. Same auto-merge path as step 0;
+ *      we await the merge so the next run starts clean.
  *
  * Gating:
  *   - CMS_E2E_PAT must be set (host-repo only — fork PRs / Dependabot skip).
@@ -58,6 +62,7 @@ const {
   waitForMerge,
   waitForWorkflowRun,
 } = require("./github-actions-poll");
+const { seedFixtureViaPr } = require("./cms-fixture-pr");
 
 const CANARY = findCanary("post");
 const PROD_HOST = "https://adamdaniel.ai";
@@ -84,42 +89,63 @@ function assertNotProdCanary(action) {
   }
 }
 
-// The full pipeline (validate-content + auto-merge + deploy-production +
-// CloudFront invalidation + public URL propagation) is the worst case when
-// runners are warm. Allow generous headroom but cap so a stuck pipeline
-// fails the test instead of hanging forever.
-const TEST_TIMEOUT_MS = 15 * 60 * 1000;
+// The full pipeline runs three labelled-PR auto-merge cycles end to
+// end:
+//   1. Optional setup PR (only when the previous run's cleanup didn't
+//      land — usually a no-op).
+//   2. The Decap-driven cms/<col>/<slug> PR (the real subject of the
+//      test).
+//   3. The cleanup PR that resets the canary baseline.
+// Each PR waits on the full required-check suite (validate-content +
+// e2e shards + finalize) plus deploy-production on main. Worst-case
+// runtime per cycle is ~10 min when runners are warm; allow ~40 min
+// total so a stuck pipeline still fails instead of hanging forever.
+const TEST_TIMEOUT_MS = 40 * 60 * 1000;
 
 test.describe.configure({ mode: "serial", timeout: TEST_TIMEOUT_MS });
-
-/** Encode the canary file as base64 for the Contents API. */
-function toContentBase64(text) {
-  return Buffer.from(text, "utf8").toString("base64");
-}
 
 /** Read the current main-branch SHA + content of the canary file. */
 async function fetchCanaryFromMain() {
   return gh(`/repos/${HOST_REPO}/contents/${CANARY.path}?ref=main`);
 }
 
-/** Write a body to the canary file directly on main via the Contents API. */
-async function writeCanaryOnMain({ bodyText, message }) {
-  assertNotProdCanary("write to the canary file via the Contents API");
+/**
+ * Compose a canary file body from the current front matter + a new
+ * body string. The front matter is preserved verbatim (it carries the
+ * canary_id, layout, permalink, etc. that the spec asserts against);
+ * only the body below the second `---` is replaced.
+ */
+async function composeCanaryFile(bodyText) {
   const current = await fetchCanaryFromMain();
   const decoded = Buffer.from(current.content, "base64").toString("utf8");
   const fmEnd = decoded.indexOf("\n---\n", 4);
   if (fmEnd < 0) throw new Error("Canary file is missing closing front-matter delimiter.");
   const frontMatter = decoded.slice(0, fmEnd + 5);
-  const newFile = `${frontMatter}\n${bodyText}\n`;
-  return gh(`/repos/${HOST_REPO}/contents/${CANARY.path}`, {
-    method: "PUT",
-    headers: { "Content-Type": "application/json" },
-    body: JSON.stringify({
-      message,
-      content: toContentBase64(newFile),
-      sha: current.sha,
-      branch: "main",
-    }),
+  return `${frontMatter}\n${bodyText}\n`;
+}
+
+/**
+ * Write a body to the canary file via a labelled PR that auto-merges.
+ *
+ * Direct writes to main are blocked by the `pull_request` rule on the
+ * main-branch ruleset (.github/rulesets/main.json); the API returns
+ * 409 "Repository rule violations found". `seedFixtureViaPr` opens a
+ * `cms/e2e-fixture/seed-<slug>-<runId>` PR with the `cms/ready` label,
+ * which engages cms-editorial-workflow.yml's `auto-merge-when-ready`
+ * job — same path prod content edits use — then blocks until the PR
+ * merges. Returns the merged-PR descriptor.
+ */
+async function writeCanaryViaPr({ runId, bodyText, message, prTitle, prBody }) {
+  assertNotProdCanary("write to the canary file via a labelled PR");
+  const newFile = await composeCanaryFile(bodyText);
+  return seedFixtureViaPr({
+    slug: CANARY.slug,
+    runId,
+    filePath: CANARY.path,
+    bodyText: newFile,
+    message,
+    prTitle,
+    prBody,
   });
 }
 
@@ -156,11 +182,14 @@ test("CMS publish loop — host repo, target main", async ({ page }, testInfo) =
 
   // ── 0. Reset canary to baseline before the run ──────────────────
   // The previous run may have crashed mid-flow; force a clean start.
-  await test.step("Reset canary to baseline via Contents API", async () => {
+  // The reset goes through a `cms/ready`-labelled PR + auto-merge
+  // because the main-branch ruleset blocks direct Contents-API writes.
+  await test.step("Reset canary to baseline via labelled PR (auto-merge)", async () => {
     const current = await fetchCanaryFromMain();
     const currentBody = Buffer.from(current.content, "base64").toString("utf8");
     if (!currentBody.includes(baselineBody)) {
-      await writeCanaryOnMain({
+      await writeCanaryViaPr({
+        runId: `setup-${runId}`,
         bodyText: `${baselineBody}\n\nThis URL exists so the automated end-to-end publish-loop tests have a stable\ntarget to assert against on both preview-pr<N>.adamdaniel.ai and\nadamdaniel.ai. The body is replaced during a test run and reset to this\nbaseline in cleanup, so the public URL always renders innocuous content\nbetween runs.\n\nIf this is the only thing you can see, no test is currently in progress.`,
         message: "test(canary): reset post baseline before publish-loop run",
       });
@@ -324,11 +353,13 @@ test("CMS publish loop — host repo, target main", async ({ page }, testInfo) =
   });
 
   // ── 9. Cleanup ──────────────────────────────────────────────────
-  // Async — write baseline back to main directly. The next deploy reverts
-  // the canary URL within a few minutes. Don't await deploy; this test has
-  // already proven the loop works.
-  await test.step("Reset canary baseline (cleanup commit)", async () => {
-    await writeCanaryOnMain({
+  // Reset baseline via a labelled PR + auto-merge (direct writes to
+  // main are blocked by the ruleset). We DO await the merge here:
+  // leaving the canary in the marker state would break the next run's
+  // baseline assertion and pollute the public URL between runs.
+  await test.step("Reset canary baseline (cleanup PR)", async () => {
+    await writeCanaryViaPr({
+      runId: `cleanup-${runId}`,
       bodyText: `${baselineBody}\n\nThis URL exists so the automated end-to-end publish-loop tests have a stable\ntarget to assert against on both preview-pr<N>.adamdaniel.ai and\nadamdaniel.ai. The body is replaced during a test run and reset to this\nbaseline in cleanup, so the public URL always renders innocuous content\nbetween runs.\n\nIf this is the only thing you can see, no test is currently in progress.`,
       message: `test(canary): reset post baseline after publish-loop run ${runId}`,
     });

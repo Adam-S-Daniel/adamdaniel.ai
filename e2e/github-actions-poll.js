@@ -160,8 +160,20 @@ async function waitForWorkflowRun({
   pollMs = 12_000,
   expectedConclusion = "success",
 } = {}) {
+  // `cms-editorial-workflow.yml` has `cancel-in-progress: true` keyed
+  // on PR number, so any push to a `cms/...` PR — including the
+  // multiple force-pushes Decap fires while saving an entry — cancels
+  // the in-flight validate-content run and starts a new one. Treating
+  // the first `cancelled` we see as a hard failure makes the publish-
+  // loop spec a coin flip: when this poller's first read of `runs[0]`
+  // catches the cancelled run before the replacement has been queued,
+  // the spec dies even though a successful run is moments away. To
+  // dodge that, remember which run IDs we've already seen as cancelled
+  // and keep polling for a NEWER run that resolves. Only treat
+  // `failure` / `timed_out` as hard failures; `cancelled` is transient.
   const deadline = Date.now() + timeoutMs;
   let lastSeen = null;
+  const cancelledSeen = new Set();
   while (Date.now() < deadline) {
     const params = new URLSearchParams();
     if (branch) params.set("branch", branch);
@@ -173,9 +185,19 @@ async function waitForWorkflowRun({
       lastSeen = runs[0];
       if (lastSeen.status === "completed") {
         if (lastSeen.conclusion === expectedConclusion) return lastSeen;
-        throw new Error(
-          `Workflow ${workflow} on ${branch || headSha} completed with conclusion=${lastSeen.conclusion} (expected ${expectedConclusion}).`,
-        );
+        if (lastSeen.conclusion === "cancelled") {
+          // Newer run hopefully on the way. Record the ID so we don't
+          // spin on the same cancelled run forever, then keep polling.
+          cancelledSeen.add(lastSeen.id);
+          // eslint-disable-next-line no-console
+          console.info(
+            `[waitForWorkflowRun] ${workflow} run ${lastSeen.id} on ${branch || headSha} was cancelled — waiting for a newer run to land.`,
+          );
+        } else {
+          throw new Error(
+            `Workflow ${workflow} on ${branch || headSha} completed with conclusion=${lastSeen.conclusion} (expected ${expectedConclusion}).`,
+          );
+        }
       }
     }
     await sleep(pollMs);
@@ -183,6 +205,10 @@ async function waitForWorkflowRun({
   throw new Error(
     `Timed out waiting for ${workflow} on ${branch || headSha}; last seen ${
       lastSeen ? `${lastSeen.status}/${lastSeen.conclusion}` : "no runs"
+    }${
+      cancelledSeen.size > 0
+        ? ` (also saw ${cancelledSeen.size} cancelled run(s) before timeout)`
+        : ""
     }.`,
   );
 }
