@@ -44,6 +44,14 @@ permissions:
   # contents stays in place.
   pull-requests: write
 
+defaults:
+  run:
+    # GHA defaults the shell to `sh -e {0}` inside `container:` jobs,
+    # but several of our run-blocks use `set -o pipefail` and other
+    # bash-isms. Force bash workflow-wide so the same scripts work
+    # both inside the Playwright container and on stock ubuntu-latest.
+    shell: bash
+
 concurrency:
   # Cancel any in-flight run for the same PR — saves minutes on
   # rapid-push spam.
@@ -103,6 +111,67 @@ jobs:
         with:
           node-version: '20'
 
+      - name: Verify Playwright image version matches lockfile
+        # Drift guard for the `mcr.microsoft.com/playwright:v<version>-noble`
+        # container images used by every Playwright job in this repo.
+        # Docker tags don't auto-update with `package-lock.json`, so a
+        # `@playwright/test` bump that lands without a matching tag bump
+        # would have the runtime client and the prebuilt browsers on
+        # different versions — silent test-time breakage. This step
+        # fails the build before any test runs.
+        #
+        # Source of truth: `packages["node_modules/@playwright/test"]`'s
+        # `version` field in `package-lock.json` — that's the resolved
+        # version npm actually installs (the `dependencies.version` in
+        # `package.json` may be a range like `^1.59.0`).
+        run: |
+          set -euo pipefail
+          expected=$(node -p "require('./package-lock.json').packages['node_modules/@playwright/test'].version")
+          echo "Lockfile @playwright/test version: $expected"
+
+          mismatches=0
+          # `nullglob` so an empty `.github/workflows/` (impossible in
+          # practice but cheap to defend against) leaves the loop body
+          # unrun rather than feeding the literal pattern through.
+          # Required by e2e/workflow-shell-glob-lint.test.js.
+          shopt -s nullglob
+          for f in .github/workflows/*.yml; do
+            # Extract every `mcr.microsoft.com/playwright:v<version>` tag
+            # from the file. `grep -oE` prints one match per line; if a
+            # workflow doesn't reference the image at all the loop body
+            # is just a no-op for that file.
+            while read -r tag; do
+              # `tag` looks like `v1.59.1-noble` or `v1.59.1`. Strip the
+              # leading `v` and any `-<flavor>` suffix to get a bare
+              # SemVer string for comparison.
+              found=${tag#v}
+              found=${found%%-*}
+              if [ "$found" != "$expected" ]; then
+                echo "::error file=$f::Playwright image tag '$tag' disagrees with package-lock.json's '$expected'."
+                mismatches=$((mismatches + 1))
+              fi
+            done < <(grep -oE 'mcr\.microsoft\.com/playwright:v[0-9]+\.[0-9]+\.[0-9]+(-[a-z]+)?' "$f" | sed 's|mcr\.microsoft\.com/playwright:||')
+          done
+
+          if [ "$mismatches" -gt 0 ]; then
+            # Plain `echo` + `printf` instead of a HEREDOC so YAML pipe-
+            # block indentation can't mis-frame the terminator.
+            {
+              echo ""
+              echo "Playwright Docker image tag(s) disagree with package-lock.json."
+              echo ""
+              echo "Lockfile says: $expected"
+              echo "To fix, bump every workflow tag to match. From the repo root:"
+              echo ""
+              echo "    sed -i 's|mcr.microsoft.com/playwright:v[^\"[:space:]]*-noble|mcr.microsoft.com/playwright:v${expected}-noble|g' .github/workflows/*.yml"
+              echo ""
+              echo "Then re-commit. The image must exist in the registry — verify"
+              echo "with: docker pull mcr.microsoft.com/playwright:v${expected}-noble"
+            } >&2
+            exit 1
+          fi
+          echo "All Playwright image tags match the lockfile version."
+
       - name: Decide scope and shard count
         id: s
         # Diff-aware subset against the base branch tip. The selector
@@ -142,6 +211,16 @@ jobs:
   e2e:
     needs: select
     runs-on: ubuntu-latest
+    # Prebuilt Playwright image — browsers + their apt deps (libnss3,
+    # libnspr4, fonts, …) are baked in. Replaces the `actions/cache` +
+    # `playwright install` + `playwright install-deps` triple step that
+    # previously paid 5–15 minutes of apt-mirror tail latency per shard
+    # whenever the deb mirror was flaky. The tag MUST match
+    # `package-lock.json`'s `@playwright/test` version; the
+    # `select` job's "Verify Playwright image version matches lockfile"
+    # step fails the build if any workflow drifts.
+    container:
+      image: mcr.microsoft.com/playwright:v1.59.1-noble
     strategy:
       fail-fast: false
       matrix:
@@ -150,7 +229,27 @@ jobs:
       - name: Checkout
         uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd  # v6.0.2 (2026-01-09)
 
+      - name: Install Ruby toolchain prerequisites
+        # The Playwright noble image ships with `libgmp` (a browser
+        # dep) but not `libyaml-0-2`, which `ruby/setup-ruby`'s
+        # prebuilt Ruby 3.2 tarball needs at link time, and not
+        # `build-essential`, which `bundler-cache` needs to build the
+        # native extensions in our Gemfile (`http_parser.rb`,
+        # `eventmachine`). Skip either and `bundle install` fails with
+        # "make: not found" or a libyaml linker error.
+        run: |
+          apt-get update -qq
+          apt-get install -y -qq --no-install-recommends libyaml-0-2 build-essential
+
       - name: Setup Ruby
+        # Required because `playwright.config.js`'s `webServer` block
+        # runs `bundle exec jekyll build && npx serve _site` for
+        # `TARGET=local` (the default). Without Ruby + bundler in the
+        # container, the webServer would fail at `bundle: not found`
+        # before any spec runs. Several specs also read `_site/` files
+        # directly (sitemap, image-alt-text, draft-isolation, the cms
+        # lifecycle suite) — the webServer's build is what produces
+        # those for the spec to read.
         uses: ruby/setup-ruby@0cb964fd540e0a24c900370abf38a33466142735  # v1.302.0 (2026-04-15)
         with:
           ruby-version: '3.2'
@@ -164,37 +263,6 @@ jobs:
 
       - name: Install npm dependencies
         run: npm ci
-
-      - name: Cache Playwright browsers
-        id: pw-cache
-        uses: actions/cache@27d5ce7f107fe9357f9df03efb73ab90386fccae  # v5.0.5 (2026-04-13)
-        with:
-          path: ~/.cache/ms-playwright
-          # Hash the lockfile so a @playwright/test version bump
-          # produces a fresh cache entry. `playwright-all-` distinguishes
-          # this triple-browser cache from the chromium-only one used
-          # by visual-regression.yml.
-          key: playwright-all-${{ runner.os }}-${{ hashFiles('package-lock.json') }}
-
-      - name: Install Playwright browsers
-        if: steps.pw-cache.outputs.cache-hit != 'true'
-        run: npx playwright install chromium firefox webkit --with-deps
-
-      - name: Install Playwright OS deps (browsers cached)
-        if: steps.pw-cache.outputs.cache-hit == 'true'
-        # Browser binaries are cached, but the apt-installed system
-        # libraries (libnss3, libnspr4, fonts, …) aren't — re-install
-        # those without redownloading the browser tarballs.
-        #
-        # Timeout sized off 435 historical runs (E2E Tests + Visual
-        # Regression, last 100 each as of 2026-05-05): success
-        # distribution was p50=35s, p90=47s, p95=66s, p99=179s,
-        # max=554s. Almost everything finishes inside 60s; the long
-        # tail is apt-mirror outages. 5 minutes catches a stuck mirror
-        # before it eats the full 6-hour GHA default while only
-        # killing ~0.5% of historical successes (2 of 385).
-        timeout-minutes: 5
-        run: npx playwright install-deps chromium firefox webkit
 
       - name: Prepare shard output dir
         run: mkdir -p shard-output
@@ -297,11 +365,24 @@ jobs:
   # merge gate. Branch protection can promote it to required later.
   parity:
     runs-on: ubuntu-latest
+    # Same prebuilt Playwright image as the `e2e` matrix above —
+    # version tag is enforced to match `package-lock.json` by the
+    # `select` job's drift-guard step.
+    container:
+      image: mcr.microsoft.com/playwright:v1.59.1-noble
     # Run against the latest commit of every PR. Forks don't block on
     # this — the parity probe is read-only and uses no secrets.
     steps:
       - name: Checkout
         uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd  # v6.0.2 (2026-01-09)
+
+      - name: Install Ruby toolchain prerequisites
+        # See the same step in the `e2e` job for rationale —
+        # libyaml-0-2 + build-essential aren't in the Playwright
+        # noble image, but `ruby/setup-ruby` + bundler need them.
+        run: |
+          apt-get update -qq
+          apt-get install -y -qq --no-install-recommends libyaml-0-2 build-essential
 
       - name: Setup Ruby
         # A handful of @parity-tagged specs (sitemap, image-alt-text,
@@ -326,23 +407,6 @@ jobs:
 
       - name: Install npm dependencies
         run: npm ci
-
-      - name: Cache Playwright browsers (chromium only)
-        id: pw-cache
-        uses: actions/cache@27d5ce7f107fe9357f9df03efb73ab90386fccae  # v5.0.5 (2026-04-13)
-        with:
-          path: ~/.cache/ms-playwright
-          # `playwright-parity-` keeps this chromium-only cache distinct
-          # from the full triple-browser cache used by the `e2e` matrix.
-          key: playwright-parity-${{ runner.os }}-${{ hashFiles('package-lock.json') }}
-
-      - name: Install Playwright chromium
-        if: steps.pw-cache.outputs.cache-hit != 'true'
-        run: npx playwright install chromium --with-deps
-
-      - name: Install Playwright OS deps (chromium)
-        if: steps.pw-cache.outputs.cache-hit == 'true'
-        run: npx playwright install-deps chromium
 
       - name: Run @parity subset against prod
         env:
@@ -373,6 +437,14 @@ jobs:
     if: ${{ !cancelled() }}
     needs: [e2e]
     runs-on: ubuntu-latest
+    # Use the same Playwright container as the `e2e` matrix — the
+    # `merge-reports` step needs the same `@playwright/test` version
+    # the shards used to write their blobs, and the image guarantees it.
+    # The downstream "Install gitleaks" + "Post failure summary" steps
+    # also work fine inside the container (curl + tar + node are baked
+    # in, sudo isn't but the image runs as root anyway).
+    container:
+      image: mcr.microsoft.com/playwright:v1.59.1-noble
     steps:
       - name: Checkout
         uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd  # v6.0.2 (2026-01-09)
@@ -450,8 +522,11 @@ jobs:
         env:
           GITLEAKS_VERSION: 8.21.2
         run: |
+          # No `sudo` here: the Playwright container runs as root by
+          # default, so `tar -xzC /usr/local/bin` works directly. Adding
+          # `sudo` would fail because sudo isn't installed in the image.
           curl -sSfL "https://github.com/gitleaks/gitleaks/releases/download/v${GITLEAKS_VERSION}/gitleaks_${GITLEAKS_VERSION}_linux_x64.tar.gz" \
-            | sudo tar -xzC /usr/local/bin gitleaks
+            | tar -xzC /usr/local/bin gitleaks
           gitleaks version
 
       - name: Extract and scrub failure summary
