@@ -84,6 +84,12 @@ jobs:
             bundle exec ruby "$t"
           done
 
+      - name: Run sync-action-pin-comments tests
+        # Pure-bash test for the action-pin comment-syncer. Stubs
+        # `gh` via a path-shadowing wrapper, so this runs offline
+        # and never hits the GitHub API. Sub-second.
+        run: bash scripts/sync-action-pin-comments.test.sh
+
   # Decide what e2e work is actually needed for this commit, and how
   # many shards to spin up. Hoisted out of the e2e matrix so the
   # selector runs once (not 4×) and so a baseline-only run can scale
