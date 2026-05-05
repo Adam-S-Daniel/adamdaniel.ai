@@ -18,6 +18,32 @@ name: Dependabot comment sync
 # with 403. `pull_request_target` runs in the BASE repo's context
 # with the full GITHUB_TOKEN, so we can push the follow-up commit.
 #
+# ── Why GITHUB_TOKEN isn't enough: workflow-file protection ────────
+#
+# GitHub Apps (which is what GITHUB_TOKEN authenticates as) cannot
+# create or update files under `.github/workflows/` without a special
+# `workflows: write` permission, and that permission can NOT be
+# requested via a workflow's `permissions:` block — it's only
+# available to GitHub Apps installed with that scope. Pushing back
+# a Dependabot action-bump (which by definition modifies workflow
+# files) with GITHUB_TOKEN fails with:
+#
+#   ! [remote rejected] HEAD -> dependabot/...
+#     refusing to allow a GitHub App to create or update workflow
+#     `.github/workflows/...` without `workflows` permission
+#
+# The fix is a fine-grained Personal Access Token with the
+# `workflows` permission, stored as the `WORKFLOW_SYNC_PAT`
+# repository secret. To create one: github.com → Settings →
+# Developer settings → Personal access tokens → Fine-grained →
+# scope to this repo, set "Workflows: Read and write" + "Contents:
+# Read and write" + "Pull requests: Read", expire in 1 year, save
+# as the WORKFLOW_SYNC_PAT secret.
+#
+# When WORKFLOW_SYNC_PAT is unset the job logs a clear notice and
+# exits cleanly so the workflow doesn't show up red on every
+# Dependabot PR — the feature is opt-in via the PAT secret.
+#
 # Standard `pull_request_target` security caveat: the workflow runs
 # at the BASE-branch HEAD, so any malicious change in the PR diff
 # CAN'T influence what runs here — *unless* we explicitly check out
@@ -83,6 +109,17 @@ jobs:
     if: github.event.pull_request.user.login == 'dependabot[bot]'
     runs-on: ubuntu-latest
     steps:
+      - name: Bail early if WORKFLOW_SYNC_PAT is unset
+        # Without a PAT carrying the `workflows` permission, pushing
+        # back a Dependabot action-bump fails with "refusing to allow
+        # a GitHub App to create or update workflow ... without
+        # workflows permission". Skip cleanly with a notice rather
+        # than fail loudly on every Dependabot PR.
+        if: ${{ secrets.WORKFLOW_SYNC_PAT == '' }}
+        run: |
+          echo "::notice::WORKFLOW_SYNC_PAT secret is not configured. Skipping comment-sync — see this workflow's header for setup instructions."
+          exit 0
+
       - name: Checkout PR head
         # `pull_request_target` defaults to the BASE ref. We need
         # the PR's HEAD to read+rewrite the just-bumped workflow
@@ -91,12 +128,17 @@ jobs:
         # is the same as the base repo — but spell it out so a
         # future tweak to support fork PRs doesn't silently break
         # this workflow.
+        if: ${{ secrets.WORKFLOW_SYNC_PAT != '' }}
         uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd  # v6.0.2 (2026-01-09)
         with:
           ref: ${{ github.event.pull_request.head.ref }}
           repository: ${{ github.event.pull_request.head.repo.full_name }}
           fetch-depth: 0
-          token: ${{ secrets.GITHUB_TOKEN }}
+          # Use the PAT (with `workflows: write`) for both the
+          # initial fetch and the persisted credential `git push`
+          # uses below. GITHUB_TOKEN can't push workflow-file
+          # changes — see this workflow's header for why.
+          token: ${{ secrets.WORKFLOW_SYNC_PAT }}
           persist-credentials: true
 
       - name: Configure git author
@@ -105,19 +147,24 @@ jobs:
         # authored by Dependabot or by the PR creator) keeps
         # working. The 49699333+ ID is Dependabot's official
         # noreply email per https://api.github.com/users/dependabot%5Bbot%5D.
+        if: ${{ secrets.WORKFLOW_SYNC_PAT != '' }}
         run: |
           git config user.name "dependabot[bot]"
           git config user.email "49699333+dependabot[bot]@users.noreply.github.com"
 
       - name: Sync action-pin comments
         # `gh` is preinstalled on ubuntu-latest. The script reads
-        # GITHUB_TOKEN via gh's standard env var so the API calls
-        # don't get rate-limited at the unauthenticated tier.
+        # the GitHub API via gh's standard env var. GITHUB_TOKEN
+        # is fine for the read-only API calls the script makes
+        # (listing tags, resolving commits) — only the push needs
+        # the workflow-scoped PAT.
+        if: ${{ secrets.WORKFLOW_SYNC_PAT != '' }}
         env:
           GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
         run: bash scripts/sync-action-pin-comments.sh
 
       - name: Commit and push if changes
+        if: ${{ secrets.WORKFLOW_SYNC_PAT != '' }}
         # No-op when the script left the tree clean. When it did
         # rewrite something, commit as Dependabot and push back
         # to the PR branch. The commit becomes part of the same
