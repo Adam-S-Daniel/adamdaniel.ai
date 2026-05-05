@@ -11,6 +11,7 @@ adamdaniel.ai
 ├── Jekyll site          (S3 + CloudFront, custom domain)
 ├── Decap CMS            (/admin/ — headless CMS backed by this repo)
 ├── AWS OAuth Proxy      (Lambda + API Gateway HTTP API — ~$0/month)
+├── Analytics            (CloudWatch RUM — see [ANALYTICS_SETUP.md](ANALYTICS_SETUP.md))
 └── GitHub Actions       (production deploy + PR preview environments)
 ```
 
