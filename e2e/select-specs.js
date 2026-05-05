@@ -41,6 +41,20 @@ const ALWAYS_RUN = [
   "e2e/canary-content.test.js",
 ];
 
+// Publish-loop browser specs that self-skip on PR runs because they're
+// gated to RUN_HOST_REPO_PUBLISH_LOOP / RUN_PROD_MUTATE_PLAYGROUND. They
+// do show up in the selector's `files` list (so the dedicated host-repo
+// workflow can pick them up), but for shard-budget purposes they're
+// effectively no-ops on a normal PR — we don't want to spin up a 4-way
+// matrix because the selector returned three publish-loop specs that
+// won't actually do any browser work.
+const HEAVY = new Set([
+  "e2e/cms-publish-loop.spec.js",
+  "e2e/cms-publish-loop-preview.spec.js",
+  "e2e/cms-publish-loop-prod-mutate.spec.js",
+  "e2e/cms-delete-published.spec.js",
+]);
+
 // Files that fan out to "every spec is potentially affected". Includes
 // shared infrastructure (layouts/css/plugins), test infrastructure
 // (helpers, base, configs), and dependency manifests.
@@ -401,13 +415,39 @@ function selectSpecs(changedFiles, options = {}) {
   return result;
 }
 
+// Decide how many parallel matrix shards the e2e job should fan out to,
+// given the selector's verdict. The full 4-way matrix exists for the
+// scope=all path (every spec, three browsers, four viewports = ~80 test
+// minutes); paying that bring-up cost for a 30-test invariant subset is
+// pure overhead. Heuristic, not measurement-driven — once we have data
+// we can replace this with a duration-based bucket. The required check
+// is `e2e (1)`, so this function MUST always include shard 1; the
+// downstream workflow turns shard_count=N into the matrix [1..N], which
+// guarantees that.
+function pickShardCount(scope, files) {
+  if (scope === "skip") return 1;
+  if (scope === "all") return 4;
+  if (scope === "subset") {
+    const browser = (files || []).filter(
+      (f) => f.endsWith(".spec.js") && !HEAVY.has(f),
+    );
+    if (browser.length <= 2) return 1;
+    if (browser.length <= 6) return 2;
+    return 4;
+  }
+  // Unknown scope — fail safe to the full matrix.
+  return 4;
+}
+
 module.exports = {
   ALWAYS_RUN,
   FANOUT_PATTERNS,
   SPEC_RULES,
+  HEAVY,
   selectSpecs,
   getChangedFiles,
   parseSpecDirectives,
+  pickShardCount,
 };
 
 if (require.main === module) {
@@ -425,5 +465,10 @@ if (require.main === module) {
   // Make output stable across CI runs by sorting and including the
   // changed-files list for traceability.
   result.changedFiles = changed;
+  // Layer 2: emit a recommended shard count so the workflow can scale
+  // the matrix to the subset's actual size. The workflow turns this
+  // into a [1..N] array; downstream the required check (`e2e (1)`)
+  // continues to fire because shard 1 is always in the array.
+  result.shard_count = pickShardCount(result.scope, result.files);
   process.stdout.write(JSON.stringify(result, null, 2) + "\n");
 }
