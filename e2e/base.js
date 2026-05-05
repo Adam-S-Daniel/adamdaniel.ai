@@ -1,5 +1,7 @@
 const { test: base, expect } = require("@playwright/test");
 const { execFileSync } = require("node:child_process");
+const fs = require("node:fs");
+const path = require("node:path");
 
 // Custom fixture that adds a rootFontSize option.
 // Projects can set rootFontSize (e.g. "20px") to simulate users who configure
@@ -76,6 +78,147 @@ function resolvePreviewBaseURL() {
   return `https://preview-pr${number}.adamdaniel.ai`;
 }
 
+// ── Per-test screenshot capture ───────────────────────────────────────
+//
+// Every browser test takes one screenshot per main-frame navigation
+// (committed top-level URL change). Frames land at:
+//
+//   test-results/per-test-frames/<safe-test-id>/NNNN.png
+//
+// alongside a sidecar `meta.json` describing the run. The
+// `e2e/generate-test-videos.js` script (run in the `finalize` job)
+// assembles these into per-test videos with a metadata banner and
+// concatenates them into a master video for the CI run.
+//
+// This fixture only triggers for tests that request the `page` fixture.
+// Pure-node tests (e2e/*.test.js) never instantiate `page`, so they
+// stay fully unaffected.
+//
+// V1 scope: only the test fixture's primary `page` is captured.
+// Secondary pages opened via `browserContext.newPage()` are not
+// instrumented — extending coverage is a follow-up.
+
+const REPO_ROOT = path.resolve(__dirname, "..");
+const PER_TEST_FRAMES_ROOT = path.join(
+  REPO_ROOT,
+  "test-results",
+  "per-test-frames",
+);
+const PER_TEST_MAX_FRAMES = 50;
+
+function safeTestId(testInfo) {
+  // Build a filesystem-safe id incorporating project, file, title, and
+  // repeatEachIndex so retries / cross-project runs of the same test
+  // don't collide. Slugify aggressively, cap to a sane length so the
+  // total path stays well under typical filesystem limits (<255).
+  const file = path.basename(testInfo.file || "unknown");
+  const parts = [
+    testInfo.project.name || "unknown-project",
+    file,
+    testInfo.title || "untitled",
+    `r${testInfo.repeatEachIndex || 0}`,
+  ];
+  const raw = parts.join("__");
+  const safe = raw
+    .replace(/[\s/:\\?*"<>|]+/g, "-")
+    .replace(/-{2,}/g, "-")
+    .replace(/^-+|-+$/g, "");
+  return safe.slice(0, 180);
+}
+
+function ensureFrameDir(testInfo) {
+  const dir = path.join(PER_TEST_FRAMES_ROOT, safeTestId(testInfo));
+  fs.mkdirSync(dir, { recursive: true });
+  return dir;
+}
+
+async function attachPerTestCapture(page, testInfo) {
+  const frameDir = ensureFrameDir(testInfo);
+  const captured = [];
+  let counter = 0;
+  let inFlight = Promise.resolve();
+
+  const meta = {
+    safeTestId: safeTestId(testInfo),
+    projectName: testInfo.project.name,
+    file: path.basename(testInfo.file || "unknown"),
+    title: testInfo.title,
+    repeatEachIndex: testInfo.repeatEachIndex || 0,
+    startTime: new Date().toISOString(),
+    endTime: null,
+    status: "running",
+    frames: [],
+  };
+
+  // Persist a starting meta.json immediately so even crashing tests
+  // leave a partial record on disk that `generate-test-videos.js` can
+  // pick up.
+  const metaPath = path.join(frameDir, "meta.json");
+  fs.writeFileSync(metaPath, JSON.stringify(meta, null, 2));
+
+  const onNavigated = async (frame) => {
+    if (frame !== page.mainFrame()) return; // skip subframes
+    if (counter >= PER_TEST_MAX_FRAMES) return; // bound runaway loops
+    const url = frame.url();
+    if (!url || url === "about:blank") return;
+    const seq = String(counter).padStart(4, "0");
+    counter += 1;
+    const file = path.join(frameDir, `${seq}.png`);
+    // Serialize captures so we don't fire concurrent screenshots on a
+    // page that's still loading the next nav. Failures are swallowed:
+    // a torn-down page (post-test) shouldn't fail the run.
+    inFlight = inFlight.then(async () => {
+      try {
+        await page.screenshot({ path: file, fullPage: true, timeout: 5000 });
+        captured.push({
+          path: file,
+          url,
+          capturedAt: new Date().toISOString(),
+        });
+      } catch (_err) {
+        // Most common: page was closed / navigated again before the
+        // screenshot could complete. Silently drop — banner stays in
+        // sequence with whatever frames did land.
+      }
+    });
+  };
+
+  page.on("framenavigated", onNavigated);
+
+  return {
+    async finalize() {
+      page.off("framenavigated", onNavigated);
+      // Drain pending screenshots before writing meta.json so the file
+      // list matches the disk state.
+      try {
+        await inFlight;
+      } catch (_) {
+        /* swallow */
+      }
+      meta.endTime = new Date().toISOString();
+      meta.frames = captured.map((c) => ({
+        path: path.relative(REPO_ROOT, c.path),
+        url: c.url,
+        capturedAt: c.capturedAt,
+      }));
+      meta.status = (() => {
+        // testInfo.status is only finalised in afterEach hooks; we read
+        // whatever Playwright has populated.
+        const s = testInfo.status || "unknown";
+        // "expected" → "passed" semantics: testInfo.status is "passed"
+        // for ok runs, "failed" / "timedOut" for failures, "skipped"
+        // for skips.
+        return s;
+      })();
+      try {
+        fs.writeFileSync(metaPath, JSON.stringify(meta, null, 2));
+      } catch (_) {
+        /* swallow */
+      }
+    },
+  };
+}
+
 exports.test = base.extend({
   rootFontSize: [null, { option: true }],
 
@@ -84,16 +227,42 @@ exports.test = base.extend({
   // local case; preview/prod resolve at fixture-init time.
   baseURL: TARGET === "local" ? undefined : resolveTargetBaseURL(),
 
-  page: async ({ page, rootFontSize }, use) => {
+  page: async ({ page, rootFontSize }, use, testInfo) => {
     if (rootFontSize) {
       await page.addInitScript((size) => {
         document.documentElement.style.fontSize = size;
       }, rootFontSize);
     }
-    await use(page);
+
+    // Per-test screenshot capture. Disabled when DISABLE_PER_TEST_VIDEOS=1
+    // so an emergency escape hatch is available without a code change.
+    let capture = null;
+    if (process.env.DISABLE_PER_TEST_VIDEOS !== "1") {
+      try {
+        capture = await attachPerTestCapture(page, testInfo);
+      } catch (_err) {
+        // Capture setup must never break a test. Fall through.
+        capture = null;
+      }
+    }
+
+    try {
+      await use(page);
+    } finally {
+      if (capture) {
+        try {
+          await capture.finalize();
+        } catch (_) {
+          /* swallow */
+        }
+      }
+    }
   },
 });
 
 exports.expect = expect;
 exports.TARGET = TARGET;
 exports.resolveTargetBaseURL = resolveTargetBaseURL;
+exports.safeTestId = safeTestId;
+exports.PER_TEST_FRAMES_ROOT = PER_TEST_FRAMES_ROOT;
+exports.PER_TEST_MAX_FRAMES = PER_TEST_MAX_FRAMES;
