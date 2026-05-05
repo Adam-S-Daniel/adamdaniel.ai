@@ -9,14 +9,18 @@ name: CMS Publish Loop — Host Repo (canary collection)
 # beyond the canary URL itself.
 #
 # Trigger model:
-#   - schedule + workflow_dispatch always run (subject to job-level
-#     gating below).
-#   - pull_request runs with salient-path gating, identical to
-#     cms-publish-loop-prod.yml. The job ALSO self-skips on cms/*
-#     PRs to avoid recursion: the spec opens a `cms/e2e/canary-post`
-#     PR, which by salient-path filtering would re-trigger this same
-#     workflow on its own PR. Gate: `head_ref` does not start with
-#     `cms/`.
+#   - schedule + workflow_dispatch always run (subject to the
+#     job-level recursion guard below). `paths:` only narrows the
+#     `pull_request` trigger; cron and dispatch ignore it.
+#   - pull_request fires only when one of the listed salient files
+#     changed. The job ALSO self-skips on cms/* PRs to avoid
+#     recursion: the spec opens a `cms/e2e/canary-post` PR, which
+#     would otherwise re-trigger this same workflow on its own PR.
+#     Gate: `head_ref` does not start with `cms/`. This job is NOT
+#     in the branch-protection required-status-checks list — see
+#     `.github/rulesets/main.json` and the live ruleset API view —
+#     so workflow-level `paths:` filtering is safe (no missing-check
+#     merge block).
 #
 # Spec gating: e2e/cms-publish-loop.spec.js self-skips when
 # `RUN_HOST_REPO_PUBLISH_LOOP=1` is unset, so the spec only runs
@@ -32,6 +36,27 @@ on:
     - cron: '0 12 * * *'
   pull_request:
     branches: [main]
+    paths:
+      - .github/workflows/cms-publish-loop-host.yml
+      - .github/workflows/cms-editorial-workflow.yml
+      - .github/workflows/deploy-production.yml
+      - .github/workflows/delete-via-pr.yml
+      - e2e/cms-publish-loop.spec.js
+      - e2e/cms-delete-published.spec.js
+      - e2e/decap-pat.js
+      - e2e/github-actions-poll.js
+      - e2e/canary-content.js
+      - e2e/base.js
+      - admin/**
+      - _e2e/canary-post.md
+      - _e2e/canary-page.md
+      - _e2e/canary-project.md
+      - playwright.config.js
+      - package.json
+      - package-lock.json
+      - _config.yml
+      - _layouts/canary.html
+      - _layouts/default.html
   workflow_dispatch:
     # Manual trigger for debugging the spec or after sunsetting +
     # un-sunsetting the workflow.
@@ -77,60 +102,17 @@ jobs:
     steps:
       - name: Checkout
         uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd  # v6.0.2 (2026-01-09)
-        with:
-          # Need the PR's full diff range (base..head) to detect
-          # whether any salient path changed. fetch-depth: 0 is the
-          # safest choice for a PR that may have many commits.
-          fetch-depth: 0
-
-      - name: Detect salient changes
-        id: salient
-        env:
-          BASE_SHA: ${{ github.event.pull_request.base.sha }}
-          HEAD_SHA: ${{ github.event.pull_request.head.sha }}
-          EVENT_NAME: ${{ github.event_name }}
-        run: |
-          set -euo pipefail
-          if [ "$EVENT_NAME" != "pull_request" ]; then
-            echo "Non-PR event ($EVENT_NAME) — forcing run."
-            echo "run=true" >> "$GITHUB_OUTPUT"
-            exit 0
-          fi
-          changed=$(git diff --name-only "$BASE_SHA" "$HEAD_SHA")
-          echo "Files changed in PR:"
-          echo "$changed" | sed 's/^/  /'
-          # Salient paths: the spec, the e2e helpers it imports, the
-          # canary fixtures, the admin shell the spec drives, the
-          # Playwright config, npm dep manifests, Jekyll config and
-          # the canary layout that renders the public page, and the
-          # workflows it depends on (editorial-workflow + deploy-
-          # production). A change to any of these can break the
-          # publish loop end-to-end.
-          if printf '%s\n' "$changed" | grep -qE '^(\.github/workflows/(cms-publish-loop-host|cms-editorial-workflow|deploy-production|delete-via-pr)\.yml|e2e/cms-publish-loop\.spec\.js|e2e/cms-delete-published\.spec\.js|e2e/(decap-pat|github-actions-poll|canary-content|base)\.js|admin/|_e2e/canary-(post|page|project)\.md|playwright\.config\.js|package(-lock)?\.json|_config\.yml|_layouts/(canary|default)\.html)'; then
-            echo "Salient paths changed → running host-repo publish loop."
-            echo "run=true" >> "$GITHUB_OUTPUT"
-          else
-            echo "No salient paths changed → emitting success without running."
-            echo "run=false" >> "$GITHUB_OUTPUT"
-          fi
-
-      - name: Skip — not salient
-        if: steps.salient.outputs.run != 'true'
-        run: echo "::notice::No salient paths changed in this PR; reporting success without running host publish loop."
 
       - name: Setup Node
-        if: steps.salient.outputs.run == 'true'
         uses: actions/setup-node@48b55a011bda9f5d6aeb4c2d9c7362e8dae4041e  # v6.4.0 (2026-04-20)
         with:
           node-version: '20'
           cache: 'npm'
 
       - name: Install npm dependencies
-        if: steps.salient.outputs.run == 'true'
         run: npm ci
 
       - name: Run host-repo publish loop + delete-published specs
-        if: steps.salient.outputs.run == 'true'
         env:
           # Same PAT cms-publish-loop-prod.yml uses. Fine-grained,
           # scoped to the host repo with contents: r/w + pull_requests:
@@ -156,7 +138,7 @@ jobs:
             2>&1 | tee /tmp/host-loop.log
 
       - name: Upload test results on failure
-        if: ${{ (failure() || cancelled()) && steps.salient.outputs.run == 'true' }}
+        if: ${{ failure() || cancelled() }}
         uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a  # v7.0.1 (2026-04-10)
         with:
           name: host-loop-results
