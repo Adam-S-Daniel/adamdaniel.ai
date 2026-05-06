@@ -200,4 +200,58 @@ test.describe("CloudFront preview-location-fixer function", () => {
     handler(evt);
     expect(evt.response.headers.location.value).toBe("/cms-posts-foo/admin/");
   });
+
+  // ── X-Robots-Tag injection ───────────────────────────────────────
+  // The function adds `X-Robots-Tag: noindex, nofollow` on EVERY
+  // response from the preview distribution, regardless of host /
+  // status / path. Belt-and-suspenders alongside the per-host
+  // robots.txt — header is more authoritative for crawlers that
+  // already have a preview URL discovered.
+
+  test("adds X-Robots-Tag: noindex, nofollow on a 200 response", () => {
+    const evt = response("preview-pr23.adamdaniel.ai", 200);
+    handler(evt);
+    expect(evt.response.headers["x-robots-tag"]).toBeDefined();
+    expect(evt.response.headers["x-robots-tag"].value).toBe(
+      "noindex, nofollow",
+    );
+  });
+
+  test("adds X-Robots-Tag on a 302 Location response (alongside the strip)", () => {
+    const evt = response("preview-pr23.adamdaniel.ai", 302, "/pr-23/admin/");
+    handler(evt);
+    expect(evt.response.headers["x-robots-tag"].value).toBe(
+      "noindex, nofollow",
+    );
+    // Strip still happened too.
+    expect(evt.response.headers.location.value).toBe("/admin/");
+  });
+
+  test("adds X-Robots-Tag on a 404 too (covers asset misses)", () => {
+    const evt = response("preview-pr23.adamdaniel.ai", 404);
+    handler(evt);
+    expect(evt.response.headers["x-robots-tag"].value).toBe(
+      "noindex, nofollow",
+    );
+  });
+
+  test("adds X-Robots-Tag on cms-slug hosts", () => {
+    const evt = response("preview-cms-posts-foo-bar.adamdaniel.ai", 200);
+    handler(evt);
+    expect(evt.response.headers["x-robots-tag"].value).toBe(
+      "noindex, nofollow",
+    );
+  });
+
+  test("adds X-Robots-Tag even when the host header is missing", () => {
+    // Defensive — preview hosts always have a Host header in practice,
+    // but the noindex marking shouldn't depend on host detection. (The
+    // production distribution doesn't attach this function at all, so
+    // a stray missing-host case here doesn't accidentally noindex prod.)
+    const evt = response(undefined, 200);
+    handler(evt);
+    expect(evt.response.headers["x-robots-tag"].value).toBe(
+      "noindex, nofollow",
+    );
+  });
 });

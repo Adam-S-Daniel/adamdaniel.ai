@@ -1,2 +1,16 @@
+# adamdaniel.ai is a public site; allow crawlers to index every page
+# served from the production distribution. Preview environments
+# (preview-pr<N>.adamdaniel.ai, preview-cms-<slug>.adamdaniel.ai) are
+# blocked at the HTTP-header level via an `X-Robots-Tag: noindex,
+# nofollow` injected by the PreviewLocationFixerFunction CloudFront
+# Function (see infrastructure/bootstrap/template.yaml). The header is
+# more authoritative than this file for crawlers that have already
+# discovered a preview URL — robots.txt itself is shared across hosts
+# from the same _site build.
+#
+# Per-page noindex still applies for canary content
+# (`_layouts/canary.html` injects a `<meta name="robots">` tag).
 User-agent: *
-Disallow: /
+Allow: /
+
+Sitemap: https://adamdaniel.ai/sitemap.xml
