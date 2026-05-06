@@ -90,4 +90,52 @@ test.describe("CloudFront preview-router function", () => {
     expect(() => handler(evt)).not.toThrow();
     expect(evt.request.uri).toBe("/blog/foo/");
   });
+
+  // ── Per-slug CMS preview hosts ───────────────────────────────────
+  // preview-cms-<slug>.adamdaniel.ai → /cms-<slug>/<uri>. The slug is
+  // Decap's `cms/<col>/<entry-slug>` head ref with `/` replaced by `-`.
+  // Editors get a stable URL that survives across draft cycles for
+  // the same entry. See docs/preview-pr-ruleset-spike.md.
+
+  test("preview-cms-posts-foo-bar.adamdaniel.ai rewrites /blog/foo-bar/ to /cms-posts-foo-bar/blog/foo-bar/", () => {
+    const evt = request(
+      "preview-cms-posts-foo-bar.adamdaniel.ai",
+      "/blog/foo-bar/",
+    );
+    handler(evt);
+    expect(evt.request.uri).toBe("/cms-posts-foo-bar/blog/foo-bar/");
+  });
+
+  test("rewrites root / to /cms-<slug>/ for the cms preview host", () => {
+    const evt = request("preview-cms-pages-about.adamdaniel.ai", "/");
+    handler(evt);
+    expect(evt.request.uri).toBe("/cms-pages-about/");
+  });
+
+  test("handles long collection-prefixed slugs", () => {
+    const evt = request(
+      "preview-cms-projects-some-very-long-project-title.adamdaniel.ai",
+      "/projects/some-very-long-project-title/",
+    );
+    handler(evt);
+    expect(evt.request.uri).toBe(
+      "/cms-projects-some-very-long-project-title/projects/some-very-long-project-title/",
+    );
+  });
+
+  test("rejects uppercase slugs (DNS labels are case-insensitive but our regex is lower-only)", () => {
+    // Uppercase in the slug would mean S3 prefix mismatch (S3 keys are
+    // case-sensitive and we always sync to lowercase prefixes). Defend
+    // by leaving the URI alone — the request 404s rather than silently
+    // routing to the wrong place.
+    const evt = request("preview-cms-Posts-FOO.adamdaniel.ai", "/");
+    handler(evt);
+    expect(evt.request.uri).toBe("/");
+  });
+
+  test("preview-cms-<slug> on a wrong domain doesn't rewrite", () => {
+    const evt = request("preview-cms-posts-foo.example.com", "/");
+    handler(evt);
+    expect(evt.request.uri).toBe("/");
+  });
 });

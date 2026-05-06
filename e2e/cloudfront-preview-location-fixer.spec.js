@@ -144,4 +144,60 @@ test.describe("CloudFront preview-location-fixer function", () => {
     // header passes through unchanged.
     expect(evt.response.headers.location.value).toBe("/pr-23/admin/");
   });
+
+  // ── Per-slug CMS preview hosts (mirror of router function) ───────
+
+  test("strips /cms-posts-foo-bar/ from a 302 Location on a preview-cms-posts-foo-bar response", () => {
+    const evt = response(
+      "preview-cms-posts-foo-bar.adamdaniel.ai",
+      302,
+      "/cms-posts-foo-bar/admin/",
+    );
+    handler(evt);
+    expect(evt.response.headers.location.value).toBe("/admin/");
+  });
+
+  test("rewrites the bare /cms-<slug> to / so the root index doesn't 404", () => {
+    const evt = response(
+      "preview-cms-pages-about.adamdaniel.ai",
+      302,
+      "/cms-pages-about/",
+    );
+    handler(evt);
+    expect(evt.response.headers.location.value).toBe("/");
+  });
+
+  test("does not strip a /cms-<slug>/ that doesn't match the host's slug", () => {
+    // A leak of the wrong slug's prefix on a different host should fail
+    // visibly rather than silently route to the wrong S3 prefix.
+    const evt = response(
+      "preview-cms-posts-foo.adamdaniel.ai",
+      302,
+      "/cms-pages-about/",
+    );
+    handler(evt);
+    expect(evt.response.headers.location.value).toBe("/cms-pages-about/");
+  });
+
+  test("does not cross-strip /pr-N/ on a cms-<slug> host", () => {
+    // A pr-23 prefix on a cms-foo host is a misroute — leave it visible.
+    const evt = response(
+      "preview-cms-posts-foo.adamdaniel.ai",
+      302,
+      "/pr-23/admin/",
+    );
+    handler(evt);
+    expect(evt.response.headers.location.value).toBe("/pr-23/admin/");
+  });
+
+  test("does not cross-strip /cms-<slug>/ on a pr-N host", () => {
+    // Mirror: cms-foo prefix surfacing on a pr-23 host is also a misroute.
+    const evt = response(
+      "preview-pr23.adamdaniel.ai",
+      302,
+      "/cms-posts-foo/admin/",
+    );
+    handler(evt);
+    expect(evt.response.headers.location.value).toBe("/cms-posts-foo/admin/");
+  });
 });

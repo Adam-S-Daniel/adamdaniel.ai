@@ -213,16 +213,37 @@ Resources:
       Name: !Sub "${AWS::StackName}-preview-router"
       AutoPublish: true
       FunctionConfig:
-        Comment: "preview-prN.adamdaniel.ai → /pr-N/<uri> for S3 origin"
+        Comment: "preview-prN / preview-cms-<slug> .adamdaniel.ai → /<prefix>/<uri> for S3 origin"
         Runtime: cloudfront-js-2.0
+      # Two host patterns map to two S3 object-key prefixes:
+      #   preview-prN.adamdaniel.ai           → /pr-N/<uri>
+      #   preview-cms-<slug>.adamdaniel.ai    → /cms-<slug>/<uri>
+      #
+      # The cms-<slug> form gives editors a stable per-entry preview URL
+      # that survives across draft cycles for the same entry. The
+      # preview-prN form changes when Decap closes & re-opens a PR for
+      # the same canary; the cms-<slug> form does not. See
+      # docs/preview-pr-ruleset-spike.md for the full reasoning.
+      #
+      # Slug shape: lowercase ASCII + digits + hyphens. Decap derives it
+      # from `cms/<collection>/<slug>` head refs by replacing `/` with
+      # `-`, so `cms/posts/foo-bar` → `posts-foo-bar`.
+      #
+      # Hosts that don't match either pattern fall through unchanged.
       FunctionCode: |
         function handler(event) {
           var request = event.request;
           var host = request.headers.host && request.headers.host.value;
           if (!host) return request;
-          var m = host.match(/^preview-pr(\d+)\.adamdaniel\.ai$/);
-          if (m) {
-            request.uri = '/pr-' + m[1] + request.uri;
+          var prMatch = host.match(/^preview-pr(\d+)\.adamdaniel\.ai$/);
+          if (prMatch) {
+            request.uri = '/pr-' + prMatch[1] + request.uri;
+            return request;
+          }
+          var cmsMatch = host.match(/^preview-cms-([a-z0-9-]+)\.adamdaniel\.ai$/);
+          if (cmsMatch) {
+            request.uri = '/cms-' + cmsMatch[1] + request.uri;
+            return request;
           }
           return request;
         }
@@ -251,8 +272,17 @@ Resources:
       Name: !Sub "${AWS::StackName}-preview-location-fixer"
       AutoPublish: true
       FunctionConfig:
-        Comment: "Strip /pr-N/ from Location headers on preview-prN responses"
+        Comment: "Strip /pr-N/ or /cms-<slug>/ from Location headers on preview responses"
         Runtime: cloudfront-js-2.0
+      # Mirror of PreviewRouterFunction's two-pattern host match. When
+      # the request hit a preview-prN.adamdaniel.ai host, we strip the
+      # matching `/pr-N/` from outbound Location headers; same shape for
+      # preview-cms-<slug>.adamdaniel.ai with `/cms-<slug>/`.
+      #
+      # Only same-host prefixes are stripped: a `/pr-99/` leak on a
+      # `pr-23` host is left visible (and a `/pr-23/` leak on a
+      # `cms-foo` host stays visible too) so misrouted responses fail
+      # loudly rather than silently rewriting somewhere unexpected.
       FunctionCode: |
         function handler(event) {
           var response = event.response;
@@ -264,16 +294,27 @@ Resources:
 
           var host = event.request.headers.host && event.request.headers.host.value;
           if (!host) return response;
-          var hm = host.match(/^preview-pr(\d+)\.adamdaniel\.ai$/);
-          if (!hm) return response;
 
-          var pr = hm[1];
-          var prefix = '/pr-' + pr;
+          var prMatch = host.match(/^preview-pr(\d+)\.adamdaniel\.ai$/);
+          if (prMatch) {
+            stripPrefix(loc, '/pr-' + prMatch[1]);
+            return response;
+          }
+
+          var cmsMatch = host.match(/^preview-cms-([a-z0-9-]+)\.adamdaniel\.ai$/);
+          if (cmsMatch) {
+            stripPrefix(loc, '/cms-' + cmsMatch[1]);
+            return response;
+          }
+
+          return response;
+        }
+
+        function stripPrefix(loc, prefix) {
           if (loc.value === prefix || loc.value.indexOf(prefix + '/') === 0) {
             var stripped = loc.value.slice(prefix.length);
             loc.value = stripped.length === 0 ? '/' : stripped;
           }
-          return response;
         }
 
   # ── CloudFront distribution for preview-pr*.adamdaniel.ai ────────────────
