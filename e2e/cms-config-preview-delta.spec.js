@@ -1,3 +1,4 @@
+// @lane: local — patches admin/config.yml on disk and execs scripts/patch-preview-config.sh
 const fs = require("node:fs");
 const os = require("node:os");
 const path = require("node:path");

@@ -1,3 +1,4 @@
+// @lane: real — drives Decap delete UI through the real GitHub delete-via-PR shim
 // @select-skip-when-head-ref-prefix: cms/
 //
 // On `cms/*` PRs (Decap-opened editorial PRs) this spec self-skips at

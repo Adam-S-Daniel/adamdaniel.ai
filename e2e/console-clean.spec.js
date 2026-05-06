@@ -1,3 +1,4 @@
+// @lane: local — fs reads of _site/sitemap + local pageviews; @parity-eligible via TARGET=
 const fs = require("node:fs");
 const path = require("node:path");
 const { test, expect } = require("./base");

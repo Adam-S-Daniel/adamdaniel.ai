@@ -1,3 +1,4 @@
+// @lane: local — execs scripts/patch-preview-config.sh against a tmp checkout; pure-fs
 const fs = require("node:fs");
 const os = require("node:os");
 const path = require("node:path");

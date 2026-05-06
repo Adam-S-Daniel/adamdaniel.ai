@@ -1,3 +1,4 @@
+// @lane: local — exercises the local Decap admin loop with decap-server file IO
 /*
  * C3 — End-to-end "first post" walkthrough that mirrors what a brand-new
  * contributor would actually do in the admin: open the editor, fill a

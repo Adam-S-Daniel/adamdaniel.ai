@@ -1,3 +1,4 @@
+// @lane: local — pure-fs lint of deploy workflow YAML; no browser, no network
 /*
  * Regression test: the `commit.json` step in deploy-{preview,production}
  * must read the timestamp from `git log` against HEAD (or a derived

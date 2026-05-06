@@ -1,3 +1,4 @@
+// @lane: local — pure-fs lint of CloudWatch RUM wiring; no AWS, no network
 const { test, expect } = require("./base");
 const { execSync } = require("child_process");
 const fs = require("fs");

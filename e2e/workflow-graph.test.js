@@ -1,3 +1,4 @@
+// @lane: local — pure-fs lint of cms-editorial-workflow YAML; no browser, no network
 /*
  * Regression tests for the cms-editorial-workflow job graph.
  *

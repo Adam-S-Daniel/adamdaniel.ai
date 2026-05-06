@@ -1,3 +1,4 @@
+// @lane: local — pure-fs invariants on _e2e canary collection wiring
 const { test, expect } = require("./base");
 const fs = require("node:fs");
 const path = require("node:path");

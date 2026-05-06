@@ -1,3 +1,4 @@
+// @lane: local — pure-fs lint of the deploy-preview workflow YAML
 /*
  * Regression test for the deploy-preview bot's sticky comment.
  *

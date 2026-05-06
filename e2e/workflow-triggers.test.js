@@ -1,3 +1,4 @@
+// @lane: local — pure-fs lint of workflow YAML; no browser, no network
 /*
  * Regression test: e2e-tests.yml must NOT carry a push-to-main trigger.
  * Branch protection's required-check on the PR run already covers main,

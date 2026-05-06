@@ -1,3 +1,4 @@
+// @lane: local — module-load smoke for every spec file; pure-Node, no network
 /*
  * Regression test: catch the PR #29 disaster class — a spec file that
  * does I/O at module scope on a path that doesn't exist in CI.

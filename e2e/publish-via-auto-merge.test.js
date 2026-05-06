@@ -1,3 +1,4 @@
+// @lane: local — pure-Node sandbox unit tests for the publish-via-auto-merge shim
 /*
  * Unit tests for admin/publish-via-auto-merge.js. Pure-Node, no browser:
  * we load the shim source as a string, run it inside a minimal sandbox

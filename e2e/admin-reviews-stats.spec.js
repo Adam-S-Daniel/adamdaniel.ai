@@ -1,3 +1,4 @@
+// @lane: local — mocks GitHub API + regression.json fetches via page.route; no auth
 const { test, expect } = require("./base");
 const { captureStep } = require("./manual-capture");
 

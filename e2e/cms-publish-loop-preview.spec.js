@@ -1,3 +1,4 @@
+// @lane: real — drives the real Decap CMS in a PR preview env against real GitHub
 // @select-skip-when-head-ref-prefix: cms/
 //
 // On `cms/*` PRs (Decap-opened editorial PRs) this spec self-skips at

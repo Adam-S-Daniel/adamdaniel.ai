@@ -1,3 +1,4 @@
+// @lane: local — uses page.route to inject canned GitHub 422 responses; never real GitHub
 /*
  * Browser-context coverage of admin/publish-via-auto-merge.js. Runs
  * the shim inside a real Chromium page (so any monkey-patch / fetch-

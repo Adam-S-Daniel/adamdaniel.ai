@@ -1,3 +1,4 @@
+// @lane: local — needs decap-server file IO + local Jekyll for the lifecycle
 const fs = require("node:fs");
 const path = require("node:path");
 const { execFileSync } = require("node:child_process");

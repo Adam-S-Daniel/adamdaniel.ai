@@ -1,3 +1,4 @@
+// @lane: local — uses the in-browser test-repo backend; no real GitHub
 const { test, expect } = require("./base");
 const {
   SEED_POST_SLUG,

@@ -1,3 +1,4 @@
+// @lane: local — walks _site/sitemap.xml from the local Jekyll build; @parity-eligible
 const fs = require("node:fs");
 const path = require("node:path");
 const { test, expect } = require("./base");

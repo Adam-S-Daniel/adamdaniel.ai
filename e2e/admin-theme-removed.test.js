@@ -1,3 +1,4 @@
+// @lane: local — pure-fs invariants on admin/index.html + admin/custom.css
 const fs = require("node:fs");
 const path = require("node:path");
 const { test, expect } = require("./base");

@@ -1,3 +1,4 @@
+// @lane: local — pure-fs invariants on admin/config*.yml; no browser navigation
 const fs = require("node:fs");
 const path = require("node:path");
 const { test, expect } = require("./base");

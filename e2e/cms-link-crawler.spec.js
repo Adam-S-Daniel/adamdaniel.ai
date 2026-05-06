@@ -1,3 +1,4 @@
+// @lane: local — crawls the local /admin shell; @parity-eligible via TARGET=
 const { test, expect, TARGET } = require("./base");
 
 // E1 — Admin link crawler.
@@ -50,6 +51,14 @@ const KNOWN_BUGS = [
   // code path; remove this entry once `data.published` is plumbed
   // correctly for Pages.
   /\/pages\/about\/?$/,
+  // The e2e canary post (_posts/2099-01-01-e2e-mutation-canary.md)
+  // ships `published: false` + `date: 2099-01-01` so Jekyll excludes it
+  // from the build; the admin's link surface (which derives URLs from
+  // front-matter alone) still advertises `/blog/e2e-mutation-canary/`.
+  // Same root cause as the pages/about entry above — `data.published`
+  // doesn't gate the surfaced URL. Remove once the banner / admin
+  // affordance honours `published: false` for Posts.
+  /\/blog\/e2e-mutation-canary\/?$/,
 ];
 
 function isKnownBug(url) {

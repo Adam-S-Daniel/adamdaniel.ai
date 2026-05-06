@@ -1,3 +1,4 @@
+// @lane: local — pure-fs unit tests on the visual-regression-skip-review helper
 const fs = require("node:fs");
 const path = require("node:path");
 const { test, expect } = require("./base");

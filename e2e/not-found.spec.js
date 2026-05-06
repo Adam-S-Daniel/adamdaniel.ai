@@ -1,3 +1,4 @@
+// @lane: local — exercises the locally-served 404 page; @parity-eligible via TARGET=
 const { test, expect } = require("./base");
 
 test.describe("404 page", () => {

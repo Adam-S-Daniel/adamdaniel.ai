@@ -1,3 +1,4 @@
+// @lane: local — pure-fs invariants on locally-captured screenshot frames
 const { test, expect } = require("./base");
 const { PNG } = require("pngjs");
 const fs = require("fs");

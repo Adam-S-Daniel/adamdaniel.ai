@@ -1,3 +1,4 @@
+// @lane: local — drives the local /preview/ shell rendered by Jekyll
 const { test, expect } = require("./base");
 const { captureStep } = require("./manual-capture");
 

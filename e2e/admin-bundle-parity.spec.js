@@ -1,3 +1,4 @@
+// @lane: real — fetches admin/ bytes from https://adamdaniel.ai and the live PR preview to compare
 const { test, expect } = require("./base");
 const fs = require("fs");
 const path = require("path");

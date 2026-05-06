@@ -1,3 +1,4 @@
+// @lane: local — drives the in-browser test-repo backend; never touches real GitHub
 const { test, expect } = require("./base");
 const { captureStep } = require("./manual-capture");
 

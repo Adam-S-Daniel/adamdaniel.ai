@@ -1,3 +1,4 @@
+// @lane: local — fs reads of locally-built canary pages + sitemap; no network
 // Lock in the canary collection's "reachable but unadvertised" contract.
 //
 // `_e2e/canary-{post,page,project}.md` exist so the publish-loop tests have

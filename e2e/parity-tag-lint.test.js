@@ -1,3 +1,4 @@
+// @lane: local — pure-fs static lint of @parity tags across spec files
 const fs = require("node:fs");
 const path = require("node:path");
 const { test, expect } = require("./base");

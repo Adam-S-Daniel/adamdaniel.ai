@@ -1,3 +1,4 @@
+// @lane: local — needs decap-server file IO + git execs to verify inline image drafts
 const fs = require("node:fs");
 const path = require("node:path");
 const { execFileSync } = require("node:child_process");

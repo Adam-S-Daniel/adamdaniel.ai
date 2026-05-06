@@ -1,3 +1,4 @@
+// @lane: local — pulls visual-diff frames from disk to assemble a regression video
 const { test } = require("@playwright/test");
 const fs = require("fs");
 const path = require("path");

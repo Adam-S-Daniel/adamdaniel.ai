@@ -1,3 +1,4 @@
+// @lane: local — drives the local /admin shell to assert form hint text
 /**
  * @file e2e/cms-form-clarity.spec.js
  *

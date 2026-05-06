@@ -104,6 +104,11 @@ jobs:
       files: ${{ steps.s.outputs.files }}
       shards: ${{ steps.s.outputs.shards }}
       shard_count: ${{ steps.s.outputs.shard_count }}
+      # Lane-aware envelope. `real_scope` / `real_files` carry the
+      # real-lane verdict (computed by re-running the selector with
+      # TEST_LANE=real). The companion `e2e-real` job consumes them.
+      real_scope: ${{ steps.s.outputs.real_scope }}
+      real_files: ${{ steps.s.outputs.real_files }}
     steps:
       - name: Checkout
         uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd  # v6.0.2 (2026-01-09)
@@ -205,8 +210,11 @@ jobs:
           GITHUB_HEAD_REF: ${{ github.head_ref }}
         run: |
           git fetch origin main --depth=500 || true
-          if ! node e2e/select-specs.js --base origin/main > /tmp/select.json 2>/tmp/select.err; then
-            echo "Selector failed:"
+          # Local-lane verdict (existing behaviour). TEST_LANE defaults
+          # to `local` in the selector when the env var is empty, but
+          # set it explicitly here for symmetry with the real-lane run.
+          if ! TEST_LANE=local node e2e/select-specs.js --base origin/main > /tmp/select.json 2>/tmp/select.err; then
+            echo "Selector failed (local lane):"
             cat /tmp/select.err || true
             scope=all
             files=
@@ -219,6 +227,20 @@ jobs:
             # forgets the field — keep coverage even if the envelope
             # contract drifts.
             shard_count=$(node -e "const j=JSON.parse(require('fs').readFileSync('/tmp/select.json'));console.log(j.shard_count || 4)")
+          fi
+          # Real-lane verdict. The selector's same SPEC_RULES + lane
+          # filter combo determines which @lane:real specs the diff
+          # touches. Failures here fall through to scope=all so a
+          # broken selector can't silently drop the real lane.
+          if ! TEST_LANE=real node e2e/select-specs.js --base origin/main > /tmp/select-real.json 2>/tmp/select-real.err; then
+            echo "Selector failed (real lane):"
+            cat /tmp/select-real.err || true
+            real_scope=all
+            real_files=
+          else
+            cat /tmp/select-real.json
+            real_scope=$(node -e "console.log(JSON.parse(require('fs').readFileSync('/tmp/select-real.json')).scope)")
+            real_files=$(node -e "const j=JSON.parse(require('fs').readFileSync('/tmp/select-real.json'));console.log((j.files||[]).join(' '))")
           fi
           # Build the matrix array as [1..shard_count]. Hardcoded
           # cases keep the bash trivial (no `seq` / `jq` dep) and
@@ -240,7 +262,9 @@ jobs:
           echo "files=$files" >> "$GITHUB_OUTPUT"
           echo "shards=$shards" >> "$GITHUB_OUTPUT"
           echo "shard_count=$shard_count" >> "$GITHUB_OUTPUT"
-          echo "Resolved: scope=$scope shard_count=$shard_count shards=$shards"
+          echo "real_scope=$real_scope" >> "$GITHUB_OUTPUT"
+          echo "real_files=$real_files" >> "$GITHUB_OUTPUT"
+          echo "Resolved: scope=$scope shard_count=$shard_count shards=$shards real_scope=$real_scope"
 
   e2e:
     needs: select
@@ -266,6 +290,12 @@ jobs:
       # not supported" without this. Chromium and WebKit are
       # unaffected; setting it uniformly keeps configuration simple.
       HOME: /root
+      # `TEST_LANE=local` pins this job to the hermetic lane. Spec
+      # headers carry a `// @lane: local|real` directive (default
+      # local); the selector filters by lane and the test runner
+      # honours the same env var. The companion `e2e-real` job
+      # carries the GitHub-backed lane on its own runner.
+      TEST_LANE: local
     container:
       image: mcr.microsoft.com/playwright:v1.59.1-noble
     strategy:
@@ -392,6 +422,130 @@ jobs:
         uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a  # v7.0.1 (2026-04-10)
         with:
           name: test-results-shard-${{ matrix.shard }}
+          path: test-results/
+          retention-days: 7
+
+  # G5 — GitHub-backed (`@lane: real`) lane.
+  #
+  # Sister job to `e2e` above. Where `e2e` runs the @lane:local subset
+  # against the local Jekyll + decap-server stack, this job runs the
+  # @lane:real subset against the actual GitHub repo (and, where
+  # applicable, the prod / preview-PR sites). Spec headers carry the
+  # `// @lane: local|real` directive that drives selection on both
+  # sides — the selector filters by lane, and the test runner sees
+  # `TEST_LANE=real` and can branch on it too.
+  #
+  # Skipped at the job level when no @lane:real spec is touched by
+  # the diff (`select.outputs.real_scope == 'skip'`) so we don't pay
+  # container bring-up just to no-op. The required-check shape is
+  # `e2e-real`, distinct from the local lane's `e2e (1)`.
+  #
+  # No matrix today: the @lane:real spec set is small enough that a
+  # single shard finishes well inside the sharded local-lane budget,
+  # and the work is dominated by network latency, not local CPU. If
+  # the set grows we can re-introduce sharding here.
+  #
+  # Non-blocking: this job is informational while real-lane coverage
+  # is being seeded (Phase A). It does NOT promote to required until
+  # the real-lane spec set has settled. Branch protection can promote
+  # it later in a separate PR.
+  e2e-real:
+    needs: select
+    if: needs.select.outputs.real_scope != 'skip'
+    runs-on: ubuntu-latest
+    env:
+      # Firefox refuses to launch when $HOME is owned by a different
+      # user. See the `e2e` job above for the full rationale.
+      HOME: /root
+      # Pin the lane to `real` so spec headers + the test runner agree.
+      TEST_LANE: real
+    container:
+      image: mcr.microsoft.com/playwright:v1.59.1-noble
+    steps:
+      - name: Checkout
+        uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd  # v6.0.2 (2026-01-09)
+
+      - name: Install Ruby toolchain prerequisites
+        # The Playwright noble image ships with `libgmp` (a browser
+        # dep) but not `libyaml-0-2`, which `ruby/setup-ruby`'s
+        # prebuilt Ruby 3.2 tarball needs at link time, and not
+        # `build-essential`, which `bundler-cache` needs to build the
+        # native extensions in our Gemfile.
+        run: |
+          apt-get update -qq
+          apt-get install -y -qq --no-install-recommends libyaml-0-2 build-essential
+
+      - name: Setup Ruby
+        # Several @lane:real specs still reach into `_site/` for
+        # local-vs-real parity comparisons; the webServer skips its
+        # build when TARGET isn't local, so build explicitly here.
+        uses: ruby/setup-ruby@c4e5b1316158f92e3d49443a9d58b31d25ac0f8f  # v1.302.0 (2026-04-15)
+        with:
+          ruby-version: '3.2'
+          bundler-cache: true
+
+      - name: Setup Node
+        uses: actions/setup-node@48b55a011bda9f5d6aeb4c2d9c7362e8dae4041e  # v6.4.0 (2026-04-20)
+        with:
+          node-version: '20'
+          cache: 'npm'
+
+      - name: Install npm dependencies
+        run: npm ci
+
+      - name: Prepare shard output dir
+        run: mkdir -p shard-output
+
+      - name: Run Playwright tests (real lane)
+        id: pw-real
+        env:
+          # `cms-publish-loop*.spec.js` and `cms-delete-published.spec.js`
+          # self-skip when this is empty (see e2e/decap-pat.js#getPat).
+          # Forks don't see the secret — GitHub strips it from
+          # pull_request events opened by external contributors —
+          # which keeps fork PRs from running real prod mutations.
+          CMS_E2E_PAT: ${{ secrets.CMS_E2E_PAT }}
+        run: |
+          set -o pipefail
+          # `select.outputs.real_files` is space-separated when the
+          # selector returned scope=subset; empty when scope=all.
+          # Empty falls through to the runner's own lane filter,
+          # which TEST_LANE=real promotes to "every @lane:real spec".
+          if [ "${{ needs.select.outputs.real_scope }}" = "subset" ]; then
+            npx playwright test ${{ needs.select.outputs.real_files }} \
+              --reporter=blob,list \
+              2>&1 | tee shard-output/playwright-output.log
+          else
+            npx playwright test \
+              --reporter=blob,list \
+              2>&1 | tee shard-output/playwright-output.log
+          fi
+
+      - name: Upload blob report (real lane)
+        if: ${{ !cancelled() }}
+        uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a  # v7.0.1 (2026-04-10)
+        with:
+          # Distinct prefix so the finalize job's `blob-report-*`
+          # download captures both lanes in the merged HTML report.
+          name: blob-report-real
+          path: blob-report
+          retention-days: 1
+
+      - name: Upload shard log (real lane)
+        if: ${{ !cancelled() }}
+        uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a  # v7.0.1 (2026-04-10)
+        with:
+          name: shard-log-real
+          path: shard-output/playwright-output.log
+          retention-days: 1
+
+      - name: Upload test results (real lane)
+        if: ${{ !cancelled() }}
+        uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a  # v7.0.1 (2026-04-10)
+        with:
+          # Same prefix as the local-lane shards so the finalize job's
+          # frame-merge step picks up real-lane captures too.
+          name: test-results-shard-real
           path: test-results/
           retention-days: 7
 
@@ -797,63 +951,6 @@ jobs:
                 repo: context.repo.repo,
                 comment_id: existing.id,
                 body: `${marker}\n## ✅ E2E tests passing on \`${context.payload.pull_request.head.sha.slice(0,7)}\`\n\n_Cleared by the most recent green run._`,
-              });
-            }
-
-      - name: Post per-test-videos artifact comment
-        # Surface the per-bucket combined videos (local / preview / prod /
-        # other) as a PR comment so reviewers can scrub through what each
-        # test actually did without downloading the artifact and unzipping
-        # it manually. Comment is updated in place per shim/marker pattern.
-        # Runs regardless of test outcome (failures still produce videos).
-        if: always() && !cancelled()
-        uses: actions/github-script@3a2844b7e9c422d3c10d287c895573f7108da1b3  # v9.0.0 (2026-04-09)
-        with:
-          script: |
-            const pr = context.payload.pull_request.number;
-            const sha = context.payload.pull_request.head.sha.slice(0, 7);
-            const runUrl = `${context.serverUrl}/${context.repo.owner}/${context.repo.repo}/actions/runs/${context.runId}`;
-            // The artifact name `per-test-videos` is the one uploaded by
-            // the assembly step earlier in this job (see
-            // e2e/generate-test-videos.js). Linking to the run's
-            // artifacts page gives reviewers a one-click download.
-            const artifactsUrl = `${runUrl}#artifacts`;
-            const marker = '<!-- e2e-per-test-videos -->';
-
-            const body = [
-              marker,
-              `## 🎬 Per-test screenshot videos on \`${sha}\``,
-              '',
-              `Combined per-bucket videos available in the [\`per-test-videos\` artifact](${artifactsUrl}). The artifact contains:`,
-              '',
-              '- `_combined-local.mp4` — tests against local fake-backend / Jekyll',
-              '- `_combined-preview.mp4` — tests against `preview-pr*.adamdaniel.ai`',
-              '- `_combined-prod.mp4` — tests against `adamdaniel.ai`',
-              '- `_combined-other.mp4` — catch-all (rare; e.g. `about:blank`, third-party hosts)',
-              '- One `<safe-test-id>.mp4` per individual test, plus a `_combined.txt` manifest',
-              '',
-              `Each frame's banner shows the test ID, PR #${pr}, project, status, current step, and per-test endTime in US/Eastern. Refreshes automatically on every push to this PR.`,
-            ].join('\n');
-
-            const { data: comments } = await github.rest.issues.listComments({
-              owner: context.repo.owner,
-              repo: context.repo.repo,
-              issue_number: pr,
-            });
-            const existing = comments.find(c => c.body && c.body.includes(marker));
-            if (existing) {
-              await github.rest.issues.updateComment({
-                owner: context.repo.owner,
-                repo: context.repo.repo,
-                comment_id: existing.id,
-                body,
-              });
-            } else {
-              await github.rest.issues.createComment({
-                owner: context.repo.owner,
-                repo: context.repo.repo,
-                issue_number: pr,
-                body,
               });
             }
 

@@ -1,3 +1,4 @@
+// @lane: local — pure-Node unit tests for the per-test video assembler
 const { test, expect } = require("./base");
 const fs = require("node:fs");
 const os = require("node:os");

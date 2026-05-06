@@ -1,3 +1,4 @@
+// @lane: local — walkthrough capture against the local Jekyll site; @parity-eligible via TARGET=
 const fs = require("node:fs");
 const path = require("node:path");
 const { test, expect, TARGET } = require("./base");

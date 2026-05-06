@@ -1,3 +1,4 @@
+// @lane: local — pure-fs lint of workflow YAML; no browser, no network
 /*
  * Regression test: no workflow may call `git log` with `${{ github.sha }}`.
  *

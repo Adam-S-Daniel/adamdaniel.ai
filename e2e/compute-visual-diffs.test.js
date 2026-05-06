@@ -1,3 +1,4 @@
+// @lane: local — pure-fs unit tests for the visual-diff PNG comparison helper
 const fs = require("node:fs");
 const os = require("node:os");
 const path = require("node:path");

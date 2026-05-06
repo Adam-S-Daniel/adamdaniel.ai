@@ -1,3 +1,4 @@
+// @lane: local — uses cms-test-backend for hermetic editorial-workflow state checks
 const { test, expect } = require("./base");
 const {
   defaultSeed,
