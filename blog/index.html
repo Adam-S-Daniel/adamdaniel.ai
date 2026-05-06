@@ -1,7 +1,7 @@
 ---
 layout: default
 title: Blog
-description: Thoughts on AI engineering, machine learning, and building intelligent systems.
+description: ... in which an AI engineer shares lessons he learns the hard way and things he hears the easy way
 permalink: /blog/
 ---
 <div class="container">
@@ -10,7 +10,7 @@ permalink: /blog/
       <h1>Blog</h1>
       {% include feed-link.html href="/feed.xml" label="Subscribe to all posts (Atom feed)" %}
     </div>
-    <p class="subtitle">Thoughts on AI engineering &amp; building intelligent systems</p>
+    <p class="subtitle">... in which an AI engineer shares lessons he learns the hard way and things he hears the easy way</p>
   </div>
 
   {% assign published_posts = site.posts | where: "published", true %}
@@ -41,6 +41,6 @@ permalink: /blog/
     {% endfor %}
   </ul>
   {% else %}
-  <p style="color: var(--text-dim);">Lorem ipsum dolor sit amet, consectetur adipiscing elit. Ut enim ad minim veniam, quis nostrud exercitation ullamco laboris.</p>
+  <p style="color: var(--text-dim);">I should really post something ;)</p>
   {% endif %}
 </div>
