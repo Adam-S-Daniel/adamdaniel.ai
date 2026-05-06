@@ -48,7 +48,7 @@ npx playwright test e2e/glow-banding.spec.js       # single test file
 | `AWS_ROLE_ARN` | bootstrap stack output | deploy-production.yml, deploy-preview.yml |
 | `PRODUCTION_CLOUDFRONT_ID` | bootstrap stack output | deploy-production.yml |
 | `PREVIEW_CLOUDFRONT_ID` | bootstrap stack output | deploy-preview.yml |
-| `CMS_E2E_PAT` | fine-grained PAT, host repo only | `e2e/cms-publish-loop*.spec.js` (drives the full Decap → cms PR → auto-merge → deploy → public-URL loop). Token permissions: `Contents: r/w`, `Pull requests: r/w`, `Metadata: r`. |
+| `CMS_E2E_PAT` | fine-grained PAT, host repo only | `e2e/cms-publish-loop*.spec.js`, `e2e/cms-delete-published.spec.js` (drive the full Decap → cms PR → auto-merge → deploy → public-URL loop, plus the shim-dispatched delete-via-pr workflow). Token permissions: `Contents: r/w`, `Pull requests: r/w`, `Actions: r/w`, `Metadata: r`. **`Actions: r/w` is required** — the shim in `admin/publish-via-auto-merge.js` calls `POST /actions/workflows/delete-via-pr.yml/dispatches` when the operator clicks "Delete published entry" and hits the 422 from the ruleset; that endpoint is gated by the Actions permission, NOT the similarly-named Workflows permission (which only controls editing workflow files). |
 
 ## AWS resources (us-east-1)
 
