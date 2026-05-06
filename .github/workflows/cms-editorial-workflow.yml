@@ -156,23 +156,39 @@ jobs:
   auto-merge-when-ready:
     # Fires when an editor promotes a draft to "Ready":
     #
-    #   - `decap-cms/ready` is what Decap CMS itself applies when the
-    #     editor changes the Status dropdown from Draft / In Review to
-    #     Ready. This is the path 99% of edits take.
+    #   - `decap-cms/pending_publish` is what Decap CMS 3.x actually
+    #     applies when the editor changes the Status dropdown from
+    #     Draft / In Review to Ready in editorial-workflow mode.
+    #     (The doc comment used to claim Decap applies
+    #     `decap-cms/ready`, but that's a label name Decap never
+    #     actually emits — empirical check on PR #220's event
+    #     timeline confirmed the real label is
+    #     `decap-cms/pending_publish`. The semantic is the same:
+    #     "approved, ready to publish".) This is the path 99% of
+    #     edits take.
+    #   - `decap-cms/ready` is kept as a synonym in case a future
+    #     Decap rename emits it, or in case a different backend
+    #     still uses that name. Cheap to keep; harmless to leave.
     #   - `cms/ready` is the legacy bare-name label this workflow
-    #     applies on `opened` (so a manual label add still works) and
-    #     was the only label this job listened for before the Decap
-    #     namespacing landed. Keeping it as a synonym means a hand-
-    #     applied `cms/ready` from `gh pr edit --add-label` still
-    #     promotes the draft.
+    #     applies on `opened` (so a manual label add still works)
+    #     and was the only label this job listened for before the
+    #     Decap namespacing landed. The shim in
+    #     admin/publish-via-auto-merge.js also adds it when it
+    #     catches a 422 from a direct merge attempt.
     #
-    # If both fire (rare — Decap usually only sets its own), the second
-    # `labeled` event re-runs this job; `enablePullRequestAutoMerge` is
-    # idempotent so the duplicate is a no-op.
+    # If multiple fire, the second `labeled` event re-runs this job;
+    # `enablePullRequestAutoMerge` is idempotent so the duplicate is
+    # a no-op.
+    #
+    # NOTE: `decap-cms/pending_review` is intentionally NOT in this
+    # list. It means "submitted for review" — the entry isn't yet
+    # approved, so auto-merging at that point would skip the human-
+    # review step that the editorial workflow exists to support.
     if: >
       github.event.action == 'labeled' &&
       (github.event.label.name == 'cms/ready' ||
-       github.event.label.name == 'decap-cms/ready')
+       github.event.label.name == 'decap-cms/ready' ||
+       github.event.label.name == 'decap-cms/pending_publish')
     # Per-job concurrency with cancel-in-progress:false so multiple
     # rapid label toggles queue rather than cancel each other.
     # `enablePullRequestAutoMerge` is idempotent — re-running it on
