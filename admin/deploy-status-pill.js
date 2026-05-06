@@ -1,41 +1,38 @@
 /*
- * admin/deploy-status-pill.js — surfaces the production deploy status
- * in the editor toolbar's top-right.
+ * admin/deploy-status-pill.js — surfaces deploy status (preview AND
+ * production) in the Decap editor toolbar, peering with Decap's
+ * built-in "Preview" link.
  *
- * Why: Decap CMS doesn't track post-merge production deploys for the
- * github backend. After "Publish Now" succeeds, the entry leaves the
- * Workflow tab and the merged PR is gone — but the actual S3 sync +
- * CloudFront invalidation in `.github/workflows/deploy-production.yml`
- * runs invisibly for ~5–10 minutes. Editors have no way to tell whether
- * "the post is live yet" without manually opening the live site.
+ * Why both: Decap's built-in deploy-preview-links feature surfaces a
+ * link once a deployment goes `success`, but it doesn't expose the
+ * GitHub Actions run URL while the deploy is in flight, and it
+ * doesn't show anything for production deploys at all (the github
+ * backend doesn't track post-merge production deploys). This script
+ * fills both gaps with two pills:
  *
- * Wiring:
- *   1. deploy-production.yml registers a GitHub Deployment with
- *      `environment: production` at job start (state=in_progress) and
- *      updates state=success or state=failure at job end (see the
- *      "Register GitHub Deployment (in_progress)" + "Update GitHub
- *      Deployment status (success/failure)" steps in that workflow).
- *   2. This script polls /repos/.../deployments?environment=production
- *      every 30 seconds, gets the most recent deployment's latest
- *      status, and renders a pill above the existing commit pill.
+ *   - Preview build status:  in_progress (link to deploy-preview run) /
+ *                            failure (link to logs).
+ *                            Hidden on success — Decap's built-in
+ *                            preview link takes over.
+ *   - Production publish status: in_progress (link to deploy-production
+ *                            run) / failure (link to logs).
+ *                            Hidden on success — the deployed-commit
+ *                            pill covers the steady state.
  *
- * UI states:
- *   - in_progress / queued → blue "Publishing… (run #NNN)" with spinner.
- *     Refreshes the existing commit pill once the deploy completes.
- *   - success → hidden (the existing commit pill already shows the
- *     deployed SHA, so two pills would be redundant). The poll stops
- *     after a short cooldown.
- *   - failure  → red "Deploy failed — view logs" linking to the run.
- *     Stays until the next deploy starts or the editor reloads.
+ * Wiring on the workflow side:
+ *   - .github/workflows/deploy-preview.yml    → preview-pr-<N>
+ *   - .github/workflows/deploy-production.yml → production
+ *
+ * Both register a GitHub Deployment with state=in_progress at job
+ * start and update to success/failure at job end.
+ *
+ * Placement: injected INTO Decap's editor toolbar (next to the
+ * built-in preview link) rather than floating in a viewport corner.
+ * Decap re-renders the toolbar on entry switches and form mutations,
+ * so the injection runs on a MutationObserver and is idempotent.
  *
  * Auth: uses the operator's Decap token from
- * `localStorage["decap-cms-user"].token`. No CMS_E2E_PAT here — the
- * polling runs with whatever scope the operator's OAuth grant carries
- * (`repo` is sufficient to read deployments on the host repo).
- *
- * No-ops if the token is missing (operator not signed in yet) or if
- * the deployments endpoint returns 404 (deploy-production hasn't
- * registered any deployments yet, e.g. before this feature shipped).
+ * `localStorage["decap-cms-user"].token`. No CMS_E2E_PAT.
  */
 (function () {
   "use strict";
@@ -47,8 +44,10 @@
   var REPO = "Adam-S-Daniel/adamdaniel.ai";
   var API = "https://api.github.com/repos/" + REPO;
   var POLL_MS = 30 * 1000;
-  var PILL_ID = "cms-deploy-status-pill";
+  var PROD_PILL_ID = "cms-prod-status-pill";
+  var PREVIEW_PILL_ID = "cms-preview-build-pill";
 
+  // ── Auth + GitHub helpers ────────────────────────────────────────
   function getToken() {
     try {
       var raw = localStorage.getItem("decap-cms-user");
@@ -68,10 +67,9 @@
     };
   }
 
-  // The latest production deployment + its latest status.
-  async function fetchLatestProductionStatus(token) {
+  async function fetchLatestStatusForEnvironment(token, environment) {
     var deplRes = await fetch(
-      API + "/deployments?environment=production&per_page=1",
+      API + "/deployments?environment=" + encodeURIComponent(environment) + "&per_page=1",
       { headers: ghHeaders(token) }
     );
     if (!deplRes.ok) return null;
@@ -85,105 +83,161 @@
     if (!statRes.ok) return null;
     var statuses = await statRes.json();
     if (!Array.isArray(statuses) || statuses.length === 0) return null;
-    return {
-      deployment: latest,
-      status: statuses[0],
-    };
+    return { deployment: latest, status: statuses[0] };
   }
 
-  function ensurePill() {
-    var existing = document.getElementById(PILL_ID);
-    if (existing) return existing;
-    var a = document.createElement("a");
-    a.id = PILL_ID;
-    a.target = "_blank";
-    a.rel = "noopener";
-    // Stack ABOVE the #cms-commit-pill in the bottom-right corner
-    // (commit pill sits at bottom:0.25rem; this one at bottom:1.85rem).
-    // Both pills are corner-tucked — informational, not action-
-    // grabbing. The deploy-status pill is opaque when visible because
-    // it usually means a deploy is in flight or broken — the editor
-    // needs to see it.
-    a.style.cssText = [
-      "position:fixed",
-      "bottom:1.85rem",
-      "right:0.25rem",
-      "z-index:10001",
-      "padding:0.15rem 0.45rem",
-      "background:rgba(255,255,255,0.95)",
-      "border:1px solid #d0d7de",
-      "border-radius:3px",
-      "color:#57606a",
-      "font-family:ui-monospace,SFMono-Regular,Menlo,monospace",
-      "font-size:0.65rem",
-      "letter-spacing:0.04em",
-      "text-decoration:none",
-      "box-shadow:0 1px 3px rgba(0,0,0,0.08)",
-      "display:none",
-    ].join(";") + ";";
-    document.body.appendChild(a);
-    return a;
+  // For preview, environment names are `preview-pr-<N>`. There's no
+  // single name to query — list recent deployments and pick the most
+  // recent that matches. The list API doesn't accept wildcards, so
+  // we paginate by created_at desc and filter in JS.
+  async function fetchLatestPreviewStatus(token) {
+    var deplRes = await fetch(
+      API + "/deployments?per_page=20",
+      { headers: ghHeaders(token) }
+    );
+    if (!deplRes.ok) return null;
+    var deployments = await deplRes.json();
+    var preview = deployments.filter(function (d) {
+      return /^preview-pr-\d+$/.test(d.environment || "");
+    })[0];
+    if (!preview) return null;
+    var statRes = await fetch(
+      API + "/deployments/" + preview.id + "/statuses?per_page=1",
+      { headers: ghHeaders(token) }
+    );
+    if (!statRes.ok) return null;
+    var statuses = await statRes.json();
+    if (!Array.isArray(statuses) || statuses.length === 0) return null;
+    return { deployment: preview, status: statuses[0] };
   }
 
-  function renderPill(status) {
-    var pill = ensurePill();
-    if (!status) {
+  // ── Pill rendering ───────────────────────────────────────────────
+  function renderPill(pill, label, state, logUrl) {
+    if (!pill) return;
+    if (!state || state === "success") {
       pill.style.display = "none";
       return;
     }
-    var state = status.status.state; // "in_progress" | "queued" | "pending" | "success" | "failure" | "error"
-    var logUrl = status.status.log_url ||
+    pill.href = logUrl ||
       "https://github.com/" + REPO + "/actions";
-    pill.href = logUrl;
 
     if (state === "in_progress" || state === "queued" || state === "pending") {
-      pill.style.borderColor = "#0969da";
       pill.style.color = "#0969da";
-      pill.title = "Click to view the in-progress deploy run";
-      // Inline SVG spinner so we don't rely on Decap's CSS framework.
+      pill.style.borderColor = "#0969da";
+      pill.title = "Click to view the in-flight deploy run";
       pill.innerHTML =
         '<svg width="10" height="10" viewBox="0 0 24 24" style="vertical-align:-1px;margin-right:0.4em" aria-hidden="true">' +
         '<circle cx="12" cy="12" r="10" stroke="currentColor" stroke-width="3" fill="none" stroke-dasharray="40 20" stroke-linecap="round">' +
         '<animateTransform attributeName="transform" type="rotate" from="0 12 12" to="360 12 12" dur="1.2s" repeatCount="indefinite"/>' +
         "</circle></svg>" +
-        "<span>Publishing…</span>";
+        "<span>" + label + "…</span>";
       pill.style.display = "";
     } else if (state === "failure" || state === "error") {
-      pill.style.borderColor = "#cf222e";
       pill.style.color = "#cf222e";
+      pill.style.borderColor = "#cf222e";
       pill.title = "Click to view the failed deploy run";
-      pill.innerHTML = '<span>⚠ Deploy failed — view logs</span>';
+      pill.innerHTML = "<span>⚠ " + label + " failed — view logs</span>";
       pill.style.display = "";
     } else {
-      // success → hide. Existing #cms-commit-pill already renders the
-      // deployed SHA + date; the deploy-status pill is purely the
-      // "something is happening or just broke" indicator.
       pill.style.display = "none";
     }
   }
 
-  var lastSeenStatusId = null;
+  // ── Toolbar insertion ────────────────────────────────────────────
+  // Decap's toolbar's emotion-class label has been observed as either
+  // `EditorToolbar` or `ToolbarContainer`; both contain "oolbar" in
+  // their className. Mirror native-preview-href.js's selector.
+  function findToolbar() {
+    return document.querySelector('[class*="oolbar"]');
+  }
+
+  function buildPill(id) {
+    var a = document.createElement("a");
+    a.id = id;
+    a.target = "_blank";
+    a.rel = "noopener";
+    // Inline-block so it sits in the toolbar's natural row, between
+    // the built-in Preview link and the Save/Publish menu.
+    a.style.cssText = [
+      "display:none",
+      "margin-left:0.5rem",
+      "padding:0.2rem 0.55rem",
+      "background:rgba(255,255,255,0.95)",
+      "border:1px solid #d0d7de",
+      "border-radius:3px",
+      "color:#57606a",
+      "font-family:ui-monospace,SFMono-Regular,Menlo,monospace",
+      "font-size:0.7rem",
+      "letter-spacing:0.03em",
+      "text-decoration:none",
+      "vertical-align:middle",
+      "cursor:pointer",
+      "transition:border-color 0.15s,color 0.15s",
+    ].join(";") + ";";
+    return a;
+  }
+
+  function ensurePillInToolbar(id) {
+    var existing = document.getElementById(id);
+    if (existing && existing.parentNode) return existing;
+    var toolbar = findToolbar();
+    if (!toolbar) return null;
+    var pill = existing || buildPill(id);
+    toolbar.appendChild(pill);
+    return pill;
+  }
+
+  // ── Polling loop ─────────────────────────────────────────────────
+  var lastSeenStatusIds = { prod: null, preview: null };
 
   async function tick() {
     var token = getToken();
     if (!token) return;
-    var s = await fetchLatestProductionStatus(token).catch(function () { return null; });
-    if (!s) return;
-    var statusId = s.status.id;
-    if (statusId === lastSeenStatusId) return;
-    lastSeenStatusId = statusId;
-    renderPill(s);
-    // If we just transitioned to success, refresh the existing commit
-    // pill so it picks up the new SHA without requiring an editor reload.
-    if (s.status.state === "success") {
-      var commitPill = document.getElementById("cms-commit-pill");
-      if (commitPill && typeof window.__refreshCommitPill === "function") {
-        try { window.__refreshCommitPill(); } catch (e) { /* ignore */ }
-      }
+
+    var prodPill = ensurePillInToolbar(PROD_PILL_ID);
+    var previewPill = ensurePillInToolbar(PREVIEW_PILL_ID);
+    if (!prodPill && !previewPill) return; // no toolbar yet (collection list view)
+
+    if (prodPill) {
+      try {
+        var p = await fetchLatestStatusForEnvironment(token, "production");
+        if (p && p.status.id !== lastSeenStatusIds.prod) {
+          lastSeenStatusIds.prod = p.status.id;
+          renderPill(prodPill, "Publishing", p.status.state, p.status.log_url);
+        } else if (!p) {
+          renderPill(prodPill, "Publishing", null, null); // hide
+        }
+      } catch (e) { /* ignore */ }
+    }
+
+    if (previewPill) {
+      try {
+        var pr = await fetchLatestPreviewStatus(token);
+        if (pr && pr.status.id !== lastSeenStatusIds.preview) {
+          lastSeenStatusIds.preview = pr.status.id;
+          renderPill(previewPill, "Preview build", pr.status.state, pr.status.log_url);
+        } else if (!pr) {
+          renderPill(previewPill, "Preview build", null, null); // hide
+        }
+      } catch (e) { /* ignore */ }
     }
   }
 
+  // Decap re-renders the toolbar on entry switches and form mutations.
+  // Re-attach the pills when the DOM changes; the polling tick takes
+  // care of the actual content refresh.
+  var observer;
+  function watchToolbar() {
+    if (observer) return;
+    observer = new MutationObserver(function () {
+      ensurePillInToolbar(PROD_PILL_ID);
+      ensurePillInToolbar(PREVIEW_PILL_ID);
+    });
+    observer.observe(document.body, { childList: true, subtree: true });
+  }
+
   function start() {
+    watchToolbar();
     tick();
     setInterval(tick, POLL_MS);
   }
