@@ -89,6 +89,37 @@ jobs:
         with:
           ref: ${{ github.event.pull_request.head.sha }}
 
+      - name: Compute CMS slug (cms/<col>/<entry> → <col>-<entry>)
+        id: cms_slug
+        # Decap-opened editorial PRs land on `cms/<collection>/<slug>`
+        # head refs. Translate that to a DNS-safe slug so we can publish
+        # an additional `preview-cms-<slug>.adamdaniel.ai` preview that
+        # survives Decap closing & re-opening a PR for the same entry
+        # (the pr-<N> URL doesn't — N changes; the cms-<slug> URL
+        # doesn't — the entry path is stable). The CloudFront router
+        # under infrastructure/bootstrap/template.yaml maps the host to
+        # the matching S3 prefix; see docs/preview-pr-ruleset-spike.md.
+        #
+        # Output `slug=` is empty for non-cms branches; downstream steps
+        # gate on `slug != ''` to skip the second sync/registration on
+        # regular code PRs.
+        run: |
+          set -euo pipefail
+          BRANCH='${{ github.event.pull_request.head.ref }}'
+          if [[ "$BRANCH" == cms/* ]]; then
+            # Replace `/` with `-`. Lowercase is enforced by Decap's
+            # slug template, not by us — the CloudFront router's regex
+            # only matches `[a-z0-9-]`, so any uppercase surfaces as a
+            # 404 (visibly broken, by design — fail loudly rather than
+            # silently route to the wrong S3 prefix).
+            SLUG=$(printf '%s' "$BRANCH" | sed -E 's|^cms/||; s|/|-|g')
+            echo "slug=${SLUG}" >> "$GITHUB_OUTPUT"
+            echo "Computed CMS slug: ${SLUG}"
+          else
+            echo "slug=" >> "$GITHUB_OUTPUT"
+            echo "Not a cms/* branch — skipping per-slug preview"
+          fi
+
       - name: Setup Ruby
         uses: ruby/setup-ruby@c4e5b1316158f92e3d49443a9d58b31d25ac0f8f  # v1.302.0 (2026-04-15)
         with:
@@ -158,13 +189,37 @@ jobs:
             --delete \
             --cache-control "no-cache, must-revalidate"
 
+      - name: Sync to S3 — per-CMS-slug alias
+        if: steps.cms_slug.outputs.slug != ''
+        # The pr-<N> sync above is already done — this is an additional
+        # alias keyed on the CMS entry's slug rather than the GH PR
+        # number. Same files; CloudFront routes the right subdomain to
+        # the right prefix. No --delete on a "second" sync would orphan
+        # files when an entry shrinks; we still --delete here so the
+        # alias matches pr-<N> exactly.
+        run: |
+          SLUG='${{ steps.cms_slug.outputs.slug }}'
+          aws s3 sync ./_site_preview \
+            "s3://${PREVIEW_BUCKET}/cms-${SLUG}/" \
+            --delete \
+            --cache-control "no-cache, must-revalidate"
+
       - name: Invalidate CloudFront cache
         if: env.CLOUDFRONT_DISTRIBUTION_ID != ''
         run: |
           PR_NUMBER=${{ github.event.pull_request.number }}
+          SLUG='${{ steps.cms_slug.outputs.slug }}'
+          # Combine PR-number + (optional) cms-slug invalidations into a
+          # single CloudFront create-invalidation call — invalidation
+          # requests are quota'd per month, so batching these saves
+          # quota even when both prefixes need flushing.
+          PATHS=("/pr-${PR_NUMBER}/*")
+          if [[ -n "$SLUG" ]]; then
+            PATHS+=("/cms-${SLUG}/*")
+          fi
           aws cloudfront create-invalidation \
             --distribution-id "$CLOUDFRONT_DISTRIBUTION_ID" \
-            --paths "/pr-${PR_NUMBER}/*"
+            --paths "${PATHS[@]}"
 
       - name: Register GitHub Deployment for the preview URL
         # Decap CMS's "Deploy Preview Links" feature
@@ -233,8 +288,62 @@ jobs:
 
             core.notice(`Registered deployment ${deployment.id} → ${url}`);
 
+      - name: Register GitHub Deployment for the per-CMS-slug preview
+        if: steps.cms_slug.outputs.slug != ''
+        # Mirror of the registration above, scoped to the cms-<slug>
+        # alias. Each preview environment gets its own GH Environment
+        # row; both register `success` immediately because the deploy
+        # already happened. Decap's deploy-preview-links integration
+        # picks the most recent successful deployment for the PR's
+        # head SHA, so the cms-<slug> URL surfaces as the "Preview"
+        # link in the editor toolbar in addition to (and stable across
+        # PR cycles, unlike) the pr-<N> URL.
+        uses: actions/github-script@3a2844b7e9c422d3c10d287c895573f7108da1b3  # v9.0.0 (2026-04-09)
+        env:
+          PR_HEAD_SHA: ${{ github.event.pull_request.head.sha }}
+          CMS_SLUG: ${{ steps.cms_slug.outputs.slug }}
+        with:
+          script: |
+            const sha = process.env.PR_HEAD_SHA;
+            const apex = process.env.APEX_DOMAIN;
+            const cfId = process.env.CLOUDFRONT_DISTRIBUTION_ID;
+            const bucket = process.env.PREVIEW_BUCKET;
+            const region = process.env.AWS_REGION;
+            const slug = process.env.CMS_SLUG;
+
+            const url = cfId
+              ? `https://preview-cms-${slug}.${apex}/`
+              : `http://${bucket}.s3-website-${region}.amazonaws.com/cms-${slug}/`;
+
+            const { data: deployment } = await github.rest.repos.createDeployment({
+              owner: context.repo.owner,
+              repo: context.repo.repo,
+              ref: sha,
+              environment: `preview-cms-${slug}`,
+              auto_merge: false,
+              required_contexts: [],
+              transient_environment: true,
+              production_environment: false,
+              description: 'Per-CMS-entry preview alias',
+            });
+
+            const runUrl = `${context.serverUrl}/${context.repo.owner}/${context.repo.repo}/actions/runs/${context.runId}`;
+            await github.rest.repos.createDeploymentStatus({
+              owner: context.repo.owner,
+              repo: context.repo.repo,
+              deployment_id: deployment.id,
+              state: 'success',
+              environment_url: url,
+              log_url: runUrl,
+              description: `Per-slug preview live at ${url}`,
+            });
+
+            core.notice(`Registered cms-slug deployment ${deployment.id} → ${url}`);
+
       - name: Post preview URL comment
         uses: actions/github-script@3a2844b7e9c422d3c10d287c895573f7108da1b3  # v9.0.0 (2026-04-09)
+        env:
+          CMS_SLUG: ${{ steps.cms_slug.outputs.slug }}
         with:
           script: |
             const pr = context.payload.pull_request.number;
@@ -242,6 +351,7 @@ jobs:
             const cfId = process.env.CLOUDFRONT_DISTRIBUTION_ID;
             const bucket = process.env.PREVIEW_BUCKET;
             const region = process.env.AWS_REGION;
+            const slug = process.env.CMS_SLUG;
 
             // Subdomain-per-PR when CloudFront is set up (wildcard cert +
             // Function handles host → S3 prefix). Fall back to the raw S3
@@ -250,6 +360,16 @@ jobs:
             const url = cfId
               ? `https://preview-pr${pr}.${apex}/`
               : `http://${bucket}.s3-website-${region}.amazonaws.com/pr-${pr}/`;
+
+            // For Decap-opened PRs (head ref `cms/<col>/<entry>`),
+            // also surface the slug-derived alias so editors can
+            // bookmark a URL that doesn't change when Decap closes
+            // and re-opens a PR for the same entry.
+            const cmsUrl = slug
+              ? (cfId
+                ? `https://preview-cms-${slug}.${apex}/`
+                : `http://${bucket}.s3-website-${region}.amazonaws.com/cms-${slug}/`)
+              : null;
 
             // Find existing preview comment (to update rather than spam)
             const { data: comments } = await github.rest.issues.listComments({
@@ -272,16 +392,27 @@ jobs:
               `https://github.com/${context.repo.owner}/${context.repo.repo}` +
               `/blob/main/docs/CONTRIBUTOR_MANUAL.md`;
 
+            const rows = [
+              `| **Preview URL** | [${url}](${url}) |`,
+            ];
+            if (cmsUrl) {
+              rows.push(
+                `| **CMS slug alias** | [${cmsUrl}](${cmsUrl}) — stable across draft cycles for this entry |`,
+              );
+            }
+            rows.push(
+              `| **Commit** | \`${{ github.event.pull_request.head.sha }}\` |`,
+              `| **Branch** | \`${{ github.head_ref }}\` |`,
+              `| **Walkthrough** | [docs/CONTRIBUTOR_MANUAL.md](${walkthroughUrl}) (current main) |`,
+            );
+
             const body = [
               BOT_MARKER,
               '## 🔵 Preview Deployed',
               '',
               '| | |',
               '|---|---|',
-              `| **Preview URL** | [${url}](${url}) |`,
-              `| **Commit** | \`${{ github.event.pull_request.head.sha }}\` |`,
-              `| **Branch** | \`${{ github.head_ref }}\` |`,
-              `| **Walkthrough** | [docs/CONTRIBUTOR_MANUAL.md](${walkthroughUrl}) (current main) |`,
+              ...rows,
               '',
               '*Preview updates automatically on every push to this PR.*',
             ].join('\n');
@@ -314,6 +445,21 @@ jobs:
       CLOUDFRONT_DISTRIBUTION_ID: ${{ secrets.PREVIEW_CLOUDFRONT_ID }}
 
     steps:
+      - name: Compute CMS slug (cms/<col>/<entry> → <col>-<entry>)
+        id: cms_slug
+        # Mirror the deploy-side computation so we know which (if any)
+        # alias S3 prefix to clean up in addition to pr-<N>. Both prefixes
+        # were syncd at deploy time; both need rm + invalidation now.
+        run: |
+          set -euo pipefail
+          BRANCH='${{ github.event.pull_request.head.ref }}'
+          if [[ "$BRANCH" == cms/* ]]; then
+            SLUG=$(printf '%s' "$BRANCH" | sed -E 's|^cms/||; s|/|-|g')
+            echo "slug=${SLUG}" >> "$GITHUB_OUTPUT"
+          else
+            echo "slug=" >> "$GITHUB_OUTPUT"
+          fi
+
       - name: Configure AWS credentials
         uses: aws-actions/configure-aws-credentials@ec61189d14ec14c8efccab744f656cffd0e33f37  # v6.1.0 (2026-04-06)
         with:
@@ -325,13 +471,26 @@ jobs:
           PR_NUMBER=${{ github.event.pull_request.number }}
           aws s3 rm "s3://${PREVIEW_BUCKET}/pr-${PR_NUMBER}/" --recursive
 
+      - name: Delete per-CMS-slug alias from S3
+        if: steps.cms_slug.outputs.slug != ''
+        run: |
+          SLUG='${{ steps.cms_slug.outputs.slug }}'
+          aws s3 rm "s3://${PREVIEW_BUCKET}/cms-${SLUG}/" --recursive
+
       - name: Invalidate CloudFront cache
         if: env.CLOUDFRONT_DISTRIBUTION_ID != ''
         run: |
           PR_NUMBER=${{ github.event.pull_request.number }}
+          SLUG='${{ steps.cms_slug.outputs.slug }}'
+          # Combine both prefixes in a single invalidation call to save
+          # against the per-month invalidation quota.
+          PATHS=("/pr-${PR_NUMBER}/*")
+          if [[ -n "$SLUG" ]]; then
+            PATHS+=("/cms-${SLUG}/*")
+          fi
           aws cloudfront create-invalidation \
             --distribution-id "$CLOUDFRONT_DISTRIBUTION_ID" \
-            --paths "/pr-${PR_NUMBER}/*"
+            --paths "${PATHS[@]}"
 
       - name: Post teardown comment
         uses: actions/github-script@3a2844b7e9c422d3c10d287c895573f7108da1b3  # v9.0.0 (2026-04-09)
