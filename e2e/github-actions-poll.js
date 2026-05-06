@@ -116,7 +116,14 @@ async function getPullRequest({ repo = HOST_REPO, prNumber }) {
 async function waitForMerge({
   repo = HOST_REPO,
   prNumber,
-  timeoutMs = 480_000,
+  // 5 minutes — happy-path auto-merges fire in <1 min once required
+  // checks settle. The previous 8 min default was set for a CI shape
+  // that no longer exists; when something IS broken (e.g. the shim's
+  // dispatch path), a faster failure surface beats a longer wait that
+  // still ends in the same error. Callers that need more headroom
+  // (cms-fixture-pr.js helpers, which go through the full editorial-
+  // workflow chain) pass their own value.
+  timeoutMs = 300_000,
   pollMs = 8_000,
 } = {}) {
   const deadline = Date.now() + timeoutMs;
