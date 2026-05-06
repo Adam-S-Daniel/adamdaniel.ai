@@ -34,7 +34,7 @@
  *     emotion never strips that substring from a labelled component).
  *   - Inside that, the PreviewLink is an `<a>` with `target="_blank"` and
  *     `rel*="noopener"`.
- *   - Exclude our own banner (`#cms-live-url-banner-link`), the floating
+ *   - Exclude the floating
  *     "Live Preview" button (`#live-preview-link`), and the deployed-commit
  *     pill (`#cms-commit-pill`) — those are also `target="_blank"` anchors
  *     in the same document and would otherwise match.
@@ -46,9 +46,14 @@
   // Decap's native toolbar. Rewriting their href would clobber what those
   // affordances are pointing at.
   var EXCLUDE_IDS = [
-    "cms-live-url-banner-link",
     "live-preview-link",
     "cms-commit-pill",
+    // The deploy-status pills inject INTO the toolbar with their own
+    // target="_blank" links pointing at GitHub Actions runs. Without
+    // this exclusion the override would rewrite their hrefs to
+    // compute()'s live URL on every form mutation, defeating them.
+    "cms-prod-status-pill",
+    "cms-preview-build-pill",
   ];
 
   function findToolbarAnchors() {

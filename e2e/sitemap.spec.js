@@ -67,7 +67,7 @@ function expectedPostUrl(filename, frontMatter) {
   // Front matter `slug:` overrides the filename-derived slug, but only when
   // it's a non-empty string. The seed posts ship `slug: ''` to keep Decap's
   // file-naming template authoritative — for those we must fall back to the
-  // filename. Mirrors `live-url-banner.js`'s `compute()`.
+  // filename. Mirrors `live-url-derive.js`'s `compute()`.
   const explicitSlug = (frontMatter.slug || "").trim();
   const slug = explicitSlug || deriveSlugFromFilename(filename);
   return `/blog/${slug}/`;
