@@ -140,6 +140,46 @@ async function addReadyLabel({ repo, prNumber }) {
   });
 }
 
+/** Close any open PR(s) on a fixed Decap-managed head branch
+ * (`cms/<col>/<slug>`), then delete the branch. Used at the start of
+ * publish-loop specs to wipe leftover state from a prior run. The
+ * symptom this prevents: Decap reuses a fixed branch per entry. If a
+ * prior run left a PR with a non-Draft editorial-workflow label
+ * (decap-cms/pending_publish, decap-cms/pending_review, decap-cms/ready),
+ * the next run's Save pushes onto the same branch — labels persist —
+ * Decap UI shows "Status: Ready" instead of "Status: Draft" — the
+ * spec's button-wait times out at 20 min. Closing the PR + deleting
+ * the branch resets to a clean slate; Decap opens a fresh
+ * decap-cms/draft on the next Save.
+ *
+ * Best-effort: any sub-step (list / close / delete) that fails is
+ * swallowed. If we can't reset cleanly, the spec's existing failure
+ * paths surface the issue downstream — no need to short-circuit
+ * here on a transient list-pulls error.
+ */
+async function closeStaleDecapPrOnBranch({ repo = HOST_REPO, branch }) {
+  if (!branch) return;
+  let prs = [];
+  try {
+    const owner = repo.split("/")[0];
+    prs = await gh(
+      `/repos/${repo}/pulls?head=${owner}:${encodeURIComponent(
+        branch,
+      )}&state=open`,
+    );
+  } catch (_) {
+    return;
+  }
+  if (!Array.isArray(prs) || prs.length === 0) return;
+  for (const pr of prs) {
+    await closePrAndDeleteBranch({
+      repo,
+      prNumber: pr.number,
+      branch,
+    });
+  }
+}
+
 /** Best-effort PR close + branch delete. Used when a fixture flow times
  * out; leaves the repo cleaner than an open zombie PR but doesn't
  * throw if either step fails — the cleanup workflow picks up the
@@ -274,6 +314,7 @@ module.exports = {
   fixtureBranchName,
   seedFixtureViaPr,
   removeFixtureViaPr,
+  closeStaleDecapPrOnBranch,
   // Exported for unit tests / debugging
   createBranchFromMain,
   putFileOnBranch,

@@ -63,7 +63,7 @@ const {
   waitForMerge,
   waitForWorkflowRun,
 } = require("./github-actions-poll");
-const { seedFixtureViaPr } = require("./cms-fixture-pr");
+const { seedFixtureViaPr, closeStaleDecapPrOnBranch } = require("./cms-fixture-pr");
 
 const CANARY = findCanary("post");
 const PROD_HOST = "https://adamdaniel.ai";
@@ -188,6 +188,24 @@ test("CMS publish loop — host repo, target main", async ({ page }, testInfo) =
   const runId = Date.now();
   const marker = makeMarker(CANARY.id, runId);
   const baselineBody = CANARY.baseline;
+
+  // ── 0a. Close any stale Decap editorial-workflow PR on the
+  // canary's fixed branch ────────────────────────────────────────
+  // Decap reuses cms/<col>/<slug> per entry, so a prior run that
+  // crashed at any stage past Save can leave a PR with a non-Draft
+  // editorial-workflow label (decap-cms/pending_publish,
+  // decap-cms/pending_review, decap-cms/ready). On the next run the
+  // Save pushes onto the same branch — the labels persist — Decap's
+  // toolbar shows "Status: Ready" instead of "Status: Draft" — the
+  // step-6 button-wait below times out at 20 min. Pre-emptively
+  // closing any open PR for this entry's branch resets to a clean
+  // slate; Decap will open a fresh decap-cms/draft PR on the next
+  // Save below.
+  await test.step("Close any stale Decap editorial-workflow PR on the canary branch", async () => {
+    await closeStaleDecapPrOnBranch({
+      branch: `cms/${CANARY.cmsCollection}/${CANARY.slug}`,
+    });
+  });
 
   // ── 0. Reset canary to baseline before the run ──────────────────
   // The previous run may have crashed mid-flow; force a clean start.
