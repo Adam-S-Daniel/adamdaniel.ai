@@ -31,6 +31,20 @@ on:
       - 'docs/manual-overrides.yml'
       - 'scripts/build-contributor-manual.js'
       - '.github/workflows/regenerate-manual.yml'
+      # Workflow files that drive the admin lifecycle. Edits to any of
+      # these can shift what an editor sees during publish/preview, so
+      # the walkthrough should regenerate.
+      - '.github/workflows/cms-editorial-workflow.yml'
+      - '.github/workflows/cms-publish-loop-host.yml'
+      - '.github/workflows/cms-publish-loop-prod.yml'
+      - '.github/workflows/deploy-preview.yml'
+      - '.github/workflows/deploy-production.yml'
+      - '.github/workflows/delete-via-pr.yml'
+      # OAuth proxy + admin-flow shim/helpers — same reasoning. An edit
+      # here can change the click → API → workflow chain editors hit.
+      - 'oauth-proxy/lambda.py'
+      - 'admin/publish-via-auto-merge.js'
+      - 'admin/deploy-status-pill.js'
 
 permissions:
   contents: write
