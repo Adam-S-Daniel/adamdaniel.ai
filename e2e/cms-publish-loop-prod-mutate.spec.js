@@ -90,10 +90,16 @@ const PUBLIC_URL = `${PROD_HOST}${PUBLIC_PATH}`;
 
 // Same envelope as cms-publish-loop.spec.js — the validate-content +
 // auto-merge + deploy-production + CloudFront invalidation chain caps
-// out around 12-15 minutes when runners are warm.
+// out around 12-15 minutes when runners are warm. Retries explicitly
+// disabled — this test mutates real prod state; retries just re-run
+// the same broken chain after another 15 min.
 const TEST_TIMEOUT_MS = 15 * 60 * 1000;
 
-test.describe.configure({ mode: "serial", timeout: TEST_TIMEOUT_MS });
+test.describe.configure({
+  mode: "serial",
+  timeout: TEST_TIMEOUT_MS,
+  retries: 0,
+});
 
 // Marker that goes into the body so the test can assert "this exact
 // run produced what's at the public URL." Distinct from the `_e2e/`

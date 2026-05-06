@@ -99,11 +99,19 @@ function assertNotProdCanary(action) {
 //   3. The cleanup PR that resets the canary baseline.
 // Each PR waits on the full required-check suite (validate-content +
 // e2e shards + finalize) plus deploy-production on main. Worst-case
-// runtime per cycle is ~10 min when runners are warm; allow ~40 min
-// total so a stuck pipeline still fails instead of hanging forever.
-const TEST_TIMEOUT_MS = 40 * 60 * 1000;
+// runtime per cycle is ~10 min when runners are warm; allow ~20 min
+// total so a stuck pipeline fails fast rather than holding a runner
+// for a full hour. Retries are explicitly disabled for the same
+// reason: the publish-loop is a real-state mutation and a retry just
+// re-runs the same broken chain after wasting another 20 min — the
+// failure mode is almost never transient.
+const TEST_TIMEOUT_MS = 20 * 60 * 1000;
 
-test.describe.configure({ mode: "serial", timeout: TEST_TIMEOUT_MS });
+test.describe.configure({
+  mode: "serial",
+  timeout: TEST_TIMEOUT_MS,
+  retries: 0,
+});
 
 /** Read the current main-branch SHA + content of the canary file. */
 async function fetchCanaryFromMain() {
