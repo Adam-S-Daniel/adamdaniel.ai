@@ -261,6 +261,17 @@ jobs:
             const BOT_MARKER = '<!-- adamdaniel-preview-bot -->';
             const existing = comments.find(c => c.body.includes(BOT_MARKER));
 
+            // Walkthrough is regenerated FROM main (regenerate-manual.yml's
+            // captureStep records). Linking to it at main's HEAD gives the
+            // editor reviewing this preview the most recent set of admin
+            // screenshots + step descriptions. The walkthrough re-fires
+            // when admin/, workflow files, or the spec list change — so
+            // any change in this PR that would shift the editor experience
+            // produces a fresh walkthrough on the next push to main.
+            const walkthroughUrl =
+              `https://github.com/${context.repo.owner}/${context.repo.repo}` +
+              `/blob/main/docs/CONTRIBUTOR_MANUAL.md`;
+
             const body = [
               BOT_MARKER,
               '## 🔵 Preview Deployed',
@@ -270,6 +281,7 @@ jobs:
               `| **Preview URL** | [${url}](${url}) |`,
               `| **Commit** | \`${{ github.event.pull_request.head.sha }}\` |`,
               `| **Branch** | \`${{ github.head_ref }}\` |`,
+              `| **Walkthrough** | [docs/CONTRIBUTOR_MANUAL.md](${walkthroughUrl}) (current main) |`,
               '',
               '*Preview updates automatically on every push to this PR.*',
             ].join('\n');
