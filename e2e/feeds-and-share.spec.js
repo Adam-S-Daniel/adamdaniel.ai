@@ -1,5 +1,6 @@
 // @lane: local — exercises the locally-served Atom/RSS feeds + per-post share row
 const { test, expect } = require("./base");
+const { discoverTags, discoverPost } = require("./content-fixtures");
 
 // Acceptance for the RSS/Atom feeds + per-post share row.
 //
@@ -10,12 +11,13 @@ const { test, expect } = require("./base");
 //
 // The share row lives on every post page; it is intentionally subtle —
 // these tests verify presence and intent URLs, not pixels.
+//
+// Post and tag fixtures are discovered at runtime via
+// e2e/content-fixtures.js rather than hardcoded — when the site has no
+// posts or no tags, the dependent tests self-skip with a clear reason
+// rather than failing because a specific fixture name was removed.
 
 const ATOM_NS = 'xmlns="http://www.w3.org/2005/Atom"';
-// allowed: literal slug used for known fixture (_posts/2026-04-25-replacement-test-post-1.md)
-const POST_URL = "/blog/replacement-test-post-1/";
-const POST_TITLE = "Replacement test post 1";
-const TAG_SLUGS = ["best-practices", "python", "rag", "langchain"];
 
 async function fetchText(page, url) {
   const response = await page.request.get(url);
@@ -38,12 +40,19 @@ test.describe("Atom feeds", () => {
     expect(body).toMatch(/<title[^>]*>.*Adam Daniel.*<\/title>/);
   });
 
-  for (const slug of TAG_SLUGS) {
-    test(`/tags/${slug}/feed.xml exists and is a valid Atom feed`, async ({
-      page,
-    }) => {
+  test("each discovered tag emits a valid per-tag Atom feed at /tags/<slug>/feed.xml", async ({
+    page,
+  }) => {
+    const tags = await discoverTags(page);
+    test.skip(
+      tags.length === 0,
+      "no tags exist on the site — no per-tag feeds to assert against",
+    );
+    for (const { slug } of tags) {
       const { body } = await fetchText(page, `/tags/${slug}/feed.xml`);
-      expect(body).toContain(ATOM_NS);
+      expect(body, `/tags/${slug}/feed.xml lacks Atom namespace`).toContain(
+        ATOM_NS,
+      );
       expect(body).toMatch(/<feed\b/);
       expect(body).toMatch(
         new RegExp(
@@ -52,14 +61,25 @@ test.describe("Atom feeds", () => {
       );
       // Subtitle scopes the feed to the tag.
       expect(body).toMatch(/Posts tagged/);
-    });
-  }
+    }
+  });
 });
 
 test.describe("Feed-link icons surface the feeds in the UI", () => {
   test('homepage "Latest Posts" header links to /feed.xml', async ({
     page,
   }) => {
+    // The homepage .feed-link icon is rendered alongside the "Latest
+    // Posts" header, which only appears when at least one post is
+    // published. Skip when the site has no posts (the feed itself
+    // still works — that's covered by the /feed.xml Atom test
+    // above).
+    const post = await discoverPost(page);
+    test.skip(
+      !post,
+      "no published posts → homepage 'Latest Posts' section + feed-link don't render",
+    );
+
     await page.goto("/");
     const link = page.locator('.feed-link[href$="/feed.xml"]').first();
     await expect(link).toBeVisible();
@@ -69,6 +89,15 @@ test.describe("Feed-link icons surface the feeds in the UI", () => {
   });
 
   test("/blog/ header links to /feed.xml", async ({ page }) => {
+    // Same reasoning — /blog/'s page-header is gated on having posts
+    // to list. Without posts, /blog/ may render an empty-state body
+    // and no feed-link.
+    const post = await discoverPost(page);
+    test.skip(
+      !post,
+      "no published posts → /blog/ page-header + feed-link don't render",
+    );
+
     await page.goto("/blog/");
     const link = page.locator(".page-header .feed-link").first();
     await expect(link).toBeVisible();
@@ -78,7 +107,9 @@ test.describe("Feed-link icons surface the feeds in the UI", () => {
   test("/tags/<slug>/ header links to its per-tag feed and advertises it in <head>", async ({
     page,
   }) => {
-    const slug = "python";
+    const tags = await discoverTags(page);
+    test.skip(tags.length === 0, "no tags on the site — no per-tag header to assert");
+    const slug = tags[0].slug;
     await page.goto(`/tags/${slug}/`);
 
     const link = page.locator(".page-header .feed-link").first();
@@ -107,6 +138,13 @@ test.describe("Feed-link icon survives CSS load failure (webkit)", () => {
     browserName,
   }) => {
     test.skip(browserName !== "webkit", "webkit-only regression case");
+    // Same homepage gating as above — the .feed-link only renders
+    // when the "Latest Posts" section has at least one post.
+    const post = await discoverPost(page);
+    test.skip(
+      !post,
+      "no published posts → homepage feed-link doesn't render, no icon to size-check",
+    );
 
     // Abort every main.css request so the icon renders unstyled.
     await page.route("**/main.css*", (route) => route.abort());
@@ -124,10 +162,18 @@ test.describe("Feed-link icon survives CSS load failure (webkit)", () => {
 });
 
 test.describe("Share row on a post", () => {
+  // Post fixture is whatever post the site lists first on /blog/. The
+  // share-row contract is the same for every post — the spec doesn't
+  // need to anchor on a specific one. When no post is published (e.g.
+  // _posts/ is empty or only contains a future-dated canary), every
+  // test in this group skips with a clear reason.
+
   test("renders an understated share row at the bottom of the post", async ({
     page,
   }) => {
-    await page.goto(POST_URL);
+    const post = await discoverPost(page);
+    test.skip(!post, "no published posts on the site — share row has no host page");
+    await page.goto(post.url);
 
     const row = page.locator(".share-row");
     await expect(row).toBeVisible();
@@ -144,7 +190,9 @@ test.describe("Share row on a post", () => {
   test("LinkedIn / X / Bluesky intents carry the post URL and title", async ({
     page,
   }) => {
-    await page.goto(POST_URL);
+    const post = await discoverPost(page);
+    test.skip(!post, "no published posts on the site");
+    await page.goto(post.url);
 
     const row = page.locator(".share-row");
     const linkedin = row.locator('a[href*="linkedin.com/sharing"]');
@@ -155,24 +203,37 @@ test.describe("Share row on a post", () => {
     await expect(x).toHaveCount(1);
     await expect(bluesky).toHaveCount(1);
 
-    const slug = "replacement-test-post-1";
-    // url_encode in Liquid uses form-encoding (spaces → +), not %20 — match either.
-    const titleHasWords = (s) =>
-      /Replacement(\+|%20)test(\+|%20)post(\+|%20)1/.test(s);
-
-    expect(await linkedin.getAttribute("href")).toContain(slug);
+    // The slug is the path segment under /blog/. Every share-intent
+    // URL must include it (so re-shares land on the right post).
+    expect(await linkedin.getAttribute("href")).toContain(post.slug);
     const xHref = await x.getAttribute("href");
-    expect(titleHasWords(xHref)).toBe(true);
-    expect(xHref).toContain(slug);
+    expect(xHref).toContain(post.slug);
     const bskyHref = await bluesky.getAttribute("href");
-    expect(titleHasWords(bskyHref)).toBe(true);
-    expect(bskyHref).toContain(slug);
+    expect(bskyHref).toContain(post.slug);
+
+    // The title must be carried (form- or percent-encoded) on every
+    // intent that takes a quoted body. Build a regex from the first
+    // non-empty word of the title — covers both encoding styles
+    // without depending on a specific fixture's exact phrasing.
+    const firstWord = post.title.split(/\s+/).find((w) => w.length > 0);
+    if (firstWord) {
+      const wordRe = new RegExp(
+        firstWord.replace(/[.*+?^${}()|[\]\\]/g, "\\$&"),
+        "i",
+      );
+      expect(xHref, "X intent URL is missing the post title").toMatch(wordRe);
+      expect(bskyHref, "Bluesky intent URL is missing the post title").toMatch(
+        wordRe,
+      );
+    }
   });
 
   test("Mastodon and Copy buttons are buttons (not links) and carry data attrs", async ({
     page,
   }) => {
-    await page.goto(POST_URL);
+    const post = await discoverPost(page);
+    test.skip(!post, "no published posts on the site");
+    await page.goto(post.url);
 
     const masto = page.locator(".share-mastodon");
     const copy = page.locator(".share-copy");
@@ -182,12 +243,9 @@ test.describe("Share row on a post", () => {
     expect(await masto.evaluate((el) => el.tagName)).toBe("BUTTON");
     expect(await copy.evaluate((el) => el.tagName)).toBe("BUTTON");
 
-    expect(await copy.getAttribute("data-share-copy-url")).toMatch(
-      /\/blog\/replacement-test-post-1\/?$/,
-    );
-    expect(await masto.getAttribute("data-share-mastodon-url")).toMatch(
-      /\/blog\/replacement-test-post-1\/?$/,
-    );
+    const slugRe = new RegExp(`/blog/${post.slug}/?$`);
+    expect(await copy.getAttribute("data-share-copy-url")).toMatch(slugRe);
+    expect(await masto.getAttribute("data-share-mastodon-url")).toMatch(slugRe);
   });
 
   test("Copy button writes the post URL to the clipboard", async ({
@@ -203,10 +261,12 @@ test.describe("Share row on a post", () => {
       testInfo.project.use.forcedColors === "active",
       "skipping under forced-colors — not relevant to the JS behavior",
     );
+    const post = await discoverPost(page);
+    test.skip(!post, "no published posts on the site");
 
     await context.grantPermissions(["clipboard-read", "clipboard-write"]);
 
-    await page.goto(POST_URL);
+    await page.goto(post.url);
     const copy = page.locator(".share-copy");
     await copy.click();
 
@@ -215,6 +275,6 @@ test.describe("Share row on a post", () => {
     const clipboardText = await page.evaluate(() =>
       navigator.clipboard.readText(),
     );
-    expect(clipboardText).toMatch(/\/blog\/replacement-test-post-1\/?$/);
+    expect(clipboardText).toMatch(new RegExp(`/blog/${post.slug}/?$`));
   });
 });

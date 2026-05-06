@@ -1,102 +1,122 @@
 // @lane: local — exercises the locally-rendered tag pages; @parity-eligible via TARGET=
 const { test, expect } = require("./base");
+const { discoverTags } = require("./content-fixtures");
 
 // Acceptance for issue #27 — make tags functional end-to-end.
 //
 // Tests are deliberately content-agnostic: they verify the *structure*
 // of the tag system (index, archive pages, homepage cloud, empty-state
-// placeholder) without depending on which posts or in-post tags exist
+// placeholder) without depending on which specific tags or posts exist
 // at the time the suite runs. The auto-generator's data-shaping is
 // covered exhaustively by Ruby unit tests in
 // `_plugins_test/auto_tag_pages_test.rb`.
 //
-// Anchored to the curated entries in `_tags/`:
-//   _tags/best-practices.md, _tags/python.md, _tags/rag.md, _tags/langchain.md
-// Each must show on `/tags/` and resolve to a working `/tags/<slug>/` archive.
-
-const CURATED_TAGS = [
-  { name: "Best Practices", slug: "best-practices" },
-  { name: "Python", slug: "python" },
-  { name: "RAG", slug: "rag" },
-  { name: "LangChain", slug: "langchain" },
-];
+// Tag fixtures are discovered at runtime via `discoverTags` rather than
+// hardcoded — see e2e/content-fixtures.js. When the site has no tags,
+// the per-tag tests self-skip with a clear reason rather than failing.
 
 test.describe("Tags index page", () => {
-  test("/tags/ exists and lists every curated tag", async ({ page }) => {
+  test("/tags/ exists and renders without errors", async ({ page }) => {
     const response = await page.goto("/tags/");
     expect(response.status()).toBe(200);
 
     await expect(
       page.locator(".page-header h1", { hasText: /^Tags$/i }),
     ).toBeVisible();
+  });
 
+  test("/tags/ either lists tags or shows the empty placeholder", async ({
+    page,
+  }) => {
+    await page.goto("/tags/");
+    // Two valid renderings: a non-empty `.tag-list`, or the
+    // "No tags yet." paragraph. A site mid-deletion shouldn't render
+    // an empty `.tag-list` shell.
     const list = page.locator(".tag-list");
-    await expect(list).toBeVisible();
-
-    for (const { name, slug } of CURATED_TAGS) {
-      const link = list.locator(`a[href$="/tags/${slug}/"]`);
-      await expect(link).toBeVisible();
-      await expect(link).toHaveText(new RegExp(name));
+    const placeholder = page.locator("text=/no tags yet/i");
+    const listVisible = await list.isVisible();
+    const placeholderVisible = await placeholder.isVisible();
+    expect(
+      listVisible || placeholderVisible,
+      "expected either a populated .tag-list or the 'No tags yet.' placeholder",
+    ).toBe(true);
+    if (listVisible) {
+      // If the list is shown, it must have at least one item — an
+      // empty .tag-list shell is the failure mode this asserts against.
+      const items = await list.locator(".tag-list-item").count();
+      expect(items).toBeGreaterThan(0);
     }
   });
 });
 
 test.describe("Tag archive pages", () => {
-  for (const { name, slug } of CURATED_TAGS) {
-    test(`/tags/${slug}/ resolves and renders the right header`, async ({
-      page,
-    }) => {
+  test("each discovered tag's /tags/<slug>/ resolves with the right header", async ({
+    page,
+  }) => {
+    const tags = await discoverTags(page);
+    test.skip(
+      tags.length === 0,
+      "no tags exist on the site — nothing to assert against",
+    );
+    for (const { name, slug } of tags) {
       const response = await page.goto(`/tags/${slug}/`);
-      expect(response.status()).toBe(200);
+      expect(response.status(), `/tags/${slug}/ should respond 200`).toBe(200);
       await expect(page.locator(".page-header h1")).toHaveText(name);
-    });
-  }
+    }
+  });
 
   test("a tag with no matching posts shows the empty-state placeholder", async ({
     page,
   }) => {
-    // Find a curated tag that no current post references — its archive
-    // page should render the "No posts yet with this tag" message rather
-    // than a broken empty list. Pick whichever curated tag scores zero so
-    // the test stays valid as content evolves.
-    let zeroCountSlug = null;
-    await page.goto("/tags/");
-    for (const { slug } of CURATED_TAGS) {
-      const card = page.locator(
-        `.tag-list-item:has(a[href$="/tags/${slug}/"])`,
-      );
-      const countText = (
-        await card.locator(".tag-list-count").innerText()
-      ).trim();
-      if (countText === "0") {
-        zeroCountSlug = slug;
-        break;
-      }
-    }
+    // Find a tag with count 0 (a curated tag entry that no post
+    // currently references). Its archive should render the
+    // "No posts yet" placeholder, not a broken empty list.
+    const tags = await discoverTags(page);
+    const zero = tags.find((t) => t.count === 0);
     test.skip(
-      zeroCountSlug === null,
-      "every curated tag is referenced by at least one post",
+      !zero,
+      "no zero-count tag available — every visible tag is referenced by at least one post",
     );
 
-    await page.goto(`/tags/${zeroCountSlug}/`);
+    await page.goto(`/tags/${zero.slug}/`);
     await expect(page.locator("text=/no posts yet/i")).toBeVisible();
   });
 });
 
 test.describe("Homepage tag cloud", () => {
-  test("landing page shows a tag list at the bottom", async ({ page }) => {
+  test("landing page shows a tag list at the bottom OR omits the section when there are no tags", async ({
+    page,
+  }) => {
+    const tags = await discoverTags(page);
+
     await page.goto("/");
-
     const section = page.locator(".tag-cloud-section");
-    await expect(section).toBeVisible();
+    const sectionVisible = await section.isVisible();
 
-    // Section links to the tags index.
+    if (tags.length === 0) {
+      // No tags → the section can either render an empty cloud or be
+      // omitted entirely. Either is acceptable; what's NOT acceptable
+      // is a section visible with broken (zero-pill) cloud markup.
+      if (sectionVisible) {
+        const cloud = section.locator(".tag-cloud");
+        const cloudVisible = await cloud.isVisible();
+        if (cloudVisible) {
+          const pills = await cloud.locator("a").count();
+          expect(
+            pills,
+            "tag-cloud rendered but contains no pills — should hide the section instead",
+          ).toBeGreaterThan(0);
+        }
+      }
+      return;
+    }
+
+    expect(sectionVisible, "homepage should show .tag-cloud-section when tags exist").toBe(true);
     await expect(section.locator('a[href$="/tags/"]')).toBeVisible();
 
-    // Every curated tag appears as a pill in the cloud linking to its archive.
     const cloud = section.locator(".tag-cloud");
     await expect(cloud).toBeVisible();
-    for (const { slug } of CURATED_TAGS) {
+    for (const { slug } of tags) {
       await expect(cloud.locator(`a[href$="/tags/${slug}/"]`)).toBeVisible();
     }
   });
