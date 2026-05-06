@@ -11,25 +11,38 @@ on:
     # paths-ignore form used elsewhere) because the dual nature of
     # `e2e/` (most specs unrelated, but a handful drive this workflow)
     # makes a negative list awkward to express.
+    #
+    # Content-only PRs are NOT in this list and therefore do not run
+    # visual regression. The CMS's editorial workflow opens a PR for
+    # every Save, and those PRs touch only the CMS-managed content
+    # collections (_posts/, _tags/, _projects/, pages/, _e2e/ — see
+    # admin/config.yml), plus media uploads under
+    # assets/images/uploads/. The "regression" of editing a post or
+    # uploading an image is by design — pixel diffs are guaranteed,
+    # so the human review of the regression video adds noise and
+    # runner time without signal. The check exists to catch
+    # *unintentional* visual drift in templates / styling / the
+    # admin shell — that's what the paths below cover. Content-only
+    # PRs still gate on validate-content + the e2e suite.
     paths:
-      # Site-rendered content / templates / styling
-      - '_posts/**'
-      - '_tags/**'
-      - '_projects/**'
+      # Templates / rendering logic / styling
       - '_layouts/**'
       - '_includes/**'
       - '_plugins/**'
-      - '_data/**'
-      - 'pages/**'
-      - 'assets/**'
-      - 'admin/**'
+      - '_data/**'              # site-wide data (e.g. nav lists), not CMS content
+      - 'admin/**'              # the editor shell itself
       - '_config.yml'
       - 'Gemfile'
       - 'Gemfile.lock'
-      - 'index.html'
+      - 'index.html'            # hand-edited root page (not a CMS page)
       - '404.html'
       - 'robots.txt'
       - 'preview.md'
+      # Styling assets — narrowed from `assets/**` so CMS media
+      # uploads under assets/images/uploads/** don't trigger.
+      - 'assets/css/**'
+      - 'assets/js/**'
+      - 'assets/images/logo.svg'
       # Tools the regression pipeline itself depends on
       - '.github/workflows/visual-regression.yml'
       - 'e2e/detect-changed-pages.js'
