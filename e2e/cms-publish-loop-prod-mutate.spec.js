@@ -66,6 +66,7 @@ const fs = require("node:fs");
 const path = require("node:path");
 const { test, expect } = require("./base");
 const { seedDecapAuth, getPat, HOST_REPO } = require("./decap-pat");
+const { closeStaleDecapPrOnBranch } = require("./cms-fixture-pr");
 const {
   addLabel,
   fetchPublicUrl,
@@ -221,6 +222,24 @@ test("CMS publish loop — prod mutation playground (real _posts/ entry)", async
   const runId = Date.now();
   const marker = makeProdMarker(runId);
   const baselineFileText = buildBaselineFileText();
+
+  // ── 0a. Close any stale Decap editorial-workflow PR on the
+  // post's fixed branch ──────────────────────────────────────────
+  // Decap reuses cms/posts/<slug> per entry, so a prior run that
+  // crashed at any stage past Save can leave a PR with a non-Draft
+  // editorial-workflow label. On the next run the Save pushes onto
+  // the same branch — labels persist — Decap shows "Status: Ready"
+  // instead of "Status: Draft" — the step-6 button-wait below times
+  // out at 15 min. See docs/.../cms-stuck-pr-triage skill for the
+  // full diagnostic. Resetting the PR here lets Decap open a fresh
+  // decap-cms/draft on the next Save.
+  await test.step("Close any stale Decap editorial-workflow PR on the post branch", async () => {
+    // Decap's branch shape for a Posts entry is
+    // `cms/posts/<file-slug>`, where <file-slug> matches the
+    // YYYY-MM-DD-<slug> filename without the .md extension.
+    const fileSlug = FIXTURE_PATH.replace(/^_posts\//, "").replace(/\.md$/, "");
+    await closeStaleDecapPrOnBranch({ branch: `cms/posts/${fileSlug}` });
+  });
 
   // ── 0. Reset fixture to baseline before the run ─────────────────
   // The previous run may have crashed mid-flow; force a clean start
