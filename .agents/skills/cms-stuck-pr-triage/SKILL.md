@@ -56,6 +56,23 @@ Two diagnostic questions the output answers:
 
 - **Pending checks, recent PR**: if the PR was opened in the last few minutes and `statusCheckRollup` shows `IN_PROGRESS`, just wait — the publish-loop run that's currently watching it should succeed when the checks settle.
 
+- **Stale Decap workflow state on a fixed-branch PR (`decap-cms/pending_publish` etc.)**: Decap reuses a fixed branch per entry — `cms/e2e/canary-post` for the e2e canary, `cms/posts/<slug>` for posts. When a prior run leaves the PR open in a non-Draft editorial-workflow state (e.g. `decap-cms/pending_publish` or `decap-cms/pending_review`), the next run's spec edits the entry, Decap pushes onto the SAME branch, the existing PR's labels stick around, and Decap's UI shows "Status: Ready" (or "In Review") rather than "Status: Draft". The publish-loop spec waits for Status: Draft and times out. Symptom in the test log:
+
+  ```
+  Error: locator.click: Test timeout of 1200000ms exceeded.
+  Call log:
+    - waiting for getByRole('button', { name: /^Status:\s*Draft$/i })
+  ```
+
+  Fix: close the stale PR with `gh pr close <N> --delete-branch`. Decap will create a fresh branch on the next Save, with `cms/draft` from `cms-editorial-workflow.yml`'s opened-event handler, and the spec sees Status: Draft. To check if a Decap PR is in this state:
+
+  ```bash
+  gh pr view <N> --json labels --jq '[.labels[].name]'
+  # Look for any of: decap-cms/pending_publish, decap-cms/pending_review,
+  # decap-cms/ready  →  next run's Status:Draft wait will block
+  # cms/draft, decap-cms/draft  →  fine; spec will see Status:Draft
+  ```
+
 ### 4. After cleaning the queue, re-trigger the workflow
 
 ```bash
