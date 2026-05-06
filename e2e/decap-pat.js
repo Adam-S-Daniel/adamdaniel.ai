@@ -12,11 +12,32 @@
  *   { backendName: "github", token: "<PAT>", login: "<user>", name: "..." }
  *
  * The PAT is read from CMS_E2E_PAT and must be a fine-grained token
- * scoped to the host repo with `Contents: read/write` and
- * `Pull requests: read/write` (see AGENTS.md → "CMS publish-loop test").
+ * scoped to the host repo with three repository permissions:
+ *
+ *   - `Contents: read/write`     — file CRUD via the Contents API
+ *   - `Pull requests: read/write` — open / label / merge cms/* PRs
+ *   - `Actions: read/write`      — dispatch the delete-via-pr.yml
+ *                                   workflow when Decap's "Delete
+ *                                   published entry" hits the
+ *                                   ruleset's 422. Without this, the
+ *                                   shim in admin/publish-via-auto-merge.js
+ *                                   gets a 403 on
+ *                                   POST /actions/workflows/{id}/dispatches
+ *                                   and the delete falls back to a
+ *                                   surfaced 422 — the spec at
+ *                                   e2e/cms-delete-published.spec.js
+ *                                   then times out at step 4 because
+ *                                   delete-via-pr.yml never runs.
+ *
+ * Note: "Workflows: read/write" is a DIFFERENT permission — it
+ * governs editing workflow files in `.github/workflows/` via the
+ * Contents API, not dispatching them. The shim's dispatch needs
+ * "Actions: write" specifically. See AGENTS.md → "CMS publish-loop
+ * test" for the canonical permission table.
  *
  * Used by `e2e/cms-publish-loop.spec.js` (host repo, target main) and
- * `e2e/cms-publish-loop-preview.spec.js` (preview env, target PR head).
+ * `e2e/cms-publish-loop-preview.spec.js` (preview env, target PR head)
+ * and `e2e/cms-delete-published.spec.js`.
  */
 // Live key as of Decap CMS 3.12.2. If a future major bump renames it
 // again, the cms-publish-loop specs will get stuck on Decap's login
