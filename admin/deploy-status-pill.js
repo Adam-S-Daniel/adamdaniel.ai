@@ -98,20 +98,24 @@
     a.id = PILL_ID;
     a.target = "_blank";
     a.rel = "noopener";
-    // Sit ABOVE the existing #cms-commit-pill (which is at top:60px).
-    // Same width-tuned positioning so the two stack tidily.
+    // Stack ABOVE the #cms-commit-pill in the bottom-right corner
+    // (commit pill sits at bottom:0.25rem; this one at bottom:1.85rem).
+    // Both pills are corner-tucked — informational, not action-
+    // grabbing. The deploy-status pill is opaque when visible because
+    // it usually means a deploy is in flight or broken — the editor
+    // needs to see it.
     a.style.cssText = [
       "position:fixed",
-      "top:30px",
-      "right:12px",
+      "bottom:1.85rem",
+      "right:0.25rem",
       "z-index:10001",
-      "padding:0.25rem 0.55rem",
+      "padding:0.15rem 0.45rem",
       "background:rgba(255,255,255,0.95)",
       "border:1px solid #d0d7de",
-      "border-radius:4px",
+      "border-radius:3px",
       "color:#57606a",
       "font-family:ui-monospace,SFMono-Regular,Menlo,monospace",
-      "font-size:0.7rem",
+      "font-size:0.65rem",
       "letter-spacing:0.04em",
       "text-decoration:none",
       "box-shadow:0 1px 3px rgba(0,0,0,0.08)",
