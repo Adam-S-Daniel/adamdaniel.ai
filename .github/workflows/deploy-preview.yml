@@ -59,6 +59,13 @@ permissions:
   contents: read
   pull-requests: write  # to post the preview URL comment
   id-token: write
+  # GitHub Deployments registration so Decap CMS's "Deploy Preview Links"
+  # spinner (https://decapcms.org/docs/deploy-preview-links/) can find
+  # the preview URL for each PR. Without this, the editor toolbar shows
+  # a perpetual "looking for preview" spinner — Decap polls
+  # /repos/.../deployments?ref=<pr-head>, never finds a deployment with
+  # state=success + a target_url, gives up.
+  deployments: write
 
 jobs:
   # ────────────────────────────────────────────────────────────
@@ -158,6 +165,73 @@ jobs:
           aws cloudfront create-invalidation \
             --distribution-id "$CLOUDFRONT_DISTRIBUTION_ID" \
             --paths "/pr-${PR_NUMBER}/*"
+
+      - name: Register GitHub Deployment for the preview URL
+        # Decap CMS's "Deploy Preview Links" feature
+        # (https://decapcms.org/docs/deploy-preview-links/) shows a
+        # spinner in the editor toolbar that polls
+        # `/repos/.../deployments?ref=<pr-head>` and surfaces the
+        # `environment_url` of the most recent successful deployment as
+        # the "Preview" link. Without this step the spinner never
+        # resolves — the only deployment that exists for the PR is
+        # `regression-review` from visual-regression.yml (which is
+        # gated on a manual-approval Environment and never has a
+        # target_url).
+        #
+        # Environment is named `preview-pr-<N>` so each PR gets its own
+        # GH Environment row in the UI. The two-step create + status
+        # pattern is the documented one for marking the deployment
+        # `success` with the target URL.
+        uses: actions/github-script@3a2844b7e9c422d3c10d287c895573f7108da1b3  # v9.0.0 (2026-04-09)
+        env:
+          PR_NUMBER: ${{ github.event.pull_request.number }}
+          PR_HEAD_SHA: ${{ github.event.pull_request.head.sha }}
+        with:
+          script: |
+            const pr = process.env.PR_NUMBER;
+            const sha = process.env.PR_HEAD_SHA;
+            const apex = process.env.APEX_DOMAIN;
+            const cfId = process.env.CLOUDFRONT_DISTRIBUTION_ID;
+            const bucket = process.env.PREVIEW_BUCKET;
+            const region = process.env.AWS_REGION;
+
+            const url = cfId
+              ? `https://preview-pr${pr}.${apex}/`
+              : `http://${bucket}.s3-website-${region}.amazonaws.com/pr-${pr}/`;
+
+            // Step 1: create the deployment. `auto_merge: false` and
+            // `required_contexts: []` skip GitHub's deploy-gating
+            // checks — the actual deploy already happened above; this
+            // call is purely metadata for Decap's polling.
+            // `transient_environment: true` so GitHub's Environments
+            // UI tags it as ephemeral.
+            const { data: deployment } = await github.rest.repos.createDeployment({
+              owner: context.repo.owner,
+              repo: context.repo.repo,
+              ref: sha,
+              environment: `preview-pr-${pr}`,
+              auto_merge: false,
+              required_contexts: [],
+              transient_environment: true,
+              production_environment: false,
+              description: 'PR preview',
+            });
+
+            // Step 2: mark it `success` with the URL Decap picks up.
+            // `log_url` is the workflow run for one-click debugging
+            // from the GitHub Environments UI.
+            const runUrl = `${context.serverUrl}/${context.repo.owner}/${context.repo.repo}/actions/runs/${context.runId}`;
+            await github.rest.repos.createDeploymentStatus({
+              owner: context.repo.owner,
+              repo: context.repo.repo,
+              deployment_id: deployment.id,
+              state: 'success',
+              environment_url: url,
+              log_url: runUrl,
+              description: `Preview live at ${url}`,
+            });
+
+            core.notice(`Registered deployment ${deployment.id} → ${url}`);
 
       - name: Post preview URL comment
         uses: actions/github-script@3a2844b7e9c422d3c10d287c895573f7108da1b3  # v9.0.0 (2026-04-09)
