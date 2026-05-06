@@ -33,6 +33,32 @@
  *
  * Auth: uses the operator's Decap token from
  * `localStorage["decap-cms-user"].token`. No CMS_E2E_PAT.
+ *
+ * ── Robustness behaviours ─────────────────────────────────────────
+ *
+ *   1. Per-pill `lastSuccessfulPollAt` timestamps. If a pill is
+ *      currently visible AND its last successful poll is older than
+ *      STALE_THRESHOLD_MS (5 min), the pill flips to amber with
+ *      "(status stale — last poll <ago>)" instead of disappearing
+ *      silently. The href stays linked to the last-known run so an
+ *      editor can still drill into the in-flight deploy.
+ *
+ *   2. Single-retry helper around fetch. Network errors and
+ *      non-2xx-non-rate-limit responses retry once with a short
+ *      backoff before surfacing a `console.warn` and giving up for
+ *      this tick. Rate-limited responses (X-RateLimit-Remaining: 0)
+ *      do NOT retry — that would just burn through the remaining
+ *      budget. We surface a `console.warn` describing the reset
+ *      window and let the next interval tick try again.
+ *
+ *   3. `console.info` one-liner whenever the polling tick can't find
+ *      a deployment for the relevant ref/environment, so devtools
+ *      shows the polling is alive even when the pill is hidden.
+ *
+ *   4. State-revert dedup is preserved: `lastSeenStatusIds` keys off
+ *      the GitHub status.id, which changes on every new state event
+ *      (success → in_progress → failure → …), so the pill re-renders
+ *      cleanly through rapid transitions.
  */
 (function () {
   "use strict";
@@ -46,6 +72,12 @@
   var POLL_MS = 30 * 1000;
   var PROD_PILL_ID = "cms-prod-status-pill";
   var PREVIEW_PILL_ID = "cms-preview-build-pill";
+  // Five minutes — three failed-poll intervals at the 30s tick.
+  var STALE_THRESHOLD_MS = 5 * 60 * 1000;
+  // 1.5s breather between fetch attempts; long enough for a transient
+  // network blip to clear without making the polling tick noticeably
+  // slower when GitHub is healthy.
+  var RETRY_DELAY_MS = 1500;
 
   // ── Auth + GitHub helpers ────────────────────────────────────────
   function getToken() {
@@ -67,20 +99,105 @@
     };
   }
 
-  async function fetchLatestStatusForEnvironment(token, environment) {
-    var deplRes = await fetch(
-      API + "/deployments?environment=" + encodeURIComponent(environment) + "&per_page=1",
-      { headers: ghHeaders(token) }
+  function isRateLimited(res) {
+    if (!res) return false;
+    if (res.status !== 403 && res.status !== 429) return false;
+    try {
+      var remaining = res.headers && res.headers.get
+        ? res.headers.get("X-RateLimit-Remaining")
+        : null;
+      // GitHub returns "X-RateLimit-Remaining: 0" with status 403 when
+      // the primary rate limit trips. status 429 with no header is the
+      // secondary/abuse limit; treat that as rate-limited too.
+      if (res.status === 429) return true;
+      return remaining === "0";
+    } catch (e) {
+      return false;
+    }
+  }
+
+  function rateLimitResetSummary(res) {
+    try {
+      var reset = res && res.headers && res.headers.get
+        ? res.headers.get("X-RateLimit-Reset")
+        : null;
+      if (!reset) return "unknown";
+      var when = new Date(parseInt(reset, 10) * 1000);
+      return when.toISOString();
+    } catch (e) {
+      return "unknown";
+    }
+  }
+
+  function delay(ms) {
+    return new Promise(function (resolve) { setTimeout(resolve, ms); });
+  }
+
+  // Fetch wrapper with single retry on transient failure. On rate
+  // limit we DO NOT retry — that would just burn through the
+  // remaining budget. The next 30s tick will try again, by which
+  // time the reset window should have passed.
+  //
+  // Returns the Response object on success, or null on permanent
+  // failure (after retry / on rate-limit). Each failure path emits
+  // a console.warn so devtools surfaces what happened.
+  async function fetchWithRetry(url, init, label) {
+    var attempt = 0;
+    var lastErr;
+    while (attempt < 2) {
+      attempt += 1;
+      try {
+        var res = await fetch(url, init);
+        if (res.ok) return res;
+        if (isRateLimited(res)) {
+          console.warn(
+            "[deploy-status-pill] " + label + " rate-limited (status " +
+            res.status + "); waiting until reset (" +
+            rateLimitResetSummary(res) + ") — no retry."
+          );
+          return null;
+        }
+        // Other non-2xx — retry once, then give up.
+        if (attempt < 2) {
+          await delay(RETRY_DELAY_MS);
+          continue;
+        }
+        console.warn(
+          "[deploy-status-pill] " + label + " HTTP " + res.status +
+          " after retry — giving up for this tick."
+        );
+        return null;
+      } catch (err) {
+        lastErr = err;
+        if (attempt < 2) {
+          await delay(RETRY_DELAY_MS);
+          continue;
+        }
+      }
+    }
+    console.warn(
+      "[deploy-status-pill] " + label + " network error after retry: " +
+      (lastErr && lastErr.message ? lastErr.message : String(lastErr))
     );
-    if (!deplRes.ok) return null;
+    return null;
+  }
+
+  async function fetchLatestStatusForEnvironment(token, environment) {
+    var deplRes = await fetchWithRetry(
+      API + "/deployments?environment=" + encodeURIComponent(environment) + "&per_page=1",
+      { headers: ghHeaders(token) },
+      "deployments?environment=" + environment
+    );
+    if (!deplRes) return null;
     var deployments = await deplRes.json();
     if (!Array.isArray(deployments) || deployments.length === 0) return null;
     var latest = deployments[0];
-    var statRes = await fetch(
+    var statRes = await fetchWithRetry(
       API + "/deployments/" + latest.id + "/statuses?per_page=1",
-      { headers: ghHeaders(token) }
+      { headers: ghHeaders(token) },
+      "deployments/" + latest.id + "/statuses"
     );
-    if (!statRes.ok) return null;
+    if (!statRes) return null;
     var statuses = await statRes.json();
     if (!Array.isArray(statuses) || statuses.length === 0) return null;
     return { deployment: latest, status: statuses[0] };
@@ -91,27 +208,33 @@
   // recent that matches. The list API doesn't accept wildcards, so
   // we paginate by created_at desc and filter in JS.
   async function fetchLatestPreviewStatus(token) {
-    var deplRes = await fetch(
+    var deplRes = await fetchWithRetry(
       API + "/deployments?per_page=20",
-      { headers: ghHeaders(token) }
+      { headers: ghHeaders(token) },
+      "deployments (preview filter)"
     );
-    if (!deplRes.ok) return null;
+    if (!deplRes) return null;
     var deployments = await deplRes.json();
-    var preview = deployments.filter(function (d) {
+    var preview = (Array.isArray(deployments) ? deployments : []).filter(function (d) {
       return /^preview-pr-\d+$/.test(d.environment || "");
     })[0];
     if (!preview) return null;
-    var statRes = await fetch(
+    var statRes = await fetchWithRetry(
       API + "/deployments/" + preview.id + "/statuses?per_page=1",
-      { headers: ghHeaders(token) }
+      { headers: ghHeaders(token) },
+      "deployments/" + preview.id + "/statuses"
     );
-    if (!statRes.ok) return null;
+    if (!statRes) return null;
     var statuses = await statRes.json();
     if (!Array.isArray(statuses) || statuses.length === 0) return null;
     return { deployment: preview, status: statuses[0] };
   }
 
   // ── Pill rendering ───────────────────────────────────────────────
+  // Render the pill for a fresh poll result.
+  // - `state` falsy or "success" → hide.
+  // - in_progress / queued / pending → blue spinner + "<label>…"
+  // - failure / error → red "⚠ <label> failed — view logs"
   function renderPill(pill, label, state, logUrl) {
     if (!pill) return;
     if (!state || state === "success") {
@@ -141,6 +264,36 @@
     } else {
       pill.style.display = "none";
     }
+  }
+
+  // Format a millisecond age into a compact "5m ago" / "1h ago" form
+  // for the stale-poll legend.
+  function formatAgo(ms, nowMs) {
+    var elapsed = Math.max(0, (nowMs || Date.now()) - ms);
+    var mins = Math.round(elapsed / 60000);
+    if (mins < 1) return "just now";
+    if (mins < 60) return mins + "m ago";
+    var hrs = Math.round(mins / 60);
+    if (hrs < 24) return hrs + "h ago";
+    var days = Math.round(hrs / 24);
+    return days + "d ago";
+  }
+
+  // Flip a currently-visible pill to the amber "stale" state when
+  // polling has been broken for >STALE_THRESHOLD_MS. The pill keeps
+  // its href so the editor can still drill into the last-known run.
+  function renderStalePill(pill, label, lastPollAt, nowMs) {
+    if (!pill) return;
+    pill.style.color = "#9a6700";
+    pill.style.borderColor = "#d4a72c";
+    pill.title =
+      "Polling for " + label + " status hasn't succeeded recently — " +
+      "the displayed state may be out of date. Click to view the last-known run.";
+    pill.innerHTML =
+      '<span aria-hidden="true" style="margin-right:0.35em">⚠</span>' +
+      "<span>" + label + " (status stale — last poll " +
+      formatAgo(lastPollAt, nowMs) + ")</span>";
+    pill.style.display = "";
   }
 
   // ── Toolbar insertion ────────────────────────────────────────────
@@ -187,9 +340,28 @@
     return pill;
   }
 
-  // ── Polling loop ─────────────────────────────────────────────────
-  var lastSeenStatusIds = { prod: null, preview: null };
+  function isPillVisible(pill) {
+    return Boolean(pill) && pill.style.display !== "none";
+  }
 
+  // ── Polling loop ─────────────────────────────────────────────────
+  // Per-pill bookkeeping. `lastSeenStatusIds` keys off GitHub's
+  // status.id which changes on every transition, so a state revert
+  // (success → in_progress when a re-publish fires) trips a fresh
+  // render. `lastSuccessfulPollAt` stamps a wall-clock the moment a
+  // poll completes successfully — used to flip a visible pill to the
+  // amber stale state when the polling chain has been broken for
+  // longer than STALE_THRESHOLD_MS.
+  var lastSeenStatusIds = { prod: null, preview: null };
+  var lastSuccessfulPollAt = { prod: null, preview: null };
+
+  // Single iteration of the polling loop.
+  // 1. ensure both pills are attached (no-op when toolbar isn't rendered)
+  // 2. fetch each environment's latest deployment + status
+  // 3. on success: render fresh state, stamp lastSuccessfulPollAt
+  // 4. on no-deployment: hide pill, console.info diagnostic
+  // 5. on fetch failure: leave existing render, but if the pill is
+  //    visible AND lastSuccessfulPollAt is stale, flip to amber.
   async function tick() {
     var token = getToken();
     if (!token) return;
@@ -198,29 +370,103 @@
     var previewPill = ensurePillInToolbar(PREVIEW_PILL_ID);
     if (!prodPill && !previewPill) return; // no toolbar yet (collection list view)
 
+    var now = Date.now();
+
     if (prodPill) {
-      try {
-        var p = await fetchLatestStatusForEnvironment(token, "production");
-        if (p && p.status.id !== lastSeenStatusIds.prod) {
-          lastSeenStatusIds.prod = p.status.id;
-          renderPill(prodPill, "Publishing", p.status.state, p.status.log_url);
-        } else if (!p) {
-          renderPill(prodPill, "Publishing", null, null); // hide
-        }
-      } catch (e) { /* ignore */ }
+      var prodResult = await pollOne({
+        pill: prodPill,
+        label: "Publishing",
+        kind: "prod",
+        environmentLabel: "production",
+        fetchFn: function () {
+          return fetchLatestStatusForEnvironment(token, "production");
+        },
+        now: now,
+      });
+      if (prodResult === null) {
+        // Permanent failure (rate limit / network) — see if we should
+        // flip a visible pill to amber.
+        applyStaleIfNeeded(prodPill, "Publishing", lastSuccessfulPollAt.prod, now);
+      }
     }
 
     if (previewPill) {
-      try {
-        var pr = await fetchLatestPreviewStatus(token);
-        if (pr && pr.status.id !== lastSeenStatusIds.preview) {
-          lastSeenStatusIds.preview = pr.status.id;
-          renderPill(previewPill, "Preview build", pr.status.state, pr.status.log_url);
-        } else if (!pr) {
-          renderPill(previewPill, "Preview build", null, null); // hide
-        }
-      } catch (e) { /* ignore */ }
+      var previewResult = await pollOne({
+        pill: previewPill,
+        label: "Preview build",
+        kind: "preview",
+        environmentLabel: "preview-pr-<N>",
+        fetchFn: function () {
+          return fetchLatestPreviewStatus(token);
+        },
+        now: now,
+      });
+      if (previewResult === null) {
+        applyStaleIfNeeded(previewPill, "Preview build", lastSuccessfulPollAt.preview, now);
+      }
     }
+  }
+
+  // Returns:
+  //   true  — succeeded (rendered fresh state OR confirmed no deployment)
+  //   null  — permanent fetch failure (caller should consider stale)
+  async function pollOne(args) {
+    var pill = args.pill;
+    var label = args.label;
+    var kind = args.kind;
+    var envLabel = args.environmentLabel;
+    var fetchFn = args.fetchFn;
+    var now = args.now;
+    var s;
+    try {
+      s = await fetchFn();
+    } catch (err) {
+      // fetchWithRetry already surfaces a console.warn before
+      // resolving null; an exception thrown above that is genuinely
+      // unexpected (JSON parse failure, etc) — log it and treat as
+      // permanent failure for this tick.
+      console.warn(
+        "[deploy-status-pill] " + envLabel + " unexpected error: " +
+        (err && err.message ? err.message : String(err))
+      );
+      return null;
+    }
+    if (s === null) {
+      // fetchWithRetry returned null — permanent failure for this tick.
+      return null;
+    }
+    if (!s) {
+      // No deployment found yet (the API returned an empty list).
+      // Hide the pill and log a one-liner so devtools shows the
+      // polling chain is alive even when the pill is invisible.
+      console.info(
+        "[deploy-status-pill] no deployment yet for " + envLabel +
+        " — pill hidden, will re-poll."
+      );
+      renderPill(pill, label, null, null);
+      lastSeenStatusIds[kind] = null;
+      lastSuccessfulPollAt[kind] = now;
+      return true;
+    }
+    var statusId = s.status.id;
+    if (statusId !== lastSeenStatusIds[kind]) {
+      lastSeenStatusIds[kind] = statusId;
+      renderPill(pill, label, s.status.state, s.status.log_url);
+    }
+    lastSuccessfulPollAt[kind] = now;
+    return true;
+  }
+
+  // If the pill is currently visible AND it's been longer than
+  // STALE_THRESHOLD_MS since we last had a successful poll, swap it
+  // into the amber "(status stale — last poll <ago>)" view. Editors
+  // get a visible signal that polling is broken instead of staring at
+  // a frozen spinner that's secretly disconnected from reality.
+  function applyStaleIfNeeded(pill, label, lastPollAt, now) {
+    if (!isPillVisible(pill)) return;
+    if (!lastPollAt) return; // never had a successful poll → nothing to mark stale
+    if (now - lastPollAt < STALE_THRESHOLD_MS) return;
+    renderStalePill(pill, label, lastPollAt, now);
   }
 
   // Decap re-renders the toolbar on entry switches and form mutations.
