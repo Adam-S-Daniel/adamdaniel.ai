@@ -1,3 +1,4 @@
+// @lane: local — exercises the locally-served /preview/ bridge between admin + Jekyll
 const fs = require("node:fs");
 const path = require("node:path");
 const { test, expect } = require("./base");

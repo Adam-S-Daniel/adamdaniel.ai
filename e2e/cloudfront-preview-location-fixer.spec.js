@@ -1,3 +1,4 @@
+// @lane: local — pure-Node parse of the CloudFront FunctionCode YAML; no network
 const fs = require("node:fs");
 const path = require("node:path");
 const { test, expect } = require("./base");

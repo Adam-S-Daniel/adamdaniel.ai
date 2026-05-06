@@ -1,3 +1,4 @@
+// @lane: local — cross-checks Decap config + Jekyll permalink output via local fs
 const fs = require("node:fs");
 const path = require("node:path");
 const { test, expect } = require("./base");

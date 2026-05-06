@@ -1,3 +1,4 @@
+// @lane: local — pixel-level sample of a locally-rendered page; no network
 const { test, expect } = require("./base");
 const { PNG } = require("pngjs");
 

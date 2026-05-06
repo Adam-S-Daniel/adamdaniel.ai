@@ -1,3 +1,4 @@
+// @lane: local — needs decap-server file IO + git execs to round-trip page CRUD
 const fs = require("node:fs");
 const path = require("node:path");
 const { execFileSync } = require("node:child_process");

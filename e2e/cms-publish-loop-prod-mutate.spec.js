@@ -1,3 +1,4 @@
+// @lane: real — mutates a real prod _posts/ entry through Decap → GitHub
 // @select-skip-when-head-ref-prefix: cms/
 //
 // On `cms/*` PRs (Decap-opened editorial PRs) this spec self-skips at

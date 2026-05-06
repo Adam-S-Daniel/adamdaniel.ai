@@ -1,3 +1,4 @@
+// @lane: local — pure-fs lint of workflow YAML; no browser, no network
 /*
  * Regression test: every job that references an AWS/PREVIEW/PRODUCTION
  * secret must skip when the actor is dependabot[bot] — Dependabot PRs

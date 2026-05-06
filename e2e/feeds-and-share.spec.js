@@ -1,3 +1,4 @@
+// @lane: local — exercises the locally-served Atom/RSS feeds + per-post share row
 const { test, expect } = require("./base");
 
 // Acceptance for the RSS/Atom feeds + per-post share row.

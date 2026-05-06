@@ -1,3 +1,4 @@
+// @lane: local — pure-fs static invariant on the admin bundle pin
 const fs = require("node:fs");
 const path = require("node:path");
 const { test, expect } = require("./base");

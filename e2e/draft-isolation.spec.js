@@ -1,3 +1,4 @@
+// @lane: local — reads _site/ artefacts produced by the local Jekyll build
 const fs = require("node:fs");
 const path = require("node:path");
 const { execFileSync } = require("node:child_process");

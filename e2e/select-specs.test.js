@@ -1,3 +1,4 @@
+// @lane: local — pure-Node unit tests for the e2e spec selector
 const { test, expect } = require("./base");
 const fs = require("node:fs");
 const os = require("node:os");
@@ -160,12 +161,22 @@ test.describe("select-specs", () => {
     expect(r.files).toEqual(ALWAYS_RUN.slice().sort());
   });
 
-  test("canary collection edit → canary invariants + publish-loop specs", () => {
+  test("canary collection edit on default (local) lane → baseline-only collapse to skip", () => {
+    // _e2e/* matches publish-loop (real) + canary-content (always-run
+    // baseline, local). After local-lane filtering, real specs are
+    // dropped and only the baseline remains — which collapses to skip.
+    // The next test asserts the real-lane view of the same change.
     const r = selectSpecs(["_e2e/canary-post.md"]);
+    expect(r.scope).toBe("skip");
+  });
+
+  test("canary collection edit on lane=real → publish-loop specs only", () => {
+    const r = selectSpecs(["_e2e/canary-post.md"], { lane: "real" });
     expect(r.scope).toBe("subset");
-    expect(r.files).toContain("e2e/canary-content.test.js");
     expect(r.files).toContain("e2e/cms-publish-loop.spec.js");
     expect(r.files).toContain("e2e/cms-publish-loop-preview.spec.js");
+    // canary-content.test.js is @lane: local so it doesn't survive.
+    expect(r.files).not.toContain("e2e/canary-content.test.js");
   });
 
   test("canary layout change → canary invariants run", () => {
@@ -174,15 +185,17 @@ test.describe("select-specs", () => {
     expect(r.scope).toBe("all");
   });
 
-  test("github-actions-poll helper change → publish-loop specs", () => {
-    const r = selectSpecs(["e2e/github-actions-poll.js"]);
+  test("github-actions-poll helper change → publish-loop specs (lane=real)", () => {
+    // The publish-loop specs are @lane: real, so the default-lane run
+    // collapses to skip; the real-lane view selects them.
+    const r = selectSpecs(["e2e/github-actions-poll.js"], { lane: "real" });
     expect(r.scope).toBe("subset");
     expect(r.files).toContain("e2e/cms-publish-loop.spec.js");
     expect(r.files).toContain("e2e/cms-publish-loop-preview.spec.js");
   });
 
-  test("decap-pat helper change → publish-loop specs", () => {
-    const r = selectSpecs(["e2e/decap-pat.js"]);
+  test("decap-pat helper change → publish-loop specs (lane=real)", () => {
+    const r = selectSpecs(["e2e/decap-pat.js"], { lane: "real" });
     expect(r.scope).toBe("subset");
     expect(r.files).toContain("e2e/cms-publish-loop.spec.js");
     expect(r.files).toContain("e2e/cms-publish-loop-preview.spec.js");
@@ -260,15 +273,24 @@ test.describe("select-specs", () => {
     // pass (otherwise filtering away the publish-loop specs collapses
     // the result to baseline-only → scope=skip, which is the correct
     // but less interesting outcome — see the next test).
-    const r = selectSpecs(["admin/index.html"], { headRef: "cms/foo" });
+    //
+    // Pin lane=real so the publish-loop @lane:real specs ARE in play
+    // pre-directive — that's the only state in which the directive
+    // pass can drop them. (On lane=local they're already filtered
+    // out by the lane filter, with no skippedByDirective entry.)
+    const r = selectSpecs(["admin/index.html"], {
+      headRef: "cms/foo",
+      lane: "real",
+    });
     expect(r.scope).toBe("subset");
     expect(r.files).not.toContain("e2e/cms-publish-loop.spec.js");
     expect(r.files).not.toContain("e2e/cms-publish-loop-preview.spec.js");
     expect(r.files).not.toContain("e2e/cms-publish-loop-prod-mutate.spec.js");
     expect(r.files).not.toContain("e2e/cms-delete-published.spec.js");
-    // Non-annotated specs that ALSO match the rule pass survive.
+    // admin-bundle-parity is also @lane:real and survives the rule pass.
     expect(r.files).toContain("e2e/admin-bundle-parity.spec.js");
-    expect(r.files).toContain("e2e/cms-smoke.spec.js");
+    // cms-smoke is @lane:local — won't appear on a real-lane subset.
+    expect(r.files).not.toContain("e2e/cms-smoke.spec.js");
     // Traceability output records what got dropped.
     expect(Array.isArray(r.skippedByDirective)).toBe(true);
     expect(r.skippedByDirective).toContain("e2e/cms-publish-loop.spec.js");
@@ -288,19 +310,28 @@ test.describe("select-specs", () => {
 
   test("selectSpecs with headRef='cms/foo' also excludes cms-delete-published spec", () => {
     // admin/ change selects cms-delete-published.spec.js; the directive
-    // takes it back out on cms/* head refs.
-    const r = selectSpecs(["admin/index.html"], { headRef: "cms/foo" });
+    // takes it back out on cms/* head refs. Pin lane=real so the spec
+    // is in play pre-directive — see the previous test for rationale.
+    const r = selectSpecs(["admin/index.html"], {
+      headRef: "cms/foo",
+      lane: "real",
+    });
     expect(r.scope).toBe("subset");
     expect(r.files).not.toContain("e2e/cms-delete-published.spec.js");
     expect(r.files).not.toContain("e2e/cms-publish-loop.spec.js");
-    // admin-bundle-parity carries no directive, so it stays.
+    // admin-bundle-parity carries no head-ref-prefix directive, so it
+    // stays for both lane filters.
     expect(r.files).toContain("e2e/admin-bundle-parity.spec.js");
   });
 
   test("selectSpecs with headRef='main' includes annotated specs", () => {
     // Non-cms head ref (e.g. a maintenance branch off main) → directive
-    // doesn't fire.
-    const r = selectSpecs(["_e2e/canary-post.md"], { headRef: "main" });
+    // doesn't fire. Pin lane=real so the publish-loop @lane:real specs
+    // are in play.
+    const r = selectSpecs(["_e2e/canary-post.md"], {
+      headRef: "main",
+      lane: "real",
+    });
     expect(r.scope).toBe("subset");
     expect(r.files).toContain("e2e/cms-publish-loop.spec.js");
     expect(r.files).toContain("e2e/cms-publish-loop-preview.spec.js");
@@ -310,8 +341,12 @@ test.describe("select-specs", () => {
   test("selectSpecs with empty headRef includes annotated specs (cron / dispatch)", () => {
     // GITHUB_HEAD_REF is empty for `schedule` and `workflow_dispatch`;
     // the selector treats empty as "no filtering" so cron runs still
-    // get full coverage of the annotated specs.
-    const r = selectSpecs(["_e2e/canary-post.md"], { headRef: "" });
+    // get full coverage of the annotated specs. Pin lane=real for the
+    // same reason as the previous test.
+    const r = selectSpecs(["_e2e/canary-post.md"], {
+      headRef: "",
+      lane: "real",
+    });
     expect(r.scope).toBe("subset");
     expect(r.files).toContain("e2e/cms-publish-loop.spec.js");
     expect(r.skippedByDirective).toBeUndefined();
@@ -321,11 +356,12 @@ test.describe("select-specs", () => {
     // The CLI block at the bottom of select-specs.js wires
     // process.env.GITHUB_HEAD_REF as the headRef option, but for
     // library callers the same fallback applies when the option is
-    // omitted entirely.
+    // omitted entirely. Pin lane=real so the publish-loop specs are
+    // in play before the directive filter runs.
     const prev = process.env.GITHUB_HEAD_REF;
     try {
       process.env.GITHUB_HEAD_REF = "cms/some-branch";
-      const r = selectSpecs(["admin/index.html"]);
+      const r = selectSpecs(["admin/index.html"], { lane: "real" });
       expect(r.scope).toBe("subset");
       expect(r.files).not.toContain("e2e/cms-publish-loop.spec.js");
       expect(r.files).not.toContain("e2e/cms-delete-published.spec.js");
@@ -339,7 +375,7 @@ test.describe("select-specs", () => {
     const prev = process.env.GITHUB_HEAD_REF;
     try {
       delete process.env.GITHUB_HEAD_REF;
-      const r = selectSpecs(["admin/index.html"]);
+      const r = selectSpecs(["admin/index.html"], { lane: "real" });
       expect(r.scope).toBe("subset");
       expect(r.files).toContain("e2e/cms-publish-loop.spec.js");
       expect(r.files).toContain("e2e/cms-delete-published.spec.js");
@@ -351,9 +387,11 @@ test.describe("select-specs", () => {
 
   test("selectSpecs with headRef='dependabot/foo' (unmatched prefix) keeps cms-only directives", () => {
     // Annotated specs only declare `cms/`; a dependabot/* head ref
-    // shouldn't accidentally drop them.
+    // shouldn't accidentally drop them. Pin lane=real for the same
+    // reason as the previous tests.
     const r = selectSpecs(["_e2e/canary-post.md"], {
       headRef: "dependabot/npm/playwright-1.60",
+      lane: "real",
     });
     expect(r.scope).toBe("subset");
     expect(r.files).toContain("e2e/cms-publish-loop.spec.js");

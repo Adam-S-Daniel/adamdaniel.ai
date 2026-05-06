@@ -1,3 +1,4 @@
+// @lane: local — exercises the locally-rendered tag pages; @parity-eligible via TARGET=
 const { test, expect } = require("./base");
 
 // Acceptance for issue #27 — make tags functional end-to-end.

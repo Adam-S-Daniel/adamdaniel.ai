@@ -1,3 +1,4 @@
+// @lane: local — pure-fs grep over test/script code; no browser, no network
 // Lint: ban silent `.catch()` handlers in test/script code.
 //
 // Background — `e2e/detect-changed-pages.js` had `.catch(() => null)` on its

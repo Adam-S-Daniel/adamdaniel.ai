@@ -1,3 +1,4 @@
+// @lane: local — crawls the local /admin shell; @parity-eligible via TARGET=
 const { test, expect, TARGET } = require("./base");
 
 // E1 — Admin link crawler.

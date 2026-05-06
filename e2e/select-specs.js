@@ -306,6 +306,23 @@ function parseSpecDirectives(absPath) {
         }
         break;
       }
+      case "lane": {
+        // First `@lane:` wins. Trailing `// — explanation` comments
+        // are stripped so reviewers can leave a one-liner beside the
+        // directive without breaking the parse. Invalid values are
+        // rejected silently and treated as absent → caller defaults
+        // to `local`.
+        if (directives.lane !== undefined) break;
+        const cleaned = rawValue
+          .split("//")[0] // drop trailing "// rationale"
+          .split(/[\s,;—-]/)[0] // first whitespace/punct token
+          .trim()
+          .toLowerCase();
+        if (cleaned === "local" || cleaned === "real") {
+          directives.lane = cleaned;
+        }
+        break;
+      }
       // Future directives slot in here. Unknown keys are ignored
       // silently so old selectors don't fail on newer spec headers.
       default:
@@ -313,6 +330,30 @@ function parseSpecDirectives(absPath) {
     }
   }
   return directives;
+}
+
+// Resolve the `@lane:` directive for a single spec, defaulting to
+// `local` when absent or invalid. Local is the safe default — it
+// keeps a spec on the hermetic matrix that has no opinions about
+// real GitHub state.
+function parseLaneDirective(absPath) {
+  const d = parseSpecDirectives(absPath);
+  return d.lane === "real" ? "real" : "local";
+}
+
+// Filter a list of repo-root-relative spec paths down to the ones whose
+// `@lane:` directive matches the requested lane. Specs without an
+// annotation default to `local` per parseLaneDirective.
+//
+// The `repoRoot` option lets callers point at a fixture tree; defaults
+// to the repo root resolved from this file's location.
+function filterByLane(specs, lane, options = {}) {
+  const repoRoot = options.repoRoot || path.resolve(__dirname, "..");
+  const wanted = lane === "real" ? "real" : "local";
+  return specs.filter((spec) => {
+    const abs = path.isAbsolute(spec) ? spec : path.join(repoRoot, spec);
+    return parseLaneDirective(abs) === wanted;
+  });
 }
 
 function selectSpecs(changedFiles, options = {}) {
@@ -325,14 +366,57 @@ function selectSpecs(changedFiles, options = {}) {
 
   const specs = new Set(ALWAYS_RUN);
 
+  // Resolve lane up-front so the fanout branch can honour it too —
+  // `scope: "all"` implies "every spec", and on a `real` lane that
+  // means "every @lane: real spec", not "every spec ignoring lane".
+  const resolvedLane =
+    (
+      options.lane !== undefined
+        ? options.lane
+        : process.env.TEST_LANE || "local"
+    ).toLowerCase() === "real"
+      ? "real"
+      : "local";
+
   // Fanout files include all specs.
   const fanoutHit = changedFiles.find((f) =>
     FANOUT_PATTERNS.some((rx) => rx.test(f)),
   );
   if (fanoutHit) {
+    if (resolvedLane === "local") {
+      return {
+        scope: "all",
+        reason: `Fanout file changed: ${fanoutHit} — running full matrix.`,
+      };
+    }
+    // For non-default lanes, we can't return scope="all" — the
+    // workflow's "all" path runs `npx playwright test` with no spec
+    // list, which would also pick up every local-marked spec. Convert
+    // to an explicit subset of every real-lane spec under e2e/.
+    const repoRoot = options.repoRoot || path.resolve(__dirname, "..");
+    const e2eDir = path.join(repoRoot, "e2e");
+    let allSpecs = [];
+    try {
+      allSpecs = fs
+        .readdirSync(e2eDir)
+        .filter((f) => /\.spec\.js$/.test(f) || /\.test\.js$/.test(f))
+        .map((f) => `e2e/${f}`);
+    } catch {
+      allSpecs = [];
+    }
+    const laneSpecs = allSpecs.filter(
+      (s) => parseLaneDirective(path.join(repoRoot, s)) === resolvedLane,
+    );
+    if (laneSpecs.length === 0) {
+      return {
+        scope: "skip",
+        reason: `Fanout file changed: ${fanoutHit}, but no spec matches lane=${resolvedLane}.`,
+      };
+    }
     return {
-      scope: "all",
-      reason: `Fanout file changed: ${fanoutHit} — running full matrix.`,
+      scope: "subset",
+      files: laneSpecs.slice().sort(),
+      reason: `Fanout file changed: ${fanoutHit} — running every lane=${resolvedLane} spec.`,
     };
   }
 
@@ -363,9 +447,9 @@ function selectSpecs(changedFiles, options = {}) {
       ? options.headRef
       : process.env.GITHUB_HEAD_REF || "";
   const skippedByDirective = [];
+  const repoRoot = options.repoRoot || path.resolve(__dirname, "..");
   if (headRef) {
     const baseline = new Set(ALWAYS_RUN);
-    const repoRoot = options.repoRoot || path.resolve(__dirname, "..");
     for (const spec of [...specs]) {
       if (baseline.has(spec)) continue;
       const directives = parseSpecDirectives(path.join(repoRoot, spec));
@@ -374,6 +458,20 @@ function selectSpecs(changedFiles, options = {}) {
         specs.delete(spec);
         skippedByDirective.push(spec);
       }
+    }
+  }
+
+  // Lane filtering. After all other selection logic, drop specs whose
+  // `@lane:` directive disagrees with the requested lane. Default lane
+  // is `local`; specs without an annotation default to `local`.
+  // ALWAYS_RUN is filtered too — a `real`-only run shouldn't pay for
+  // the local-only baseline (e.g. compute-visual-diffs reads `_site/`).
+  // resolvedLane was settled above so the fanout path could honour it.
+  const skippedByLane = [];
+  for (const spec of [...specs]) {
+    if (parseLaneDirective(path.join(repoRoot, spec)) !== resolvedLane) {
+      specs.delete(spec);
+      skippedByLane.push(spec);
     }
   }
 
@@ -387,6 +485,17 @@ function selectSpecs(changedFiles, options = {}) {
     return {
       scope: "skip",
       reason: "Only documentation changed — running baseline only.",
+    };
+  }
+
+  // If lane filtering dropped every spec (e.g. TEST_LANE=real on a
+  // change that only affects local-only specs), there's nothing to
+  // run — collapse to skip so the workflow doesn't try to launch an
+  // empty shard.
+  if (specs.size === 0 && !options.disableSkip) {
+    return {
+      scope: "skip",
+      reason: `${changedFiles.length} file(s) changed but no spec matches lane=${resolvedLane}.`,
     };
   }
 
@@ -411,6 +520,9 @@ function selectSpecs(changedFiles, options = {}) {
   };
   if (skippedByDirective.length > 0) {
     result.skippedByDirective = skippedByDirective.slice().sort();
+  }
+  if (skippedByLane.length > 0) {
+    result.skippedByLane = skippedByLane.slice().sort();
   }
   return result;
 }
@@ -447,6 +559,8 @@ module.exports = {
   selectSpecs,
   getChangedFiles,
   parseSpecDirectives,
+  parseLaneDirective,
+  filterByLane,
   pickShardCount,
 };
 

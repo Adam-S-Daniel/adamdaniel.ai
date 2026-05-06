@@ -1,3 +1,4 @@
+// @lane: local — captures locally-rendered pages for the visual-regression baseline
 const { test, expect } = require("./base");
 
 // Freeze all CSS animations for deterministic screenshots.

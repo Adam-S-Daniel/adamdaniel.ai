@@ -1,3 +1,4 @@
+// @lane: local — stubs window.open + GitHub OAuth handshake; never hits real GitHub
 const { test, expect } = require("./base");
 
 // Verifies the /admin/reviews/ dashboard actually completes the

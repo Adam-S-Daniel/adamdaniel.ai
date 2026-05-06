@@ -1,3 +1,4 @@
+// @lane: real — exercises the real Decap → GitHub → Actions publish loop end to end
 // @select-skip-when-head-ref-prefix: cms/
 //
 // On `cms/*` PRs (Decap-opened editorial PRs) this spec self-skips at

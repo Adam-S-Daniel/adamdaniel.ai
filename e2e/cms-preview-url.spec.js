@@ -1,3 +1,4 @@
+// @lane: local — fs reads of admin/config*.yml; pure-Node permalink invariants
 const fs = require("node:fs");
 const path = require("node:path");
 const { test, expect } = require("./base");

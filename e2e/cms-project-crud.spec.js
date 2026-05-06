@@ -1,3 +1,4 @@
+// @lane: local — needs decap-server file IO to round-trip project CRUD locally
 const fs = require("node:fs");
 const path = require("node:path");
 const { test, expect } = require("./base");

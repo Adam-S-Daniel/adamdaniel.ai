@@ -1,3 +1,4 @@
+// @lane: local — drives local-backend Decap (decap-server) for collection smoke checks
 const fs = require("node:fs");
 const path = require("node:path");
 const { test, expect } = require("./base");

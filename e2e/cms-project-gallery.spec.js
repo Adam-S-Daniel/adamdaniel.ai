@@ -1,3 +1,4 @@
+// @lane: local — spins up a local http stub server + reads project fixtures from disk
 const fs = require("node:fs");
 const path = require("node:path");
 const http = require("node:http");

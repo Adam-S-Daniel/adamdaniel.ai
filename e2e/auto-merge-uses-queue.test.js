@@ -1,3 +1,4 @@
+// @lane: local — pure-fs lint of the cms-editorial-workflow workflow YAML
 /*
  * Regression test: cms-editorial-workflow must enable GitHub's
  * native auto-merge (queue-based, respects required checks) — never

@@ -1,3 +1,4 @@
+// @lane: local — pure-fs lint of workflow YAML; no browser, no network
 /*
  * Regression test: every `for VAR in <glob>; do … done` loop inside a
  * workflow `run:` block must guard against an empty match, either via

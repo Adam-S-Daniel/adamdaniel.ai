@@ -1,3 +1,4 @@
+// @lane: local — pure-fs grep over spec files; no browser, no network
 // Lint: ban hard-coded `/blog/<slug>/` URLs in spec files.
 //
 // Background — PR #29 / #57 fix derived every blog slug at runtime from a

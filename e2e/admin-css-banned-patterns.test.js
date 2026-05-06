@@ -1,3 +1,4 @@
+// @lane: local — pure-fs CSS lint; no browser, no network
 // Lint: ban CSS patterns that mis-composite the Decap CMS form on iOS WebKit.
 //
 // Background — iOS Safari (and iOS Chrome, which is just Safari WebKit under

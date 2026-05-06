@@ -1,3 +1,4 @@
+// @lane: local — pure-fs grep over spec files; no browser, no network
 /*
  * Regression test: spec files must not gate skip logic on
  * `matchMedia(... forced-colors ...)`.

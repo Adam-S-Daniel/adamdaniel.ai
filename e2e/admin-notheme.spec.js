@@ -1,3 +1,4 @@
+// @lane: local — drives the local Jekyll-served /admin shell over the test base URL
 const { test, expect } = require("./base");
 
 // Verifies the contributor capability "?notheme kill-switch in admin":

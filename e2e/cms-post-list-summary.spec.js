@@ -1,3 +1,4 @@
+// @lane: local — fs reads of admin/config*.yml + drives the local /admin shell
 const fs = require("node:fs");
 const path = require("node:path");
 const { test, expect } = require("./base");

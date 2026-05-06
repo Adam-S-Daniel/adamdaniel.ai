@@ -1,3 +1,4 @@
+// @lane: local — drives the local /admin shell for contributor walkthrough capture
 const fs = require("node:fs");
 const path = require("node:path");
 const { test, expect, TARGET } = require("./base");

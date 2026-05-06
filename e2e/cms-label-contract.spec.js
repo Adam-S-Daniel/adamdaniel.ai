@@ -1,3 +1,4 @@
+// @lane: local — uses cms-test-backend to assert label-contract on the local /admin
 const fs = require("node:fs");
 const path = require("node:path");
 const { test, expect } = require("./base");

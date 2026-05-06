@@ -1,3 +1,4 @@
+// @lane: local — fs reads of the admin bundle + local /admin shell smoke check
 const fs = require("node:fs");
 const path = require("node:path");
 const { test, expect } = require("./base");

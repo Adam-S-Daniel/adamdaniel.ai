@@ -1,3 +1,4 @@
+// @lane: local — drives the local Decap admin shell; no real GitHub
 const { test, expect } = require("./base");
 
 // A1 runtime check — Decap's native "View Live" toolbar anchor is rewritten
@@ -108,7 +109,7 @@ test.describe("CMS native View-Live anchor — runtime href contract", () => {
     );
     await loadAdmin(page);
 
-    // Drive directly to the canary entry — same one cms-view-live-affordances
+    // Drive directly to the canary entry — same one cms-banner-clickable
     // and cms-editorial-workflow specs use, so all three lock the same
     // surface against the same fixture.
     await page.goto(
@@ -116,22 +117,18 @@ test.describe("CMS native View-Live anchor — runtime href contract", () => {
     );
     await expect(page.getByLabel(/^Title$/)).toBeVisible({ timeout: 60_000 });
 
-    // Wait for live-url-derive.js to expose window.LiveURL — that
-    // module is the source of truth for both the toolbar override
-    // (admin/native-preview-href.js) and any future consumer. Once
-    // it's defined and compute() returns a URL, the override has
-    // fired at least once on the form's first render.
-    await page.waitForFunction(
-      () => Boolean(window.LiveURL && window.LiveURL.compute && window.LiveURL.compute()),
-      { timeout: 30_000 },
-    );
-    const computedPath = await page.evaluate(() => {
-      const url = window.LiveURL.compute();
-      return url ? new URL(url, location.href).pathname : null;
-    });
+    // Wait for the banner to render — its presence proves
+    // live-url-derive.js loaded and compute() returned a URL. The
+    // override depends on the same module, so once the banner is up
+    // the override has fired at least once.
+    const banner = page.locator('[data-testid="cms-live-url-banner-link"]');
+    await expect(banner).toBeVisible({ timeout: 30_000 });
+    const bannerHref = await banner.getAttribute("href");
+    expect(bannerHref, "Banner anchor must have an href").toBeTruthy();
+    const bannerPath = new URL(bannerHref).pathname;
     expect(
-      computedPath,
-      `window.LiveURL.compute() should resolve to ${EXPECTED_PATH} for the seed canary post`,
+      bannerPath,
+      `Banner should resolve to ${EXPECTED_PATH} for the seed canary post`,
     ).toBe(EXPECTED_PATH);
 
     // ── Find the native toolbar anchor ────────────────────────────────
@@ -150,10 +147,9 @@ test.describe("CMS native View-Live anchor — runtime href contract", () => {
               '[class*="EditorToolbar"]',
             );
             const excluded = new Set([
+              "cms-live-url-banner-link",
               "live-preview-link",
               "cms-commit-pill",
-              "cms-prod-status-pill",
-              "cms-preview-build-pill",
             ]);
             const hrefs = [];
             for (const tb of toolbars) {

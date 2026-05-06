@@ -1,3 +1,4 @@
+// @lane: local — exercises the locally-rendered blog post page; @parity-eligible via TARGET=
 const { test, expect } = require("./base");
 
 // allowed: literal slug used for known fixture (_posts/2026-04-25-replacement-test-post-1.md)

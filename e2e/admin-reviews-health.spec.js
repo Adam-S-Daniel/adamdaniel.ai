@@ -1,3 +1,4 @@
+// @lane: local — mocks every GitHub API request via page.route; runs hermetically
 const { test, expect } = require("./base");
 const { captureStep } = require("./manual-capture");
 
