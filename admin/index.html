@@ -125,6 +125,18 @@
   <script src="native-preview-href.js" defer></script>
 
   <!--
+    Production deploy status pill — shows "Publishing…" with a spinner
+    while deploy-production.yml's GitHub Deployment is `in_progress` /
+    `queued`, transitions to a hidden state on `success` (the commit
+    pill below already shows the deployed SHA), and shows a red
+    "⚠ Deploy failed — view logs" link on failure. Decap CMS itself
+    doesn't track post-merge production deploys for the github
+    backend; this fills the gap. See admin/deploy-status-pill.js for
+    polling cadence + the upstream workflow steps that drive it.
+  -->
+  <script src="deploy-status-pill.js" defer></script>
+
+  <!--
     Deployed-build commit indicator. Pinned to the top-right corner
     under Decap's user/host menu so editors can tell which version of
     the admin they're looking at. The deploy workflows (deploy-prod and

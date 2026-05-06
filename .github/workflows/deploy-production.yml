@@ -58,6 +58,12 @@ on:
 permissions:
   contents: read
   id-token: write   # needed for AWS OIDC authentication
+  # Register GitHub Deployments so admin/deploy-status-pill.js can
+  # surface "Publishing… (deploy run #NNN)" in the editor while this
+  # workflow runs, transitioning to "Live since HH:MM" or "Deploy
+  # failed" when it finishes. Decap CMS itself doesn't track post-merge
+  # production deploys for the github backend, so this fills the gap.
+  deployments: write
 
 # Allow only one concurrent deployment, skipping runs queued between the run
 # in-progress and latest queued.  We do NOT cancel in-progress runs, so that
@@ -75,6 +81,40 @@ jobs:
       CLOUDFRONT_DISTRIBUTION_ID: ${{ secrets.PRODUCTION_CLOUDFRONT_ID }}
 
     steps:
+      - name: Register GitHub Deployment (in_progress)
+        # Mirror of deploy-preview.yml's deployment-registration step,
+        # but for production. Creates a deployment + initial in_progress
+        # status keyed by main's HEAD SHA. The companion
+        # admin/deploy-status-pill.js polls
+        # /repos/.../deployments?environment=production and surfaces
+        # the state to the editor. The closing step at the end of this
+        # job updates the status to success/failure.
+        id: deploy-start
+        uses: actions/github-script@3a2844b7e9c422d3c10d287c895573f7108da1b3  # v9.0.0 (2026-04-09)
+        with:
+          script: |
+            const { data: deployment } = await github.rest.repos.createDeployment({
+              owner: context.repo.owner,
+              repo: context.repo.repo,
+              ref: context.sha,
+              environment: 'production',
+              auto_merge: false,
+              required_contexts: [],
+              production_environment: true,
+              description: 'deploy-production.yml run',
+            });
+            const runUrl = `${context.serverUrl}/${context.repo.owner}/${context.repo.repo}/actions/runs/${context.runId}`;
+            await github.rest.repos.createDeploymentStatus({
+              owner: context.repo.owner,
+              repo: context.repo.repo,
+              deployment_id: deployment.id,
+              state: 'in_progress',
+              log_url: runUrl,
+              description: 'Building + syncing to S3 + invalidating CloudFront',
+            });
+            core.setOutput('deployment_id', deployment.id);
+            core.notice(`Registered production deployment ${deployment.id} (in_progress)`);
+
       - name: Checkout
         uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd  # v6.0.2 (2026-01-09)
         with:
@@ -142,3 +182,35 @@ jobs:
           aws cloudfront create-invalidation \
             --distribution-id "$CLOUDFRONT_DISTRIBUTION_ID" \
             --paths "/*"
+
+      - name: Update GitHub Deployment status (success/failure)
+        # Always-run partner of `Register GitHub Deployment (in_progress)`.
+        # `if: always() && steps.deploy-start.outputs.deployment_id` covers:
+        #   - success path → `state: success`, with `environment_url` so
+        #     admin/deploy-status-pill.js shows "Live since …"
+        #   - any prior step failed → `state: failure`, so the pill goes
+        #     red with a link to the run logs
+        # Cancellation falls through (we still mark failure so the pill
+        # stops spinning).
+        if: always() && steps.deploy-start.outputs.deployment_id
+        uses: actions/github-script@3a2844b7e9c422d3c10d287c895573f7108da1b3  # v9.0.0 (2026-04-09)
+        env:
+          JOB_STATUS: ${{ job.status }}
+        with:
+          script: |
+            const id = ${{ steps.deploy-start.outputs.deployment_id }};
+            const job = process.env.JOB_STATUS;        // success | failure | cancelled
+            const state = job === 'success' ? 'success' : 'failure';
+            const runUrl = `${context.serverUrl}/${context.repo.owner}/${context.repo.repo}/actions/runs/${context.runId}`;
+            await github.rest.repos.createDeploymentStatus({
+              owner: context.repo.owner,
+              repo: context.repo.repo,
+              deployment_id: id,
+              state,
+              environment_url: state === 'success' ? 'https://adamdaniel.ai/' : undefined,
+              log_url: runUrl,
+              description: state === 'success'
+                ? 'adamdaniel.ai is live with the latest commit'
+                : `deploy-production.yml ${job}`,
+            });
+            core.notice(`Production deployment ${id} → ${state}`);
