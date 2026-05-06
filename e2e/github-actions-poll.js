@@ -189,9 +189,21 @@ async function waitForWorkflowRun({
     const data = await gh(`/repos/${repo}/actions/workflows/${workflow}/runs?${params}`);
     const runs = data.workflow_runs || [];
     if (runs.length > 0) {
+      // Don't just look at runs[0]. When two runs have the same
+      // created_at (the typical opened+labeled webhook race against
+      // a fresh PR), the API consistently returns one ordering of
+      // them — and if it returns the cancelled one first, polling
+      // runs[0] forever sees only the cancelled run even though a
+      // success-conclusion sibling sits at runs[1]. Search the
+      // whole returned page for the expected conclusion before
+      // falling back to the runs[0] cancellation/failure handling.
+      const success = runs.find(
+        (r) => r.status === "completed" && r.conclusion === expectedConclusion,
+      );
+      if (success) return success;
+
       lastSeen = runs[0];
       if (lastSeen.status === "completed") {
-        if (lastSeen.conclusion === expectedConclusion) return lastSeen;
         if (lastSeen.conclusion === "cancelled") {
           // Newer run hopefully on the way. Record the ID so we don't
           // spin on the same cancelled run forever, then keep polling.
@@ -201,6 +213,10 @@ async function waitForWorkflowRun({
             `[waitForWorkflowRun] ${workflow} run ${lastSeen.id} on ${branch || headSha} was cancelled — waiting for a newer run to land.`,
           );
         } else {
+          // Any other terminal conclusion (failure, timed_out,
+          // action_required, etc.) IS a real failure. Surface it
+          // immediately rather than waiting for a successor that
+          // may never come.
           throw new Error(
             `Workflow ${workflow} on ${branch || headSha} completed with conclusion=${lastSeen.conclusion} (expected ${expectedConclusion}).`,
           );
