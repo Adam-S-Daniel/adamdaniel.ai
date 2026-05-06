@@ -299,6 +299,8 @@ Uses `regression-review` GitHub Environment with required reviewers (all write-a
 
 **Branch-protection ruleset:** `cms-feature-branches` (id 15756474, see `.github/rulesets/cms-feature-branches.json`) requires `validate-content` on PRs into `cms/**`, `claude/**`, `feat/**`, `fix/**`, `chore/**`, `test/**`, `ci/**`, `docs/**`. Without this required check, GitHub's mergeable_state goes "unstable" the moment the auto-merge job's own pending state is queued — which is exactly what bit PR #78 and motivated issue #79.
 
+**When this workflow looks "stuck":** the workflow run is rarely the bug. The publish-loop opens a `cms/<col>/<slug>` PR and waits for it to auto-merge; if a *prior* run's PR is still open with failed required checks (typically because it was opened against a base that pre-dates a recent CI fix on `main`), every subsequent run times out at ~13–40 min with `Timed out waiting for PR #N to merge`. First action: `gh pr list --state open --search "head:cms"` and audit any BLOCKED PRs — close stale ones (`gh pr close N --delete-branch`) and the next workflow run opens fresh against current `main`. Don't restart the workflow before clearing the queue. The full procedure lives in `.agents/skills/cms-stuck-pr-triage/SKILL.md`.
+
 ### `cms-publish-loop-prod.yml` (prod mutation playground)
 
 Sibling to the `cms-publish-loop` and `cms-publish-loop-preview` specs, but operates against a real `_posts/` entry on `main` rather than the `_e2e/` canary subset. See `e2e/cms-publish-loop-prod-mutate.spec.js` and the G4 plan for fixture details.
@@ -669,6 +671,8 @@ the `claude-code` harness should report PASS.
 - `.agents/skills/preview-environments/` — preview pipeline, CloudFront, S3 debugging
 - `.agents/skills/browser-testing/` — e2e test matrix, fixtures, cross-browser testing
 - `.agents/skills/github-actions-sha-pinning/` — workflow SHA-pinning rules + 7-day cooldown
+- `.agents/skills/workflow-path-audit/` — audit `paths:` / `paths-ignore:` filters across `.github/workflows/`
+- `.agents/skills/cms-stuck-pr-triage/` — diagnose "stuck" publish-loop / canary runs (`gh pr list --state open --search "head:cms"` first, blame the workflow last)
 - `.agents/skills/sveltia-cms-playwright-demo/` — historical Sveltia/Playwright notes (Decap is current)
 - `.agents/skills/test-canary/` — internal test fixture; never invoke from real work
 
