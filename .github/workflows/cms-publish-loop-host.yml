@@ -160,11 +160,19 @@ jobs:
           RUN_HOST_REPO_PUBLISH_LOOP: "1"
         run: |
           set -o pipefail
+          # `--max-failures=1` (Playwright's bail-out flag) stops the
+          # entire test run on the first failure rather than burning
+          # ~20-40 more minutes running the second spec while the
+          # operator is already triaging the first failure. Faster
+          # feedback + earlier log availability (live logs only
+          # become tailable after the job ends, so an early bail
+          # surfaces them sooner).
           npx playwright test \
             e2e/cms-publish-loop.spec.js \
             e2e/cms-delete-published.spec.js \
             --project=chromium-desktop \
             --reporter=list \
+            --max-failures=1 \
             2>&1 | tee /tmp/host-loop.log
 
       - name: Upload test results on failure

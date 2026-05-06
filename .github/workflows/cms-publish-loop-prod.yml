@@ -129,10 +129,15 @@ jobs:
           RUN_PROD_MUTATE_PLAYGROUND: "1"
         run: |
           set -o pipefail
+          # `--max-failures=1` is a no-op for a single spec but kept
+          # here for symmetry with cms-publish-loop-host.yml so any
+          # future addition of a second spec in this workflow inherits
+          # the fail-fast behaviour.
           npx playwright test \
             e2e/cms-publish-loop-prod-mutate.spec.js \
             --project=chromium-desktop \
             --reporter=list \
+            --max-failures=1 \
             2>&1 | tee /tmp/prod-mutate.log
 
       - name: Upload test results on failure
