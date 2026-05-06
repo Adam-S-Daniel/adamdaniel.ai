@@ -1,0 +1,22 @@
+{
+  "name": "cms-content-branches",
+  "_comment": "DRAFT — not applied yet. Spike artefact for the preview-pr-mimicry exploration (see docs/preview-pr-ruleset-spike.md). The existing cms-feature-branches.json ruleset already covers refs/heads/cms/** with non_fast_forward, pull_request (squash/merge, 0 reviewers), and validate-content as a required check — the issue #79 fix. The ONLY delta this ruleset adds is `deletion` protection: if/when long-lived cms/<slug> draft branches start carrying their own preview environments à la preview-pr-<N>, Decap relies on the branch existing while the draft is open, and accidental deletion would orphan the in-flight draft. Apply via `gh api -X POST repos/Adam-S-Daniel/adamdaniel.ai/rulesets --input .github/rulesets/cms-content-branches.json` once the user buys in. Intentionally NOT promoting `pull_request` (Decap commits per keystroke via the Contents API — blocking direct writes here would break the editor) and NOT promoting the full required_status_checks list from main.json (`e2e (1)` / `finalize` etc. on every Save would burn ~7 min of CI per keystroke).",
+  "target": "branch",
+  "enforcement": "active",
+  "conditions": {
+    "ref_name": {
+      "include": ["refs/heads/cms/**"],
+      "exclude": []
+    }
+  },
+  "rules": [
+    { "type": "deletion" }
+  ],
+  "bypass_actors": [
+    {
+      "actor_id": 5,
+      "actor_type": "RepositoryRole",
+      "bypass_mode": "always"
+    }
+  ]
+}
