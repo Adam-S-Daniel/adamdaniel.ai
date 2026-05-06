@@ -4,7 +4,6 @@
  *
  * Two consumers depend on this:
  *
- *   1. `live-url-banner.js` — renders the "VIEW PAGE ON SITE:" banner above
  *      the form so editors can click straight through to the live page.
  *   2. `native-preview-href.js` — rewrites Decap's native "View Live"
  *      toolbar anchor on every form mutation so it points at the same URL.

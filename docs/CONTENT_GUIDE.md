@@ -172,14 +172,15 @@ glance that you're editing on a preview.
    `https://preview-pr<N>.adamdaniel.ai/` (the bot posts the URL as a
    PR comment within ~30 seconds). This is the full site, with your
    changes, on a real CloudFront distribution.
-4. A **visual-regression video** is generated, showing every changed
-   page side-by-side with production. The video is posted as another PR
-   comment.
-5. Open the **Reviews dashboard** at
-   <https://adamdaniel.ai/admin/reviews/> to watch the regression video
-   inline and approve or request changes — same GitHub login, no need to
-   visit the PR on GitHub.
-6. Once you (or another reviewer) change the label from `cms/draft` to
+4. **Content-only PRs skip the visual-regression video.** When the
+   diff only touches `_posts/`, `_tags/`, `_projects/`, `pages/`,
+   `_e2e/`, or media uploads (`assets/images/uploads/`), the
+   regression workflow does not run — the pixel diff is the *intent*
+   of your edit, not a regression to flag, so the video would be pure
+   noise. PRs that touch a layout, template, stylesheet, or the admin
+   shell still trigger the regression video and the
+   `/admin/reviews/` dashboard review.
+5. Once you (or another reviewer) change the label from `cms/draft` to
    `cms/ready`, auto-merge enables. As soon as all checks pass, the PR
    merges and the production deploy fires.
 
@@ -308,11 +309,15 @@ You don't need this to use the CMS, but for context:
 
 - The CMS commits to a `cms/draft-…` branch, opens a PR, and labels it
   `cms/draft`.
-- GitHub Actions builds a preview at `preview-pr<N>.adamdaniel.ai` and
-  generates a visual-regression video.
+- GitHub Actions builds a preview at `preview-pr<N>.adamdaniel.ai`. A
+  visual-regression video is generated only for PRs that touch
+  templates / layouts / styling / the admin shell — pure content edits
+  skip it (the pixel diff is intentional, so the video adds no signal).
 - Changing the label to `cms/ready` enables auto-merge.
-- When required checks pass (`e2e`, `visual-regression / approve-regression`),
-  the PR squash-merges to `main` with the title `publish: <PR title>`.
+- When required checks pass (`e2e` + the always-fire jobs), the PR
+  squash-merges to `main` with the title `publish: <PR title>`. The
+  `visual-regression / approve-regression` review only gates merge
+  when the workflow actually fires (template/styling changes).
 - The push to `main` triggers `deploy-production.yml`, which builds with
   Jekyll, syncs to S3, and invalidates CloudFront. Post is live within
   ~1–2 minutes of merge.

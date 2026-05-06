@@ -800,6 +800,63 @@ jobs:
               });
             }
 
+      - name: Post per-test-videos artifact comment
+        # Surface the per-bucket combined videos (local / preview / prod /
+        # other) as a PR comment so reviewers can scrub through what each
+        # test actually did without downloading the artifact and unzipping
+        # it manually. Comment is updated in place per shim/marker pattern.
+        # Runs regardless of test outcome (failures still produce videos).
+        if: always() && !cancelled()
+        uses: actions/github-script@3a2844b7e9c422d3c10d287c895573f7108da1b3  # v9.0.0 (2026-04-09)
+        with:
+          script: |
+            const pr = context.payload.pull_request.number;
+            const sha = context.payload.pull_request.head.sha.slice(0, 7);
+            const runUrl = `${context.serverUrl}/${context.repo.owner}/${context.repo.repo}/actions/runs/${context.runId}`;
+            // The artifact name `per-test-videos` is the one uploaded by
+            // the assembly step earlier in this job (see
+            // e2e/generate-test-videos.js). Linking to the run's
+            // artifacts page gives reviewers a one-click download.
+            const artifactsUrl = `${runUrl}#artifacts`;
+            const marker = '<!-- e2e-per-test-videos -->';
+
+            const body = [
+              marker,
+              `## 🎬 Per-test screenshot videos on \`${sha}\``,
+              '',
+              `Combined per-bucket videos available in the [\`per-test-videos\` artifact](${artifactsUrl}). The artifact contains:`,
+              '',
+              '- `_combined-local.mp4` — tests against local fake-backend / Jekyll',
+              '- `_combined-preview.mp4` — tests against `preview-pr*.adamdaniel.ai`',
+              '- `_combined-prod.mp4` — tests against `adamdaniel.ai`',
+              '- `_combined-other.mp4` — catch-all (rare; e.g. `about:blank`, third-party hosts)',
+              '- One `<safe-test-id>.mp4` per individual test, plus a `_combined.txt` manifest',
+              '',
+              `Each frame's banner shows the test ID, PR #${pr}, project, status, current step, and per-test endTime in US/Eastern. Refreshes automatically on every push to this PR.`,
+            ].join('\n');
+
+            const { data: comments } = await github.rest.issues.listComments({
+              owner: context.repo.owner,
+              repo: context.repo.repo,
+              issue_number: pr,
+            });
+            const existing = comments.find(c => c.body && c.body.includes(marker));
+            if (existing) {
+              await github.rest.issues.updateComment({
+                owner: context.repo.owner,
+                repo: context.repo.repo,
+                comment_id: existing.id,
+                body,
+              });
+            } else {
+              await github.rest.issues.createComment({
+                owner: context.repo.owner,
+                repo: context.repo.repo,
+                issue_number: pr,
+                body,
+              });
+            }
+
       # ─── DO NOT REMOVE OR SOFTEN — this step IS the merge gate ─────────
       # `e2e (1)` is required, but `e2e (2..4)` are not (dynamic shard
       # count would create the missing-check trap). This step's `exit 1`
