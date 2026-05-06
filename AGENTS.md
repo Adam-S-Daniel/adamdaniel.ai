@@ -673,6 +673,7 @@ the `claude-code` harness should report PASS.
 - `.agents/skills/github-actions-sha-pinning/` — workflow SHA-pinning rules + 7-day cooldown
 - `.agents/skills/workflow-path-audit/` — audit `paths:` / `paths-ignore:` filters across `.github/workflows/`
 - `.agents/skills/cms-stuck-pr-triage/` — diagnose "stuck" publish-loop / canary runs (`gh pr list --state open --search "head:cms"` first, blame the workflow last)
+- `.agents/skills/ci-watcher-loops/` — patterns for reliable agent self-feedback when watching long-running workflows; covers the chained-capture pitfall (`RUN=$(cmd1 && cmd2)`) that silently breaks watcher loops
 - `.agents/skills/sveltia-cms-playwright-demo/` — historical Sveltia/Playwright notes (Decap is current)
 - `.agents/skills/test-canary/` — internal test fixture; never invoke from real work
 
