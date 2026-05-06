@@ -272,20 +272,44 @@ Resources:
       Name: !Sub "${AWS::StackName}-preview-location-fixer"
       AutoPublish: true
       FunctionConfig:
-        Comment: "Strip /pr-N/ or /cms-<slug>/ from Location headers on preview responses"
+        Comment: "Strip /pr-N/ or /cms-<slug>/ from Location, and inject X-Robots-Tag: noindex on every preview response"
         Runtime: cloudfront-js-2.0
-      # Mirror of PreviewRouterFunction's two-pattern host match. When
-      # the request hit a preview-prN.adamdaniel.ai host, we strip the
-      # matching `/pr-N/` from outbound Location headers; same shape for
-      # preview-cms-<slug>.adamdaniel.ai with `/cms-<slug>/`.
+      # Two responsibilities, both viewer-response, on the preview
+      # distribution only:
       #
-      # Only same-host prefixes are stripped: a `/pr-99/` leak on a
-      # `pr-23` host is left visible (and a `/pr-23/` leak on a
-      # `cms-foo` host stays visible too) so misrouted responses fail
-      # loudly rather than silently rewriting somewhere unexpected.
+      #   1. **Location-header stripping.** When the upstream rewriter
+      #      prepended `/pr-N/` (or `/cms-<slug>/`) to the request URI,
+      #      S3's same-prefix `/admin → /admin/` redirect leaks the
+      #      internal path back into the response Location. Strip
+      #      same-host prefixes; leave cross-host prefixes visible so
+      #      misrouted responses fail loudly.
+      #
+      #   2. **noindex header.** Preview environments must NEVER show
+      #      up in search results — they're per-PR ephemeral copies of
+      #      adamdaniel.ai content, often with future-dated canaries
+      #      and unpublished posts. The shared `robots.txt` allows
+      #      crawling on the production host, but per-host robots
+      #      files aren't reliable across crawlers, so we add an
+      #      `X-Robots-Tag: noindex, nofollow` HTTP header on every
+      #      response from this distribution. The header is more
+      #      authoritative than robots.txt and applies to all asset
+      #      types (HTML, images, feeds, etc.).
+      #
+      # Production responses don't pass through this function (the
+      # production distribution doesn't attach it), so adamdaniel.ai
+      # itself stays default-indexable.
       FunctionCode: |
         function handler(event) {
           var response = event.response;
+
+          // (2) noindex header — applies to EVERY response from this
+          // distribution, regardless of status code or path. Use
+          // `value` per CloudFront Functions header API.
+          response.headers['x-robots-tag'] = {
+            value: 'noindex, nofollow'
+          };
+
+          // (1) Location-header stripping for redirects only.
           var status = Number(response.statusCode);
           if (status < 300 || status >= 400) return response;
 
