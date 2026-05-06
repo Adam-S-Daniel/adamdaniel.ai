@@ -29,15 +29,32 @@ permissions:
   pull-requests: write
   issues: write
 
-concurrency:
-  # Cancel previous validation runs when the CMS pushes another commit
-  # to the same draft PR (Decap pushes per-keystroke during editing).
-  # Labeled events also pile up on rapid label toggling — same group.
-  group: cms-editorial-${{ github.event.pull_request.number }}
-  cancel-in-progress: true
+# Concurrency is now per-job (see each job's `concurrency:` block).
+# Workflow-level `cancel-in-progress: true` was racing the labeled
+# event for cms/ready: a same-second `opened` + `labeled` pair would
+# create two runs (one per event), the workflow-level group would
+# cancel the first, and whichever run survived determined whether
+# auto-merge-when-ready fired (its `if:` only matches the labeled
+# event, so the survivor needed to be the labeled-event run for
+# auto-merge to be enabled). When the opened-event run won the
+# race — observed on PRs #210 and similar fixture PRs — auto-merge
+# was never enabled, the PR sat for 12 minutes, and the spec timed
+# out in waitForMerge.
+#
+# Splitting concurrency into per-job groups keeps the per-keystroke
+# cancel optimization on validate-content (cheap re-run cost on
+# Decap's rapid saves) while ensuring auto-merge-when-ready always
+# runs to completion when its labeled event fires.
 
 jobs:
   validate-content:
+    # Cancel previous validation runs when the CMS pushes another
+    # commit to the same draft PR (Decap pushes per-keystroke during
+    # editing). Each new commit invalidates the prior run's verdict,
+    # so cancelling the in-flight one saves ~30s of CI per keystroke.
+    concurrency:
+      group: cms-editorial-validate-content-${{ github.event.pull_request.number }}
+      cancel-in-progress: true
     runs-on: ubuntu-latest
     steps:
       - name: Checkout
@@ -156,7 +173,25 @@ jobs:
       github.event.action == 'labeled' &&
       (github.event.label.name == 'cms/ready' ||
        github.event.label.name == 'decap-cms/ready')
-    needs: validate-content
+    # Per-job concurrency with cancel-in-progress:false so multiple
+    # rapid label toggles queue rather than cancel each other.
+    # `enablePullRequestAutoMerge` is idempotent — re-running it on
+    # an already-auto-mergeable PR is a no-op. The workflow-level
+    # cancel that used to live here was THE bug: a same-second
+    # opened+labeled pair on a new PR could let the opened-event
+    # run cancel the labeled-event run mid-evaluation, leaving
+    # auto-merge unenabled and the PR stuck for ~12 min. (Observed
+    # on PR #210 — only `auto_squash_enabled` event missing in its
+    # timeline despite the cms/ready label being added.)
+    concurrency:
+      group: cms-editorial-auto-merge-${{ github.event.pull_request.number }}
+      cancel-in-progress: false
+    # `needs: validate-content` removed: enablePullRequestAutoMerge
+    # only sets the *intent* to merge — GitHub waits for the
+    # required-status-checks ruleset (which includes validate-content)
+    # before actually firing the merge. Making this job wait on
+    # validate-content was redundant *and* coupled it to the same
+    # cancel-in-progress mechanic that caused the original bug.
     runs-on: ubuntu-latest
     permissions:
       contents: write
