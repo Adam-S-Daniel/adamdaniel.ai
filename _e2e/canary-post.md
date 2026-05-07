@@ -10,28 +10,12 @@ date: 2026-01-01 00:00:00 +0000
 sitemap: false
 robots: noindex,nofollow
 ---
+
 Adam Daniel — E2E canary post (do not edit by hand).
 
 This URL exists so the automated end-to-end publish-loop tests have a stable
 target to assert against on both preview-pr<N>.adamdaniel.ai and
 adamdaniel.ai. The body is replaced during a test run and reset to this
-
-e2e-publish-loop:post:1778160022869
-
-e2e-publish-loop:post:1778161924233
-
-e2e-publish-loop:post:1778162805205
-
-
-
-e2e-publish-loop:post:1778163265219
-
-
-
-e2e-publish-loop:post:1778162366887
-
-e2e-publish-loop:post:1778161470433
-
 baseline in cleanup, so the public URL always renders innocuous content
 between runs.
 
