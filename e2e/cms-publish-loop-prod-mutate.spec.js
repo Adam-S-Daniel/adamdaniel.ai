@@ -360,19 +360,16 @@ test("CMS publish loop — prod mutation playground (real _posts/ entry)", async
   });
 
   await test.step("Wait for the prod deploy-status pill spinner→settled (DOM is ground truth)", async () => {
-    await page.goto(PROD_ADMIN, { waitUntil: "domcontentloaded" });
-    await expect(page.getByRole("link", { name: /^Posts$/i })).toBeVisible({
-      timeout: 60_000,
-    });
+    // STAY on the entry editor view (we're already on the canary
+    // post's editor from earlier steps). The pill is injected into
+    // Decap's editor toolbar, NOT the collection list — navigating
+    // to /admin/ unmounts the toolbar so the pill never gets
+    // created. (Run #25500041766 hit this trap on the publish-loop
+    // spec; same fix applies here.)
     await waitForDeployPillSettled({
       page,
       pillId: PILL_PROD,
-      // 6 min covers cms-editorial-workflow + auto-merge + deploy-
-      // production startup with margin. p95 ~3 min, max observed
-      // ~5 min under runner saturation.
       spinTimeoutMs: 6 * 60 * 1000,
-      // 4 min covers the deploy run itself + trailing 30-s pill-
-      // poll window for success → hidden.
       settleTimeoutMs: 4 * 60 * 1000,
     });
   });
