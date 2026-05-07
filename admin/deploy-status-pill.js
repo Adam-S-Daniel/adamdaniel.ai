@@ -69,10 +69,15 @@
  *   e2e/cms-publish-loop-preview.spec.js  → cms-preview-build-pill
  *
  * Both specs drive a real publish (Save → Status:Ready → merge →
- * deploy) and then assert the pill reaches its terminal hidden
- * state (display: none) after the corresponding deploy completes,
- * with a 90-sec window for the next 30-sec polling tick. If the
- * polling chain breaks or success → hidden transition stops
+ * deploy) and use the `waitForChangeReflected` helper in
+ * `e2e/deploy-pill.js`: poll the public URL until it serves the
+ * marker, watch the pill for failure-state transitions during the
+ * wait, and finally assert the pill is in its terminal hidden
+ * state. (The earlier "wait for spinner-visible then settled"
+ * approach was racy — deploy-production / deploy-preview can
+ * complete in <30 s, less than the pill's 30 s polling interval,
+ * and the in_progress phase passes entirely between two polls.)
+ * If the polling chain breaks or success → hidden transition stops
  * working, those specs surface it. The robustness invariants
  * (retry, rate-limit, stale-state amber) live in
  * e2e/deploy-status-pill-robustness.test.js as text-grep checks
