@@ -45,7 +45,7 @@ const { test, expect } = require("./base");
 const { seedDecapAuth, getPat, HOST_REPO } = require("./decap-pat");
 const { fetchPublicUrl, gh } = require("./github-actions-poll");
 const { seedFixtureViaPr, removeFixtureViaPr } = require("./cms-fixture-pr");
-const { waitForDeployPillSettled, PILL_PROD } = require("./deploy-pill");
+const { waitForChangeReflected, PILL_PROD } = require("./deploy-pill");
 
 const PROD_HOST = "https://adamdaniel.ai";
 const PROD_ADMIN = `${PROD_HOST}/admin/`;
@@ -336,53 +336,54 @@ test("Delete published entry — UI click → shim → delete-via-pr workflow �
     // for the spinner-detect phase (covers the full delete chain:
     // dispatch → PR open → validate-content → merge → deploy
     // start).
-    await test.step("Wait for the prod deploy-status pill spinner→settled (DOM is ground truth)", async () => {
-      // After the delete click, the entry being deleted may unmount
-      // its editor (Decap navigates back to the collection list when
-      // the source disappears). The pill is only injected into an
-      // entry editor's toolbar, so we navigate to a SIBLING entry —
-      // canary-page is guaranteed to exist and is not mutated by any
-      // spec, so its editor toolbar is a stable mount point for the
-      // pill while the delete chain runs in the background.
+    // ── 4+5. Wait for the URL to 404 (delete chain landed) ──────
+    // After the delete click, Decap may unmount the deleted entry's
+    // editor and navigate to the collection list. The pill is only
+    // injected into an entry editor's toolbar, so navigate to a
+    // SIBLING entry (canary-page is stable and unmutated) for a
+    // stable pill mount point. Then poll the public URL until it
+    // 404s, watching the pill for failure transitions and finally
+    // asserting it lands in its terminal hidden state.
+    const publicUrl = `${PROD_HOST}/e2e/${slug}/`;
+    await test.step("Wait for the URL to 404 (and pill terminal-hidden)", async () => {
       await page.goto(`${PROD_ADMIN}#/collections/e2e/entries/canary-page`, {
         waitUntil: "domcontentloaded",
       });
       await expect(page.getByRole("textbox", { name: /^Title$/i })).toBeVisible({
         timeout: 60_000,
       });
-      await waitForDeployPillSettled({
+      await waitForChangeReflected({
         page,
         pillId: PILL_PROD,
-        // 8 min covers the long delete chain (dispatch + PR open +
-        // validate-content + auto-merge + deploy-production
-        // startup) with margin, in case runners are saturated.
-        spinTimeoutMs: 8 * 60 * 1000,
-        // 4 min covers the deploy run itself + trailing 30-s pill-
-        // poll window for success → hidden.
-        settleTimeoutMs: 4 * 60 * 1000,
+        urlCheck: async () => {
+          const res = await page.request.get(publicUrl, {
+            maxRedirects: 0,
+            failOnStatusCode: false,
+          });
+          const status = res.status();
+          return status >= 400 && status < 500;
+        },
+        // 12 min covers the long delete chain (dispatch + PR open +
+        // validate-content + auto-merge + deploy-production + CDN
+        // propagation) with margin, in case runners are saturated.
+        urlTimeoutMs: 12 * 60 * 1000,
       });
     });
 
-    // ── 5. Verify the public URL actually 404s ──────────────────
-    // The pill settled → deploy-production succeeded. CloudFront
-    // can lag the deploy by a few seconds; poll until 4xx so we
-    // know the deletion landed at the customer-visible layer too.
-    const publicUrl = `${PROD_HOST}/e2e/${slug}/`;
-    await test.step("Verify the canary's public URL 404s after delete + deploy", async () => {
-      const deadline = Date.now() + 6 * 60 * 1000;
-      let lastStatus = null;
-      while (Date.now() < deadline) {
-        const res = await page.request.get(publicUrl, {
-          maxRedirects: 0,
-          failOnStatusCode: false,
-        });
-        lastStatus = res.status();
-        if (lastStatus >= 400 && lastStatus < 500) return;
-        await page.waitForTimeout(8_000);
+    // Defensive: throw if the delete didn't actually land. The
+    // urlCheck above is the gate; this is just a clearer error if
+    // something raced past it.
+    await test.step("Confirm the canary's public URL 404s", async () => {
+      const res = await page.request.get(publicUrl, {
+        maxRedirects: 0,
+        failOnStatusCode: false,
+      });
+      const status = res.status();
+      if (status < 400 || status >= 500) {
+        throw new Error(
+          `${publicUrl} returned ${status} — expected 4xx after delete + deploy.`,
+        );
       }
-      throw new Error(
-        `${publicUrl} did not return 4xx within 6 min after delete + deploy; last status=${lastStatus}.`,
-      );
     });
   } finally {
     // Best-effort cleanup. If the shim/workflow path didn't actually

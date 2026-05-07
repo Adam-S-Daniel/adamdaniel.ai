@@ -61,7 +61,7 @@ const {
   waitForCmsPullRequest,
 } = require("./github-actions-poll");
 const { seedFixtureViaPr, closeStaleDecapPrOnBranch } = require("./cms-fixture-pr");
-const { waitForDeployPillSettled, PILL_PROD } = require("./deploy-pill");
+const { waitForChangeReflected, PILL_PROD } = require("./deploy-pill");
 
 const CANARY = findCanary("post");
 const PROD_HOST = "https://adamdaniel.ai";
@@ -347,32 +347,31 @@ test("CMS publish loop — host repo, target main", async ({ page }, testInfo) =
   // chain. Navigate to /admin/ now so the pill scripts have a
   // stable shell to mount on while the chain runs in the
   // background, then wait for the spinner→settled lifecycle.
-  await test.step("Wait for the prod deploy-status pill spinner→settled (DOM is ground truth)", async () => {
-    // STAY on the entry editor view. The pill is injected into
-    // Decap's editor toolbar (next to the built-in preview link),
-    // NOT the collection list. Navigating to /admin/ unmounts the
-    // editor toolbar so the pill never gets created — run
-    // #25500041766 hit exactly this: 6-min spinTimeoutMs fired
-    // because document.getElementById('cms-prod-status-pill')
-    // returned null the whole time.
-    await waitForDeployPillSettled({
+  // ── 7+8. Wait for the change to land on adamdaniel.ai ──────────
+  //
+  // STAY on the entry editor view — that's where deploy-status-pill.js
+  // injects the pill. Poll the public URL until it serves the marker;
+  // along the way, watch the pill for failure transitions (fast-fail)
+  // and finally assert it lands in its terminal hidden state. We
+  // intentionally do NOT gate on observing the pill's in_progress
+  // spinner — production deploys often complete in 15–30 s, less than
+  // the pill's 30-s polling interval, so the spinner state can pass
+  // entirely between two polls without ever rendering. The URL
+  // change is the user-facing ground truth; the pill's terminal
+  // state confirms the editor's signal stayed consistent.
+  await test.step("Wait for the marker to be live on adamdaniel.ai (and pill terminal-hidden)", async () => {
+    await waitForChangeReflected({
       page,
       pillId: PILL_PROD,
-      spinTimeoutMs: 6 * 60 * 1000,
-      settleTimeoutMs: 4 * 60 * 1000,
-    });
-  });
-
-  // ── 8. Verify public URL surfaces the marker ────────────────────
-  // The pill settled to hidden, which means deploy-production
-  // succeeded according to GitHub. CloudFront invalidation can lag
-  // the deploy by a few seconds; the URL fetch confirms the change
-  // is end-to-end visible to a browser. Generous timeout in case
-  // CloudFront is propagating slower than usual.
-  await test.step("Verify marker is live on adamdaniel.ai", async () => {
-    await fetchPublicUrl(PUBLIC_URL, {
-      expectContent: marker,
-      timeoutMs: 90_000,
+      urlCheck: async () => {
+        const res = await page.request.get(PUBLIC_URL, { failOnStatusCode: false });
+        if (res.status() !== 200) return false;
+        return (await res.text()).includes(marker);
+      },
+      // 10 min covers cms-editorial-workflow + auto-merge + required
+      // checks + deploy-production + CDN propagation under runner
+      // saturation.
+      urlTimeoutMs: 10 * 60 * 1000,
     });
     await page.goto(PUBLIC_URL, { waitUntil: "domcontentloaded" });
     await captureStep(page, {

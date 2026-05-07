@@ -73,7 +73,7 @@ const {
   gh,
   waitForCmsPullRequest,
 } = require("./github-actions-poll");
-const { waitForDeployPillSettled, PILL_PROD } = require("./deploy-pill");
+const { waitForChangeReflected, PILL_PROD } = require("./deploy-pill");
 
 const REPO_ROOT = path.resolve(__dirname, "..");
 const FIXTURE_PATH = "_posts/2099-01-01-e2e-mutation-canary.md";
@@ -359,29 +359,22 @@ test("CMS publish loop — prod mutation playground (real _posts/ entry)", async
     await addLabel({ prNumber: pr.number, label: "cms/ready" });
   });
 
-  await test.step("Wait for the prod deploy-status pill spinner→settled (DOM is ground truth)", async () => {
-    // STAY on the entry editor view (we're already on the canary
-    // post's editor from earlier steps). The pill is injected into
-    // Decap's editor toolbar, NOT the collection list — navigating
-    // to /admin/ unmounts the toolbar so the pill never gets
-    // created. (Run #25500041766 hit this trap on the publish-loop
-    // spec; same fix applies here.)
-    await waitForDeployPillSettled({
+  // ── Wait for the URL to surface the marker (and pill terminal) ──
+  // STAY on the entry editor view — the pill is injected there.
+  // Poll the public URL until it contains the marker; watch the pill
+  // for failure transitions and assert it lands in terminal hidden
+  // state. Don't gate on the pill's in_progress spinner — fast
+  // deploys often pass entirely between two 30-s pill polls.
+  await test.step("Wait for /blog/e2e-mutation-canary/ to surface the marker (and pill terminal-hidden)", async () => {
+    await waitForChangeReflected({
       page,
       pillId: PILL_PROD,
-      spinTimeoutMs: 6 * 60 * 1000,
-      settleTimeoutMs: 4 * 60 * 1000,
-    });
-  });
-
-  // ── 6. Public URL goes live with the marker ─────────────────────
-  // The pill settled → deploy-production succeeded. CloudFront can
-  // lag the deploy by a few seconds; the URL fetch confirms the
-  // change is end-to-end visible to a browser.
-  await test.step("Verify /blog/e2e-mutation-canary/ surfaces the marker", async () => {
-    await fetchPublicUrl(PUBLIC_URL, {
-      expectContent: marker,
-      timeoutMs: 90_000,
+      urlCheck: async () => {
+        const res = await page.request.get(PUBLIC_URL, { failOnStatusCode: false });
+        if (res.status() !== 200) return false;
+        return (await res.text()).includes(marker);
+      },
+      urlTimeoutMs: 10 * 60 * 1000,
     });
   });
 
