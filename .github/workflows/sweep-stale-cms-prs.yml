@@ -81,6 +81,11 @@ jobs:
       - name: Sweep stale Decap-managed PRs
         env:
           GH_TOKEN: ${{ secrets.CMS_E2E_PAT }}
+          # `gh` defaults to the current git repo; without a checkout
+          # step the runner has no .git, so we set GH_REPO explicitly
+          # so every `gh pr ...` call resolves to this repo without
+          # needing actions/checkout for what is purely an API job.
+          GH_REPO: Adam-S-Daniel/adamdaniel.ai
           DRY_RUN: ${{ inputs.dry_run || 'false' }}
           THRESHOLD_HOURS: ${{ inputs.threshold_hours || 6 }}
         run: |
@@ -205,6 +210,7 @@ jobs:
         if: ${{ inputs.dry_run != 'true' }}
         env:
           GH_TOKEN: ${{ secrets.CMS_E2E_PAT }}
+          GH_REPO: Adam-S-Daniel/adamdaniel.ai
           THRESHOLD_HOURS: ${{ inputs.threshold_hours || 6 }}
         run: |
           set -euo pipefail
