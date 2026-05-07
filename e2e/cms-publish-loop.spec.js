@@ -383,12 +383,91 @@ test("CMS publish loop — host repo, target main", async ({ page }, testInfo) =
     });
   });
 
-  // ── 9. Cleanup ──────────────────────────────────────────────────
-  // Reset baseline via a labelled PR + auto-merge (direct writes to
-  // main are blocked by the ruleset). We DO await the merge here:
-  // leaving the canary in the marker state would break the next run's
-  // baseline assertion and pollute the public URL between runs.
-  await test.step("Reset canary baseline (cleanup PR)", async () => {
+  // ── 9a. Cleanup via Decap UI (the user-facing path) ────────────
+  //
+  // Drive Decap to remove the marker we just appended, restoring the
+  // canary body to its baseline. This is the editor's actual
+  // "undo my edit" flow — Save → Status:Ready → Publish Now —
+  // exercised symmetrically with the forward leg.
+  //
+  // Per AGENTS.md "no back doors in setup or cleanup either": the
+  // forward leg (Save marker → URL serves marker) is symmetrical
+  // with the cleanup leg (Save baseline → URL serves baseline);
+  // both go through the same UI chain. The fixture-PR safety net
+  // remains as 9b in case the UI-driven cleanup itself fails (e.g.
+  // a Decap regression mid-run leaves the canary mutated even after
+  // the spec attempted to restore baseline).
+  await test.step("Cleanup via UI: remove marker, Save → Status:Ready → Publish Now", async () => {
+    // Navigate back to the canary entry (we may have left for the
+    // pill-watch step on /admin/).
+    await page.goto(
+      `${PROD_ADMIN}#/collections/${CANARY.cmsCollection}/entries/${CANARY.slug}`,
+      { waitUntil: "domcontentloaded" },
+    );
+    await expect(page.getByRole("textbox", { name: /^Title$/i })).toBeVisible({
+      timeout: 30_000,
+    });
+
+    // Replace the body content with the canonical baseline. Decap's
+    // markdown widget renders the body as a contenteditable. Click
+    // it, select all, delete, then type the baseline back. This
+    // produces the same end-state as the fixture-PR cleanup but
+    // through the editor's normal Save flow.
+    const body = page.locator('[role="textbox"][contenteditable="true"]').last();
+    await body.click();
+    await page.keyboard.press("Control+A");
+    await page.keyboard.press("Backspace");
+    await body.pressSequentially(
+      `${baselineBody}\n\n` +
+        "This URL exists so the automated end-to-end publish-loop tests have a stable\n" +
+        "target to assert against on both preview-pr<N>.adamdaniel.ai and\n" +
+        "adamdaniel.ai. The body is replaced during a test run and reset to this\n" +
+        "baseline in cleanup, so the public URL always renders innocuous content\n" +
+        "between runs.\n\n" +
+        "If this is the only thing you can see, no test is currently in progress.\n",
+    );
+
+    await page.getByRole("button", { name: /^Save$/i }).click();
+    await expect(page.getByText(/Changes saved/i).first()).toBeVisible({
+      timeout: 60_000,
+    });
+
+    await page.getByRole("button", { name: /^Status:\s*Draft$/i }).click();
+    await page.getByRole("menuitem", { name: /^Ready$/i }).click();
+    await expect(
+      page.getByRole("button", { name: /^Status:\s*Ready$/i }),
+    ).toBeVisible({ timeout: 30_000 });
+
+    await page.getByRole("button", { name: /^Publish$/i }).click();
+    await page
+      .getByRole("menuitem", { name: /publish now/i })
+      .first()
+      .click();
+
+    // Wait for the URL to serve baseline (no marker). Reuse
+    // waitForChangeReflected with an inverted urlCheck — URL fetched,
+    // body does NOT contain the marker.
+    const { waitForChangeReflected, PILL_PROD: P } = require("./deploy-pill");
+    await waitForChangeReflected({
+      page,
+      pillId: P,
+      urlCheck: async () => {
+        const res = await page.request.get(PUBLIC_URL, { failOnStatusCode: false });
+        if (res.status() !== 200) return false;
+        const text = await res.text();
+        return !text.includes(marker) && text.includes(baselineBody);
+      },
+      urlTimeoutMs: 10 * 60 * 1000,
+    });
+  });
+
+  // ── 9b. Cleanup safety net via fixture PR (legacy fallback) ────
+  // If the UI-driven cleanup above somehow left the canary mutated
+  // (Decap regression, network blip mid-Publish-Now, etc.), this
+  // step opens a labelled fixture PR + auto-merges to restore the
+  // baseline file directly. Keeps the canary in a known-good state
+  // for the next run regardless of what happened above.
+  await test.step("Cleanup safety net: reset canary baseline via labelled fixture PR", async () => {
     await writeCanaryViaPr({
       runId: `cleanup-${runId}`,
       bodyText: `${baselineBody}\n\nThis URL exists so the automated end-to-end publish-loop tests have a stable\ntarget to assert against on both preview-pr<N>.adamdaniel.ai and\nadamdaniel.ai. The body is replaced during a test run and reset to this\nbaseline in cleanup, so the public URL always renders innocuous content\nbetween runs.\n\nIf this is the only thing you can see, no test is currently in progress.`,
