@@ -384,22 +384,95 @@ test("CMS publish loop — prod mutation playground (real _posts/ entry)", async
   // and survives a Decap UI hiccup. The `cms-feature-branches` ruleset
   // allows direct pushes to main from the repo owner; the PAT belongs
   // to that account.
-  await test.step("Reset fixture to baseline (cleanup commit)", async () => {
-    await writeFixtureOnMain({
-      fileText: baselineFileText,
-      message: `test(prod-mutate): reset fixture after run ${runId}`,
+  // ── Cleanup via Decap UI (toggle Published OFF + restore body) ─
+  // Drive Decap to undo the mutation symmetrically with the forward
+  // leg. The forward leg flipped `published: true` and added a
+  // marker to the body; the cleanup flips back and restores body.
+  // Per AGENTS.md "no back doors in setup or cleanup either."
+  await test.step("Cleanup via UI: toggle Published → OFF, restore body, Save → Status:Ready → Publish Now", async () => {
+    // We may have left the entry editor for the pill-watch step;
+    // navigate back. Direct entry URL is deterministic.
+    await page.goto(
+      `${PROD_ADMIN}#/collections/posts/entries/${FIXTURE_PATH.replace(/^_posts\//, "").replace(/\.md$/, "")}`,
+      { waitUntil: "domcontentloaded" },
+    );
+    await expect(page.getByRole("textbox", { name: /^Title$/i })).toBeVisible({
+      timeout: 30_000,
+    });
+
+    const publishedToggle = page.getByRole("checkbox", { name: /^Published$/i });
+    await expect(publishedToggle).toBeVisible({ timeout: 30_000 });
+    await publishedToggle.uncheck();
+    await expect(publishedToggle).not.toBeChecked();
+
+    const body = page.locator('[role="textbox"][contenteditable="true"]').last();
+    await body.click();
+    await page.keyboard.press("Control+A");
+    await page.keyboard.press("Backspace");
+    // Restore the canonical baseline body verbatim. baselineFileText
+    // is the entire .md file (frontmatter + body); slice off the
+    // frontmatter so we only paste the body portion.
+    const fmEnd = baselineFileText.indexOf("\n---\n", 4);
+    const baselineBodyOnly = baselineFileText.slice(fmEnd + 5).trim();
+    await body.pressSequentially(baselineBodyOnly + "\n");
+
+    await page.getByRole("button", { name: /^Save$/i }).click();
+    await expect(page.getByText(/Changes saved/i).first()).toBeVisible({
+      timeout: 60_000,
+    });
+    await page.getByRole("button", { name: /^Status:\s*Draft$/i }).click();
+    await page.getByRole("menuitem", { name: /^Ready$/i }).click();
+    await expect(
+      page.getByRole("button", { name: /^Status:\s*Ready$/i }),
+    ).toBeVisible({ timeout: 30_000 });
+    await page.getByRole("button", { name: /^Publish$/i }).click();
+    await page.getByRole("menuitem", { name: /publish now/i }).first().click();
+
+    // Wait for the URL to 4xx (post unpublished, file restored).
+    await waitForChangeReflected({
+      page,
+      pillId: PILL_PROD,
+      urlCheck: async () => {
+        const res = await page.request.get(PUBLIC_URL, { failOnStatusCode: false });
+        const s = res.status();
+        return s >= 400 && s < 500;
+      },
+      urlTimeoutMs: 10 * 60 * 1000,
     });
   });
+});
 
-  // ── 10. Confirm the URL 404s again after cleanup ────────────────
-  // The cleanup commit retriggers deploy-production.yml. We don't
-  // block on it — the next nightly run handles any propagation lag —
-  // but a quick check that the cleanup commit *was* applied to main
-  // catches "the API write 404'd silently" failure modes.
-  await test.step("Verify cleanup landed on main (published: false on main)", async () => {
-    const after = await fetchFixtureFromMain();
-    const afterBody = Buffer.from(after.content, "base64").toString("utf8");
-    const afterPublished = readPublishedFlag(afterBody);
-    expect(afterPublished, "main should be published: false after cleanup").toBe(false);
+// ── Test-harness cleanup safety net ───────────────────────────────
+// Mirrors cms-publish-loop.spec.js's afterAll. Reads the fixture
+// from main; if it's not at baseline (`published: true` still set,
+// or marker still present in body), opens the API write to restore
+// it. Skips when the fixture is already at baseline.
+test.afterAll(async () => {
+  if (PROD_CANARY) return;
+  if (!getPat()) return;
+  let current;
+  try {
+    current = await fetchFixtureFromMain();
+  } catch (e) {
+    console.warn(
+      `[cleanup-harness] couldn't read ${FIXTURE_PATH} from main; skipping safety net: ${e && e.message}`,
+    );
+    return;
+  }
+  const decoded = Buffer.from(current.content, "base64").toString("utf8");
+  const stillPublished = readPublishedFlag(decoded) === true;
+  const hasMarker = /e2e-publish-loop:[a-z]+:\d+/.test(decoded);
+  if (!stillPublished && !hasMarker) {
+    console.log(
+      "[cleanup-harness] prod-mutate fixture at baseline; UI cleanup succeeded — no safety net needed",
+    );
+    return;
+  }
+  console.warn(
+    `[cleanup-harness] fixture on main is mutated (published=${stillPublished}, marker=${hasMarker}); restoring via Contents API`,
+  );
+  await writeFixtureOnMain({
+    fileText: buildBaselineFileText(),
+    message: `test(prod-mutate): harness safety-net reset of fixture (UI cleanup left mutation)`,
   });
 });
