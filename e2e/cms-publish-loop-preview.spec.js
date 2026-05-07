@@ -131,10 +131,23 @@ test("CMS publish loop — preview env, target PR head branch", async ({ page },
   });
 
   await test.step("Navigate to canary entry", async () => {
-    await page.goto(`${PREVIEW_ADMIN}#/collections/${CANARY.cmsCollection}`, { waitUntil: "domcontentloaded" });
-    const entry = page.getByRole("link", { name: /Canary/i }).first();
-    await expect(entry).toBeVisible({ timeout: 30_000 });
-    await entry.click();
+    // Mirror the host-loop spec's navigate-by-slug pattern: go
+    // straight to the entry instead of clicking the first /Canary/i
+    // link in the collection list. The e2e collection has multiple
+    // canaries (page/post/project) plus any leftover throw-away
+    // `canary-delete-<runId>` fixtures from failed delete-spec runs,
+    // and the sidebar's display order can't be relied on to land on
+    // the configured one (CANARY.id). Run #25470995760 hit exactly
+    // this — `.getByRole("link", { name: /Canary/i }).first()`
+    // landed on a stale `canary-delete-1778008012598` entry, the
+    // marker insert went into the wrong file, and Decap opened a
+    // cms PR for a `_e2e/canary-delete-*` change that
+    // `waitForCmsPullRequest({ filePath: "_e2e/canary-page.md" })`
+    // never matched.
+    await page.goto(
+      `${PREVIEW_ADMIN}#/collections/${CANARY.cmsCollection}/entries/${CANARY.slug}`,
+      { waitUntil: "domcontentloaded" },
+    );
     await expect(page.getByRole("textbox", { name: /^Title$/i })).toBeVisible({ timeout: 30_000 });
   });
 
