@@ -81,6 +81,14 @@ test.describe.configure({
 });
 
 function buildCanaryBody({ slug, title, runId }) {
+  // IMPORTANT: do NOT include the words "deleted" or "removed" anywhere
+  // in the body. Step 3's Promise.race below uses
+  // `page.getByText(/deleted|removed/i)` as one of its accept signals;
+  // those words appearing in the body would false-resolve the race
+  // before Decap's actual UI response. Run #25496374142 hit exactly
+  // this — a previous body of "Will be deleted by …" caused the
+  // race to resolve immediately on page load and the test then
+  // hung waiting for the never-dispatched workflow.
   return [
     "---",
     "layout: canary",
@@ -92,8 +100,8 @@ function buildCanaryBody({ slug, title, runId }) {
     "robots: noindex,nofollow",
     "published: true",
     "---",
-    `Throw-away delete-test fixture from run ${runId}.`,
-    "Will be deleted by cms-delete-published.spec.js.",
+    `Throw-away fixture from run ${runId}.`,
+    "Used by cms-delete-published.spec.js to exercise the editorial-workflow delete path.",
     "",
   ].join("\n");
 }
@@ -206,6 +214,42 @@ test("Delete published entry — UI click → shim → delete-via-pr workflow �
 
     // ── 2. Open admin, navigate to the canary entry ──────────────
     await seedDecapAuth(page);
+
+    // Diagnostic: log every DELETE-on-contents call and every
+    // workflow_dispatch POST so a future failure trace tells us
+    // exactly what Decap + shim did or didn't do. The CDN-side
+    // network is noisy; restrict to the GitHub API calls relevant
+    // to the delete chain.
+    page.on("request", (req) => {
+      const method = req.method();
+      const url = req.url();
+      if (
+        method === "DELETE" &&
+        /api\.github\.com\/repos\/[^/]+\/[^/]+\/contents\//.test(url)
+      ) {
+        console.info(`[trace] DELETE → ${url}`);
+      } else if (
+        method === "POST" &&
+        /actions\/workflows\/[^/]+\/dispatches/.test(url)
+      ) {
+        console.info(`[trace] dispatch → ${url}`);
+      }
+    });
+    page.on("response", (res) => {
+      const url = res.url();
+      if (
+        /api\.github\.com\/repos\/[^/]+\/[^/]+\/contents\//.test(url) &&
+        res.request().method() === "DELETE"
+      ) {
+        console.info(`[trace] DELETE ${res.status()} ← ${url}`);
+      } else if (/actions\/workflows\/[^/]+\/dispatches/.test(url)) {
+        console.info(`[trace] dispatch ${res.status()} ← ${url}`);
+      }
+    });
+    page.on("pageerror", (err) => {
+      console.warn(`[trace] page error: ${err && err.message}`);
+    });
+
     await test.step("Load production admin", async () => {
       await page.goto(PROD_ADMIN, { waitUntil: "domcontentloaded" });
       await expect(page.getByRole("link", { name: /^Posts$/i })).toBeVisible({
@@ -274,19 +318,26 @@ test("Delete published entry — UI click → shim → delete-via-pr workflow �
           );
         });
 
-      // Shim's synthetic 200 → Decap reports success. The shim toast
-      // should appear, but if Decap's "deleted" notification beats it
-      // we accept either as proof the click resolved.
-      await Promise.race([
-        page
-          .locator("[data-publish-via-auto-merge-toast]")
-          .first()
-          .waitFor({ timeout: 30_000 }),
-        page
-          .getByText(/deleted|removed/i)
-          .first()
-          .waitFor({ timeout: 30_000 }),
-      ]);
+      // The shim is the contract: clicking "Delete published entry"
+      // should call DELETE /repos/.../contents/<path>, the main-branch
+      // ruleset rejects it 422, and the shim catches and dispatches
+      // delete-via-pr.yml + shows its toast. Wait specifically for
+      // the shim toast — generic "deleted"/"removed" text on the
+      // page is unreliable (an earlier body that read "Will be
+      // deleted by cms-delete-published.spec.js" caused this race
+      // to false-resolve on the body's own text, run
+      // #25496374142). If the toast doesn't appear, EITHER the
+      // click didn't trigger DELETE on /contents at all (Decap
+      // version drift, button selector mismatch, or
+      // editorial-workflow path that bypasses the shim) OR the shim
+      // fired but `delete-via-pr.yml` dispatch failed silently. The
+      // next step (waitForWorkflowRun) would catch the second case
+      // anyway; the toast wait gives us a clearer first-failure
+      // localisation on the first.
+      await page
+        .locator("[data-publish-via-auto-merge-toast]")
+        .first()
+        .waitFor({ timeout: 30_000 });
     });
 
     // ── 4. The shim dispatched delete-via-pr.yml — wait for it ──
