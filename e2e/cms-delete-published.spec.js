@@ -62,13 +62,17 @@ const PROD_ADMIN = `${PROD_HOST}/admin/`;
 //      blocked by the ruleset).
 //   2. The cms/delete/<slug> PR opened by delete-via-pr.yml after the
 //      shim catches the 422 — this is the real subject of the test.
-// Each cycle waits on the full required-check suite + deploy. Allow
-// ~20 min total so a stuck pipeline fails fast rather than holding a
-// runner for a full hour. Retries are explicitly disabled — this
-// test mutates real state, so a retry just re-runs the same broken
-// chain (e.g. shim → workflow_dispatch → delete-via-pr) after
-// wasting another 20 min. Failures here are almost never transient.
-const TEST_TIMEOUT_MS = 20 * 60 * 1000;
+// Two seedFixtureViaPr / removeFixtureViaPr cycles in this spec at
+// 18 min each (post-2026-05-07 bump in cms-fixture-pr.js) — accommodates
+// concurrent CI on busy days where the required-check matrix queues
+// up. Plus the in-browser delete drive + delete-via-pr workflow
+// dispatch + delete PR's full check matrix. 30 min envelope.
+//
+// Retries stay disabled — this test mutates real state, so a retry
+// just re-runs the same broken chain (e.g. shim → workflow_dispatch
+// → delete-via-pr) after wasting another 30 min. Failures here are
+// almost never transient.
+const TEST_TIMEOUT_MS = 30 * 60 * 1000;
 
 test.describe.configure({
   mode: "serial",

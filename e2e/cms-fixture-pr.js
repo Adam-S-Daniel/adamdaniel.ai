@@ -224,10 +224,18 @@ async function seedFixtureViaPr({
   message,
   prTitle,
   prBody,
-  // Generous default — the merge waits on validate-content + e2e checks
-  // (~6-10 min cold-start + matrix). Caller should bump if their per-PR
-  // checks are heavier.
-  timeoutMs = 12 * 60 * 1000,
+  // Bumped from 12 → 18 min on 2026-05-07 after run #25468384439
+  // showed 12 min wasn't enough headroom: PR #252 had auto-merge
+  // enabled at +7 sec but the required-check matrix
+  // (validate-content + scan + select + unit + parity + e2e (1) +
+  // finalize) took longer than 12 min to all complete green when
+  // runners were busy (concurrent host-loop run holding shards).
+  // The PR was at "all checks pass + auto-merge enabled" state
+  // moments after this throws, but the spec had already given up
+  // and closed it. 18 min covers normal-busy queue depth without
+  // pushing the spec's TEST_TIMEOUT_MS into needing a parallel
+  // bump.
+  timeoutMs = 18 * 60 * 1000,
 } = {}) {
   if (!slug || !runId || !filePath || !bodyText || !message) {
     throw new Error(
@@ -276,7 +284,10 @@ async function removeFixtureViaPr({
   message,
   prTitle,
   prBody,
-  timeoutMs = 12 * 60 * 1000,
+  // Same headroom as seedFixtureViaPr (18 min) — both go through the
+  // identical full required-check matrix on the host repo's main
+  // ruleset.
+  timeoutMs = 18 * 60 * 1000,
 } = {}) {
   if (!slug || !runId || !filePath || !message) {
     throw new Error(

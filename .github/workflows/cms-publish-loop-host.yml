@@ -113,17 +113,15 @@ jobs:
       HOME: /root
     container:
       image: mcr.microsoft.com/playwright:v1.59.1-noble
-    # Two specs run serially in this job: cms-publish-loop (~10 min
-    # happy path — three labelled-PR auto-merge cycles) and
-    # cms-delete-published (~8 min happy path — two cycles). Each
-    # spec's internal timeout is 20 min with retries disabled, so a
-    # broken spec fails its describe-level timeout before the job
-    # ceiling. The 45 min ceiling exists as a final backstop —
+    # Two specs run serially: cms-publish-loop (~7 min happy path,
+    # 20 min cap) and cms-delete-published (~12 min happy path,
+    # 30 min cap — bumped from 20 min on 2026-05-07 after fixture
+    # PRs were observed taking 12+ min to merge under busy-runner
+    # conditions). Per-spec timeouts fire before this ceiling for any
+    # legit stuck-run; the 60 min cap is the final backstop —
     # GHA-level kill only fires when something has gone catastrophically
-    # wrong (e.g. infinite loop in a step outside Playwright control).
-    # Previous 90 min ceiling was tuned for the 40-min-per-spec +
-    # retries=1 era and held runners far too long when something stuck.
-    timeout-minutes: 45
+    # wrong (infinite loop in a step outside Playwright control).
+    timeout-minutes: 60
     # Skip on cms/* PRs to prevent recursion: the spec itself opens a
     # cms/e2e/<slug> PR that would otherwise re-trigger this workflow
     # via the salient-path filter. github.head_ref is empty on cron
