@@ -163,7 +163,7 @@ async function tryHardDelete(filePath, slug, runId, message) {
   }
 }
 
-test("Delete published entry — UI click → shim → delete-via-pr workflow → merged", async ({ page }, testInfo) => {
+test("Delete published entry — UI click → public URL 404s", async ({ page }, testInfo) => {
   test.skip(
     testInfo.project.name !== "chromium-desktop",
     "Delete-published flow is real-network — runs once on chromium-desktop only.",
