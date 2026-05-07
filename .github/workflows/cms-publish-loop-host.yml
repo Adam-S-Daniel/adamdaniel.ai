@@ -43,15 +43,18 @@ on:
       - .github/workflows/delete-via-pr.yml
       - e2e/cms-publish-loop.spec.js
       - e2e/cms-delete-published.spec.js
+      - e2e/cms-unpublish-republish.spec.js
       - e2e/cms-fixture-pr.js
       - e2e/decap-pat.js
       - e2e/github-actions-poll.js
+      - e2e/deploy-pill.js
       - e2e/canary-content.js
       - e2e/base.js
       - admin/**
       - _e2e/canary-post.md
       - _e2e/canary-page.md
       - _e2e/canary-project.md
+      - _posts/2099-01-02-e2e-unpublish-canary.md
       - playwright.config.js
       - package.json
       - package-lock.json
@@ -168,6 +171,7 @@ jobs:
           npx playwright test \
             e2e/cms-publish-loop.spec.js \
             e2e/cms-delete-published.spec.js \
+            e2e/cms-unpublish-republish.spec.js \
             --project=chromium-desktop \
             --reporter=list \
             --max-failures=1 \
