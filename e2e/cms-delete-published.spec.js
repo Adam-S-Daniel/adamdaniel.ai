@@ -225,22 +225,34 @@ test("Delete published entry — UI click → shim → delete-via-pr workflow �
 
     // ── 3. Click "Delete published entry" (hits the shim) ────────
     await test.step("Click Delete published entry → shim dispatches workflow", async () => {
-      // Decap renders this as a button in the Status menu (or a
-      // top-level "Delete" depending on entry status). Try the menu
+      // Decap renders this as a button in the entry-status menu (or a
+      // top-level "Delete" depending on entry state). Try the menu
       // path first; fall back to a direct button match. Either click
       // ultimately lands on the same fetch that the shim catches.
+      //
+      // The status-button label DEPENDS on the entry's editorial
+      // workflow state. Run #25473784039 hung for 40 min on the
+      // fallback path because the seeded canary is published already
+      // — the toolbar shows a single button labelled `Published`,
+      // NOT `Status: …`. Without an explicit click timeout the
+      // missing-element wait pegged the runner until the
+      // outer test timeout fired. Match either label and pin a
+      // timeout on every action so a UI shape change next time fails
+      // in 30 s instead of 40 min.
       const trigger = page
         .getByRole("button", { name: /delete (published )?entry/i })
         .first();
       if (await trigger.isVisible({ timeout: 5_000 }).catch(() => false)) {
-        await trigger.click();
+        await trigger.click({ timeout: 30_000 });
       } else {
-        // Status menu form: Delete unpublished changes / Delete published.
-        await page.getByRole("button", { name: /^Status:/i }).click();
+        await page
+          .getByRole("button", { name: /^(Status:|Published$|In Review$|Ready$|Draft$)/i })
+          .first()
+          .click({ timeout: 30_000 });
         await page
           .getByRole("menuitem", { name: /delete (published )?entry/i })
           .first()
-          .click();
+          .click({ timeout: 30_000 });
       }
       // Decap shows a confirm dialog — accept it. The handler covers
       // both the native confirm() and Decap's own modal variant.
@@ -248,7 +260,7 @@ test("Delete published entry — UI click → shim → delete-via-pr workflow �
       await page
         .getByRole("button", { name: /^(delete|confirm|yes)$/i })
         .first()
-        .click()
+        .click({ timeout: 5_000 })
         .catch((err) => {
           // Decap may use a native confirm() instead of an in-page
           // button — the dialog handler above accepts it and the

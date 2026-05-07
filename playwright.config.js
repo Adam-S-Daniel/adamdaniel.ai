@@ -59,6 +59,21 @@ module.exports = defineConfig({
     baseURL: "http://localhost:4000",
     screenshot: "on",
     video: "retain-on-failure",
+    // Default action timeout — caps every page action (click, fill,
+    // press, type, etc.) that doesn't pass an explicit `timeout`.
+    // Playwright's library default is 0 (no timeout), which turns any
+    // missing-element bug into the worst kind of failure: the runner
+    // hangs until the outer test timeout fires. Run #25473784039 was
+    // exactly this — `getByRole("button", { name: /^Status:/i }).click()`
+    // missed because the canary entry's actual button label was
+    // "Published"; the click pegged the runner for ~40 min before
+    // the spec timeout finally killed it. 30 s is generous for any
+    // real Decap interaction (the slowest in-flight thing is the
+    // editor mount, which the specs explicitly wait for via
+    // `expect(...).toBeVisible({ timeout: 60_000 })` — that's an
+    // expect, not an action) and turns the next "selector drifted"
+    // bug into a 30 s fast-fail with a clear diagnostic.
+    actionTimeout: 30_000,
   },
   expect: {
     toHaveScreenshot: {
