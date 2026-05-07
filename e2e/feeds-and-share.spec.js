@@ -63,6 +63,73 @@ test.describe("Atom feeds", () => {
       expect(body).toMatch(/Posts tagged/);
     }
   });
+
+  test("/feed.xml content includes every published post", async ({ page }) => {
+    // Discover what posts ARE published (read /blog/), then confirm
+    // each one shows up in the Atom feed. This catches the regression
+    // where jekyll-feed silently skips a post because it has
+    // `feed_exclude: true` set, or where a layout change drops the
+    // post's frontmatter from the feed input. Structure-only tests
+    // above pass even when the feed is empty.
+    const post = await discoverPost(page);
+    test.skip(
+      !post,
+      "no published posts to verify against — skipping feed-content check",
+    );
+    const { body } = await fetchText(page, "/feed.xml");
+    // Each post's permalink ends with /blog/<slug>/. The feed's
+    // <entry><link href="…"/> should reference the canonical URL.
+    expect(
+      body,
+      `feed.xml should reference ${post.url} (the discovered post)`,
+    ).toMatch(new RegExp(`href="[^"]*${post.url.replace(/\//g, "\\/")}"`));
+    // The post's title should appear in an <entry><title>…</title>.
+    // Escape any regex special chars in the title.
+    const escapedTitle = post.title.replace(/[.*+?^${}()|[\]\\]/g, "\\$&");
+    expect(
+      body,
+      `feed.xml should contain the post title "${post.title}"`,
+    ).toMatch(new RegExp(`<title[^>]*>[^<]*${escapedTitle}`));
+  });
+
+  test("per-tag feed isolation: contains only posts with that tag", async ({
+    page,
+  }) => {
+    // The crucial contract for /tags/<slug>/feed.xml: it MUST contain
+    // only the posts tagged with <slug>, NOT every post. If the
+    // _plugins/tag_feeds.rb plugin's filter regresses, a tag's feed
+    // could leak unrelated posts. This test fetches each tag's feed
+    // and the global /feed.xml, then asserts that any post URL in the
+    // tag's feed is also in the global feed (sanity), AND that the
+    // tag's feed has at most as many <entry> elements as the tag
+    // says it has (count discovered from /tags/).
+    const tags = await discoverTags(page);
+    test.skip(
+      tags.length === 0,
+      "no tags exist — no per-tag feeds to isolate-check",
+    );
+    const { body: globalBody } = await fetchText(page, "/feed.xml");
+    for (const { slug, count } of tags) {
+      const { body } = await fetchText(page, `/tags/${slug}/feed.xml`);
+      const entryCount = (body.match(/<entry\b/g) || []).length;
+      expect(
+        entryCount,
+        `/tags/${slug}/feed.xml has ${entryCount} entries; the tag claims ${count} on /tags/`,
+      ).toBeLessThanOrEqual(count);
+      // Every <entry><link href="…"> in the per-tag feed must also
+      // appear in the global /feed.xml. (Reverse direction is not
+      // asserted — global feed contains posts from ALL tags.)
+      const tagEntryHrefs = Array.from(
+        body.matchAll(/<entry\b[\s\S]*?<link[^>]*href="([^"]+)"/g),
+      ).map((m) => m[1]);
+      for (const href of tagEntryHrefs) {
+        expect(
+          globalBody,
+          `tag-feed href ${href} should also be in /feed.xml`,
+        ).toContain(href);
+      }
+    }
+  });
 });
 
 test.describe("Feed-link icons surface the feeds in the UI", () => {
