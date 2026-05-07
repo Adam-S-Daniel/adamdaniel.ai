@@ -289,18 +289,26 @@ collections:
   # body is reset to a known baseline, so the URLs always render
   # innocuous content.
   #
-  # `create: false` so contributors don't accidentally add fixtures
-  # — the test harness depends on this exact set of canaries
-  # existing. `delete: true` is REQUIRED by
-  # `e2e/cms-delete-published.spec.js`, which clicks the Decap UI's
-  # "Delete published entry" menuitem on its throw-away
-  # `canary-delete-<runId>.md` fixtures to drive the shim →
-  # delete-via-pr.yml chain. Until 2026-05-07 this was `delete:
-  # false`, which made the menu render empty (run #25491225206:
-  # status menu opened but `Delete published entry` never appeared,
-  # 30 s click timeout, 30 min spec timeout). Discoverability of
-  # accidental deletion is mitigated by the explicit collection
-  # label and the `description` field below.
+  # Both `create: true` and `delete: true` so the UI-driven test
+  # specs can exercise the full CRUD lifecycle without back doors:
+  #
+  #   - `create: true` lets `cms-delete-published.spec.js` open
+  #     the e2e collection and click "+ New E2E Canary" to seed
+  #     its throw-away `canary-delete-<runId>.md` fixture via the
+  #     Decap UI, replacing the `seedFixtureViaPr` back door that
+  #     bypassed the editor.
+  #   - `delete: true` is REQUIRED by the same spec, which clicks
+  #     the Decap UI's "Delete published entry" menuitem on the
+  #     throw-away fixture to drive the shim → delete-via-pr.yml
+  #     chain. Until 2026-05-07 this was `delete: false`, which
+  #     made the menu render empty (run #25491225206: 30 s click
+  #     timeout, 30 min spec timeout).
+  #
+  # Discoverability of accidental editor mutation is mitigated by
+  # the explicit collection label and the `description` field
+  # below. The label leads with [E2E TEST FIXTURES — DO NOT EDIT]
+  # and the description spells out that the harness resets these
+  # between runs.
   - name: e2e
     label: "[E2E TEST FIXTURES — DO NOT EDIT]"
     label_singular: "E2E Canary"
@@ -309,7 +317,7 @@ collections:
       entries by hand is not supported — the test harness resets them
       between runs.
     folder: _e2e
-    create: false
+    create: true
     delete: true
     slug: "{{slug}}"
     preview_path: "/e2e/{{slug}}/"
