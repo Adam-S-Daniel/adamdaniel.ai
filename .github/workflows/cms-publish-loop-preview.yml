@@ -94,26 +94,37 @@ jobs:
 
       - name: Resolve PR head ref
         id: pr
-        env:
-          GH_TOKEN: ${{ secrets.CMS_E2E_PAT }}
         # Look up the head ref + verify the PR is open before
         # spinning up the rest. If the PR is closed/merged, fail
         # fast — the preview env is gone and the spec can't run.
-        run: |
-          set -euo pipefail
-          PR_DATA=$(gh api /repos/${{ github.repository }}/pulls/${{ inputs.pr_number }})
-          STATE=$(echo "$PR_DATA" | jq -r .state)
-          HEAD_REF=$(echo "$PR_DATA" | jq -r .head.ref)
-          if [ "$STATE" != "open" ]; then
-            echo "::error::PR #${{ inputs.pr_number }} is not open (state=$STATE). The preview env may already be torn down."
-            exit 1
-          fi
-          if [ -z "$HEAD_REF" ] || [ "$HEAD_REF" = "null" ]; then
-            echo "::error::Could not resolve head ref for PR #${{ inputs.pr_number }}."
-            exit 1
-          fi
-          echo "head_ref=$HEAD_REF" >> "$GITHUB_OUTPUT"
-          echo "Resolved PR #${{ inputs.pr_number }} → head_ref=$HEAD_REF"
+        #
+        # Uses actions/github-script (not `gh api`) because the
+        # Playwright noble container doesn't ship the GitHub CLI;
+        # the previous shell-based step failed with "gh: command
+        # not found" on every run. github-script's Octokit client
+        # ships in the action and runs against the container's
+        # node.
+        uses: actions/github-script@3a2844b7e9c422d3c10d287c895573f7108da1b3  # v9.0.0 (2026-04-09)
+        with:
+          script: |
+            const prNumber = parseInt(`${{ inputs.pr_number }}`, 10);
+            const { data: pr } = await github.rest.pulls.get({
+              owner: context.repo.owner,
+              repo: context.repo.repo,
+              pull_number: prNumber,
+            });
+            if (pr.state !== "open") {
+              core.setFailed(
+                `PR #${prNumber} is not open (state=${pr.state}). The preview env may already be torn down.`,
+              );
+              return;
+            }
+            if (!pr.head || !pr.head.ref) {
+              core.setFailed(`Could not resolve head ref for PR #${prNumber}.`);
+              return;
+            }
+            core.setOutput("head_ref", pr.head.ref);
+            core.notice(`Resolved PR #${prNumber} → head_ref=${pr.head.ref}`);
 
       - name: Run preview-env publish-loop spec
         env:
