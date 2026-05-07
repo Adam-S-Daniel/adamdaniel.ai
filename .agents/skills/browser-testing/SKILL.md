@@ -163,6 +163,36 @@ Heavy CMS specs are restricted to `chromium-desktop` — the assertion is about 
 
 Folder collections need **explicit** `create: true` AND `delete: true` in `admin/config*.yml`. Decap defaults both to true, but the explicit form keeps editor capabilities visible in the YAML and survives major-version default changes. `files:` collections never expose create/delete in the UI — convert to `folder:` if editors need to add or remove entries. `cms-config.spec.js` locks this in structurally.
 
+If a UI-driven delete spec on a collection ever stops "doing anything" silently, check the collection's `delete:` flag first — Decap renders the delete menuitem only when `delete: true`. (This bit `cms-delete-published.spec.js` until PR #302 flipped the e2e collection's flag.)
+
+### Native window.confirm() in delete / unpublish flows
+
+Decap CMS 3.x uses native `window.confirm()` for delete confirmations (the bundle has 9+ call sites). Playwright's default behavior is to AUTO-DISMISS native dialogs when no listener is registered — Decap reads the dismiss as "user cancelled" and aborts the chain silently. Symptoms: the click on "Delete published entry" focuses the button but produces NO DELETE call, NO workflow dispatch, NO cms PR.
+
+**Fix:** register a persistent `page.on("dialog", d => d.accept())` BEFORE any user interaction. `page.once(...)` set after the click is too late — the dialog has already fired and been auto-dismissed.
+
+```js
+// CORRECT — set up handler BEFORE any clicks
+page.on("dialog", (d) => d.accept());
+await trigger.click();
+```
+
+```js
+// WRONG — listener registered AFTER click is too late
+await trigger.click();              // dialog fires + auto-dismisses here
+page.once("dialog", (d) => d.accept());  // registered too late
+```
+
+Other specs that already use the right pattern: `cms-page-crud.spec.js`, `cms-project-crud.spec.js`, `cms-smoke.spec.js`. Use them as the template.
+
+### Never bypass the UI in a UI test
+
+Codified in AGENTS.md too. The mistake to avoid: when a Decap UI click is reliably broken (e.g., empirically the "Delete published entry" button stopped firing today), the temptation is to swap the UI click for `page.evaluate(fetch(...))` against the GitHub API or call the shim's `__callDelete` directly. Don't. The whole point of `cms-publish-loop*` and `cms-delete-published` specs is to validate that the editor's click does what we expect end-to-end. A bypass test passes while the UI is silently broken — exactly the regression the spec exists to catch.
+
+If the UI looks broken, suspect (in order): `delete:` flag on the collection, missing dialog handler, anchored regex on the confirm-button label not matching the live label, missing `force: true` on a click intercepted by an overlay, Decap version drift. All of these have bit cms-delete-published in the past — see git log e2e/cms-delete-published.spec.js for the genealogy.
+
+The route-mocked unit specs (`publish-via-auto-merge-browser.spec.js`) exercise the shim's internal contract without Decap. Those CAN call `__callDelete` directly because that's their entire reason for existing. The real-network specs must not.
+
 ### Why not Sveltia
 
 An earlier iteration used Sveltia CMS for its UX improvements, but Sveltia ≤ 0.158 silently ignores `publish_mode: editorial_workflow`. With branch protection on `main`, every Save returned "Repository rule violations found." Decap implements the editorial workflow correctly — each Save lands on a `cms/...` branch and opens a PR — so we swapped back. See PR #48.
