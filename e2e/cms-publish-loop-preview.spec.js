@@ -139,12 +139,23 @@ test("CMS publish loop — preview env, target PR head branch", async ({ page },
   });
 
   await test.step("Insert run marker into body and Save", async () => {
-    const body = page.getByRole("textbox", { name: /Body|Content/i }).last();
+    // Mirror cms-publish-loop.spec.js's working selector: the pinned
+    // Decap version no longer exposes "Body" / "Content" as the
+    // textbox's accessible name (run #25470209346 hit a 720s timeout
+    // on `getByRole("textbox", { name: /Body|Content/i })`). Grab the
+    // last contenteditable textbox on the page; the live preview
+    // iframe is not a textbox, so .last() lands on the editor body.
+    const body = page.locator('[role="textbox"][contenteditable="true"]').last();
     await body.click();
     await body.press("End");
     await body.pressSequentially(`\n\n${marker}\n`);
     await page.getByRole("button", { name: /^Save$/i }).click();
-    await expect(page.getByRole("button", { name: /^Save$/i })).toBeEnabled({ timeout: 60_000 });
+    // In editorial_workflow mode (preview admin), Save stays
+    // disabled after the save completes — the toolbar swaps in
+    // status pills + a "Publish" button. Wait for the "Changes
+    // saved" status text instead of the (incorrect) toBeEnabled
+    // signal that the host-loop spec also walked away from.
+    await expect(page.getByText(/Changes saved/i).first()).toBeVisible({ timeout: 60_000 });
   });
 
   let pr;
