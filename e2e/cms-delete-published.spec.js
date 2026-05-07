@@ -208,39 +208,45 @@ test("Delete published entry — UI click → shim → delete-via-pr workflow �
     // ── 2. Open admin, navigate to the canary entry ──────────────
     await seedDecapAuth(page);
 
-    // Diagnostic: log every DELETE-on-contents call and every
-    // workflow_dispatch POST so a future failure trace tells us
-    // exactly what Decap + shim did or didn't do. The CDN-side
-    // network is noisy; restrict to the GitHub API calls relevant
-    // to the delete chain.
+    // PERSISTENT dialog handler — Decap's "Delete published entry"
+    // path uses a native confirm() dialog. Playwright's default
+    // behavior is to AUTO-DISMISS dialogs that have no listener,
+    // which Decap interprets as "user cancelled" and aborts the
+    // delete chain. The earlier `page.once("dialog", ...)` was set
+    // AFTER the trigger click, so any dialog that appeared during
+    // the click was already auto-dismissed by the time the listener
+    // registered. Set the persistent listener BEFORE any user
+    // interaction so every dialog the delete flow raises gets
+    // accepted.
+    page.on("dialog", (d) => d.accept());
+
+    // Broad network trace: log every GitHub API request +
+    // response during the delete flow, plus any console / page
+    // error. This is the diagnostic surface a future failure
+    // points at — narrower filters previously hid the fact that
+    // Decap wasn't calling DELETE /contents at all because the
+    // confirm() was being auto-rejected.
     page.on("request", (req) => {
       const method = req.method();
       const url = req.url();
-      if (
-        method === "DELETE" &&
-        /api\.github\.com\/repos\/[^/]+\/[^/]+\/contents\//.test(url)
-      ) {
-        console.info(`[trace] DELETE → ${url}`);
-      } else if (
-        method === "POST" &&
-        /actions\/workflows\/[^/]+\/dispatches/.test(url)
-      ) {
-        console.info(`[trace] dispatch → ${url}`);
+      if (/api\.github\.com\/repos\/Adam-S-Daniel\/adamdaniel\.ai\//.test(url)) {
+        console.info(`[trace] ${method} → ${url}`);
       }
     });
     page.on("response", (res) => {
       const url = res.url();
-      if (
-        /api\.github\.com\/repos\/[^/]+\/[^/]+\/contents\//.test(url) &&
-        res.request().method() === "DELETE"
-      ) {
-        console.info(`[trace] DELETE ${res.status()} ← ${url}`);
-      } else if (/actions\/workflows\/[^/]+\/dispatches/.test(url)) {
-        console.info(`[trace] dispatch ${res.status()} ← ${url}`);
+      if (/api\.github\.com\/repos\/Adam-S-Daniel\/adamdaniel\.ai\//.test(url)) {
+        console.info(`[trace] ${res.status()} ${res.request().method()} ← ${url}`);
+      }
+    });
+    page.on("console", (msg) => {
+      const t = msg.type();
+      if (t === "error" || t === "warning") {
+        console.info(`[trace] console.${t}: ${msg.text()}`);
       }
     });
     page.on("pageerror", (err) => {
-      console.warn(`[trace] page error: ${err && err.message}`);
+      console.warn(`[trace] pageerror: ${err && err.message}`);
     });
 
     await test.step("Load production admin", async () => {
@@ -291,26 +297,30 @@ test("Delete published entry — UI click → shim → delete-via-pr workflow �
           .first()
           .click({ timeout: 30_000 });
       }
-      // Decap shows a confirm dialog — accept it. The handler covers
-      // both the native confirm() and Decap's own modal variant.
-      page.once("dialog", (d) => d.accept());
-      await page
-        .getByRole("button", { name: /^(delete|confirm|yes)$/i })
+      // The persistent `page.on("dialog", ...)` set up earlier in
+      // the test will accept any native confirm() dialog the
+      // delete flow raises. If Decap uses an in-page modal
+      // instead, look for its confirm button (Yes / OK / Delete /
+      // Confirm) and click it within a generous window.
+      // page.locator is loose-match by default; narrow with
+      // role="button" + an anchored regex covering the labels
+      // Decap-cms-locales emits.
+      const confirmInPageModal = page.getByRole("button", {
+        name: /^(delete|confirm|yes|ok)$/i,
+      });
+      await confirmInPageModal
         .first()
         .click({ timeout: 5_000 })
         .catch((err) => {
-          // Decap may use a native confirm() instead of an in-page
-          // button — the dialog handler above accepts it and the
-          // button query then has nothing to click. The click
-          // rejecting is the success signal here. Log at debug level
-          // so silent-catch-lint stays happy and grep finds this
-          // branch if behaviour changes.
+          // No in-page modal button found — Decap used a native
+          // confirm() (handled by the persistent listener above),
+          // OR clicked-confirm wasn't required. Either way, the
+          // delete chain should be in flight.
           console.debug(
-            "[cms-delete-published] confirm-button click rejected (likely native dialog already handled):",
+            "[cms-delete-published] no in-page confirm button (Decap likely used native confirm() — handled by persistent dialog listener):",
             err && err.message,
           );
         });
-
     });
 
     // ── 4. Wait for the deploy-status pill spinner→settled ──────
