@@ -57,12 +57,19 @@ test.describe("Visual regression", () => {
   });
 
   test("tags index", async ({ page }) => {
-    // Without curated tags, /tags/ renders the 'No tags yet.'
-    // placeholder — different layout from a populated index. Skip.
-    const tags = await discoverTags(page);
+    // Skip when no tags OR only transient e2e-fixture tags exist —
+    // /tags/ renders the 'No tags yet.' placeholder, which is a
+    // different layout from a populated index, AND fixture tags from
+    // local-backend specs (cms-smoke creates _tags/e2e-smoke-flow-tag,
+    // etc.) make the captured page non-deterministic across runs.
+    // The snapshot baseline only makes sense when /tags/ is in its
+    // steady-state production layout with curated content.
+    const stableTags = (await discoverTags(page)).filter(
+      (t) => !t.slug.startsWith("e2e-"),
+    );
     test.skip(
-      tags.length === 0,
-      "no tags on the site → /tags/ shows the empty placeholder; baseline would be of a different layout",
+      stableTags.length === 0,
+      "no curated (non-e2e-fixture) tags on the site → /tags/ layout is non-deterministic; baseline would shift between runs",
     );
 
     await page.goto("/tags/");
@@ -72,13 +79,22 @@ test.describe("Visual regression", () => {
   });
 
   test("tag archive", async ({ page }) => {
-    const tags = await discoverTags(page);
+    // Same reason as "tags index": filter out e2e-fixture tags so the
+    // captured /tags/<slug>/ page corresponds to curated production
+    // content, not whatever cms-smoke / cms-publish-flow happened to
+    // seed in _tags/ during this run. Run #25504778037 caught this:
+    // the test captured `tag-archive-e2e-smoke-flow-tag-...png`, a
+    // baseline that never gets committed to source because the tag
+    // is transient.
+    const stableTags = (await discoverTags(page)).filter(
+      (t) => !t.slug.startsWith("e2e-"),
+    );
     test.skip(
-      tags.length === 0,
-      "no tags on the site → no archive page to capture",
+      stableTags.length === 0,
+      "no curated (non-e2e-fixture) tags → no stable archive page to capture",
     );
 
-    const slug = tags[0].slug;
+    const slug = stableTags[0].slug;
     await page.goto(`/tags/${slug}/`);
     await page.addStyleTag({ content: FREEZE_ANIMATIONS });
     await page.waitForTimeout(200);
