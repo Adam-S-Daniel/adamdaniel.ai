@@ -207,7 +207,14 @@ jobs:
         # human-authored; the canary collection's
         # `[E2E TEST FIXTURES — DO NOT EDIT]` label is the
         # convention.)
-        if: ${{ inputs.dry_run != 'true' }}
+        # Boolean comparison: workflow_dispatch booleans come through
+        # as the boolean literal `true`, not the string `'true'`. Use
+        # `!inputs.dry_run` so the if matches when dry_run is unset
+        # (cron) AND when it's explicitly false. The earlier
+        # `!= 'true'` form silently let the step run on every dry-run
+        # dispatch — run #25500298081 opened a real cleanup PR (#347)
+        # that was supposed to be a dry-run preview only.
+        if: ${{ !inputs.dry_run }}
         env:
           GH_TOKEN: ${{ secrets.CMS_E2E_PAT }}
           GH_REPO: Adam-S-Daniel/adamdaniel.ai
