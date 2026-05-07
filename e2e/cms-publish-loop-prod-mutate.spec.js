@@ -86,6 +86,9 @@ const PUBLIC_PATH = `/blog/${FIXTURE_SLUG}/`;
 const PROD_HOST = "https://adamdaniel.ai";
 const PROD_ADMIN = `${PROD_HOST}/admin/`;
 const PUBLIC_URL = `${PROD_HOST}${PUBLIC_PATH}`;
+// Read-only daily probe gate — set in canary-prod.yml. The afterAll
+// harness consults this so the probe never tries to write to main.
+const PROD_CANARY = process.env.PROD_CANARY === "1";
 
 // Same envelope as cms-publish-loop.spec.js — the validate-content +
 // auto-merge + deploy-production + CloudFront invalidation chain caps
