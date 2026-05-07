@@ -71,11 +71,9 @@ const {
   addLabel,
   fetchPublicUrl,
   gh,
-  waitForAutoMergeEnabled,
   waitForCmsPullRequest,
-  waitForMerge,
-  waitForWorkflowRun,
 } = require("./github-actions-poll");
+const { waitForDeployPillSettled, PILL_PROD } = require("./deploy-pill");
 
 const REPO_ROOT = path.resolve(__dirname, "..");
 const FIXTURE_PATH = "_posts/2099-01-01-e2e-mutation-canary.md";
@@ -346,43 +344,47 @@ test("CMS publish loop — prod mutation playground (real _posts/ entry)", async
     expect(pr.number, "Decap PR number").toBeGreaterThan(0);
   });
 
-  // ── 5. validate-content must pass ───────────────────────────────
-  await test.step("Wait for validate-content to succeed", async () => {
-    await waitForWorkflowRun({
-      workflow: "cms-editorial-workflow.yml",
-      headSha: pr.head.sha,
-      branch: pr.head.ref,
-      timeoutMs: 6 * 60 * 1000,
-    });
-  });
-
-  // ── 6. Add cms/ready, wait for auto-merge + merge ───────────────
+  // ── 5. Apply cms/ready and wait for the deploy-status pill ──────
+  // Set cms/ready directly on the cms PR. cms-editorial-workflow.yml
+  // sees it, enables auto-merge once required checks pass, and the
+  // PR merges into main → deploy-production fires.
+  //
+  // Wait for the prod deploy-status pill spinner→settled lifecycle
+  // as the editor-facing ground truth that the chain landed. No
+  // GitHub API peeks (waitForWorkflowRun, waitForMerge,
+  // waitForAutoMergeEnabled) — the pill is the user contract; if
+  // the pill misses its in-progress window or stays spinning past
+  // success, that IS the regression we want to catch.
   await test.step("Label PR cms/ready", async () => {
     await addLabel({ prNumber: pr.number, label: "cms/ready" });
   });
 
-  await test.step("Wait for auto-merge to be enabled", async () => {
-    await waitForAutoMergeEnabled({ prNumber: pr.number });
-  });
-
-  await test.step("Wait for PR to merge into main", async () => {
-    await waitForMerge({ prNumber: pr.number });
-  });
-
-  // ── 7. deploy-production.yml on main ────────────────────────────
-  await test.step("Wait for deploy-production.yml to succeed on main", async () => {
-    await waitForWorkflowRun({
-      workflow: "deploy-production.yml",
-      branch: "main",
-      timeoutMs: 8 * 60 * 1000,
+  await test.step("Wait for the prod deploy-status pill spinner→settled (DOM is ground truth)", async () => {
+    await page.goto(PROD_ADMIN, { waitUntil: "domcontentloaded" });
+    await expect(page.getByRole("link", { name: /^Posts$/i })).toBeVisible({
+      timeout: 60_000,
+    });
+    await waitForDeployPillSettled({
+      page,
+      pillId: PILL_PROD,
+      // 6 min covers cms-editorial-workflow + auto-merge + deploy-
+      // production startup with margin. p95 ~3 min, max observed
+      // ~5 min under runner saturation.
+      spinTimeoutMs: 6 * 60 * 1000,
+      // 4 min covers the deploy run itself + trailing 30-s pill-
+      // poll window for success → hidden.
+      settleTimeoutMs: 4 * 60 * 1000,
     });
   });
 
-  // ── 8. Public URL goes live with the marker ─────────────────────
+  // ── 6. Public URL goes live with the marker ─────────────────────
+  // The pill settled → deploy-production succeeded. CloudFront can
+  // lag the deploy by a few seconds; the URL fetch confirms the
+  // change is end-to-end visible to a browser.
   await test.step("Verify /blog/e2e-mutation-canary/ surfaces the marker", async () => {
     await fetchPublicUrl(PUBLIC_URL, {
       expectContent: marker,
-      timeoutMs: 6 * 60 * 1000,
+      timeoutMs: 90_000,
     });
   });
 
