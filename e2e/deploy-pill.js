@@ -7,9 +7,7 @@
  * "is my change live yet?" Polling the GitHub Actions API for
  * deploy-production / deploy-preview success peeks under the
  * covers; it tests whether the chain MECHANICALLY worked, not
- * whether the user-facing signal updated correctly. Use these
- * helpers in any spec that wants to assert "the change reflected on
- * the site" without trusting an API peek as ground truth.
+ * whether the user-facing signal updated correctly.
  *
  * Pill state machine (from admin/deploy-status-pill.js#renderPill):
  *
@@ -19,97 +17,120 @@
  *   deploy success           → display: none                  (hidden)
  *   deploy failure / error   → display: ""    + "⚠ … failed"  (visible)
  *
- * The pill polls every 30 s, so its observation lags the underlying
- * deploy by up to one tick. Timeouts here account for that.
+ * Why we don't gate on observing the spinner state itself: the pill
+ * polls every 30 s, and the deploy-production / deploy-preview
+ * runs typically have an in_progress phase of just 15–30 s before
+ * the GitHub Deployment status flips to success. If the pill's
+ * 30-s tick lands outside that narrow window, the editor (and the
+ * test) sees `display: none` → `display: none` with no spinner ever
+ * rendering. That's not a bug — that's just a fast deploy.
+ *
+ * What we DO gate on:
+ *   1. The URL on the live site has the expected content (or has
+ *      404'd, for the delete case). This is the actual user-facing
+ *      surface; if it reflects the change, the chain landed.
+ *   2. The pill is in its terminal hidden / non-failure state.
+ *      Catches the regression where the deploy succeeded but the
+ *      editor's signal got stuck spinning, or flipped to failure
+ *      mid-flight.
+ *   3. The pill never went to the failure state during the wait.
  */
 
 const PILL_PROD = "cms-prod-status-pill";
 const PILL_PREVIEW = "cms-preview-build-pill";
 
 /**
- * Wait for the deploy-status pill's complete spinner→settled
- * lifecycle after a deploy-triggering action.
+ * Wait for a deploy-triggering action to be reflected on the live
+ * site, with the deploy-status pill as a parallel observation.
  *
- * Phase 1: pill becomes visible in spinner state (deploy started).
- * Phase 2: pill goes hidden (deploy succeeded).
- * Throws if the pill ever flips to the failure state.
- *
- * The helper deliberately does NOT consult the GitHub API — the
- * whole point is to anchor the assertion on the DOM signal an
- * editor would watch. If the pill misses the in-progress window
- * (deploy completed inside one 30-s tick), Phase 1 times out with
- * a clear diagnostic explaining the ambiguity.
+ * Polls the URL until `urlCheck` returns true, then asserts the pill
+ * is in its terminal hidden state (allowing 90 s for one trailing
+ * pill poll). Throws immediately if the pill flips to failure at
+ * any point during the wait.
  *
  * @param {object} opts
- * @param {import('@playwright/test').Page} opts.page
- * @param {string} opts.pillId — PILL_PROD or PILL_PREVIEW
- * @param {number} [opts.spinTimeoutMs=240000] — 4 min default,
- *   covers cms-editorial-workflow + auto-merge + deploy-production
- *   (or deploy-preview) startup with margin.
- * @param {number} [opts.settleTimeoutMs=300000] — 5 min default,
- *   covers the deploy run itself plus one trailing 30-s pill-poll
- *   window for the success → hidden transition.
+ * @param {import('@playwright/test').Page} opts.page — must be on
+ *   an entry editor URL where deploy-status-pill.js has injected
+ *   the pill into the toolbar. Collection-list pages don't have
+ *   the toolbar, so the pill never mounts there.
+ * @param {string} opts.pillId — PILL_PROD or PILL_PREVIEW.
+ * @param {() => Promise<boolean>} opts.urlCheck — async function
+ *   the helper polls; returns true once the URL reflects the
+ *   change. For publish flows: fetch URL, check it 200s with the
+ *   expected marker. For delete flows: fetch URL, check 4xx.
+ * @param {number} [opts.urlTimeoutMs=10*60*1000] — total budget for
+ *   the URL to reflect the change. Covers cms-editorial-workflow +
+ *   auto-merge + deploy-production/deploy-preview + CDN.
+ * @param {number} [opts.urlPollMs=8000] — interval between URL polls.
+ * @param {number} [opts.pillTerminalTimeoutMs=120_000] — once the
+ *   URL reflects the change, allow this long for the pill's last
+ *   poll to land it in the terminal hidden state.
  */
-async function waitForDeployPillSettled({
+async function waitForChangeReflected({
   page,
   pillId,
-  spinTimeoutMs = 4 * 60 * 1000,
-  settleTimeoutMs = 5 * 60 * 1000,
+  urlCheck,
+  urlTimeoutMs = 10 * 60 * 1000,
+  urlPollMs = 8000,
+  pillTerminalTimeoutMs = 120_000,
 }) {
-  // Phase 1: pill enters spinner state. The waitForFunction throws
-  // (via the explicit `throw` inside it) if the pill flips to
-  // failure during this window — Playwright surfaces the throw as
-  // the wait's rejection, with the inner message preserved.
-  await page
-    .waitForFunction(
-      (id) => {
-        const el = document.getElementById(id);
-        if (!el) return false;
-        if (el.style.display === "none") return false;
-        if (el.innerHTML && el.innerHTML.includes("failed")) {
-          throw new Error(
-            "deploy-status-pill (#" + id + ") flipped to failure — see " + el.href,
-          );
-        }
-        return true;
-      },
-      pillId,
-      { timeout: spinTimeoutMs },
-    )
-    .catch((err) => {
-      // Re-raise with a clearer diagnostic so the failure mode is
-      // self-explanatory in CI logs without having to chase the
-      // pill's source.
-      const msg = err && err.message ? err.message : String(err);
-      throw new Error(
-        "Timed out waiting for deploy-status-pill #" +
-          pillId +
-          " to enter the in-progress state within " +
-          spinTimeoutMs +
-          "ms. Either the action that should have triggered a deploy never " +
-          "did (chain broken before deploy-production / deploy-preview " +
-          "fired), OR the deploy completed inside a single 30-s pill-poll " +
-          "window so the spinner state was never observed by the pill. " +
-          "Original: " +
-          msg,
-      );
-    });
+  if (typeof urlCheck !== "function") {
+    throw new Error("waitForChangeReflected requires an async urlCheck() function.");
+  }
 
-  // Phase 2: pill settles to hidden. Same failure-state guard, in
-  // case the deploy goes from in_progress straight to failure.
+  const deadline = Date.now() + urlTimeoutMs;
+  let urlReflected = false;
+  while (Date.now() < deadline) {
+    // Fast-fail if the pill ever flips to the failure state. We
+    // check this BEFORE the URL probe so a pre-existing failure
+    // doesn't get masked by a stale URL response.
+    const pillFailed = await page.evaluate((id) => {
+      const el = document.getElementById(id);
+      return Boolean(el && el.innerHTML && el.innerHTML.includes("failed"));
+    }, pillId);
+    if (pillFailed) {
+      const href = await page.evaluate((id) => {
+        const el = document.getElementById(id);
+        return el && el.href ? el.href : "";
+      }, pillId);
+      throw new Error(
+        `deploy-status-pill (#${pillId}) flipped to failure during wait — see ${href}`,
+      );
+    }
+
+    if (await urlCheck()) {
+      urlReflected = true;
+      break;
+    }
+
+    await page.waitForTimeout(urlPollMs);
+  }
+
+  if (!urlReflected) {
+    throw new Error(
+      `Timed out waiting for the URL to reflect the change within ${urlTimeoutMs}ms. ` +
+        `The deploy-triggering action may not have fired the chain, or the chain may ` +
+        `still be running past this budget. Check the pill state for in-flight clues.`,
+    );
+  }
+
+  // URL is reflecting the change. Wait for the pill to settle into
+  // its terminal hidden / non-failure state. The pill polls every
+  // 30 s, so allow up to two ticks for it to catch up after the
+  // deploy's final status event.
   await page.waitForFunction(
     (id) => {
       const el = document.getElementById(id);
       if (!el) return true;
       if (el.innerHTML && el.innerHTML.includes("failed")) {
         throw new Error(
-          "deploy-status-pill (#" + id + ") flipped to failure during settle — see " + el.href,
+          "deploy-status-pill (#" + id + ") flipped to failure after URL change — see " + el.href,
         );
       }
       return el.style.display === "none";
     },
     pillId,
-    { timeout: settleTimeoutMs },
+    { timeout: pillTerminalTimeoutMs },
   );
 }
 
@@ -139,6 +160,6 @@ async function expectDeployPillHidden({ page, pillId, timeoutMs = 90_000 }) {
 module.exports = {
   PILL_PROD,
   PILL_PREVIEW,
-  waitForDeployPillSettled,
+  waitForChangeReflected,
   expectDeployPillHidden,
 };

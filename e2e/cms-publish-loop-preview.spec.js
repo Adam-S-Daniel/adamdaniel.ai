@@ -41,7 +41,7 @@ const {
   gh,
   waitForCmsPullRequest,
 } = require("./github-actions-poll");
-const { waitForDeployPillSettled, PILL_PREVIEW } = require("./deploy-pill");
+const { waitForChangeReflected, PILL_PREVIEW } = require("./deploy-pill");
 
 const CANARY = findCanary("page");
 const PR_NUMBER = process.env.PR_NUMBER || process.env.GITHUB_PR_NUMBER || "";
@@ -206,30 +206,24 @@ test("CMS publish loop — preview env, target PR head branch", async ({ page },
   // Navigate to /admin/ on the PR's preview subdomain so the pill
   // scripts have a stable shell while the auto-merge → deploy
   // chain runs in the background.
-  await test.step("Wait for preview deploy-status pill spinner→settled (DOM is ground truth)", async () => {
-    // STAY on the entry editor view (the canary-page entry).
-    // The pill is injected into Decap's editor toolbar, NOT the
-    // collection list. Navigating away unmounts the toolbar so
-    // the pill never gets created — run #25500041766 (sister
-    // case on prod) hit this same trap.
-    await waitForDeployPillSettled({
+  // STAY on the entry editor view (the canary-page entry) — that's
+  // where deploy-status-pill.js injects the pill. Poll the preview
+  // URL until it serves the marker; along the way watch the pill
+  // for failure (fast-fail) and assert it lands in the terminal
+  // hidden state. We don't gate on the pill's in_progress spinner —
+  // deploy-preview can complete in 15–30 s, less than the pill's
+  // 30-s polling interval, so the spinner state can pass entirely
+  // between two polls without rendering.
+  await test.step("Wait for the marker to be live on the preview subdomain (and pill terminal-hidden)", async () => {
+    await waitForChangeReflected({
       page,
       pillId: PILL_PREVIEW,
-      spinTimeoutMs: 6 * 60 * 1000,
-      settleTimeoutMs: 4 * 60 * 1000,
-    });
-  });
-
-  // The pill settled to hidden, which means deploy-preview
-  // succeeded. Now confirm the change is end-to-end visible to a
-  // browser hitting the preview URL — this catches the rare case
-  // where deploy-preview's S3 sync finished but CloudFront's
-  // invalidation lagged enough to serve stale content past pill
-  // settle.
-  await test.step("Verify marker is live on the preview subdomain", async () => {
-    await fetchPublicUrl(PREVIEW_PUBLIC_URL, {
-      expectContent: marker,
-      timeoutMs: 90_000,
+      urlCheck: async () => {
+        const res = await page.request.get(PREVIEW_PUBLIC_URL, { failOnStatusCode: false });
+        if (res.status() !== 200) return false;
+        return (await res.text()).includes(marker);
+      },
+      urlTimeoutMs: 10 * 60 * 1000,
     });
   });
 
