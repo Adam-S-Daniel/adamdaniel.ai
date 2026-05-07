@@ -32,16 +32,20 @@ test.describe("Canary content invariants", () => {
     // If it disappears, the test goes silently green (no PR opened ≠
     // success) — fail loudly here.
     expect(cfg).toMatch(/^\s{2}- name: e2e\s*$/m);
-    // Canaries are system fixtures; contributors must not be able to
-    // create new ones through the admin UI (`create: false`).
-    // `delete: true` IS required by `cms-delete-published.spec.js`,
-    // which clicks the Decap UI's "Delete published entry" menuitem
-    // — Decap renders that menuitem only when the collection allows
-    // deletes. The "[E2E TEST FIXTURES — DO NOT EDIT]" collection
-    // label is the convention-only guardrail against accidental
-    // editor-driven deletion.
+    // Both `create: true` and `delete: true` are required:
+    //   - `delete: true` lets `cms-delete-published.spec.js` click
+    //     the Decap UI's "Delete published entry" menuitem (Decap
+    //     renders that menuitem only when the collection allows
+    //     deletes).
+    //   - `create: true` lets the same spec drive the editor's
+    //     "+ New E2E Canary" form to seed its throw-away fixture
+    //     via UI instead of the `seedFixtureViaPr` API back door
+    //     (per AGENTS.md "no back doors in setup or cleanup").
+    // The "[E2E TEST FIXTURES — DO NOT EDIT]" collection label is
+    // the convention-only guardrail against accidental editor-driven
+    // mutation.
     expect(cfg).toMatch(/^\s{4}folder: _e2e\s*$/m);
-    expect(cfg).toMatch(/^\s{4}create: false\s*$/m);
+    expect(cfg).toMatch(/^\s{4}create: true\s*$/m);
     expect(cfg).toMatch(/^\s{4}delete: true\s*$/m);
   });
 
