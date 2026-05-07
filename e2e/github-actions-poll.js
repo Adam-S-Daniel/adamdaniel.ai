@@ -68,6 +68,18 @@ async function waitForCmsPullRequest({
   canaryMarker,
   timeoutMs = 180_000,
   pollMs = 4_000,
+  // Auto-label the matched PR `automated-test` so
+  // sweep-stale-cms-prs.yml can safely close it if the test that
+  // opened it crashes before auto-merge fires. The label is the
+  // signal "definitely automation-opened, sweeping is safe
+  // regardless of branch prefix" — without it the sweep has to be
+  // conservative about cms/posts/*, cms/tags/*, etc. where real
+  // editor drafts can live (run #25473398494 / PR #305 was exactly
+  // this case: prod-mutate spec opened a cms/posts/2099-… PR,
+  // auto-merge couldn't fire because of unrelated check failures,
+  // PR sat 30+ min). Failure to label is non-fatal — the spec's
+  // primary contract is finding the PR, not labelling it.
+  autoLabelTest = true,
 } = {}) {
   if (!canaryMarker) {
     throw new Error("waitForCmsPullRequest needs a canaryMarker to disambiguate the PR.");
@@ -92,7 +104,18 @@ async function waitForCmsPullRequest({
           typeof f.patch === "string" &&
           f.patch.includes(canaryMarker),
       );
-      if (hit) return pr;
+      if (hit) {
+        if (autoLabelTest) {
+          try {
+            await addLabel({ repo, prNumber: pr.number, label: "automated-test" });
+          } catch (e) {
+            console.warn(
+              `[waitForCmsPullRequest] could not label PR #${pr.number} automated-test: ${e && e.message}`,
+            );
+          }
+        }
+        return pr;
+      }
     }
     await sleep(pollMs);
   }
