@@ -126,6 +126,7 @@ jobs:
           fi
 
       - name: Open PR with regenerated manual
+        id: open-pr
         if: steps.diff.outputs.changed == 'true'
         # Branch name lives outside `refs/heads/docs/**` so the
         # `cms-feature-branches` ruleset (which protects `docs/**`
@@ -159,3 +160,32 @@ jobs:
           labels: |
             docs
             automated
+
+      - name: Enable auto-merge for the regenerate-manual PR
+        # Without this, the PR sits open until a maintainer clicks merge
+        # by hand — wasted human attention for a doc that any push to
+        # main will overwrite again on the next regen run anyway.
+        # Mirror of the auto-merge enable in cms-editorial-workflow.yml:
+        # we route through CMS_E2E_PAT so the eventual squash-merge push
+        # is authored by Adam-S-Daniel rather than github-actions[bot].
+        # Bot pushes don't trigger downstream workflows
+        # (deploy-production, regenerate-manual itself) — this is the
+        # same GHA anti-loop guard that PR #245 hit for cms PRs.
+        # peter-evans's `pull-request-operation` output is
+        # "created" | "updated" | "closed"; only enable on the first
+        # two and only when there's a number to address.
+        if: |
+          steps.diff.outputs.changed == 'true'
+          && steps.open-pr.outputs.pull-request-number != ''
+          && (steps.open-pr.outputs.pull-request-operation == 'created' || steps.open-pr.outputs.pull-request-operation == 'updated')
+        env:
+          GH_TOKEN: ${{ secrets.CMS_E2E_PAT }}
+          PR_NUMBER: ${{ steps.open-pr.outputs.pull-request-number }}
+        run: |
+          set -o pipefail
+          echo "::notice::Enabling auto-merge on PR #$PR_NUMBER (peter-evans operation: ${{ steps.open-pr.outputs.pull-request-operation }})"
+          # `--squash` matches the merge method used everywhere else in
+          # this repo. If auto-merge is already enabled (because a prior
+          # run set it on the same long-lived branch), this is a no-op
+          # — but gh exits 0 in that case, so no special handling needed.
+          gh pr merge "$PR_NUMBER" --auto --squash
