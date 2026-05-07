@@ -279,6 +279,13 @@ test.describe("@parity Manual walkthrough — CONTRIBUTOR_MANUAL probes", () => 
     page.on("pageerror", (err) =>
       console.log(`[pageerror] ${err.name}: ${err.message}`),
     );
+    // Decap CMS uses native window.confirm() for delete and unpublish
+    // confirmations; the contributor probe asserts the Delete button is
+    // reachable and may evolve to actually click it (see manual section
+    // §"deleting an entry"). Without a persistent listener, Playwright
+    // auto-dismisses the dialog and Decap reads it as "user cancelled."
+    // See AGENTS.md "Test-Driven Design" section.
+    page.on("dialog", (d) => d.accept());
     page.on("console", (msg) => {
       if (msg.type() === "error") console.log(`[console.error] ${msg.text()}`);
     });

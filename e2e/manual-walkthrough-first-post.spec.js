@@ -189,6 +189,13 @@ test.describe("First-post walkthrough — full create → publish → verify cyc
     page.on("pageerror", (err) =>
       console.log(`[pageerror] ${err.name}: ${err.message}`),
     );
+    // Decap CMS uses native window.confirm() for delete and unpublish
+    // confirmations; without a persistent listener, Playwright's
+    // default behavior auto-dismisses the dialog and Decap reads it
+    // as "user cancelled." Defensive in case the walkthrough ever
+    // exercises a destructive action — see AGENTS.md "Test-Driven
+    // Design" section.
+    page.on("dialog", (d) => d.accept());
   });
 
   test("brand-new contributor: create → fill → image → save → publish → verify", async ({
