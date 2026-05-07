@@ -31,41 +31,48 @@
  * Fixture model: this spec creates and then deletes its own throw-
  * away `_e2e/canary-delete-<runId>.md` file. A crash mid-flow leaves
  * a recognisable, dated stub on main rather than damaging a checked-
- * in fixture. The seed itself can't go directly to main — the
- * `pull_request` rule on `.github/rulesets/main.json` rejects every
- * direct write — so we route it through a `cms/e2e-fixture/seed-…`
- * PR labelled `cms/ready` and let cms-editorial-workflow.yml's
- * auto-merge-when-ready land it. Once on main and deployed, the
- * delete itself goes through Decap's UI to exercise the shim
- * (admin/publish-via-auto-merge.js → delete-via-pr.yml). On test
- * failure, the cleanup helper opens a parallel
- * `cms/e2e-fixture/remove-…` PR so the next run starts clean.
+ * in fixture. Both the seed and the delete go through the Decap UI:
+ *
+ *   - Seed: click "+ New E2E Canary" in the e2e collection list,
+ *     fill Title + Body, Save → cms/e2e/<slug> PR opens, drive
+ *     Status:Draft → Ready and Publish → Publish Now to engage
+ *     auto-merge. Lands on main; deploy-production publishes the
+ *     URL.
+ *   - Delete: navigate to the just-created entry, click "Delete
+ *     published entry", confirm via native confirm() (persistent
+ *     dialog handler), wait for the URL to 404.
+ *
+ * No back doors — both halves are UI-driven per AGENTS.md "Never
+ * bypass the UI in a UI test." On test failure, the afterAll
+ * harness consults `fileExistsOnMain` and opens a parallel
+ * `cms/e2e-fixture/remove-…` PR if the throw-away fixture is still
+ * on main.
  */
 const { test, expect } = require("./base");
 const { seedDecapAuth, getPat, HOST_REPO } = require("./decap-pat");
-const { fetchPublicUrl, gh } = require("./github-actions-poll");
-const { seedFixtureViaPr, removeFixtureViaPr } = require("./cms-fixture-pr");
+const { gh } = require("./github-actions-poll");
+const { removeFixtureViaPr } = require("./cms-fixture-pr");
 const { waitForChangeReflected, PILL_PROD } = require("./deploy-pill");
 
 const PROD_HOST = "https://adamdaniel.ai";
 const PROD_ADMIN = `${PROD_HOST}/admin/`;
 
-// The delete spec runs two labelled-PR auto-merge cycles end to end:
-//   1. The setup PR that seeds `_e2e/canary-delete-<runId>.md` on main
-//      (necessary because direct Contents-API writes to main are
-//      blocked by the ruleset).
+// The delete spec runs two editorial-workflow auto-merge cycles end
+// to end:
+//   1. The cms/e2e/<slug> PR Decap opens when Save is clicked on the
+//      "+ New E2E Canary" form (replaces the earlier seedFixtureViaPr
+//      back door).
 //   2. The cms/delete/<slug> PR opened by delete-via-pr.yml after the
 //      shim catches the 422 — this is the real subject of the test.
-// Two seedFixtureViaPr / removeFixtureViaPr cycles in this spec at
-// 18 min each (post-2026-05-07 bump in cms-fixture-pr.js) — accommodates
-// concurrent CI on busy days where the required-check matrix queues
-// up. Plus the in-browser delete drive + delete-via-pr workflow
-// dispatch + delete PR's full check matrix. 30 min envelope.
+// Each is roughly the same shape (validate-content + auto-merge +
+// deploy-production + CloudFront propagation), capping out around
+// 12-15 min. Plus the in-browser drive of two full publish chains.
+// 40 min envelope accommodates concurrent CI on busy days where the
+// required-check matrix queues up.
 //
 // Retries stay disabled — this test mutates real state, so a retry
-// just re-runs the same broken chain (e.g. shim → workflow_dispatch
-// → delete-via-pr) after wasting another 30 min. Failures here are
-// almost never transient.
+// just re-runs the same broken chain after wasting another 30 min.
+// Failures here are almost never transient.
 const TEST_TIMEOUT_MS = 40 * 60 * 1000;
 
 test.describe.configure({
@@ -80,58 +87,6 @@ test.describe.configure({
 // harness no-ops. If it fails (test threw mid-flow), the harness opens
 // a fixture-cleanup PR so the next run starts clean.
 let pendingFixture = null;
-
-function buildCanaryBody({ slug, title, runId }) {
-  // IMPORTANT: do NOT include the words "deleted" or "removed" anywhere
-  // in the body. Step 3's Promise.race below uses
-  // `page.getByText(/deleted|removed/i)` as one of its accept signals;
-  // those words appearing in the body would false-resolve the race
-  // before Decap's actual UI response. Run #25496374142 hit exactly
-  // this — a previous body of "Will be deleted by …" caused the
-  // race to resolve immediately on page load and the test then
-  // hung waiting for the never-dispatched workflow.
-  return [
-    "---",
-    "layout: canary",
-    `title: "${title}"`,
-    `slug: ${slug}`,
-    `canary_id: delete-${runId}`,
-    "permalink: /e2e/" + slug + "/",
-    "sitemap: false",
-    "robots: noindex,nofollow",
-    "published: true",
-    "---",
-    `Throw-away fixture from run ${runId}.`,
-    "Used by cms-delete-published.spec.js to exercise the editorial-workflow delete path.",
-    "",
-  ].join("\n");
-}
-
-/**
- * Seed the throw-away canary file on main via a labelled PR.
- *
- * Direct PUT /contents/{path} on main is blocked by the `pull_request`
- * rule on .github/rulesets/main.json (returns 409 "Repository rule
- * violations found"). We open a `cms/e2e-fixture/seed-<slug>-<runId>`
- * PR, label it `cms/ready` to engage cms-editorial-workflow.yml's
- * auto-merge-when-ready job, and block until the merge lands. Once on
- * main, deploy-production.yml publishes the canary URL.
- */
-async function createTempCanary({ filePath, slug, title, runId }) {
-  return seedFixtureViaPr({
-    slug,
-    runId,
-    filePath,
-    bodyText: buildCanaryBody({ slug, title, runId }),
-    message: `test(canary): seed throw-away delete fixture run ${runId}`,
-    prTitle: `test(canary): seed throw-away delete fixture run ${runId}`,
-    prBody:
-      `Throw-away fixture for the delete-published e2e spec (run \`${runId}\`).\n\n` +
-      `Auto-merges via the \`cms/ready\` label. The fixture is deleted by ` +
-      `the spec itself in a later step, then \`deploy-production.yml\` removes ` +
-      `the public URL.`,
-  });
-}
 
 async function fileExistsOnMain(filePath) {
   try {
@@ -186,10 +141,18 @@ test("Delete published entry — UI click → public URL 404s", async ({ page },
     "RUN_HOST_REPO_PUBLISH_LOOP not set — delete-published spec is opt-in.",
   );
 
+  // Title shape is chosen so Decap's title→slug derivation matches the
+  // slug we predict client-side. Lowercase + spaces only — Decap's
+  // default slugify lowercases and replaces non-alphanumerics with `-`,
+  // so `Canary delete 1234567890` → `canary-delete-1234567890`. Keep
+  // the title to plain ASCII letters/digits/spaces; otherwise the
+  // derived slug may not match the predicted one and downstream URL
+  // assertions break.
   const runId = Date.now();
   const slug = `canary-delete-${runId}`;
   const filePath = `_e2e/${slug}.md`;
-  const title = `Delete-test canary (${runId})`;
+  const title = `Canary delete ${runId}`;
+  const publicUrl = `${PROD_HOST}/e2e/${slug}/`;
   pendingFixture = { runId, slug, filePath };
 
   test.info().annotations.push({
@@ -197,211 +160,255 @@ test("Delete published entry — UI click → public URL 404s", async ({ page },
     description: filePath,
   });
 
-  // ── 0. Seed the throw-away fixture on main ─────────────────────
-  await test.step("Create throw-away canary on main via Contents API", async () => {
-    await createTempCanary({ filePath, slug, title, runId });
+  // ── Set up persistent dialog + network trace listeners up-front ────
+  //
+  // PERSISTENT dialog handler — Decap's "Delete published entry" path
+  // uses a native confirm() dialog. Playwright's default behavior is
+  // to AUTO-DISMISS dialogs that have no listener, which Decap
+  // interprets as "user cancelled" and aborts the delete chain. The
+  // earlier `page.once("dialog", ...)` was set AFTER the trigger
+  // click, so any dialog that appeared during the click was already
+  // auto-dismissed by the time the listener registered. Set the
+  // persistent listener BEFORE any user interaction so every dialog
+  // any flow (create, publish, delete) raises gets accepted.
+  page.on("dialog", (d) => d.accept());
+
+  // Broad network trace: log every GitHub API request + response
+  // during the spec, plus any console / page error. This is the
+  // diagnostic surface a future failure points at — narrower filters
+  // previously hid the fact that Decap wasn't calling DELETE /contents
+  // at all because the confirm() was being auto-rejected.
+  page.on("request", (req) => {
+    const method = req.method();
+    const url = req.url();
+    if (/api\.github\.com\/repos\/Adam-S-Daniel\/adamdaniel\.ai\//.test(url)) {
+      console.info(`[trace] ${method} → ${url}`);
+    }
+  });
+  page.on("response", (res) => {
+    const url = res.url();
+    if (/api\.github\.com\/repos\/Adam-S-Daniel\/adamdaniel\.ai\//.test(url)) {
+      console.info(`[trace] ${res.status()} ${res.request().method()} ← ${url}`);
+    }
+  });
+  page.on("console", (msg) => {
+    const t = msg.type();
+    if (t === "error" || t === "warning") {
+      console.info(`[trace] console.${t}: ${msg.text()}`);
+    }
+  });
+  page.on("pageerror", (err) => {
+    console.warn(`[trace] pageerror: ${err && err.message}`);
   });
 
-  // ── 1. Wait for the canary to land on the public site ────────
-    await test.step("Wait for the canary URL to publish", async () => {
-      await fetchPublicUrl(`${PROD_HOST}/e2e/${slug}/`, {
-        // The fixture's `title:` ends up in the page; that's enough to
-        // confirm the deploy actually landed before we drive admin.
-        expectContent: title,
-        timeoutMs: 6 * 60 * 1000,
-      });
-    });
+  await seedDecapAuth(page);
 
-    // ── 2. Open admin, navigate to the canary entry ──────────────
-    await seedDecapAuth(page);
+  // ── 0. Open admin ──────────────────────────────────────────────
+  await test.step("Load production admin", async () => {
+    await page.goto(PROD_ADMIN, { waitUntil: "domcontentloaded" });
+    await expect(page.getByRole("link", { name: /^Posts$/i })).toBeVisible({
+      timeout: 60_000,
+    });
+  });
 
-    // PERSISTENT dialog handler — Decap's "Delete published entry"
-    // path uses a native confirm() dialog. Playwright's default
-    // behavior is to AUTO-DISMISS dialogs that have no listener,
-    // which Decap interprets as "user cancelled" and aborts the
-    // delete chain. The earlier `page.once("dialog", ...)` was set
-    // AFTER the trigger click, so any dialog that appeared during
-    // the click was already auto-dismissed by the time the listener
-    // registered. Set the persistent listener BEFORE any user
-    // interaction so every dialog the delete flow raises gets
-    // accepted.
-    page.on("dialog", (d) => d.accept());
+  // ── 1. Create the throw-away canary via UI ─────────────────────
+  //
+  // Direct URL nav to the e2e collection's "new entry" form is more
+  // deterministic than clicking "+ New E2E Canary" from the
+  // collection list (no listing-render race). The route is the same
+  // one the button would navigate to. Editorial workflow is on, so
+  // Save creates a cms/e2e/<slug> PR — auto-merge engages once
+  // Status:Ready is set. The slug Decap derives MUST match the slug
+  // we predicted from the title (see comment above).
+  await test.step("Open + New E2E Canary form (collections/e2e/new)", async () => {
+    await page.goto(`${PROD_ADMIN}#/collections/e2e/new`, {
+      waitUntil: "domcontentloaded",
+    });
+    await expect(page.getByRole("textbox", { name: /^Title$/i })).toBeVisible({
+      timeout: 30_000,
+    });
+  });
 
-    // Broad network trace: log every GitHub API request +
-    // response during the delete flow, plus any console / page
-    // error. This is the diagnostic surface a future failure
-    // points at — narrower filters previously hid the fact that
-    // Decap wasn't calling DELETE /contents at all because the
-    // confirm() was being auto-rejected.
-    page.on("request", (req) => {
-      const method = req.method();
-      const url = req.url();
-      if (/api\.github\.com\/repos\/Adam-S-Daniel\/adamdaniel\.ai\//.test(url)) {
-        console.info(`[trace] ${method} → ${url}`);
-      }
-    });
-    page.on("response", (res) => {
-      const url = res.url();
-      if (/api\.github\.com\/repos\/Adam-S-Daniel\/adamdaniel\.ai\//.test(url)) {
-        console.info(`[trace] ${res.status()} ${res.request().method()} ← ${url}`);
-      }
-    });
-    page.on("console", (msg) => {
-      const t = msg.type();
-      if (t === "error" || t === "warning") {
-        console.info(`[trace] console.${t}: ${msg.text()}`);
-      }
-    });
-    page.on("pageerror", (err) => {
-      console.warn(`[trace] pageerror: ${err && err.message}`);
-    });
+  await test.step("Fill Title and Body", async () => {
+    await page.getByRole("textbox", { name: /^Title$/i }).fill(title);
+    // Markdown widget renders as a contenteditable rich-text editor;
+    // last-of-type matches the body editor (the title is a separate
+    // simple textbox that already has its own role-name match).
+    const body = page.locator('[role="textbox"][contenteditable="true"]').last();
+    await body.click();
+    await body.pressSequentially(
+      `Throw-away fixture from run ${runId}. Used by cms-delete-published.spec.js to exercise the editorial-workflow delete path.`,
+    );
+  });
 
-    await test.step("Load production admin", async () => {
-      await page.goto(PROD_ADMIN, { waitUntil: "domcontentloaded" });
-      await expect(page.getByRole("link", { name: /^Posts$/i })).toBeVisible({
-        timeout: 60_000,
-      });
+  await test.step("Save → opens cms/e2e/<slug> PR via editorial workflow", async () => {
+    await page.getByRole("button", { name: /^Save$/i }).click();
+    // editorial_workflow Save: stays disabled after, toolbar swaps to
+    // a Status:<state> button. Wait for the "Changes saved" toast as
+    // the canonical signal the cms PR was opened.
+    await expect(page.getByText(/Changes saved/i).first()).toBeVisible({
+      timeout: 60_000,
     });
+  });
 
-    await test.step("Navigate to the throw-away canary entry", async () => {
-      await page.goto(`${PROD_ADMIN}#/collections/e2e/entries/${slug}`, {
-        waitUntil: "domcontentloaded",
-      });
-      // The Title input is the cheapest "editor mounted" sentinel.
-      await expect(page.getByRole("textbox", { name: /^Title$/i })).toBeVisible({
-        timeout: 30_000,
-      });
-    });
+  await test.step("Status:Draft → Ready (label flip → cms/ready)", async () => {
+    await page.getByRole("button", { name: /^Status:\s*Draft$/i }).click({ timeout: 30_000 });
+    await page.getByRole("menuitem", { name: /^Ready$/i }).click({ timeout: 30_000 });
+    await expect(
+      page.getByRole("button", { name: /^Status:\s*Ready$/i }),
+    ).toBeVisible({ timeout: 30_000 });
+  });
 
-    // ── 3. Click "Delete published entry" (hits the shim) ────────
-    await test.step("Click Delete published entry → shim dispatches workflow", async () => {
-      // Decap renders this as a button in the entry-status menu (or a
-      // top-level "Delete" depending on entry state). Try the menu
-      // path first; fall back to a direct button match. Either click
-      // ultimately lands on the same fetch that the shim catches.
-      //
-      // The status-button label DEPENDS on the entry's editorial
-      // workflow state. Run #25473784039 hung for 40 min on the
-      // fallback path because the seeded canary is published already
-      // — the toolbar shows a single button labelled `Published`,
-      // NOT `Status: …`. Without an explicit click timeout the
-      // missing-element wait pegged the runner until the
-      // outer test timeout fired. Match either label and pin a
-      // timeout on every action so a UI shape change next time fails
-      // in 30 s instead of 40 min.
-      const trigger = page
-        .getByRole("button", { name: /delete (published )?entry/i })
-        .first();
-      if (await trigger.isVisible({ timeout: 5_000 }).catch(() => false)) {
-        await trigger.click({ timeout: 30_000 });
-      } else {
-        await page
-          .getByRole("button", { name: /^(Status:|Published$|In Review$|Ready$|Draft$)/i })
-          .first()
-          .click({ timeout: 30_000 });
-        await page
-          .getByRole("menuitem", { name: /delete (published )?entry/i })
-          .first()
-          .click({ timeout: 30_000 });
-      }
-      // The persistent `page.on("dialog", ...)` set up earlier in
-      // the test will accept any native confirm() dialog the
-      // delete flow raises. If Decap uses an in-page modal
-      // instead, look for its confirm button (Yes / OK / Delete /
-      // Confirm) and click it within a generous window.
-      // page.locator is loose-match by default; narrow with
-      // role="button" + an anchored regex covering the labels
-      // Decap-cms-locales emits.
-      const confirmInPageModal = page.getByRole("button", {
-        name: /^(delete|confirm|yes|ok)$/i,
-      });
-      await confirmInPageModal
-        .first()
-        .click({ timeout: 5_000 })
-        .catch((err) => {
-          // No in-page modal button found — Decap used a native
-          // confirm() (handled by the persistent listener above),
-          // OR clicked-confirm wasn't required. Either way, the
-          // delete chain should be in flight.
-          console.debug(
-            "[cms-delete-published] no in-page confirm button (Decap likely used native confirm() — handled by persistent dialog listener):",
-            err && err.message,
-          );
+  await test.step("Publish → Publish Now (engages auto-merge)", async () => {
+    await page.getByRole("button", { name: /^Publish$/i }).click({ timeout: 30_000 });
+    await page
+      .getByRole("menuitem", { name: /publish now/i })
+      .first()
+      .click({ timeout: 30_000 });
+  });
+
+  // ── 2. Wait for the canary URL to land on the public site ──────
+  //
+  // The cms/e2e/<slug> PR auto-merges, deploy-production runs, and
+  // the URL becomes 200 with the title rendered. waitForChangeReflected
+  // also pins the prod pill in its terminal-hidden state so we don't
+  // confuse "deploy in progress" with "deploy never ran." The runtime
+  // budget covers the full chain (validate-content + auto-merge +
+  // deploy-production + CDN propagation).
+  await test.step("Wait for /e2e/<slug>/ to publish (and pill terminal-hidden)", async () => {
+    await waitForChangeReflected({
+      page,
+      pillId: PILL_PROD,
+      urlCheck: async () => {
+        const res = await page.request.get(publicUrl, {
+          maxRedirects: 0,
+          failOnStatusCode: false,
         });
+        if (res.status() !== 200) return false;
+        return (await res.text()).includes(title);
+      },
+      // Cms PR cycle (validate-content + auto-merge + deploy-production
+      // + CDN propagation), generous margin for queued runners.
+      urlTimeoutMs: 15 * 60 * 1000,
     });
+  });
 
-    // ── 4. Wait for the deploy-status pill spinner→settled ──────
-    //
-    // The pill is the editor-facing signal for "your deletion is
-    // live on prod." Whichever internal path Decap took — the shim
-    // (DELETE /contents 422 → dispatch delete-via-pr.yml → cms PR →
-    // auto-merge → deploy-production), or an editorial-workflow
-    // path that opens its own delete PR directly — the user-facing
-    // contract is the same: deploy-production runs, the prod pill
-    // spins, then settles to hidden.
-    //
-    // Anchor the wait on the pill DOM, not on GitHub API peeks
-    // (waitForWorkflowRun / waitForMerge / fileExistsOnMain). Those
-    // peek under the covers; the pill is the editor's actual
-    // signal. If the pill misses the in-progress window or stays
-    // spinning past success, that IS the regression — the previous
-    // API-based version of this chain would have hidden a real
-    // pill bug.
-    //
-    // The pill polls every 30 s, so its observation lags the
-    // underlying deploy by up to one tick. Allow generous timeouts
-    // for the spinner-detect phase (covers the full delete chain:
-    // dispatch → PR open → validate-content → merge → deploy
-    // start).
-    // ── 4+5. Wait for the URL to 404 (delete chain landed) ──────
-    // After the delete click, Decap may unmount the deleted entry's
-    // editor and navigate to the collection list. The pill is only
-    // injected into an entry editor's toolbar, so navigate to a
-    // SIBLING entry (canary-page is stable and unmutated) for a
-    // stable pill mount point. Then poll the public URL until it
-    // 404s, watching the pill for failure transitions and finally
-    // asserting it lands in its terminal hidden state.
-    const publicUrl = `${PROD_HOST}/e2e/${slug}/`;
-    await test.step("Wait for the URL to 404 (and pill terminal-hidden)", async () => {
-      await page.goto(`${PROD_ADMIN}#/collections/e2e/entries/canary-page`, {
-        waitUntil: "domcontentloaded",
-      });
-      await expect(page.getByRole("textbox", { name: /^Title$/i })).toBeVisible({
-        timeout: 60_000,
-      });
-      await waitForChangeReflected({
-        page,
-        pillId: PILL_PROD,
-        urlCheck: async () => {
-          const res = await page.request.get(publicUrl, {
-            maxRedirects: 0,
-            failOnStatusCode: false,
-          });
-          const status = res.status();
-          return status >= 400 && status < 500;
-        },
-        // 12 min covers the long delete chain (dispatch + PR open +
-        // validate-content + auto-merge + deploy-production + CDN
-        // propagation) with margin, in case runners are saturated.
-        urlTimeoutMs: 12 * 60 * 1000,
-      });
+  // ── 3. Re-open the canary entry editor for the delete leg ──────
+  //
+  // After Publish-Now, Decap may unmount the editor or land us on
+  // the cms PR's view; navigate explicitly to the entry's editor URL
+  // so the delete menu is on a known DOM. The slug-bearing URL is
+  // deterministic since the slug template at the collection level
+  // (`slug: "{{slug}}"`) derives from the title we set.
+  await test.step("Navigate to the throw-away canary entry", async () => {
+    await page.goto(`${PROD_ADMIN}#/collections/e2e/entries/${slug}`, {
+      waitUntil: "domcontentloaded",
     });
+    await expect(page.getByRole("textbox", { name: /^Title$/i })).toBeVisible({
+      timeout: 30_000,
+    });
+  });
 
-    // Defensive: throw if the delete didn't actually land. The
-    // urlCheck above is the gate; this is just a clearer error if
-    // something raced past it.
-    await test.step("Confirm the canary's public URL 404s", async () => {
-      const res = await page.request.get(publicUrl, {
-        maxRedirects: 0,
-        failOnStatusCode: false,
-      });
-      const status = res.status();
-      if (status < 400 || status >= 500) {
-        throw new Error(
-          `${publicUrl} returned ${status} — expected 4xx after delete + deploy.`,
+  // ── 4. Click "Delete published entry" (hits the shim) ──────────
+  await test.step("Click Delete published entry → shim dispatches workflow", async () => {
+    // Decap renders this as a button in the entry-status menu (or a
+    // top-level "Delete" depending on entry state). Try the menu
+    // path first; fall back to a direct button match. Either click
+    // ultimately lands on the same fetch that the shim catches.
+    //
+    // The status-button label DEPENDS on the entry's editorial
+    // workflow state. Run #25473784039 hung for 40 min on the
+    // fallback path because the seeded canary is published already
+    // — the toolbar shows a single button labelled `Published`,
+    // NOT `Status: …`. Without an explicit click timeout the
+    // missing-element wait pegged the runner until the
+    // outer test timeout fired. Match either label and pin a
+    // timeout on every action so a UI shape change next time fails
+    // in 30 s instead of 40 min.
+    const trigger = page
+      .getByRole("button", { name: /delete (published )?entry/i })
+      .first();
+    if (await trigger.isVisible({ timeout: 5_000 }).catch(() => false)) {
+      await trigger.click({ timeout: 30_000 });
+    } else {
+      await page
+        .getByRole("button", { name: /^(Status:|Published$|In Review$|Ready$|Draft$)/i })
+        .first()
+        .click({ timeout: 30_000 });
+      await page
+        .getByRole("menuitem", { name: /delete (published )?entry/i })
+        .first()
+        .click({ timeout: 30_000 });
+    }
+    // The persistent `page.on("dialog", ...)` set up at the top of
+    // the test will accept any native confirm() dialog the delete
+    // flow raises. If Decap uses an in-page modal instead, look for
+    // its confirm button (Yes / OK / Delete / Confirm) and click it
+    // within a generous window. page.locator is loose-match by
+    // default; narrow with role="button" + an anchored regex.
+    const confirmInPageModal = page.getByRole("button", {
+      name: /^(delete|confirm|yes|ok)$/i,
+    });
+    await confirmInPageModal
+      .first()
+      .click({ timeout: 5_000 })
+      .catch((err) => {
+        console.debug(
+          "[cms-delete-published] no in-page confirm button (Decap likely used native confirm() — handled by persistent dialog listener):",
+          err && err.message,
         );
-      }
+      });
+  });
+
+  // ── 5. Wait for the URL to 404 (and pill terminal-hidden) ──────
+  //
+  // After the delete click, Decap may unmount the deleted entry's
+  // editor and navigate to the collection list. The pill is only
+  // injected into an entry editor's toolbar, so navigate to a SIBLING
+  // entry (canary-page is stable and unmutated) for a stable pill
+  // mount point. Then poll the public URL until it 404s, watching
+  // the pill for failure transitions and finally asserting it lands
+  // in its terminal hidden state.
+  await test.step("Wait for the URL to 404 (and pill terminal-hidden)", async () => {
+    await page.goto(`${PROD_ADMIN}#/collections/e2e/entries/canary-page`, {
+      waitUntil: "domcontentloaded",
     });
+    await expect(page.getByRole("textbox", { name: /^Title$/i })).toBeVisible({
+      timeout: 60_000,
+    });
+    await waitForChangeReflected({
+      page,
+      pillId: PILL_PROD,
+      urlCheck: async () => {
+        const res = await page.request.get(publicUrl, {
+          maxRedirects: 0,
+          failOnStatusCode: false,
+        });
+        const status = res.status();
+        return status >= 400 && status < 500;
+      },
+      // 12 min covers the long delete chain (dispatch + PR open +
+      // validate-content + auto-merge + deploy-production + CDN
+      // propagation) with margin, in case runners are saturated.
+      urlTimeoutMs: 12 * 60 * 1000,
+    });
+  });
+
+  // Defensive: throw if the delete didn't actually land. The
+  // urlCheck above is the gate; this is just a clearer error if
+  // something raced past it.
+  await test.step("Confirm the canary's public URL 404s", async () => {
+    const res = await page.request.get(publicUrl, {
+      maxRedirects: 0,
+      failOnStatusCode: false,
+    });
+    const status = res.status();
+    if (status < 400 || status >= 500) {
+      throw new Error(
+        `${publicUrl} returned ${status} — expected 4xx after delete + deploy.`,
+      );
+    }
+  });
 });
 
 // Safety-net harness: the spec's forward leg IS the cleanup (UI delete
