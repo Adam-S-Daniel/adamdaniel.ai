@@ -303,31 +303,28 @@ test("CMS publish loop — host repo, target main", async ({ page }, testInfo) =
 
   // ── 6b. Drive Publish → Publish Now via the UI ──────────────────
   //
-  // Click Publish → Publish Now and wait ONLY for Decap's local
-  // status to flip to "Published" — that's the DOM signal that
-  // Decap accepted the click. The chain that follows (decap-cms/
-  // pending_publish label → cms-editorial-workflow.yml maps to
-  // cms/ready → auto-merge fires → PR merges → deploy-production
-  // runs) happens in the background; we observe it via the
-  // deploy-status pill in the next step.
-  //
-  // No GitHub API peeks here. The previous version raced shim
-  // toast / "successfully published" / API-merged-state, which
-  // worked but peeked under the covers (the API leg directly polled
-  // /pulls/N for `merged` / `auto_merge.enabled_by`). The pill is
-  // the editor-facing signal; that is what this spec asserts.
+  // Click Publish → Publish Now. The chain that follows
+  // (decap-cms/pending_publish label → cms-editorial-workflow.yml
+  // maps to cms/ready → auto-merge fires → PR merges → deploy-
+  // production runs → pill spins → pill hides) takes ~1–3 min
+  // typically. We observe the chain SOLELY via the deploy-status
+  // pill in the next step — no GitHub API peeks, no waiting on
+  // Decap's local status-button transition (which lags the merge
+  // by however long the entire chain takes; an earlier 60-s wait
+  // on the "Published" flip flaked because the chain takes longer
+  // than that under any meaningful load). If the click doesn't
+  // trigger a deploy at all, the pill spinTimeoutMs in the next
+  // step gives a clean, localised failure.
   await test.step("Click Publish → Publish Now via UI", async () => {
     await page.getByRole("button", { name: /^Publish$/i }).click();
     await page
       .getByRole("menuitem", { name: /publish now/i })
       .first()
       .click();
-    // Decap flips the toolbar status button from "Status: Ready" to
-    // "Published" once it accepts the publish action. 60-s timeout
-    // covers a slow GitHub API roundtrip on Decap's side.
-    await expect(
-      page.getByRole("button", { name: /^Published$/i }),
-    ).toBeVisible({ timeout: 60_000 });
+    // Don't wait for any UI transition here. The pill is the
+    // ground truth for the chain's outcome. Decap closes the
+    // Publish menu synchronously; a follow-up pill spin proves
+    // the click reached the GitHub API.
   });
 
   // ── 7. Pill is the editor-facing wait signal for "deploy complete" ──
