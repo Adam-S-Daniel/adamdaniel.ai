@@ -67,6 +67,30 @@ The include in `_includes/analytics/cloudwatch-rum.html` is a no-op unless
 This means a contributor who only sets one (or neither) cannot accidentally
 ship the snippet to a non-production environment.
 
+## Excluding traffic from RUM
+
+Even when the snippet ships (production), it has two runtime guards that
+short-circuit before any RUM event is emitted:
+
+**1. Automated browsers** — `navigator.webdriver === true` skips RUM init
+entirely. Catches GitHub Actions Playwright runs (cms-publish-loop, daily
+canary, console-clean parity, etc.) so bot traffic doesn't pollute
+real-user metrics. No configuration needed; Playwright sets the flag by
+default.
+
+**2. Per-device opt-out** — visit
+`https://adamdaniel.ai/?rum=off` once per browser/device. The query-param
+trigger sets `localStorage["rum-opt-out"] = "1"`, and every subsequent
+page load on that device skips RUM init. To re-enable, visit
+`https://adamdaniel.ai/?rum=on` (or clear site data).
+
+Use the per-device opt-out to exclude personal/household traffic from
+your own metrics. It's per-device because the RUM SDK ships events
+browser-direct to AWS — there's no edge layer to do per-network IP
+filtering, and AWS RUM doesn't expose a server-side IP allowlist.
+Opt out on each device you use to browse the site (laptop, phone,
+work machine).
+
 ## Retention and portability
 
 CloudWatch RUM's own dashboard retains data for **30 days only**, then
