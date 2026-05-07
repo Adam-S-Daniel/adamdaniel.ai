@@ -7,6 +7,12 @@
 // On `cms/*` PRs (Decap-opened editorial PRs) this spec self-skips at
 // runtime — RUN_HOST_REPO_PUBLISH_LOOP is unset on the standard PR
 // matrix.
+//
+// allowed: literal slug used for known fixture
+// (`/blog/e2e-unpublish-canary/` is the rendered URL of the dedicated
+// fixture `_posts/2099-01-02-e2e-unpublish-canary.md`; this spec
+// references it deliberately as the test target. File-scope pragma
+// per `e2e/blog-slug-literal-lint.test.js`.)
 
 /*
  * UI test for Decap CMS's "unpublish" + "re-publish" flow on a real
