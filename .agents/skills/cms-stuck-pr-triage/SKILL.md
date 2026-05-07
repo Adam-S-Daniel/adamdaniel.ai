@@ -82,6 +82,24 @@ gh run watch                                       # follow the new run live
 
 The new run opens a fresh `cms/<col>/<slug>` PR on top of current main; with the queue clean it should auto-merge cleanly.
 
+### 5. Delete-spec specific: `delete:` flag on the collection
+
+`cms-delete-published.spec.js` clicks the Decap UI's "Delete published entry" menuitem. Decap renders that menuitem ONLY when the entry's collection has `delete: true` in `admin/config.yml`. If the collection is `delete: false` the status menu opens but renders an empty list, the menuitem never appears, and `getByRole("menuitem", { name: /delete (published )?entry/i }).click()` times out at the action-timeout (run #25491225206 hit exactly this on the e2e collection until PR #302 set `delete: true`).
+
+When triaging a stuck delete-spec, before chasing infrastructure: `grep -A1 "name: e2e\|name: posts\|name: <collection>" admin/config.yml` and check the `delete:` flag for the relevant collection.
+
+### 6. Empty status-menu pattern (Published button opens, nothing inside)
+
+The artifact's `error-context.md` snapshot looks like:
+
+```yaml
+- button "Published" [expanded] [active] [ref=...]
+  - menu:
+    - list      # ← empty, no items
+```
+
+This is the same `delete: false` symptom from §5 — the menu rendered, but Decap had no items to put in it because the collection's capability flags forbade them. Could also indicate the spec's selector matched a non-clickable element (rare; check the UI's actual structure for the entry state).
+
 ## What ISN'T the bug (red herrings to ignore unless you've ruled out the above)
 
 - **`WARNING: Error loading config file: open /root/.docker/config.json: permission denied`** at the top of a job log. This is a benign GHA quirk — every container job emits it because Docker tries to read a config that doesn't exist in the playwright image. Ignore.
