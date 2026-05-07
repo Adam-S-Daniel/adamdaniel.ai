@@ -71,7 +71,7 @@
   }
   const scopeList = scopes.split(',').map((s) => s.trim()).filter(Boolean);
   ok('token scopes', JSON.stringify(scopeList));
-  const want = ['repo', 'user', 'workflow'];
+  const want = ['repo', 'user'];
   for (const s of want) {
     const have = scopeList.includes(s) ||
       (s === 'user' && scopeList.some((x) => x.startsWith('user'))) ||
@@ -79,41 +79,8 @@
     if (have) {
       ok('  has ' + s + ' scope', 'yes');
     } else {
-      bad('  has ' + s + ' scope', 'NO',
-        s === 'workflow'
-          ? 'The shim cannot dispatch delete-via-pr.yml. Log out + log back in after the OAuth proxy is redeployed with `workflow` scope (PR #175).'
-          : 'CMS API calls will fail. Re-authenticate.');
+      bad('  has ' + s + ' scope', 'NO', 'CMS API calls will fail. Re-authenticate.');
     }
-  }
-
-  // ── 5. Workflow dispatch endpoint reachable ───────────────────────
-  // Probe the dispatch endpoint with a no-op payload. We expect:
-  //   - 204 if the user re-authed AFTER PR #175 deployed (workflow scope granted, dry-run accepted)
-  //   - 422 "missing inputs" if scope is granted but the payload is rejected (still good — proves auth)
-  //   - 404 if scope missing (the failure mode that breaks Delete)
-  let dispatchProbe = '';
-  try {
-    const r = await fetch(
-      'https://api.github.com/repos/Adam-S-Daniel/adamdaniel.ai/actions/workflows/delete-via-pr.yml/dispatches',
-      {
-        method: 'POST',
-        headers: { Authorization: 'token ' + authBlob.token, 'Content-Type': 'application/json' },
-        body: JSON.stringify({ ref: 'main', inputs: { path: '__smoke_probe_does_not_exist__' } }),
-      },
-    );
-    dispatchProbe = String(r.status);
-    if (r.status === 404) {
-      bad('dispatch probe', '404 — workflow scope missing on token',
-        'The smoking gun. Re-authenticate after the OAuth proxy is redeployed.');
-    } else if (r.status === 204) {
-      ok('dispatch probe', '204 — endpoint accepted (a real run is now in flight against `__smoke_probe_does_not_exist__`; the workflow will validate-fail safely)');
-    } else if (r.status === 422) {
-      ok('dispatch probe', '422 — scope is granted (payload-validation failure is fine)');
-    } else {
-      bad('dispatch probe', String(r.status) + ' — unexpected', 'Inspect the response body.');
-    }
-  } catch (e) {
-    bad('dispatch probe', 'network error: ' + e.message);
   }
 
   print();

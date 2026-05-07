@@ -40,7 +40,6 @@ on:
       - .github/workflows/cms-publish-loop-host.yml
       - .github/workflows/cms-editorial-workflow.yml
       - .github/workflows/deploy-production.yml
-      - .github/workflows/delete-via-pr.yml
       - e2e/cms-publish-loop.spec.js
       - e2e/cms-delete-published.spec.js
       - e2e/cms-unpublish-republish.spec.js

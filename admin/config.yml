@@ -299,10 +299,13 @@ collections:
   #     bypassed the editor.
   #   - `delete: true` is REQUIRED by the same spec, which clicks
   #     the Decap UI's "Delete published entry" menuitem on the
-  #     throw-away fixture to drive the shim → delete-via-pr.yml
-  #     chain. Until 2026-05-07 this was `delete: false`, which
-  #     made the menu render empty (run #25491225206: 30 s click
-  #     timeout, 30 min spec timeout).
+  #     throw-away fixture. Decap's delete UI uses the git data API
+  #     directly (POST /git/trees → POST /git/commits → PATCH
+  #     /git/refs/heads/main); auto-merge engages on the resulting
+  #     `cms/<col>/<slug>` PR exactly like Save does. Until
+  #     2026-05-07 this was `delete: false`, which made the menu
+  #     render empty (run #25491225206: 30 s click timeout, 30 min
+  #     spec timeout).
   #
   # Discoverability of accidental editor mutation is mitigated by
   # the explicit collection label and the `description` field

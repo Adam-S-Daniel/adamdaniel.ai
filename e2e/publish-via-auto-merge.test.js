@@ -105,7 +105,7 @@ test.describe("publish-via-auto-merge.js (unit)", () => {
     const { sandbox } = bootShim();
     expect(sandbox.window.__publishViaAutoMergeInstalled).toBe(true);
     expect(sandbox.window.__publishViaAutoMerge.installed).toBe(true);
-    expect(sandbox.window.__publishViaAutoMerge.matchers).toEqual(["merge", "delete"]);
+    expect(sandbox.window.__publishViaAutoMerge.matchers).toEqual(["merge"]);
   });
 
   test("re-invocation is a no-op (idempotent install)", () => {
@@ -179,52 +179,6 @@ test.describe("publish-via-auto-merge.js (unit)", () => {
     );
     expect(res.status).toBe(422);
     expect(calls).toHaveLength(2);
-  });
-
-  test("DELETE contents 422 dispatches delete-via-pr workflow + returns synthetic 200", async () => {
-    const { fetch, queueResponse, calls } = bootShim();
-    queueResponse({ message: "Repository rule violations found" }, { status: 422 });
-    queueResponse(null, { status: 204 }); // workflow dispatch returns 204
-    const res = await fetch(
-      "https://api.github.com/repos/Adam-S-Daniel/adamdaniel.ai/contents/_posts/2026-04-25-replacement-test-post-1.md",
-      { method: "DELETE", headers: { Authorization: "Bearer t" } },
-    );
-    expect(res.status).toBe(200);
-    const body = await res.json();
-    expect(body.commit.sha).toBe("pending-delete-pr");
-    expect(body.content).toBeNull();
-    expect(calls).toHaveLength(2);
-    expect(calls[1].method).toBe("POST");
-    expect(calls[1].url).toBe(
-      "https://api.github.com/repos/Adam-S-Daniel/adamdaniel.ai/actions/workflows/delete-via-pr.yml/dispatches",
-    );
-    const dispatchBody = JSON.parse(calls[1].body);
-    expect(dispatchBody.ref).toBe("main");
-    expect(dispatchBody.inputs.path).toBe("_posts/2026-04-25-replacement-test-post-1.md");
-  });
-
-  test("DELETE contents URL-encoded path round-trips through decode", async () => {
-    const { fetch, queueResponse, calls } = bootShim();
-    queueResponse({ message: "Repository rule violations found" }, { status: 422 });
-    queueResponse(null, { status: 204 });
-    await fetch(
-      "https://api.github.com/repos/Adam-S-Daniel/adamdaniel.ai/contents/_posts%2F2026-04-25-replacement-test-post-1.md",
-      { method: "DELETE", headers: { Authorization: "Bearer t" } },
-    );
-    expect(JSON.parse(calls[1].body).inputs.path).toBe(
-      "_posts/2026-04-25-replacement-test-post-1.md",
-    );
-  });
-
-  test("DELETE contents 422 + workflow dispatch fails → original 422 surfaces", async () => {
-    const { fetch, queueResponse } = bootShim();
-    queueResponse({ message: "Repository rule violations found" }, { status: 422 });
-    queueResponse({ message: "Resource not accessible by integration" }, { status: 403 });
-    const res = await fetch(
-      "https://api.github.com/repos/Adam-S-Daniel/adamdaniel.ai/contents/_posts/x.md",
-      { method: "DELETE", headers: { Authorization: "Bearer t" } },
-    );
-    expect(res.status).toBe(422);
   });
 
   test("URL with query string after /merge does NOT match (defends against PUT to /pulls/N/merge?foo=bar)", async () => {

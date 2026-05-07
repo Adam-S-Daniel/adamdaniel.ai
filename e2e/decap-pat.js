@@ -16,24 +16,16 @@
  *
  *   - `Contents: read/write`     — file CRUD via the Contents API
  *   - `Pull requests: read/write` — open / label / merge cms/* PRs
- *   - `Actions: read/write`      — dispatch the delete-via-pr.yml
- *                                   workflow when Decap's "Delete
- *                                   published entry" hits the
- *                                   ruleset's 422. Without this, the
- *                                   shim in admin/publish-via-auto-merge.js
- *                                   gets a 403 on
- *                                   POST /actions/workflows/{id}/dispatches
- *                                   and the delete falls back to a
- *                                   surfaced 422 — the spec at
- *                                   e2e/cms-delete-published.spec.js
- *                                   then times out at step 4 because
- *                                   delete-via-pr.yml never runs.
- *
- * Note: "Workflows: read/write" is a DIFFERENT permission — it
- * governs editing workflow files in `.github/workflows/` via the
- * Contents API, not dispatching them. The shim's dispatch needs
- * "Actions: write" specifically. See AGENTS.md → "CMS publish-loop
- * test" for the canonical permission table.
+ *   - `Actions: read`            — read workflow run state (the test
+ *                                   helpers poll workflow conclusions
+ *                                   while waiting for auto-merge +
+ *                                   deploy-production to finish).
+ *                                   No dispatch is needed — the
+ *                                   earlier shim → delete-via-pr.yml
+ *                                   path was removed once we
+ *                                   confirmed Decap's delete UI uses
+ *                                   the git data API directly, not
+ *                                   DELETE /contents.
  *
  * Used by `e2e/cms-publish-loop.spec.js` (host repo, target main) and
  * `e2e/cms-publish-loop-preview.spec.js` (preview env, target PR head)

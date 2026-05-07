@@ -1,33 +1,37 @@
 /*
- * publish-via-auto-merge.js — admin/ shim that recovers the two Decap
- * UI buttons that hit GitHub's branch-protection ruleset directly:
+ * publish-via-auto-merge.js — admin/ shim that recovers the Decap
+ * "Publish Now" button when it hits GitHub's branch-protection ruleset:
  *
- *   1. "Publish Now" on a Ready cms/ PR  → PUT /pulls/{N}/merge
- *      Decap calls the synchronous merge API. The main-branch ruleset
- *      requires every PR to pass 6 status checks (~10 min runtime),
- *      so the call returns 422 "Repository rule violations found".
- *      We recover by adding the `cms/ready` label, which makes
- *      cms-editorial-workflow.yml's `auto-merge-when-ready` job enable
- *      auto-merge — the PR then merges itself when the checks land.
- *
- *   2. "Delete published entry"  → DELETE /contents/{path}
- *      Decap commits the deletion straight to main. The `pull_request`
- *      rule rejects every direct push, again with 422 "rule
- *      violations". We recover by dispatching the `delete-via-pr.yml`
- *      workflow, which opens a labelled PR; auto-merge takes over.
+ *   "Publish Now" on a Ready cms/ PR  → PUT /pulls/{N}/merge
+ *     Decap calls the synchronous merge API. The main-branch ruleset
+ *     requires every PR to pass 6 status checks (~10 min runtime),
+ *     so the call returns 422 "Repository rule violations found".
+ *     We recover by adding the `cms/ready` label, which makes
+ *     cms-editorial-workflow.yml's `auto-merge-when-ready` job enable
+ *     auto-merge — the PR then merges itself when the checks land.
  *
  * The shim only kicks in on a 422 with a "rule violations" message —
  * any other failure passes through untouched. On a successful 2xx
  * response the shim is a no-op.
  *
  * The synthetic 2xx response we hand back to Decap is a white lie:
- * the merge / delete hasn't actually landed, it's queued. Decap's UI
- * proceeds as if it had, but a toast warns the operator that the
- * change goes live in 5–15 minutes when the auto-merge wakes up.
+ * the merge hasn't actually landed, it's queued. Decap's UI proceeds
+ * as if it had, but a toast warns the operator that the change goes
+ * live in 5–15 minutes when the auto-merge wakes up.
  *
  * Loaded via a non-deferred <script> tag in admin/index.html *before*
  * decap-cms.js, so the wrap is in place before Decap captures any
  * reference to window.fetch.
+ *
+ * Note: a previous version of this shim also intercepted DELETE
+ * /contents and dispatched a `delete-via-pr.yml` workflow as a
+ * recovery path for "Delete published entry". That intercept never
+ * fired in production — Decap's delete UI uses the git data API
+ * directly (POST /git/trees → POST /git/commits → PATCH
+ * /git/refs/heads/main) rather than DELETE /contents, so the 422
+ * the shim watches for never came back. The workflow had zero runs
+ * across its lifetime; it was removed alongside the DELETE matcher
+ * here.
  */
 (function () {
   'use strict';
@@ -41,7 +45,6 @@
   // config.yml have to move together.
   var REPO = 'Adam-S-Daniel/adamdaniel.ai';
   var API = 'https://api.github.com/repos/' + REPO;
-  var DELETE_WORKFLOW = 'delete-via-pr.yml';
 
   var origFetch = window.fetch.bind(window);
 
@@ -90,52 +93,6 @@
         );
       },
     },
-    {
-      kind: 'delete',
-      test: function (url, method) {
-        if (method !== 'DELETE') return null;
-        var m = url.match(
-          /^https:\/\/api\.github\.com\/repos\/[^/]+\/[^/]+\/contents\/([^?]+)(\?.*)?$/,
-        );
-        return m ? { path: safeDecodePath(m[1]) } : null;
-      },
-      recover: async function (ctx, init, originalRes) {
-        var dispatchRes = await origFetch(
-          API + '/actions/workflows/' + DELETE_WORKFLOW + '/dispatches',
-          {
-            method: 'POST',
-            headers: extractAuth(init.headers),
-            body: JSON.stringify({
-              ref: 'main',
-              inputs: { path: ctx.path },
-            }),
-          },
-        );
-        if (!dispatchRes.ok) {
-          // Surface the original 422 so the operator at least sees a
-          // failure rather than a silently-failed delete.
-          return originalRes;
-        }
-        toast(
-          'Deletion submitted as PR — will merge when CI checks finish ' +
-            '(~5–15 min). The entry stays in the list until the PR merges ' +
-            'and the next deploy lands.',
-        );
-        // Match GitHub's delete-contents shape so Decap's downstream
-        // parsing doesn't trip. `content: null` is what the real API
-        // returns on successful delete.
-        return new Response(
-          JSON.stringify({
-            commit: {
-              sha: 'pending-delete-pr',
-              message: 'Delete enqueued via delete-via-pr.yml workflow',
-            },
-            content: null,
-          }),
-          { status: 200, headers: { 'Content-Type': 'application/json' } },
-        );
-      },
-    },
   ];
 
   function extractAuth(headers) {
@@ -160,10 +117,6 @@
     if (lower.authorization) out.Authorization = lower.authorization;
     if (lower['x-github-api-version']) out['X-GitHub-Api-Version'] = lower['x-github-api-version'];
     return out;
-  }
-
-  function safeDecodePath(encoded) {
-    try { return decodeURIComponent(encoded); } catch (e) { return encoded; }
   }
 
   function toast(msg) {

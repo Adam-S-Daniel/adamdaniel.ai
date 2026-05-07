@@ -85,12 +85,11 @@
   <!--
     publish-via-auto-merge shim. MUST load before decap-cms.js so the
     window.fetch wrap is in place before Decap captures any reference
-    to the original. Catches the 422 "rule violations" responses from
+    to the original. Catches the 422 "rule violations" response from
     the main-branch ruleset (`pull_request` + required-status-checks)
-    that Decap's "Publish Now" and "Delete published entry" buttons
-    hit, and rewrites them onto the cms/ready-label / delete-via-pr
-    paths so the editorial-workflow auto-merge can do the actual
-    merge once required checks finish.
+    that Decap's "Publish Now" button hits, and rewrites it onto the
+    cms/ready-label path so the editorial-workflow auto-merge can do
+    the actual merge once required checks finish.
   -->
   <script src="publish-via-auto-merge.js"></script>
 
