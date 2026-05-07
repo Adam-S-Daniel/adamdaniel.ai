@@ -96,6 +96,12 @@ const TEST_TIMEOUT_MS = 30 * 60 * 1000;
 
 test.describe.configure({ mode: "serial", timeout: TEST_TIMEOUT_MS });
 
+// Module-scoped flag for the afterAll safety-net harness. Set inside
+// the test once the marker is inserted into the canary body. The hook
+// reads the file from main and only fires the API restore when the
+// marker is still there (UI cleanup didn't run / failed).
+let pendingMarker = null;
+
 async function fetchCanaryFromMain() {
   return gh(`/repos/${HOST_REPO}/contents/${CANARY.path}?ref=main`);
 }
@@ -189,6 +195,7 @@ test("@lane:real CMS preview-PR-mimicry harness — cms/<slug> branch lifecycle"
     await body.click();
     await body.press("End");
     await body.pressSequentially(`\n\n${marker}\n`);
+    pendingMarker = marker;
     await page.getByRole("button", { name: /^Save$/i }).click();
     await expect(page.getByText(/Changes saved/i).first()).toBeVisible({
       timeout: 60_000,
@@ -276,12 +283,49 @@ test("@lane:real CMS preview-PR-mimicry harness — cms/<slug> branch lifecycle"
   // 404/CloudFront-error, matching how deploy-preview.yml's
   // teardown-preview job cleans up after code PRs today).
 
-  // ── 7. Cleanup: reset canary baseline ───────────────────────────
-  await test.step("Reset canary baseline (cleanup PR)", async () => {
-    await writeCanaryViaPr({
-      runId: `spike-cleanup-${runId}`,
-      bodyText: `${baselineBody}\n\nSpike harness baseline — see e2e/cms-preview-pr-self-contained.spec.js.\n`,
-      message: `test(spike): reset canary baseline after spike-harness run ${runId}`,
-    });
+  // ── 7. Cleanup: the cms/<slug> PR's merge IS the cleanup. The
+  // spike's mutation is a marker insert; the merge lands the body
+  // verbatim back on main with the marker, so the next run's baseline
+  // check finds the marker and forces a fresh reset via the spec's
+  // step-0 setup. The afterAll harness below is the safety net for the
+  // (rare) case where the spike crashed mid-flow before merge.
+  pendingMarker = null;
+});
+
+// Safety-net harness: when the spec body crashes after marker insert
+// but before the cms/<slug> PR merges, the canary on main still
+// contains the marker — the next run's step-0 detects this and resets
+// via the spec's normal setup PR path. This hook is the belt-and-
+// suspenders short-circuit: if the marker is on main when the test
+// finishes, open a baseline-reset PR right away rather than relying on
+// the next run to notice.
+test.afterAll(async () => {
+  if (!pendingMarker) return; // spec succeeded or never reached marker insert
+  if (PROD_CANARY) return; // daily canary probe doesn't mutate
+  if (!getPat()) return;
+  let current;
+  try {
+    current = await fetchCanaryFromMain();
+  } catch (e) {
+    console.warn(
+      `[cleanup-harness] couldn't read ${CANARY.path} from main; skipping safety net: ${e && e.message}`,
+    );
+    return;
+  }
+  const decoded = Buffer.from(current.content, "base64").toString("utf8");
+  if (!decoded.includes(pendingMarker)) {
+    console.log(
+      "[cleanup-harness] spike canary at baseline (marker not present); merge happened or spec recovered — no safety net needed",
+    );
+    return;
+  }
+  console.warn(
+    `[cleanup-harness] spike marker still present on main; opening fixture PR to restore canary baseline`,
+  );
+  const baselineBody = CANARY.baseline;
+  await writeCanaryViaPr({
+    runId: `spike-harness-cleanup-${Date.now()}`,
+    bodyText: `${baselineBody}\n\nSpike harness baseline — see e2e/cms-preview-pr-self-contained.spec.js.\n`,
+    message: "test(spike): harness safety-net reset of canary baseline (marker remained on main)",
   });
 });
