@@ -337,8 +337,17 @@ test("Delete published entry — UI click → shim → delete-via-pr workflow �
     // dispatch → PR open → validate-content → merge → deploy
     // start).
     await test.step("Wait for the prod deploy-status pill spinner→settled (DOM is ground truth)", async () => {
-      await page.goto(`${PROD_ADMIN}`, { waitUntil: "domcontentloaded" });
-      await expect(page.getByRole("link", { name: /^Posts$/i })).toBeVisible({
+      // After the delete click, the entry being deleted may unmount
+      // its editor (Decap navigates back to the collection list when
+      // the source disappears). The pill is only injected into an
+      // entry editor's toolbar, so we navigate to a SIBLING entry —
+      // canary-page is guaranteed to exist and is not mutated by any
+      // spec, so its editor toolbar is a stable mount point for the
+      // pill while the delete chain runs in the background.
+      await page.goto(`${PROD_ADMIN}#/collections/e2e/entries/canary-page`, {
+        waitUntil: "domcontentloaded",
+      });
+      await expect(page.getByRole("textbox", { name: /^Title$/i })).toBeVisible({
         timeout: 60_000,
       });
       await waitForDeployPillSettled({

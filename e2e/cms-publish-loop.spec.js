@@ -348,19 +348,17 @@ test("CMS publish loop — host repo, target main", async ({ page }, testInfo) =
   // stable shell to mount on while the chain runs in the
   // background, then wait for the spinner→settled lifecycle.
   await test.step("Wait for the prod deploy-status pill spinner→settled (DOM is ground truth)", async () => {
-    await page.goto(`${PROD_ADMIN}`, { waitUntil: "domcontentloaded" });
-    await expect(page.getByRole("link", { name: /^Posts$/i })).toBeVisible({
-      timeout: 60_000,
-    });
+    // STAY on the entry editor view. The pill is injected into
+    // Decap's editor toolbar (next to the built-in preview link),
+    // NOT the collection list. Navigating to /admin/ unmounts the
+    // editor toolbar so the pill never gets created — run
+    // #25500041766 hit exactly this: 6-min spinTimeoutMs fired
+    // because document.getElementById('cms-prod-status-pill')
+    // returned null the whole time.
     await waitForDeployPillSettled({
       page,
       pillId: PILL_PROD,
-      // 6 min covers cms-editorial-workflow + auto-merge + deploy-
-      // production startup with margin (typical p95 ~3 min, max
-      // observed ~5 min under runner saturation).
       spinTimeoutMs: 6 * 60 * 1000,
-      // 4 min covers the deploy run itself + the trailing 30-s
-      // pill-poll window for success → hidden.
       settleTimeoutMs: 4 * 60 * 1000,
     });
   });

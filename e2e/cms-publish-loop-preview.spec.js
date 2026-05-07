@@ -207,20 +207,15 @@ test("CMS publish loop — preview env, target PR head branch", async ({ page },
   // scripts have a stable shell while the auto-merge → deploy
   // chain runs in the background.
   await test.step("Wait for preview deploy-status pill spinner→settled (DOM is ground truth)", async () => {
-    await page.goto(PREVIEW_ADMIN, { waitUntil: "domcontentloaded" });
-    await expect(page.getByRole("link", { name: /^Posts$/i })).toBeVisible({
-      timeout: 60_000,
-    });
+    // STAY on the entry editor view (the canary-page entry).
+    // The pill is injected into Decap's editor toolbar, NOT the
+    // collection list. Navigating away unmounts the toolbar so
+    // the pill never gets created — run #25500041766 (sister
+    // case on prod) hit this same trap.
     await waitForDeployPillSettled({
       page,
       pillId: PILL_PREVIEW,
-      // 6 min covers cms-editorial-workflow + auto-merge + deploy-
-      // preview startup with margin. Preview deploys are typically
-      // a few seconds faster than prod, but the 30-s pill-poll
-      // window dominates here.
       spinTimeoutMs: 6 * 60 * 1000,
-      // 4 min covers the deploy run itself + the trailing 30-s
-      // pill-poll window for success → hidden.
       settleTimeoutMs: 4 * 60 * 1000,
     });
   });
