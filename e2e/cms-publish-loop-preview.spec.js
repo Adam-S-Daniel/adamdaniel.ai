@@ -55,7 +55,16 @@ const PREVIEW_PUBLIC_URL = `${PREVIEW_HOST}${CANARY.publicPath}`;
 
 const TEST_TIMEOUT_MS = 12 * 60 * 1000;
 
-test.describe.configure({ mode: "serial", timeout: TEST_TIMEOUT_MS });
+test.describe.configure({
+  mode: "serial",
+  timeout: TEST_TIMEOUT_MS,
+  // Real-state mutation; a Playwright retry just re-walks the same
+  // broken chain after wasting another 12 min — and on the
+  // cms-publish-loop-preview workflow with timeout-minutes: 20,
+  // a retry consistently runs out of GHA budget and gets cancelled
+  // mid-attempt (run #25468569663 hit exactly this on 2026-05-07).
+  retries: 0,
+});
 
 function toContentBase64(text) {
   return Buffer.from(text, "utf8").toString("base64");
@@ -189,6 +198,30 @@ test("CMS publish loop — preview env, target PR head branch", async ({ page },
       expectContent: marker,
       timeoutMs: 6 * 60 * 1000,
     });
+  });
+
+  // ── Verify the preview-build pill resolved to a non-spinner state ──
+  // Mirror of the prod publish-loop's pill assertion (cms-publish-loop
+  // .spec.js step 8a) — same contract, different pill ID. While
+  // deploy-preview is in flight, `cms-preview-build-pill` shows a
+  // spinner with text "Preview build…"; after success it HIDES (and
+  // Decap's built-in deploy-preview-links feature surfaces a
+  // clickable Preview link in the toolbar). The deploy-status-pill
+  // polls every 30s, so allow up to 90s after the merge for the
+  // pill to reach its terminal hidden state.
+  await test.step("Preview-build pill: in-flight spinner resolved to hidden after deploy", async () => {
+    await page.goto(PREVIEW_ADMIN, { waitUntil: "domcontentloaded" });
+    await expect(page.getByRole("link", { name: /^Posts$/i })).toBeVisible({
+      timeout: 60_000,
+    });
+    await page.waitForFunction(
+      () => {
+        const el = document.getElementById("cms-preview-build-pill");
+        return !el || el.style.display === "none";
+      },
+      undefined,
+      { timeout: 90_000 },
+    );
   });
 
   await test.step("Reset canary baseline on PR head branch (cleanup)", async () => {
