@@ -1,17 +1,17 @@
 ---
-title: "E2E Mutation Canary"
+reading_time: null
+excerpt: "Fixture used by the nightly prod-mutation playground spec. Never
+  serves at a public URL until a test flips published: true, then resets it."
+robots: noindex,nofollow
+title: E2E Mutation Canary
 slug: e2e-mutation-canary
 date: 2099-01-01 00:00:00 +0000
-excerpt: "Fixture used by the nightly prod-mutation playground spec. Never serves at a public URL until a test flips published: true, then resets it."
 tags: []
-featured_image: ''
-published: false
-publish_date: ''
+featured_image: ""
+published: true
 sitemap: false
-robots: noindex,nofollow
-reading_time: null
+publish_date: ""
 ---
-
 Adam Daniel — E2E mutation canary post (do not edit by hand).
 
 This file is the target of the nightly prod-mutation playground spec
@@ -26,6 +26,12 @@ The spec keeps `published: false` between runs, so this file does NOT
 serve at any public URL until the spec flips it to `true`. After the
 URL goes live and the spec asserts the deploy succeeded, a cleanup
 commit flips it back to `false` and the URL 404s again. `sitemap: false`
+
+
+
+e2e-prod-mutate:e2e-mutation-canary:1778162778650
+
+
 and `robots: noindex,nofollow` are belt-and-suspenders so a stuck
 "published: true" state never leaks into search.
 
