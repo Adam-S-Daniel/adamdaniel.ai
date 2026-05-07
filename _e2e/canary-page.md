@@ -1,13 +1,13 @@
 ---
+title: E2E Canary — Page
 layout: canary
-title: "E2E Canary — Page"
-collection_label: page
 permalink: /e2e/canary-page/
-canary_baseline: "Adam Daniel — E2E canary page (do not edit by hand)"
+canary_baseline: Adam Daniel — E2E canary page (do not edit by hand)
+canary_id: page
+collection_label: page
 slug: canary-page
 sitemap: false
 robots: noindex,nofollow
-canary_id: page
 ---
 
 Adam Daniel — E2E canary page (do not edit by hand).
