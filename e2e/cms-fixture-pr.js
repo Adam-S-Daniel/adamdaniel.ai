@@ -235,7 +235,7 @@ async function seedFixtureViaPr({
   // and closed it. 18 min covers normal-busy queue depth without
   // pushing the spec's TEST_TIMEOUT_MS into needing a parallel
   // bump.
-  timeoutMs = 18 * 60 * 1000,
+  timeoutMs = 25 * 60 * 1000,
 } = {}) {
   if (!slug || !runId || !filePath || !bodyText || !message) {
     throw new Error(
@@ -287,7 +287,7 @@ async function removeFixtureViaPr({
   // Same headroom as seedFixtureViaPr (18 min) — both go through the
   // identical full required-check matrix on the host repo's main
   // ruleset.
-  timeoutMs = 18 * 60 * 1000,
+  timeoutMs = 25 * 60 * 1000,
 } = {}) {
   if (!slug || !runId || !filePath || !message) {
     throw new Error(

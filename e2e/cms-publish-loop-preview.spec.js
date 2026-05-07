@@ -162,6 +162,7 @@ test("CMS publish loop — preview env, target PR head branch", async ({ page },
   await test.step("Wait for Decap to open the cms/... PR against the PR head", async () => {
     pr = await waitForCmsPullRequest({
       base: PR_HEAD_REF,
+      filePath: CANARY.path,
       canaryMarker: marker,
       timeoutMs: 5 * 60 * 1000,
     });

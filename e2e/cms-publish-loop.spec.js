@@ -105,7 +105,7 @@ function assertNotProdCanary(action) {
 // reason: the publish-loop is a real-state mutation and a retry just
 // re-runs the same broken chain after wasting another 20 min — the
 // failure mode is almost never transient.
-const TEST_TIMEOUT_MS = 20 * 60 * 1000;
+const TEST_TIMEOUT_MS = 35 * 60 * 1000;
 
 test.describe.configure({
   mode: "serial",

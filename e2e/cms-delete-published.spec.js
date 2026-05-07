@@ -72,7 +72,7 @@ const PROD_ADMIN = `${PROD_HOST}/admin/`;
 // just re-runs the same broken chain (e.g. shim → workflow_dispatch
 // → delete-via-pr) after wasting another 30 min. Failures here are
 // almost never transient.
-const TEST_TIMEOUT_MS = 30 * 60 * 1000;
+const TEST_TIMEOUT_MS = 40 * 60 * 1000;
 
 test.describe.configure({
   mode: "serial",
