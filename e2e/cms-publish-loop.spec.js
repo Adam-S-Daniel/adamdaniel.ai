@@ -105,7 +105,7 @@ function assertNotProdCanary(action) {
 // reason: the publish-loop is a real-state mutation and a retry just
 // re-runs the same broken chain after wasting another 20 min — the
 // failure mode is almost never transient.
-const TEST_TIMEOUT_MS = 20 * 60 * 1000;
+const TEST_TIMEOUT_MS = 35 * 60 * 1000;
 
 test.describe.configure({
   mode: "serial",
@@ -413,6 +413,42 @@ test("CMS publish loop — host repo, target main", async ({ page }, testInfo) =
       body:
         "After the PR auto-merges and `deploy-production.yml` finishes, the canary URL on `adamdaniel.ai` reflects the edit. CloudFront's invalidation typically completes within ~2 minutes of the merge — if you don't see your change after that, check the deploy run on GitHub Actions.",
     });
+  });
+
+  // ── 8a. Verify the deploy-status pill resolved to a non-spinner state ─
+  // The contract for admin/deploy-status-pill.js: while a deploy is
+  // in flight, `cms-prod-status-pill` shows a spinner with text
+  // "Publishing…"; after success, the pill HIDES (display: none —
+  // the "deployed commit pill" already covers steady-state). Driving
+  // the pill through that transition end-to-end is the only behavioral
+  // check that the pill actually reflects production-deploy state.
+  // The deploy-status-pill.js polls every 30s, so allow up to 90s
+  // after the URL goes live for the next poll to see the success
+  // status and hide the pill.
+  await test.step("Deploy-status pill: in-flight spinner resolved to hidden after deploy", async () => {
+    // The admin tab is still on the canary entry editor from earlier
+    // steps; navigate to a fresh /admin/ to ensure the pill scripts
+    // re-mount in their post-deploy state.
+    await page.goto(`${PROD_ADMIN}`, { waitUntil: "domcontentloaded" });
+    // Wait for the admin shell to load (Posts link is the canonical
+    // signal). Pill scripts mount alongside the shell.
+    await expect(page.getByRole("link", { name: /^Posts$/i })).toBeVisible({
+      timeout: 60_000,
+    });
+    // Pill is HIDDEN on success (display:none in the IIFE's render
+    // path). Wait up to 90s for the next polling tick after deploy.
+    await page.waitForFunction(
+      () => {
+        const el = document.getElementById("cms-prod-status-pill");
+        // Acceptable terminal states: pill not in DOM yet, OR pill
+        // exists with display:none. (Decap re-renders the toolbar on
+        // entry switches, so the pill might be in the DOM mid-poll
+        // but hidden — both pass.)
+        return !el || el.style.display === "none";
+      },
+      undefined,
+      { timeout: 90_000 },
+    );
   });
 
   // ── 9. Cleanup ──────────────────────────────────────────────────

@@ -72,7 +72,7 @@ const PROD_ADMIN = `${PROD_HOST}/admin/`;
 // just re-runs the same broken chain (e.g. shim → workflow_dispatch
 // → delete-via-pr) after wasting another 30 min. Failures here are
 // almost never transient.
-const TEST_TIMEOUT_MS = 30 * 60 * 1000;
+const TEST_TIMEOUT_MS = 40 * 60 * 1000;
 
 test.describe.configure({
   mode: "serial",
@@ -339,6 +339,31 @@ test("Delete published entry — UI click → shim → delete-via-pr workflow �
     await test.step("Verify the throw-away canary is gone from main", async () => {
       const stillThere = await fileExistsOnMain(filePath);
       expect(stillThere, `${filePath} should be gone from main after merge`).toBe(false);
+    });
+
+    // ── 9. Verify the public URL actually 404s ──────────────────
+    // The file being absent from main isn't sufficient — the
+    // user-visible contract is that the URL stops serving content.
+    // CDN cache, deploy-production rsync semantics, or a stale
+    // Jekyll _site/ could all leave the page reachable. Poll until
+    // the URL returns 4xx so we KNOW the deletion landed at the
+    // customer-visible layer too.
+    const publicUrl = `${PROD_HOST}/e2e/${slug}/`;
+    await test.step("Verify the canary's public URL 404s after delete + deploy", async () => {
+      const deadline = Date.now() + 6 * 60 * 1000;
+      let lastStatus = null;
+      while (Date.now() < deadline) {
+        const res = await page.request.get(publicUrl, {
+          maxRedirects: 0,
+          failOnStatusCode: false,
+        });
+        lastStatus = res.status();
+        if (lastStatus >= 400 && lastStatus < 500) return;
+        await page.waitForTimeout(8_000);
+      }
+      throw new Error(
+        `${publicUrl} did not return 4xx within 6 min after delete + deploy; last status=${lastStatus}.`,
+      );
     });
   } finally {
     // Best-effort cleanup. If the shim/workflow path didn't actually

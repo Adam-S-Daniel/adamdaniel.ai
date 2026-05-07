@@ -121,7 +121,7 @@ jobs:
     # legit stuck-run; the 60 min cap is the final backstop —
     # GHA-level kill only fires when something has gone catastrophically
     # wrong (infinite loop in a step outside Playwright control).
-    timeout-minutes: 60
+    timeout-minutes: 90
     # Skip on cms/* PRs to prevent recursion: the spec itself opens a
     # cms/e2e/<slug> PR that would otherwise re-trigger this workflow
     # via the salient-path filter. github.head_ref is empty on cron

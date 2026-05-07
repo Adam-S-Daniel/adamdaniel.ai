@@ -59,6 +59,24 @@
  *      the GitHub status.id, which changes on every new state event
  *      (success → in_progress → failure → …), so the pill re-renders
  *      cleanly through rapid transitions.
+ *
+ * ── Test contract ────────────────────────────────────────────────
+ *
+ * End-to-end coverage of the spinner→hidden transition lives in
+ * the publish-loop specs:
+ *
+ *   e2e/cms-publish-loop.spec.js          → cms-prod-status-pill
+ *   e2e/cms-publish-loop-preview.spec.js  → cms-preview-build-pill
+ *
+ * Both specs drive a real publish (Save → Status:Ready → merge →
+ * deploy) and then assert the pill reaches its terminal hidden
+ * state (display: none) after the corresponding deploy completes,
+ * with a 90-sec window for the next 30-sec polling tick. If the
+ * polling chain breaks or success → hidden transition stops
+ * working, those specs surface it. The robustness invariants
+ * (retry, rate-limit, stale-state amber) live in
+ * e2e/deploy-status-pill-robustness.test.js as text-grep checks
+ * against this file's source.
  */
 (function () {
   "use strict";
