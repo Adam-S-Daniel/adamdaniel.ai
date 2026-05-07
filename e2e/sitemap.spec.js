@@ -142,6 +142,13 @@ test.describe("sitemap structure @parity", () => {
     for (const file of posts) {
       const fm = parseFrontMatter(file);
       if (!isPublished(fm)) continue;
+      // Posts with `sitemap: false` (e.g. test-fixture canaries that
+      // get briefly flipped to `published: true` mid-run by
+      // cms-publish-loop-prod-mutate.spec.js) are deliberately
+      // excluded from the sitemap by jekyll-sitemap. Don't assert on
+      // them — they're a fixture, not a published post the public
+      // sees.
+      if (fm.sitemap === "false" || fm.sitemap === false) continue;
       const url = expectedPostUrl(file, fm);
       if (!locs.includes(url)) {
         missing.push({ file: path.relative(REPO_ROOT, file), url });
