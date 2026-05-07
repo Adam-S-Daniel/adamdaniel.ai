@@ -43,15 +43,9 @@
  */
 const { test, expect } = require("./base");
 const { seedDecapAuth, getPat, HOST_REPO } = require("./decap-pat");
-const {
-  fetchPublicUrl,
-  gh,
-  waitForAutoMergeEnabled,
-  waitForCmsPullRequest,
-  waitForMerge,
-  waitForWorkflowRun,
-} = require("./github-actions-poll");
+const { fetchPublicUrl, gh } = require("./github-actions-poll");
 const { seedFixtureViaPr, removeFixtureViaPr } = require("./cms-fixture-pr");
+const { waitForDeployPillSettled, PILL_PROD } = require("./deploy-pill");
 
 const PROD_HOST = "https://adamdaniel.ai";
 const PROD_ADMIN = `${PROD_HOST}/admin/`;
@@ -189,7 +183,6 @@ test("Delete published entry — UI click → shim → delete-via-pr workflow �
   const slug = `canary-delete-${runId}`;
   const filePath = `_e2e/${slug}.md`;
   const title = `Delete-test canary (${runId})`;
-  let pr;
 
   test.info().annotations.push({
     type: "fixture-path",
@@ -318,99 +311,53 @@ test("Delete published entry — UI click → shim → delete-via-pr workflow �
           );
         });
 
-      // The shim is the contract: clicking "Delete published entry"
-      // should call DELETE /repos/.../contents/<path>, the main-branch
-      // ruleset rejects it 422, and the shim catches and dispatches
-      // delete-via-pr.yml + shows its toast. Wait specifically for
-      // the shim toast — generic "deleted"/"removed" text on the
-      // page is unreliable (an earlier body that read "Will be
-      // deleted by cms-delete-published.spec.js" caused this race
-      // to false-resolve on the body's own text, run
-      // #25496374142). If the toast doesn't appear, EITHER the
-      // click didn't trigger DELETE on /contents at all (Decap
-      // version drift, button selector mismatch, or
-      // editorial-workflow path that bypasses the shim) OR the shim
-      // fired but `delete-via-pr.yml` dispatch failed silently. The
-      // next step (waitForWorkflowRun) would catch the second case
-      // anyway; the toast wait gives us a clearer first-failure
-      // localisation on the first.
-      await page
-        .locator("[data-publish-via-auto-merge-toast]")
-        .first()
-        .waitFor({ timeout: 30_000 });
     });
 
-    // ── 4. The shim dispatched delete-via-pr.yml — wait for it ──
-    await test.step("Wait for delete-via-pr.yml workflow_dispatch run to succeed", async () => {
-      await waitForWorkflowRun({
-        workflow: "delete-via-pr.yml",
-        // No headSha to pin against — workflow_dispatch runs aren't
-        // tied to a commit. Filter on branch=main + recency inside
-        // waitForWorkflowRun so we pick up THIS run, not a stale one.
-        branch: "main",
-        timeoutMs: 5 * 60 * 1000,
+    // ── 4. Wait for the deploy-status pill spinner→settled ──────
+    //
+    // The pill is the editor-facing signal for "your deletion is
+    // live on prod." Whichever internal path Decap took — the shim
+    // (DELETE /contents 422 → dispatch delete-via-pr.yml → cms PR →
+    // auto-merge → deploy-production), or an editorial-workflow
+    // path that opens its own delete PR directly — the user-facing
+    // contract is the same: deploy-production runs, the prod pill
+    // spins, then settles to hidden.
+    //
+    // Anchor the wait on the pill DOM, not on GitHub API peeks
+    // (waitForWorkflowRun / waitForMerge / fileExistsOnMain). Those
+    // peek under the covers; the pill is the editor's actual
+    // signal. If the pill misses the in-progress window or stays
+    // spinning past success, that IS the regression — the previous
+    // API-based version of this chain would have hidden a real
+    // pill bug.
+    //
+    // The pill polls every 30 s, so its observation lags the
+    // underlying deploy by up to one tick. Allow generous timeouts
+    // for the spinner-detect phase (covers the full delete chain:
+    // dispatch → PR open → validate-content → merge → deploy
+    // start).
+    await test.step("Wait for the prod deploy-status pill spinner→settled (DOM is ground truth)", async () => {
+      await page.goto(`${PROD_ADMIN}`, { waitUntil: "domcontentloaded" });
+      await expect(page.getByRole("link", { name: /^Posts$/i })).toBeVisible({
+        timeout: 60_000,
+      });
+      await waitForDeployPillSettled({
+        page,
+        pillId: PILL_PROD,
+        // 8 min covers the long delete chain (dispatch + PR open +
+        // validate-content + auto-merge + deploy-production
+        // startup) with margin, in case runners are saturated.
+        spinTimeoutMs: 8 * 60 * 1000,
+        // 4 min covers the deploy run itself + trailing 30-s pill-
+        // poll window for success → hidden.
+        settleTimeoutMs: 4 * 60 * 1000,
       });
     });
 
-    // ── 5. Find the cms/delete/<slug> PR the workflow opened ────
-    await test.step("Find the cms/delete/... PR opened by the workflow", async () => {
-      pr = await waitForCmsPullRequest({
-        base: "main",
-        headBranchPrefix: `cms/delete/${slug}`,
-        // The PR's diff IS the deletion — file path appears in the
-        // patch's `--- a/<filePath>` line and the patch body. Match by
-        // file path (the diff matcher's normal mode handles deletions).
-        filePath,
-        // For a delete PR there's no positive marker in the file body
-        // — the patch is purely red. Match on the file path alone by
-        // setting canaryMarker to something that's certain to appear:
-        // the path itself shows up in the patch header.
-        canaryMarker: filePath,
-        timeoutMs: 5 * 60 * 1000,
-      });
-      expect(pr.number, "delete-via-pr PR number").toBeGreaterThan(0);
-    });
-
-    // ── 6. validate-content on the cms/delete/<slug> PR ─────────
-    await test.step("Wait for validate-content to succeed on the delete PR", async () => {
-      await waitForWorkflowRun({
-        workflow: "cms-editorial-workflow.yml",
-        headSha: pr.head.sha,
-        branch: pr.head.ref,
-        timeoutMs: 6 * 60 * 1000,
-      });
-    });
-
-    await test.step("Wait for auto-merge to be enabled on the delete PR", async () => {
-      await waitForAutoMergeEnabled({ prNumber: pr.number });
-    });
-
-    await test.step("Wait for delete PR to merge into main", async () => {
-      await waitForMerge({ prNumber: pr.number });
-    });
-
-    // ── 7. deploy-production lands the deletion ─────────────────
-    await test.step("Wait for deploy-production.yml on main", async () => {
-      await waitForWorkflowRun({
-        workflow: "deploy-production.yml",
-        branch: "main",
-        timeoutMs: 8 * 60 * 1000,
-      });
-    });
-
-    // ── 8. Verify the file is gone from main ────────────────────
-    await test.step("Verify the throw-away canary is gone from main", async () => {
-      const stillThere = await fileExistsOnMain(filePath);
-      expect(stillThere, `${filePath} should be gone from main after merge`).toBe(false);
-    });
-
-    // ── 9. Verify the public URL actually 404s ──────────────────
-    // The file being absent from main isn't sufficient — the
-    // user-visible contract is that the URL stops serving content.
-    // CDN cache, deploy-production rsync semantics, or a stale
-    // Jekyll _site/ could all leave the page reachable. Poll until
-    // the URL returns 4xx so we KNOW the deletion landed at the
-    // customer-visible layer too.
+    // ── 5. Verify the public URL actually 404s ──────────────────
+    // The pill settled → deploy-production succeeded. CloudFront
+    // can lag the deploy by a few seconds; poll until 4xx so we
+    // know the deletion landed at the customer-visible layer too.
     const publicUrl = `${PROD_HOST}/e2e/${slug}/`;
     await test.step("Verify the canary's public URL 404s after delete + deploy", async () => {
       const deadline = Date.now() + 6 * 60 * 1000;

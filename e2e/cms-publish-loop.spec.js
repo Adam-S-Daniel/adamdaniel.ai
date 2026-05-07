@@ -58,12 +58,10 @@ const { CANARIES, findCanary, makeMarker, REPO_ROOT } = require("./canary-conten
 const {
   fetchPublicUrl,
   gh,
-  waitForAutoMergeEnabled,
   waitForCmsPullRequest,
-  waitForMerge,
-  waitForWorkflowRun,
 } = require("./github-actions-poll");
 const { seedFixtureViaPr, closeStaleDecapPrOnBranch } = require("./cms-fixture-pr");
+const { waitForDeployPillSettled, PILL_PROD } = require("./deploy-pill");
 
 const CANARY = findCanary("post");
 const PROD_HOST = "https://adamdaniel.ai";
@@ -285,20 +283,6 @@ test("CMS publish loop — host repo, target main", async ({ page }, testInfo) =
     expect(pr.number, "Decap PR number").toBeGreaterThan(0);
   });
 
-  // ── 5. Wait for validate-content to pass ─────────────────────────
-  await test.step("Wait for validate-content to succeed", async () => {
-    await waitForWorkflowRun({
-      workflow: "cms-editorial-workflow.yml",
-      headSha: pr.head.sha,
-      branch: pr.head.ref,
-      timeoutMs: 6 * 60 * 1000,
-      // The workflow has two jobs (validate-content + auto-merge-when-ready);
-      // the workflow run's overall conclusion is what we care about. At this
-      // stage only validate-content has fired (no label yet), so its success
-      // = workflow success.
-    });
-  });
-
   // ── 6. Drive Status: Ready via the UI dropdown ──────────────────
   // Editorial workflow: click the "Status: Draft" button, pick
   // "Ready" from the menu. Decap applies the `decap-cms/ready` label,
@@ -317,93 +301,83 @@ test("CMS publish loop — host repo, target main", async ({ page }, testInfo) =
     ).toBeVisible({ timeout: 30_000 });
   });
 
-  await test.step("Wait for auto-merge to be enabled", async () => {
-    await waitForAutoMergeEnabled({ prNumber: pr.number });
-  });
-
   // ── 6b. Drive Publish → Publish Now via the UI ──────────────────
-  // Three valid outcomes after the click, ANY of which means the
-  // chain is healthy:
   //
-  //   (a) Shim toast appears — ruleset returned 422 on the direct
-  //       merge call, the shim caught it, added cms/ready (idempotent
-  //       — already there), and surfaced its own toast explaining
-  //       auto-merge will land the PR. This was the only valid path
-  //       BEFORE auto-merge-when-ready started firing on
-  //       decap-cms/pending_publish (PR #227); now it's a fallback
-  //       for PRs whose checks finished AFTER the click but BEFORE
-  //       the in-flight merge call's 422 response was received.
+  // Click Publish → Publish Now and wait ONLY for Decap's local
+  // status to flip to "Published" — that's the DOM signal that
+  // Decap accepted the click. The chain that follows (decap-cms/
+  // pending_publish label → cms-editorial-workflow.yml maps to
+  // cms/ready → auto-merge fires → PR merges → deploy-production
+  // runs) happens in the background; we observe it via the
+  // deploy-status pill in the next step.
   //
-  //   (b) Decap shows its own "successfully published" notification —
-  //       the merge call succeeded synchronously (200 + merged:true).
-  //       Happens when checks were already done by click time and the
-  //       ruleset gate let the merge through.
-  //
-  //   (c) The PR is already merged (or actively auto-merging) by the
-  //       time the click fires. With auto-merge-when-ready enabling
-  //       auto-merge at Status:Ready (PR #227), the PR can transition
-  //       merged → "merged" before the spec's click reaches the API.
-  //       Decap's response then is "PR already merged" with no
-  //       distinguishing UI text — neither the shim toast nor
-  //       "successfully published" appears within 30 sec.
-  //
-  // The original spec only raced (a) and (b). After PR #245 made
-  // auto-merge actually deploy, (c) became the dominant path —
-  // dropping us into a 30-sec timeout even though the chain was
-  // succeeding under the spec. Add (c) as an API-side check.
+  // No GitHub API peeks here. The previous version raced shim
+  // toast / "successfully published" / API-merged-state, which
+  // worked but peeked under the covers (the API leg directly polled
+  // /pulls/N for `merged` / `auto_merge.enabled_by`). The pill is
+  // the editor-facing signal; that is what this spec asserts.
   await test.step("Click Publish → Publish Now via UI", async () => {
     await page.getByRole("button", { name: /^Publish$/i }).click();
     await page
       .getByRole("menuitem", { name: /publish now/i })
       .first()
       .click();
-
-    // Race (a) shim toast, (b) Decap success notification,
-    // (c) the PR's auto-merge / merged state via the API. (c) polls
-    // every 3 sec for ~30 sec so it can win against (a)/(b)'s
-    // own 30-sec deadlines when neither UI signal appears.
-    await Promise.race([
-      page
-        .locator("[data-publish-via-auto-merge-toast]")
-        .first()
-        .waitFor({ timeout: 30_000 }),
-      page
-        .getByText(/successfully published|published successfully/i)
-        .first()
-        .waitFor({ timeout: 30_000 }),
-      (async () => {
-        const deadline = Date.now() + 30_000;
-        while (Date.now() < deadline) {
-          const state = await gh(`/repos/${HOST_REPO}/pulls/${pr.number}`);
-          if (state.merged === true) return;
-          if (state.auto_merge && state.auto_merge.enabled_by) return;
-          await new Promise((r) => setTimeout(r, 3_000));
-        }
-        throw new Error(
-          `PR #${pr.number} neither showed publish UI nor became auto-merging within 30s.`,
-        );
-      })(),
-    ]);
+    // Decap flips the toolbar status button from "Status: Ready" to
+    // "Published" once it accepts the publish action. 60-s timeout
+    // covers a slow GitHub API roundtrip on Decap's side.
+    await expect(
+      page.getByRole("button", { name: /^Published$/i }),
+    ).toBeVisible({ timeout: 60_000 });
   });
 
-  await test.step("Wait for PR to merge into main", async () => {
-    await waitForMerge({ prNumber: pr.number });
-  });
-
-  // ── 7. deploy-production.yml on main ────────────────────────────
-  await test.step("Wait for deploy-production.yml to succeed on main", async () => {
-    await waitForWorkflowRun({
-      workflow: "deploy-production.yml",
-      branch: "main",
-      timeoutMs: 8 * 60 * 1000,
+  // ── 7. Pill is the editor-facing wait signal for "deploy complete" ──
+  //
+  // After Publish Now, the chain that runs in the background is:
+  //   Decap → cms-editorial-workflow.yml (validate-content + auto-
+  //   merge-when-ready) → PR squash-merge → deploy-production.yml →
+  //   deploy-status-pill polls and sees in_progress → spinner →
+  //   pill polls and sees success → display: none.
+  //
+  // The pill is what an editor watches; it is the ground-truth user
+  // signal for "your change is live." Anchoring the wait on the
+  // pill DOM (instead of polling the GitHub API for PR-merge state
+  // and deploy-run state) is the contract this test asserts. If the
+  // pill misses the in-progress window or stays spinning past
+  // success, that IS the regression — the previous API-based
+  // version of this step would have hidden a real pill bug.
+  //
+  // Step 6b's "Click Publish → Publish Now" already drives the
+  // chain. Navigate to /admin/ now so the pill scripts have a
+  // stable shell to mount on while the chain runs in the
+  // background, then wait for the spinner→settled lifecycle.
+  await test.step("Wait for the prod deploy-status pill spinner→settled (DOM is ground truth)", async () => {
+    await page.goto(`${PROD_ADMIN}`, { waitUntil: "domcontentloaded" });
+    await expect(page.getByRole("link", { name: /^Posts$/i })).toBeVisible({
+      timeout: 60_000,
+    });
+    await waitForDeployPillSettled({
+      page,
+      pillId: PILL_PROD,
+      // 6 min covers cms-editorial-workflow + auto-merge + deploy-
+      // production startup with margin (typical p95 ~3 min, max
+      // observed ~5 min under runner saturation).
+      spinTimeoutMs: 6 * 60 * 1000,
+      // 4 min covers the deploy run itself + the trailing 30-s
+      // pill-poll window for success → hidden.
+      settleTimeoutMs: 4 * 60 * 1000,
     });
   });
 
   // ── 8. Verify public URL surfaces the marker ────────────────────
+  // The pill settled to hidden, which means deploy-production
+  // succeeded according to GitHub. CloudFront invalidation can lag
+  // the deploy by a few seconds; the URL fetch confirms the change
+  // is end-to-end visible to a browser. Generous timeout in case
+  // CloudFront is propagating slower than usual.
   await test.step("Verify marker is live on adamdaniel.ai", async () => {
     await fetchPublicUrl(PUBLIC_URL, {
       expectContent: marker,
-      timeoutMs: 6 * 60 * 1000,
+      timeoutMs: 90_000,
     });
     await page.goto(PUBLIC_URL, { waitUntil: "domcontentloaded" });
     await captureStep(page, {
@@ -411,44 +385,8 @@ test("CMS publish loop — host repo, target main", async ({ page }, testInfo) =
       step: "7.2",
       title: "Marker live on the production canary URL",
       body:
-        "After the PR auto-merges and `deploy-production.yml` finishes, the canary URL on `adamdaniel.ai` reflects the edit. CloudFront's invalidation typically completes within ~2 minutes of the merge — if you don't see your change after that, check the deploy run on GitHub Actions.",
+        "After the PR auto-merges and `deploy-production.yml` finishes, the canary URL on `adamdaniel.ai` reflects the edit. The deploy-status pill in `/admin/` settles to hidden once the deploy succeeds — that's the editor-facing 'change is live' signal.",
     });
-  });
-
-  // ── 8a. Verify the deploy-status pill resolved to a non-spinner state ─
-  // The contract for admin/deploy-status-pill.js: while a deploy is
-  // in flight, `cms-prod-status-pill` shows a spinner with text
-  // "Publishing…"; after success, the pill HIDES (display: none —
-  // the "deployed commit pill" already covers steady-state). Driving
-  // the pill through that transition end-to-end is the only behavioral
-  // check that the pill actually reflects production-deploy state.
-  // The deploy-status-pill.js polls every 30s, so allow up to 90s
-  // after the URL goes live for the next poll to see the success
-  // status and hide the pill.
-  await test.step("Deploy-status pill: in-flight spinner resolved to hidden after deploy", async () => {
-    // The admin tab is still on the canary entry editor from earlier
-    // steps; navigate to a fresh /admin/ to ensure the pill scripts
-    // re-mount in their post-deploy state.
-    await page.goto(`${PROD_ADMIN}`, { waitUntil: "domcontentloaded" });
-    // Wait for the admin shell to load (Posts link is the canonical
-    // signal). Pill scripts mount alongside the shell.
-    await expect(page.getByRole("link", { name: /^Posts$/i })).toBeVisible({
-      timeout: 60_000,
-    });
-    // Pill is HIDDEN on success (display:none in the IIFE's render
-    // path). Wait up to 90s for the next polling tick after deploy.
-    await page.waitForFunction(
-      () => {
-        const el = document.getElementById("cms-prod-status-pill");
-        // Acceptable terminal states: pill not in DOM yet, OR pill
-        // exists with display:none. (Decap re-renders the toolbar on
-        // entry switches, so the pill might be in the DOM mid-poll
-        // but hidden — both pass.)
-        return !el || el.style.display === "none";
-      },
-      undefined,
-      { timeout: 90_000 },
-    );
   });
 
   // ── 9. Cleanup ──────────────────────────────────────────────────

@@ -39,11 +39,9 @@ const {
   addLabel,
   fetchPublicUrl,
   gh,
-  waitForAutoMergeEnabled,
   waitForCmsPullRequest,
-  waitForMerge,
-  waitForWorkflowRun,
 } = require("./github-actions-poll");
+const { waitForDeployPillSettled, PILL_PREVIEW } = require("./deploy-pill");
 
 const CANARY = findCanary("page");
 const PR_NUMBER = process.env.PR_NUMBER || process.env.GITHUB_PR_NUMBER || "";
@@ -181,72 +179,63 @@ test("CMS publish loop — preview env, target PR head branch", async ({ page },
     });
   });
 
-  await test.step("Wait for validate-content to succeed", async () => {
-    await waitForWorkflowRun({
-      workflow: "cms-editorial-workflow.yml",
-      headSha: pr.head.sha,
-      branch: pr.head.ref,
-      timeoutMs: 6 * 60 * 1000,
-    });
-  });
-
+  // Apply cms/ready directly (mirrors the prod spec's "Set Status:
+  // Ready" UI click — Decap has the same dropdown in preview-mode
+  // admin, but we'd need a separate UI exercise to validate it
+  // there, and the editorial-workflow chain is identical from this
+  // label onward). Once cms/ready lands,
+  // cms-editorial-workflow.yml's auto-merge-when-ready job
+  // enables auto-merge; validate-content + the PR's required
+  // checks then land the PR into PR_HEAD_REF and trigger
+  // deploy-preview.
   await test.step("Label PR cms/ready", async () => {
     await addLabel({ prNumber: pr.number, label: "cms/ready" });
   });
 
-  // The PR #78 chicken-and-egg issue (auto-merge "unstable" rollup on
-  // feature-branch PRs with no required checks) is now mitigated by the
-  // ruleset added under .github/rulesets/cms-feature-branches.json. If
-  // the ruleset is missing or the required check name drifts, this step
-  // fails and surfaces the regression.
-  await test.step("Wait for auto-merge to be enabled on PR head", async () => {
-    await waitForAutoMergeEnabled({ prNumber: pr.number });
-  });
-
-  await test.step("Wait for PR to merge into PR head branch", async () => {
-    await waitForMerge({ prNumber: pr.number });
-  });
-
-  await test.step("Wait for deploy-preview.yml to redeploy", async () => {
-    // The merge into the PR head branch should retrigger deploy-preview's
-    // synchronize event on the parent PR. The latest run on the parent PR
-    // is what we want.
-    await waitForWorkflowRun({
-      workflow: "deploy-preview.yml",
-      branch: PR_HEAD_REF,
-      timeoutMs: 8 * 60 * 1000,
-    });
-  });
-
-  await test.step("Verify marker is live on the preview subdomain", async () => {
-    await fetchPublicUrl(PREVIEW_PUBLIC_URL, {
-      expectContent: marker,
-      timeoutMs: 6 * 60 * 1000,
-    });
-  });
-
-  // ── Verify the preview-build pill resolved to a non-spinner state ──
-  // Mirror of the prod publish-loop's pill assertion (cms-publish-loop
-  // .spec.js step 8a) — same contract, different pill ID. While
-  // deploy-preview is in flight, `cms-preview-build-pill` shows a
-  // spinner with text "Preview build…"; after success it HIDES (and
-  // Decap's built-in deploy-preview-links feature surfaces a
-  // clickable Preview link in the toolbar). The deploy-status-pill
-  // polls every 30s, so allow up to 90s after the merge for the
-  // pill to reach its terminal hidden state.
-  await test.step("Preview-build pill: in-flight spinner resolved to hidden after deploy", async () => {
+  // ── Wait for the preview deploy-status pill spinner→settled ──
+  //
+  // The pill is the editor-facing signal for "your change is live
+  // on the PR's preview environment." Anchoring the wait on the
+  // pill DOM (instead of polling the GitHub API for PR-merge state
+  // and deploy-preview-run state) is the contract this test
+  // asserts. If the pill misses the in-progress window, stays
+  // spinning past success, or flips to failure, that IS the
+  // regression — the previous API-based version of these steps
+  // would have hidden a real pill bug.
+  //
+  // Navigate to /admin/ on the PR's preview subdomain so the pill
+  // scripts have a stable shell while the auto-merge → deploy
+  // chain runs in the background.
+  await test.step("Wait for preview deploy-status pill spinner→settled (DOM is ground truth)", async () => {
     await page.goto(PREVIEW_ADMIN, { waitUntil: "domcontentloaded" });
     await expect(page.getByRole("link", { name: /^Posts$/i })).toBeVisible({
       timeout: 60_000,
     });
-    await page.waitForFunction(
-      () => {
-        const el = document.getElementById("cms-preview-build-pill");
-        return !el || el.style.display === "none";
-      },
-      undefined,
-      { timeout: 90_000 },
-    );
+    await waitForDeployPillSettled({
+      page,
+      pillId: PILL_PREVIEW,
+      // 6 min covers cms-editorial-workflow + auto-merge + deploy-
+      // preview startup with margin. Preview deploys are typically
+      // a few seconds faster than prod, but the 30-s pill-poll
+      // window dominates here.
+      spinTimeoutMs: 6 * 60 * 1000,
+      // 4 min covers the deploy run itself + the trailing 30-s
+      // pill-poll window for success → hidden.
+      settleTimeoutMs: 4 * 60 * 1000,
+    });
+  });
+
+  // The pill settled to hidden, which means deploy-preview
+  // succeeded. Now confirm the change is end-to-end visible to a
+  // browser hitting the preview URL — this catches the rare case
+  // where deploy-preview's S3 sync finished but CloudFront's
+  // invalidation lagged enough to serve stale content past pill
+  // settle.
+  await test.step("Verify marker is live on the preview subdomain", async () => {
+    await fetchPublicUrl(PREVIEW_PUBLIC_URL, {
+      expectContent: marker,
+      timeoutMs: 90_000,
+    });
   });
 
   await test.step("Reset canary baseline on PR head branch (cleanup)", async () => {
