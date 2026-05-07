@@ -461,18 +461,61 @@ test("CMS publish loop — host repo, target main", async ({ page }, testInfo) =
     });
   });
 
-  // ── 9b. Cleanup safety net via fixture PR (legacy fallback) ────
-  // If the UI-driven cleanup above somehow left the canary mutated
-  // (Decap regression, network blip mid-Publish-Now, etc.), this
-  // step opens a labelled fixture PR + auto-merges to restore the
-  // baseline file directly. Keeps the canary in a known-good state
-  // for the next run regardless of what happened above.
-  await test.step("Cleanup safety net: reset canary baseline via labelled fixture PR", async () => {
-    await writeCanaryViaPr({
-      runId: `cleanup-${runId}`,
-      bodyText: `${baselineBody}\n\nThis URL exists so the automated end-to-end publish-loop tests have a stable\ntarget to assert against on both preview-pr<N>.adamdaniel.ai and\nadamdaniel.ai. The body is replaced during a test run and reset to this\nbaseline in cleanup, so the public URL always renders innocuous content\nbetween runs.\n\nIf this is the only thing you can see, no test is currently in progress.`,
-      message: `test(canary): reset post baseline after publish-loop run ${runId}`,
-    });
+});
+
+// ── Test-harness cleanup safety net ───────────────────────────────
+//
+// The test body's step 9a (Cleanup via UI) is the contract being
+// validated — it drives the editor's actual "undo my edit" path. If
+// it succeeds, the canary on main is at baseline AND the URL serves
+// baseline content; this hook becomes a no-op.
+//
+// If 9a fails or the test aborts before reaching it (Playwright
+// timeout, pill-watch failure, the marker leg never reached the
+// URL, etc.), the canary file on main may still hold the marker.
+// Leaving it that way breaks subsequent runs and pollutes the
+// public URL between runs. This hook detects mutation by reading
+// the canary file from main via the Contents API; if a marker is
+// present, it opens a labelled fixture PR + auto-merges to restore
+// baseline. If the file is already at baseline, it skips with a
+// notice.
+//
+// Per AGENTS.md "no back doors in setup or cleanup either," this
+// API-driven path is restricted to the harness-cleanup safety net
+// — it never replaces the UI-driven cleanup leg, only fires when
+// that leg has demonstrably failed to complete.
+test.afterAll(async () => {
+  if (PROD_CANARY) return; // daily canary probe doesn't mutate
+  if (!getPat()) return; // PAT-less local runs can't write anyway
+  const CanaryFile = require("./canary-content").findCanary("post");
+  let current;
+  try {
+    current = await fetchCanaryFromMain();
+  } catch (e) {
+    console.warn(
+      `[cleanup-harness] couldn't read ${CanaryFile.path} from main; skipping safety-net check: ${e && e.message}`,
+    );
+    return;
+  }
+  const decoded = Buffer.from(current.content, "base64").toString("utf8");
+  // The forward leg adds markers shaped `e2e-publish-loop:post:<runId>`.
+  // If any are present in the file body, the UI cleanup didn't fully
+  // restore baseline — fix it via the API path.
+  const hasMarker = /e2e-publish-loop:[a-z]+:\d+/.test(decoded);
+  if (!hasMarker) {
+    console.log(
+      "[cleanup-harness] canary at baseline; UI-driven cleanup succeeded — no API safety net needed",
+    );
+    return;
+  }
+  console.warn(
+    "[cleanup-harness] canary on main still contains a marker after the UI cleanup; opening fixture PR to restore baseline",
+  );
+  const baselineBody = CanaryFile.baseline;
+  await writeCanaryViaPr({
+    runId: `harness-cleanup-${Date.now()}`,
+    bodyText: `${baselineBody}\n\nThis URL exists so the automated end-to-end publish-loop tests have a stable\ntarget to assert against on both preview-pr<N>.adamdaniel.ai and\nadamdaniel.ai. The body is replaced during a test run and reset to this\nbaseline in cleanup, so the public URL always renders innocuous content\nbetween runs.\n\nIf this is the only thing you can see, no test is currently in progress.`,
+    message: `test(canary): harness safety-net reset of post baseline (UI cleanup left a marker)`,
   });
 });
 
