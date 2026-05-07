@@ -16,9 +16,24 @@ This URL exists so the automated end-to-end publish-loop tests have a stable
 target to assert against on both preview-pr<N>.adamdaniel.ai and
 adamdaniel.ai. The body is replaced during a test run and reset to this
 
+e2e-publish-loop:post:177819160173Adam Daniel — E2E canary post (do not edit by hand).
 
 
-e2e-publish-loop:post:1778191601739
+
+This URL exists so the automated end-to-end publish-loop tests have a stable
+
+target to assert against on both preview-pr<N>.adamdaniel.ai and
+
+adamdaniel.ai. The body is replaced during a test run and reset to this
+
+baseline in cleanup, so the public URL always renders innocuous content
+
+between runs.
+
+
+
+If this is the only thing you can see, no test is currently in progress.
+
 
 
 baseline in cleanup, so the public URL always renders innocuous content
