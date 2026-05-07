@@ -33,10 +33,16 @@ test.describe("Canary content invariants", () => {
     // success) — fail loudly here.
     expect(cfg).toMatch(/^\s{2}- name: e2e\s*$/m);
     // Canaries are system fixtures; contributors must not be able to
-    // create or delete them through the admin UI.
+    // create new ones through the admin UI (`create: false`).
+    // `delete: true` IS required by `cms-delete-published.spec.js`,
+    // which clicks the Decap UI's "Delete published entry" menuitem
+    // — Decap renders that menuitem only when the collection allows
+    // deletes. The "[E2E TEST FIXTURES — DO NOT EDIT]" collection
+    // label is the convention-only guardrail against accidental
+    // editor-driven deletion.
     expect(cfg).toMatch(/^\s{4}folder: _e2e\s*$/m);
     expect(cfg).toMatch(/^\s{4}create: false\s*$/m);
-    expect(cfg).toMatch(/^\s{4}delete: false\s*$/m);
+    expect(cfg).toMatch(/^\s{4}delete: true\s*$/m);
   });
 
   test("_config.yml registers the e2e collection with the right permalink", () => {

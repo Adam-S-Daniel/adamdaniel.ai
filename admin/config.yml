@@ -289,9 +289,18 @@ collections:
   # body is reset to a known baseline, so the URLs always render
   # innocuous content.
   #
-  # `create: false, delete: false` so contributors don't accidentally
-  # add or remove fixtures — the test harness depends on this exact
-  # set of canaries existing.
+  # `create: false` so contributors don't accidentally add fixtures
+  # — the test harness depends on this exact set of canaries
+  # existing. `delete: true` is REQUIRED by
+  # `e2e/cms-delete-published.spec.js`, which clicks the Decap UI's
+  # "Delete published entry" menuitem on its throw-away
+  # `canary-delete-<runId>.md` fixtures to drive the shim →
+  # delete-via-pr.yml chain. Until 2026-05-07 this was `delete:
+  # false`, which made the menu render empty (run #25491225206:
+  # status menu opened but `Delete published entry` never appeared,
+  # 30 s click timeout, 30 min spec timeout). Discoverability of
+  # accidental deletion is mitigated by the explicit collection
+  # label and the `description` field below.
   - name: e2e
     label: "[E2E TEST FIXTURES — DO NOT EDIT]"
     label_singular: "E2E Canary"
@@ -301,7 +310,7 @@ collections:
       between runs.
     folder: _e2e
     create: false
-    delete: false
+    delete: true
     slug: "{{slug}}"
     preview_path: "/e2e/{{slug}}/"
     summary: "{{title}}"
