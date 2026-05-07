@@ -322,22 +322,46 @@ test("CMS publish loop — host repo, target main", async ({ page }, testInfo) =
   });
 
   // ── 6b. Drive Publish → Publish Now via the UI ──────────────────
-  // Without admin/publish-via-auto-merge.js this clicks calls the
-  // merge API synchronously, which the main-branch ruleset rejects
-  // with 422. The shim catches that, adds the cms/ready label
-  // (idempotent — already set above), returns a synthetic merged: true
-  // response, and surfaces a toast explaining the actual merge
-  // happens once required checks finish.
+  // Three valid outcomes after the click, ANY of which means the
+  // chain is healthy:
+  //
+  //   (a) Shim toast appears — ruleset returned 422 on the direct
+  //       merge call, the shim caught it, added cms/ready (idempotent
+  //       — already there), and surfaced its own toast explaining
+  //       auto-merge will land the PR. This was the only valid path
+  //       BEFORE auto-merge-when-ready started firing on
+  //       decap-cms/pending_publish (PR #227); now it's a fallback
+  //       for PRs whose checks finished AFTER the click but BEFORE
+  //       the in-flight merge call's 422 response was received.
+  //
+  //   (b) Decap shows its own "successfully published" notification —
+  //       the merge call succeeded synchronously (200 + merged:true).
+  //       Happens when checks were already done by click time and the
+  //       ruleset gate let the merge through.
+  //
+  //   (c) The PR is already merged (or actively auto-merging) by the
+  //       time the click fires. With auto-merge-when-ready enabling
+  //       auto-merge at Status:Ready (PR #227), the PR can transition
+  //       merged → "merged" before the spec's click reaches the API.
+  //       Decap's response then is "PR already merged" with no
+  //       distinguishing UI text — neither the shim toast nor
+  //       "successfully published" appears within 30 sec.
+  //
+  // The original spec only raced (a) and (b). After PR #245 made
+  // auto-merge actually deploy, (c) became the dominant path —
+  // dropping us into a 30-sec timeout even though the chain was
+  // succeeding under the spec. Add (c) as an API-side check.
   await test.step("Click Publish → Publish Now via UI", async () => {
     await page.getByRole("button", { name: /^Publish$/i }).click();
     await page
       .getByRole("menuitem", { name: /publish now/i })
       .first()
       .click();
-    // The shim's toast carries the literal string "auto-merge"; the
-    // race vs. a Decap-native success notification covers both the
-    // shim-fired path (expected on prod) and any edge case where the
-    // merge actually succeeded synchronously (no rule violation).
+
+    // Race (a) shim toast, (b) Decap success notification,
+    // (c) the PR's auto-merge / merged state via the API. (c) polls
+    // every 3 sec for ~30 sec so it can win against (a)/(b)'s
+    // own 30-sec deadlines when neither UI signal appears.
     await Promise.race([
       page
         .locator("[data-publish-via-auto-merge-toast]")
@@ -347,6 +371,18 @@ test("CMS publish loop — host repo, target main", async ({ page }, testInfo) =
         .getByText(/successfully published|published successfully/i)
         .first()
         .waitFor({ timeout: 30_000 }),
+      (async () => {
+        const deadline = Date.now() + 30_000;
+        while (Date.now() < deadline) {
+          const state = await gh(`/repos/${HOST_REPO}/pulls/${pr.number}`);
+          if (state.merged === true) return;
+          if (state.auto_merge && state.auto_merge.enabled_by) return;
+          await new Promise((r) => setTimeout(r, 3_000));
+        }
+        throw new Error(
+          `PR #${pr.number} neither showed publish UI nor became auto-merging within 30s.`,
+        );
+      })(),
     ]);
   });
 
