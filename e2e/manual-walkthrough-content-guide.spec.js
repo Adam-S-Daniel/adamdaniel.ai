@@ -285,6 +285,12 @@ test.describe("Manual walkthrough — docs/CONTENT_GUIDE.md @parity", () => {
     page.on("pageerror", (err) =>
       console.log(`[pageerror] ${err.name}: ${err.message}`),
     );
+    // Decap CMS uses native window.confirm() for delete / unpublish
+    // confirmations; without a persistent listener, Playwright auto-
+    // dismisses the dialog and Decap reads it as "user cancelled."
+    // Defensive in case future probes exercise destructive actions —
+    // see AGENTS.md "Test-Driven Design" section.
+    page.on("dialog", (d) => d.accept());
   });
 
   if (!guideExists) {
