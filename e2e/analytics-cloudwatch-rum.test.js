@@ -107,6 +107,26 @@ test.describe("CloudWatch RUM include", () => {
     expect(html).toContain("client.rum.us-east-1.amazonaws.com");
   });
 
+  test("snippet skips RUM init for automated browsers (navigator.webdriver)", () => {
+    // The gate is a runtime check, but we lock the source-level
+    // intent here so a future edit can't silently strip it. Catches
+    // GitHub Actions Playwright traffic that would otherwise pollute
+    // real-user metrics.
+    const html = readIndex(PROD_WITH_ID_DEST);
+    expect(html).toContain("navigator.webdriver");
+  });
+
+  test("snippet honors per-device opt-out via localStorage + ?rum=off trigger", () => {
+    // Same source-level lock for the household-device opt-out path:
+    // visiting `?rum=off` once persists `rum-opt-out=1` in
+    // localStorage; the gate skips RUM init on every subsequent load
+    // until the user clears site data (or visits `?rum=on`).
+    const html = readIndex(PROD_WITH_ID_DEST);
+    expect(html).toContain("rum-opt-out");
+    expect(html).toMatch(/qs\.get\(["']rum["']\)\s*===\s*["']off["']/);
+    expect(html).toMatch(/qs\.get\(["']rum["']\)\s*===\s*["']on["']/);
+  });
+
   test("silent when JEKYLL_ENV=production but app_monitor_id is empty", () => {
     const html = readIndex(PROD_NO_ID_DEST);
     expect(html).not.toContain("AwsRumClient");
