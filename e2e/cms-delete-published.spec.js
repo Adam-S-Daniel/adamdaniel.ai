@@ -74,6 +74,13 @@ test.describe.configure({
   retries: 0,
 });
 
+// Module-scoped handle so the afterAll safety-net harness can see the
+// runId/slug/filePath generated inside the test. The forward leg is the
+// delete itself; if it succeeds the file is gone from main and the
+// harness no-ops. If it fails (test threw mid-flow), the harness opens
+// a fixture-cleanup PR so the next run starts clean.
+let pendingFixture = null;
+
 function buildCanaryBody({ slug, title, runId }) {
   // IMPORTANT: do NOT include the words "deleted" or "removed" anywhere
   // in the body. Step 3's Promise.race below uses
@@ -183,6 +190,7 @@ test("Delete published entry — UI click → public URL 404s", async ({ page },
   const slug = `canary-delete-${runId}`;
   const filePath = `_e2e/${slug}.md`;
   const title = `Delete-test canary (${runId})`;
+  pendingFixture = { runId, slug, filePath };
 
   test.info().annotations.push({
     type: "fixture-path",
@@ -194,8 +202,7 @@ test("Delete published entry — UI click → public URL 404s", async ({ page },
     await createTempCanary({ filePath, slug, title, runId });
   });
 
-  try {
-    // ── 1. Wait for the canary to land on the public site ────────
+  // ── 1. Wait for the canary to land on the public site ────────
     await test.step("Wait for the canary URL to publish", async () => {
       await fetchPublicUrl(`${PROD_HOST}/e2e/${slug}/`, {
         // The fixture's `title:` ends up in the page; that's enough to
@@ -395,19 +402,34 @@ test("Delete published entry — UI click → public URL 404s", async ({ page },
         );
       }
     });
-  } finally {
-    // Best-effort cleanup. If the shim/workflow path didn't actually
-    // remove the file (test failed before the merge), open a
-    // fixture-cleanup PR + auto-merge to drop it. Direct deletes to
-    // main are blocked by the ruleset; the cleanup mirrors the success
-    // path so subsequent runs start clean.
-    if (await fileExistsOnMain(filePath).catch(() => false)) {
-      await tryHardDelete(
-        filePath,
-        slug,
-        runId,
-        `test(canary): cleanup throw-away delete fixture run ${runId}`,
-      );
-    }
+});
+
+// Safety-net harness: the spec's forward leg IS the cleanup (UI delete
+// removes the file from main). If the test body completes successfully,
+// the file is gone and `fileExistsOnMain` returns false — harness
+// no-ops. If the test failed mid-flow (workflow stuck, shim 422 not
+// caught, etc.), the throw-away fixture is still on main and the
+// harness opens a fixture-cleanup PR so the next run starts clean.
+// Direct DELETE /contents on main is blocked by the ruleset; the
+// fixture-PR path mirrors the success case.
+test.afterAll(async () => {
+  if (!pendingFixture) return; // test never ran (skipped)
+  if (!getPat()) return; // PAT-less runs can't write anyway
+  const { filePath, slug, runId } = pendingFixture;
+  const stillThere = await fileExistsOnMain(filePath).catch(() => false);
+  if (!stillThere) {
+    console.log(
+      `[cleanup-harness] ${filePath} gone from main; UI delete succeeded — no safety net needed`,
+    );
+    return;
   }
+  console.warn(
+    `[cleanup-harness] ${filePath} still on main after the test; opening fixture-cleanup PR to remove it`,
+  );
+  await tryHardDelete(
+    filePath,
+    slug,
+    runId,
+    `test(canary): cleanup throw-away delete fixture run ${runId}`,
+  );
 });

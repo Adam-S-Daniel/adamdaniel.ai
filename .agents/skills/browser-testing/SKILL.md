@@ -193,6 +193,58 @@ If the UI looks broken, suspect (in order): `delete:` flag on the collection, mi
 
 The route-mocked unit specs (`publish-via-auto-merge-browser.spec.js`) exercise the shim's internal contract without Decap. Those CAN call `__callDelete` directly because that's their entire reason for existing. The real-network specs must not.
 
+### UI-driven cleanup + `test.afterAll()` harness safety net
+
+Real-network specs that mutate prod state (write to a `_e2e/` canary, flip a `published:` flag, delete a fixture) need cleanup that's both UI-driven AND deterministic. Two failure modes pull in opposite directions:
+
+1. **API cleanup as the primary path** = back door. Violates "Never bypass the UI in a UI test" — if Decap's UI cleanup is silently broken, an API-driven cleanup hides the regression.
+2. **UI-only cleanup with no safety net** = next run starts dirty. A test crash mid-mutation leaves the canary in the wrong state; the next run fails its baseline check or, worse, runs against the corrupted state and confuses diagnostics.
+
+The pattern that resolves both: make UI cleanup the primary path (last `test.step` in the body), and add a `test.afterAll()` harness that **only** runs API cleanup when the file on main is still mutated. In the happy path the harness reads the file once and no-ops with a `[cleanup-harness] … no safety net needed` log line.
+
+```js
+// Inside the test body, last step — UI-driven restore-to-baseline:
+await test.step("Cleanup via UI: remove marker, Save → Status:Ready → Publish Now", async () => {
+  // ... drive Decap's editor to undo the mutation, wait for the URL
+  // to flip back via waitForChangeReflected ...
+});
+});
+
+// At the bottom of the file, after the test() block — API safety net:
+test.afterAll(async () => {
+  if (PROD_CANARY) return; // daily canary probe doesn't mutate
+  if (!getPat()) return;   // PAT-less runs can't write anyway
+  let current;
+  try {
+    current = await fetchFixtureFromMain();
+  } catch (e) {
+    console.warn(`[cleanup-harness] couldn't read ${FIXTURE_PATH}: ${e.message}`);
+    return;
+  }
+  const decoded = Buffer.from(current.content, "base64").toString("utf8");
+  // Skip-when-clean check: regex / structural test that distinguishes
+  // baseline from mutated. If clean, log and return — the harness is silent.
+  if (!/e2e-publish-loop:[a-z]+:\d+/.test(decoded)) {
+    console.log("[cleanup-harness] at baseline; UI cleanup succeeded — no safety net needed");
+    return;
+  }
+  console.warn("[cleanup-harness] mutation remained after UI cleanup; restoring via API");
+  await writeFixtureOnMain({ fileText: baselineFileText, message: "..." });
+});
+```
+
+**Why a module-scoped flag for delete-style specs.** When the test creates a per-run fixture (`_e2e/canary-delete-<runId>.md`), the `runId` and `filePath` only exist inside the test closure. A common pattern: hoist a `let pendingFixture = null;` to module scope, set it inside the test once the fixture is committed, and have the harness read from it. The harness skips when `pendingFixture === null` (test never ran) and only acts when `fileExistsOnMain(pendingFixture.filePath)` is true (UI delete failed).
+
+**What the skip-when-clean check should be.**
+- Body-marker mutations: regex on file text (`/e2e-publish-loop:[a-z]+:\d+/`).
+- Frontmatter flag mutations: parse the field (`readPublishedFlag(decoded) === true`).
+- Fixture-delete mutations: file existence (`fileExistsOnMain(filePath)`).
+- The check must return *quickly* and *cheaply*. One `gh /contents/` call per spec is fine; anything heavier and the harness becomes its own flake source.
+
+**Reference implementations.** `cms-publish-loop.spec.js` (PR #421), `cms-publish-loop-preview.spec.js` (PR #423), `cms-publish-loop-prod-mutate.spec.js` (PR #426), `cms-unpublish-republish.spec.js`, `cms-delete-published.spec.js`, `cms-preview-pr-self-contained.spec.js`. Search for `test.afterAll` + `[cleanup-harness]` to find them.
+
+**Anti-pattern: try/finally in the test body.** Functionally similar but conflates "test logic" with "harness logic" and forces the cleanup code to live inside the test closure. `test.afterAll()` reads better, runs even when the test was skipped (the harness self-skips on `if (!pendingFixture) return;`), and matches the shape every other spec uses.
+
 ### Why not Sveltia
 
 An earlier iteration used Sveltia CMS for its UX improvements, but Sveltia ≤ 0.158 silently ignores `publish_mode: editorial_workflow`. With branch protection on `main`, every Save returned "Repository rule violations found." Decap implements the editorial workflow correctly — each Save lands on a `cms/...` branch and opens a PR — so we swapped back. See PR #48.
