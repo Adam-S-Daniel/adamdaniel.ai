@@ -227,11 +227,99 @@ test("CMS publish loop — preview env, target PR head branch", async ({ page },
     });
   });
 
-  await test.step("Reset canary baseline on PR head branch (cleanup)", async () => {
-    await writeCanaryOnBranch({
-      branch: PR_HEAD_REF,
-      bodyText: `${baselineBody}\n\nThis URL exists so the automated end-to-end publish-loop tests have a stable\ntarget to assert against on both preview-pr<N>.adamdaniel.ai and\nadamdaniel.ai. The body is replaced during a test run and reset to this\nbaseline in cleanup, so the public URL always renders innocuous content\nbetween runs.\n\nIf this is the only thing you can see, no test is currently in progress.`,
-      message: `test(canary): reset page baseline after preview publish-loop run ${runId}`,
+  // ── Cleanup via Decap UI (the user-facing path) ────────────────
+  // Drive Decap to remove the marker, restoring the canary body to
+  // baseline. Symmetrical with the forward leg — Save → cms PR
+  // (against PR_HEAD_REF) → cms/ready → auto-merge → deploy-preview
+  // re-renders → URL serves baseline. Per AGENTS.md "no back doors
+  // in setup or cleanup either".
+  await test.step("Cleanup via UI: replace body with baseline, Save, label cms/ready", async () => {
+    await page.goto(
+      `${PREVIEW_ADMIN}#/collections/${CANARY.cmsCollection}/entries/${CANARY.slug}`,
+      { waitUntil: "domcontentloaded" },
+    );
+    await expect(page.getByRole("textbox", { name: /^Title$/i })).toBeVisible({
+      timeout: 30_000,
     });
+
+    const body = page.locator('[role="textbox"][contenteditable="true"]').last();
+    await body.click();
+    await page.keyboard.press("Control+A");
+    await page.keyboard.press("Backspace");
+    await body.pressSequentially(
+      `${baselineBody}\n\n` +
+        "This URL exists so the automated end-to-end publish-loop tests have a stable\n" +
+        "target to assert against on both preview-pr<N>.adamdaniel.ai and\n" +
+        "adamdaniel.ai. The body is replaced during a test run and reset to this\n" +
+        "baseline in cleanup, so the public URL always renders innocuous content\n" +
+        "between runs.\n\n" +
+        "If this is the only thing you can see, no test is currently in progress.\n",
+    );
+
+    await page.getByRole("button", { name: /^Save$/i }).click();
+    await expect(page.getByText(/Changes saved/i).first()).toBeVisible({
+      timeout: 60_000,
+    });
+
+    // Find the cms PR Decap just opened for this Save and label it
+    // cms/ready so editorial-workflow auto-merges it. (Mirrors the
+    // forward leg's labelling step.)
+    const cleanupPr = await waitForCmsPullRequest({
+      base: PR_HEAD_REF,
+      filePath: CANARY.path,
+      canaryMarker: baselineBody,
+      timeoutMs: 5 * 60 * 1000,
+    });
+    await addLabel({ prNumber: cleanupPr.number, label: "cms/ready" });
+
+    // Wait for the URL to revert to baseline (no marker).
+    await waitForChangeReflected({
+      page,
+      pillId: PILL_PREVIEW,
+      urlCheck: async () => {
+        const res = await page.request.get(PREVIEW_PUBLIC_URL, { failOnStatusCode: false });
+        if (res.status() !== 200) return false;
+        const text = await res.text();
+        return !text.includes(marker) && text.includes(baselineBody);
+      },
+      urlTimeoutMs: 10 * 60 * 1000,
+    });
+  });
+});
+
+// ── Test-harness cleanup safety net ───────────────────────────────
+//
+// Mirrors cms-publish-loop.spec.js's afterAll harness. If the
+// in-spec UI cleanup left the canary mutated on the PR head branch
+// (test aborted, Decap regression mid-cleanup, etc.), this hook
+// reads canary-page.md from PR_HEAD_REF and writes baseline back
+// via the Contents API. SKIPS when the file is already at baseline.
+test.afterAll(async () => {
+  if (!getPat()) return;
+  if (!PR_HEAD_REF) return;
+  let current;
+  try {
+    current = await fetchCanaryFromBranch(PR_HEAD_REF);
+  } catch (e) {
+    console.warn(
+      `[cleanup-harness] couldn't read ${CANARY.path} from ${PR_HEAD_REF}; skipping safety net: ${e && e.message}`,
+    );
+    return;
+  }
+  const decoded = Buffer.from(current.content, "base64").toString("utf8");
+  const hasMarker = /e2e-publish-loop:[a-z]+:\d+/.test(decoded);
+  if (!hasMarker) {
+    console.log(
+      "[cleanup-harness] preview canary at baseline; UI-driven cleanup succeeded — no safety net needed",
+    );
+    return;
+  }
+  console.warn(
+    `[cleanup-harness] canary on ${PR_HEAD_REF} still contains a marker after the UI cleanup; restoring via Contents API`,
+  );
+  await writeCanaryOnBranch({
+    branch: PR_HEAD_REF,
+    bodyText: `${CANARY.baseline}\n\nThis URL exists so the automated end-to-end publish-loop tests have a stable\ntarget to assert against on both preview-pr<N>.adamdaniel.ai and\nadamdaniel.ai. The body is replaced during a test run and reset to this\nbaseline in cleanup, so the public URL always renders innocuous content\nbetween runs.\n\nIf this is the only thing you can see, no test is currently in progress.`,
+    message: `test(canary): harness safety-net reset of page baseline (UI cleanup left a marker)`,
   });
 });
