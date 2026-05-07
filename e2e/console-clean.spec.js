@@ -86,10 +86,20 @@ function buildContentUrls() {
   // explicitly says `published: false`. A post that's been pulled stops
   // being asserted on; one that omits the key entirely (Jekyll publishes
   // it) is still covered.
+  //
+  // ALSO skip `sitemap: false` posts. Test-fixture canaries (e.g. the
+  // prod-mutate playground's `2099-01-01-e2e-mutation-canary.md`) get
+  // briefly flipped to `published: true` mid-run; their `sitemap:
+  // false` flag is the canonical "this is hidden by design" signal.
+  // Asserting that the URL is console-clean against TARGET=prod
+  // breaks because prod (correctly) still has the BASELINE
+  // `published: false` and the URL 404s — even though the cms PR's
+  // source tree says published: true.
   for (const file of listMd(POSTS_DIR)) {
     const fm = parseFrontMatter(path.join(POSTS_DIR, file));
     if (!fm) continue;
     if (fm.published === "false") continue;
+    if (fm.sitemap === "false" || fm.sitemap === false) continue;
     const slugSource = fm.slug && fm.slug !== "" ? fm.slug : fm.title;
     if (!slugSource) continue;
     urls.add(`/blog/${slugify(slugSource)}/`);
