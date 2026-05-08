@@ -91,7 +91,7 @@ if: ${{ success() && vars.PROD_PLAYGROUND_MODE == 'true' }}
 - **`${{ job.status }}`** in `with:` — silently expands to empty string inside a composite action's `with:` block. Two iterations confirmed: no comment ever lands.
 - **`failure()` / `success()` inside the action's own step `if:`** — unreliable in composite contexts; whatever GitHub Actions evaluates `failure()` against inside a composite step doesn't reflect the calling job's state in our case.
 
-The caller-side gating in the patterns above is the only approach that has been empirically confirmed to fire.
+The caller-side gating in the patterns above is the only approach that has been **empirically confirmed** to fire (PR #517 finalize job at run 25561744480 — first successful auto-comment after switching to v3 mode-driven design).
 
 ## Required upstream conditions
 
