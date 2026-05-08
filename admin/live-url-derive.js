@@ -5,8 +5,12 @@
  * Two consumers depend on this:
  *
  *      the form so editors can click straight through to the live page.
- *   2. `native-preview-href.js` — rewrites Decap's native "View Live"
- *      toolbar anchor on every form mutation so it points at the same URL.
+ *   2. (historical) `native-preview-href.js` used to rewrite Decap's native
+ *      "View Live" toolbar anchor's href on every form mutation. That anchor
+ *      is now removed entirely (redundant with the floating Live Preview
+ *      button and the deploy-status / commit pills, and it clipped the
+ *      publish-status pill off-screen on narrow viewports). The override
+ *      script remains and removes the anchor; it no longer needs compute().
  *
  * Both used to maintain their own view of the slug → URL math, which made
  * keeping them in sync impossible. Centralising the logic here means a future

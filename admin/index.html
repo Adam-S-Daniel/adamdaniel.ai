@@ -115,11 +115,13 @@
        state from the DOM and renders a link (or placeholder when
        Published is OFF / no slug yet). -->
 
-  <!-- Rewrites Decap's native "View Live" toolbar anchor href so it
-       matches the banner's URL. Required because Decap's two-pass
-       `preview_path` substitution diverges from Jekyll's `:slug` for
-       collections whose `slug:` template includes a date prefix
-       (Posts). See admin/config.yml's Posts comment block + AGENTS.md. -->
+  <!-- Removes Decap's native "View Live" toolbar anchor — redundant
+       with the floating "Live Preview" button (#live-preview-link)
+       and the deploy-status / commit pills, and clips the publish
+       pill off-screen on narrow viewports. The override also keeps
+       the historical `live-url-derive.js`-based href rewrite contract
+       moot (the anchor no longer exists), but live-url-derive.js is
+       still loaded for the in-editor banner. -->
   <script src="native-preview-href.js" defer></script>
 
   <!--

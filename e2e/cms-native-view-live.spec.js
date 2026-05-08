@@ -1,30 +1,22 @@
 // @lane: local — drives the local Decap admin shell; no real GitHub
 const { test, expect } = require("./base");
 
-// A1 runtime check — Decap's native "View Live" toolbar anchor is rewritten
-// at runtime by admin/native-preview-href.js to match the URL the in-editor
-// banner uses (admin/live-url-derive.js's compute()).
+// A1 runtime check — Decap's native "View Live" toolbar anchor is REMOVED
+// at runtime by admin/native-preview-href.js.
 //
-// The seed canary post at _posts/2026-04-25-replacement-test-post-1.md ships
-// with `slug: ''` (empty), so:
-//   - file slug (Decap's `slug:` template result) → 2026-04-25-replacement-test-post-1
-//   - banner URL (live-url-derive.js compute()) → /blog/replacement-test-post-1/
-//     (slugified from the title because explicit slug is empty —
-//     see live-url-derive.js's `explicitSlug || slugify(fallback)` chain)
-//   - Jekyll's published URL → /blog/replacement-test-post-1/
-//     (`permalink: /blog/:slug/` strips the date prefix)
+// Why removed (not rewritten): the native anchor is redundant with the
+// floating eye-icon "Live Preview" button (#live-preview-link in
+// admin/index.html) and the deploy-status / commit pills. On narrow
+// viewports the toolbar overflows and the redundant anchor pushes the
+// publish-status pill off-screen. See admin/native-preview-href.js's
+// header comment for the full rationale.
 //
-// Without the override, Decap's native toolbar would point at
-// /blog/2026-04-25-replacement-test-post-1/ (the file slug). With the
-// override, it tracks the banner exactly. This spec asserts the latter, then
-// fetches the URL against the local Jekyll dev server and confirms HTTP 200.
+// This spec asserts that, after Decap mounts the editor toolbar, NO
+// `target="_blank" rel*="noopener"` anchor (other than the
+// site-rendered exclusions) remains inside the toolbar.
 
 const SEED_POST_SLUG = "2026-04-25-replacement-test-post-1";
 const SEED_POST_TITLE = "Replacement test post 1";
-// What both the banner and the override should resolve to for this entry.
-// `replacement-test-post-1` is what slugify("Replacement test post 1") produces.
-// allowed: literal slug used for known fixture (the seed canary post).
-const EXPECTED_PATH = "/blog/replacement-test-post-1/";
 
 const SEED_POST_CONTENT =
   `---
@@ -82,7 +74,7 @@ async function loadAdmin(page) {
   });
 }
 
-test.describe("CMS native View-Live anchor — runtime href contract", () => {
+test.describe("CMS native View-Live anchor — runtime removal contract", () => {
   test.describe.configure({ mode: "serial", timeout: 180_000 });
 
   test.beforeEach(({ page }, testInfo) => {
@@ -92,7 +84,7 @@ test.describe("CMS native View-Live anchor — runtime href contract", () => {
     );
   });
 
-  test("native toolbar anchor href matches Jekyll's URL and serves HTTP 200", async ({
+  test("native toolbar View-Live anchor is removed from the DOM", async ({
     page,
   }) => {
     test.fixme(
@@ -117,69 +109,58 @@ test.describe("CMS native View-Live anchor — runtime href contract", () => {
     );
     await expect(page.getByLabel(/^Title$/)).toBeVisible({ timeout: 60_000 });
 
-    // Wait for the banner to render — its presence proves
-    // live-url-derive.js loaded and compute() returned a URL. The
-    // override depends on the same module, so once the banner is up
-    // the override has fired at least once.
-    const banner = page.locator('[data-testid="cms-live-url-banner-link"]');
-    await expect(banner).toBeVisible({ timeout: 30_000 });
-    const bannerHref = await banner.getAttribute("href");
-    expect(bannerHref, "Banner anchor must have an href").toBeTruthy();
-    const bannerPath = new URL(bannerHref).pathname;
-    expect(
-      bannerPath,
-      `Banner should resolve to ${EXPECTED_PATH} for the seed canary post`,
-    ).toBe(EXPECTED_PATH);
+    // Wait for the editor toolbar to render — its presence proves
+    // Decap mounted the entry editor. Once the toolbar is visible
+    // the override has had a chance to run (it observes mutations
+    // and fires on every toolbar render).
+    const toolbar = page.locator('[class*="EditorToolbar"]').first();
+    await expect(toolbar).toBeVisible({ timeout: 30_000 });
 
-    // ── Find the native toolbar anchor ────────────────────────────────
-    // The override module rewrites every <a target="_blank"
-    // rel*="noopener"> inside an `[class*="EditorToolbar"]` ancestor,
-    // excluding the banner / live-preview / commit-pill IDs.
+    // ── Assert NO native View Live anchor remains ─────────────────────
+    // The override script removes every `<a target="_blank"
+    // rel*="noopener">` inside an `[class*="oolbar"]` ancestor that
+    // isn't one of this site's own surfaces (live-preview-link,
+    // cms-commit-pill, cms-prod-status-pill, cms-preview-build-pill).
     //
-    // Wait for at least one such anchor to exist AND for its href to
-    // match what compute() produces — that's the contract this spec
-    // locks.
+    // We poll because Decap may re-mount the toolbar a few times
+    // during initial render; the override fires on mutation, so the
+    // anchor is removed shortly after each mount.
     await expect
       .poll(
         async () => {
           return await page.evaluate(() => {
             const toolbars = document.querySelectorAll(
-              '[class*="EditorToolbar"]',
+              '[class*="oolbar"]',
             );
             const excluded = new Set([
               "cms-live-url-banner-link",
               "live-preview-link",
               "cms-commit-pill",
+              "cms-prod-status-pill",
+              "cms-preview-build-pill",
             ]);
-            const hrefs = [];
+            const remaining = [];
             for (const tb of toolbars) {
               const as = tb.querySelectorAll(
                 'a[target="_blank"][rel*="noopener"][href]',
               );
               for (const a of as) {
                 if (excluded.has(a.id)) continue;
-                hrefs.push(a.getAttribute("href"));
+                remaining.push(a.getAttribute("href") || "(no-href)");
               }
             }
-            return hrefs;
+            return remaining;
           });
         },
         {
           timeout: 30_000,
           message:
-            "Decap's native toolbar should render at least one View-Live-style anchor for a published post.",
+            "Native Decap View-Live anchor should be removed from the toolbar — " +
+            "it's redundant with the floating Live Preview button and the " +
+            "deploy-status / commit pills, and clips the publish pill off-screen " +
+            "on narrow viewports.",
         },
       )
-      .toEqual(expect.arrayContaining([bannerHref]));
-
-    // ── Fetch the URL against Jekyll and assert HTTP 200 ──────────────
-    // playwright's `page.request.get` reuses the test's baseURL, so the
-    // path-only fetch hits the local Jekyll dev server.
-    const response = await page.request.get(EXPECTED_PATH);
-    expect(
-      response.status(),
-      `${EXPECTED_PATH} should serve a published post (200) — if this fails ` +
-        `the override pointed at a URL Jekyll doesn't render.`,
-    ).toBe(200);
+      .toEqual([]);
   });
 });

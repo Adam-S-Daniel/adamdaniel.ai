@@ -38,8 +38,9 @@ collections:
 
   # ── Posts ─────────────────────────────────────────────────
   # The `slug:` date prefix is required by Jekyll's `_posts/` folder; the
-  # divergence it introduces against `permalink: /blog/:slug/` is fixed at
-  # runtime by admin/native-preview-href.js. See admin/config.yml's Posts
+  # divergence it introduces against `permalink: /blog/:slug/` is moot
+  # at runtime because admin/native-preview-href.js removes the native
+  # "View Live" toolbar anchor entirely. See admin/config.yml's Posts
   # block for the long-form rationale.
   - name: posts
     label: Posts
