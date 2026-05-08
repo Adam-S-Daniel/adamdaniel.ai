@@ -837,122 +837,22 @@ jobs:
           done
 
       # ── Failure summary on the PR ────────────────────────────────
-      # Without log access from outside the workflow, a failed CI
-      # run is opaque to anyone (or any agent) iterating on a PR.
-      # Surface the actual Playwright failure blocks as a PR
-      # comment, scrubbed of secrets via gitleaks first.
-      - name: Determine if any shard failed
-        id: e2e-status
-        if: always()
-        # `needs.e2e.result` is "success" only when every matrix
-        # entry succeeded; "failure" when any failed; "cancelled"
-        # when any was cancelled.
-        run: |
-          if [ "${{ needs.e2e.result }}" = "failure" ]; then
-            echo "failed=true" >> "$GITHUB_OUTPUT"
-          else
-            echo "failed=false" >> "$GITHUB_OUTPUT"
-          fi
-
-      - name: Install gitleaks
-        if: steps.e2e-status.outputs.failed == 'true'
-        env:
-          GITLEAKS_VERSION: 8.21.2
-        run: |
-          # No `sudo` here: the Playwright container runs as root by
-          # default, so `tar -xzC /usr/local/bin` works directly. Adding
-          # `sudo` would fail because sudo isn't installed in the image.
-          curl -sSfL "https://github.com/gitleaks/gitleaks/releases/download/v${GITLEAKS_VERSION}/gitleaks_${GITLEAKS_VERSION}_linux_x64.tar.gz" \
-            | tar -xzC /usr/local/bin gitleaks
-          gitleaks version
-
-      - name: Extract and scrub failure summary
-        if: steps.e2e-status.outputs.failed == 'true'
-        run: |
-          bash scripts/extract-playwright-failures.sh /tmp/playwright-output.log > /tmp/failures-raw.txt || true
-          if [ ! -s /tmp/failures-raw.txt ]; then
-            # Fallback: send the tail of the log so the comment isn't empty.
-            tail -c 80000 /tmp/playwright-output.log > /tmp/failures-raw.txt
-          fi
-          node scripts/scrub-secrets.js /tmp/failures-raw.txt /tmp/failures-clean.txt
-          # Truncate to fit comfortably in a GitHub comment
-          # (the hard cap is ~65 535 chars; leave headroom for the
-          # surrounding markdown).
-          head -c 60000 /tmp/failures-clean.txt > /tmp/failures-final.txt
-
-      - name: Post failure summary to PR
-        if: steps.e2e-status.outputs.failed == 'true'
-        uses: actions/github-script@3a2844b7e9c422d3c10d287c895573f7108da1b3  # v9.0.0 (2026-04-09)
+      # Surface the matrix's failure blocks as a PR comment so a
+      # human (or agent) iterating on the PR can triage without
+      # needing workflow-log access. Delegated to the shared
+      # composite action at .github/actions/post-failure-comment;
+      # see AGENTS.md "Failure-comment composite action" for the
+      # full convention and design notes.
+      - name: Post / resolve failure summary
+        if: ${{ always() && github.event_name == 'pull_request' }}
+        uses: ./.github/actions/post-failure-comment
         with:
-          script: |
-            const fs = require('fs');
-            const summary = fs.readFileSync('/tmp/failures-final.txt', 'utf8');
-            const sha = context.payload.pull_request.head.sha.slice(0, 7);
-            const runUrl = `${context.serverUrl}/${context.repo.owner}/${context.repo.repo}/actions/runs/${context.runId}`;
-
-            const body = [
-              '<!-- e2e-failure-summary -->',
-              `## ❌ E2E test failures on \`${sha}\``,
-              '',
-              `[View full run](${runUrl})`,
-              '',
-              '<details>',
-              '<summary>Failure log (secrets redacted via gitleaks)</summary>',
-              '',
-              '```',
-              summary || '(no failure block matched the extractor; see the run for full output)',
-              '```',
-              '',
-              '</details>',
-              '',
-              '*Posted automatically. The comment refreshes on every CI run; the most recent failures are always shown here.*',
-            ].join('\n');
-
-            const pr = context.payload.pull_request.number;
-            const { data: comments } = await github.rest.issues.listComments({
-              owner: context.repo.owner,
-              repo: context.repo.repo,
-              issue_number: pr,
-            });
-            const marker = '<!-- e2e-failure-summary -->';
-            const existing = comments.find(c => c.body && c.body.includes(marker));
-            if (existing) {
-              await github.rest.issues.updateComment({
-                owner: context.repo.owner,
-                repo: context.repo.repo,
-                comment_id: existing.id,
-                body,
-              });
-            } else {
-              await github.rest.issues.createComment({
-                owner: context.repo.owner,
-                repo: context.repo.repo,
-                issue_number: pr,
-                body,
-              });
-            }
-
-      - name: Resolve failure-summary comment on success
-        if: always() && steps.e2e-status.outputs.failed != 'true'
-        uses: actions/github-script@3a2844b7e9c422d3c10d287c895573f7108da1b3  # v9.0.0 (2026-04-09)
-        with:
-          script: |
-            const pr = context.payload.pull_request.number;
-            const { data: comments } = await github.rest.issues.listComments({
-              owner: context.repo.owner,
-              repo: context.repo.repo,
-              issue_number: pr,
-            });
-            const marker = '<!-- e2e-failure-summary -->';
-            const existing = comments.find(c => c.body && c.body.includes(marker));
-            if (existing) {
-              await github.rest.issues.updateComment({
-                owner: context.repo.owner,
-                repo: context.repo.repo,
-                comment_id: existing.id,
-                body: `${marker}\n## ✅ E2E tests passing on \`${context.payload.pull_request.head.sha.slice(0,7)}\`\n\n_Cleared by the most recent green run._`,
-              });
-            }
+          log-file: /tmp/playwright-output.log
+          marker: e2e-failure-summary
+          title: E2E tests
+          # `needs.e2e.result` is `success`, `failure`, `cancelled`,
+          # or `skipped`. The action no-ops on cancelled/skipped.
+          outcome: ${{ needs.e2e.result }}
 
       # ─── DO NOT REMOVE OR SOFTEN — this step IS the merge gate ─────────
       # `e2e (1)` is required, but `e2e (2..4)` are not (dynamic shard

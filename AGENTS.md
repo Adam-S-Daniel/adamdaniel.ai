@@ -621,6 +621,44 @@ node scripts/generate-showcase.js                           # produces before/af
 
 `scripts/generate-showcase.js` displays each snapshot as a before/after side-by-side pair (3.5s per slide) and records the session as `recordings/visual-regression-showcase.webm`. If no `-before` directory exists (first run), it shows current baselines only. The `-before` directory is auto-cleaned after the video is written.
 
+## Failure-comment composite action
+
+Workflow logs are not directly readable by the Claude agent (no `gh` CLI, the GitHub MCP server has no `actions/runs/.../logs` tool, and unauthenticated `curl` to `api.github.com/.../actions/runs/.../logs` returns 403). To make CI failures triage-able from inside a PR conversation, every Playwright-running workflow forwards its captured log to a shared composite action:
+
+```yaml
+- name: Post / resolve failure summary
+  if: ${{ always() && github.event_name == 'pull_request' }}
+  uses: ./.github/actions/post-failure-comment
+  with:
+    log-file: /tmp/<your-log>.log
+    marker: <unique-marker-slug>     # NO `<!-- -->` — the action wraps it
+    title: <short label>
+    outcome: ${{ job.status }}
+```
+
+For workflows that don't fire on `pull_request` (e.g. `cms-publish-loop-preview.yml` on `workflow_dispatch`), pass `pr-number: ${{ inputs.pr_number }}` as well — the action falls back to looking up the head SHA via the API.
+
+The composite action at `.github/actions/post-failure-comment/action.yml`:
+
+1. Installs `gitleaks` to `$HOME/.local/bin` (no sudo, works in both the Playwright Docker container and on `ubuntu-latest`).
+2. Runs `scripts/extract-playwright-failures.sh` against the captured log to pull just the numbered failure blocks; falls back to `tail -c 80000` if the extractor finds nothing.
+3. Pipes the result through `scripts/scrub-secrets.js` (gitleaks-backed) and truncates to 60 KB to fit in a GitHub comment.
+4. Posts (or updates, via marker-based dedup) a PR comment under `<!-- <marker> -->`.
+5. Resolves the comment to a "passing on `<sha>`" stub on the next green run.
+
+**Markers in use** (must be globally unique to avoid clobbering each other):
+
+| Marker | Workflow |
+|---|---|
+| `e2e-failure-summary` | `e2e-tests.yml` |
+| `host-loop-failure-summary` | `cms-publish-loop-host.yml` |
+| `prod-mutate-failure-summary` | `cms-publish-loop-prod.yml` |
+| `preview-loop-failure-summary` | `cms-publish-loop-preview.yml` |
+
+**Security note.** The embedded `actions/github-script` calls receive their inputs as `env:` vars and read them via `process.env.X` — never inline `${{ inputs.x }}` directly into a script body. This pattern is what `actions/github-script`'s README explicitly requires, and it's a script-injection vector if you skip it. Same rule applies to any extension of the action.
+
+The full convention (when to use, when NOT to use, common refactor pitfalls, how to test wiring) lives in the `post-failure-comment` skill (`.agents/skills/post-failure-comment/SKILL.md`).
+
 ## Preview environment flow
 
 1. PR opened → Jekyll builds at root (no baseurl) → sync to `s3://adamdaniel-ai-previews/pr-{N}/`

@@ -160,3 +160,19 @@ jobs:
             test-results/**
           if-no-files-found: ignore
           retention-days: 14
+
+      # Surface the failure block as a PR comment on the parent PR
+      # (resolved via the workflow_dispatch input). See AGENTS.md
+      # "Failure-comment composite action" for the pattern. This
+      # workflow has no `pull_request` event, so we pass `pr-number`
+      # explicitly — the action falls back to looking up the head
+      # SHA via the API.
+      - name: Post / resolve failure summary
+        if: always()
+        uses: ./.github/actions/post-failure-comment
+        with:
+          log-file: /tmp/preview-loop.log
+          marker: preview-loop-failure-summary
+          title: preview-loop
+          outcome: ${{ job.status }}
+          pr-number: ${{ inputs.pr_number }}

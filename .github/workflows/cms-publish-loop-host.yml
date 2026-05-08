@@ -188,97 +188,16 @@ jobs:
 
       # Surface the Playwright failure block as a PR comment so a
       # human (or agent) iterating on the PR can triage without
-      # needing workflow-log access. Mirrors e2e-tests.yml's
-      # post-failure-summary pattern; uses a distinct marker so it
+      # needing workflow-log access. Delegated to the shared
+      # composite action at .github/actions/post-failure-comment;
+      # see AGENTS.md "Failure-comment composite action" for the
+      # full convention and design notes. Distinct marker so it
       # doesn't clobber the e2e or prod-mutate comment.
-      - name: Install gitleaks
-        if: ${{ failure() && github.event_name == 'pull_request' }}
-        env:
-          GITLEAKS_VERSION: 8.21.2
-        run: |
-          # Playwright container runs as root; no sudo available.
-          curl -sSfL "https://github.com/gitleaks/gitleaks/releases/download/v${GITLEAKS_VERSION}/gitleaks_${GITLEAKS_VERSION}_linux_x64.tar.gz" \
-            | tar -xzC /usr/local/bin gitleaks
-          gitleaks version
-
-      - name: Extract and scrub host-loop failure summary
-        if: ${{ failure() && github.event_name == 'pull_request' }}
-        run: |
-          bash scripts/extract-playwright-failures.sh /tmp/host-loop.log > /tmp/failures-raw.txt || true
-          if [ ! -s /tmp/failures-raw.txt ]; then
-            tail -c 80000 /tmp/host-loop.log > /tmp/failures-raw.txt
-          fi
-          node scripts/scrub-secrets.js /tmp/failures-raw.txt /tmp/failures-clean.txt
-          head -c 60000 /tmp/failures-clean.txt > /tmp/failures-final.txt
-
-      - name: Post host-loop failure summary to PR
-        if: ${{ failure() && github.event_name == 'pull_request' }}
-        uses: actions/github-script@3a2844b7e9c422d3c10d287c895573f7108da1b3  # v9.0.0 (2026-04-09)
+      - name: Post / resolve failure summary
+        if: ${{ always() && github.event_name == 'pull_request' }}
+        uses: ./.github/actions/post-failure-comment
         with:
-          script: |
-            const fs = require('fs');
-            const summary = fs.readFileSync('/tmp/failures-final.txt', 'utf8');
-            const sha = context.payload.pull_request.head.sha.slice(0, 7);
-            const runUrl = `${context.serverUrl}/${context.repo.owner}/${context.repo.repo}/actions/runs/${context.runId}`;
-            const marker = '<!-- host-loop-failure-summary -->';
-            const body = [
-              marker,
-              `## host-loop failure on \`${sha}\``,
-              '',
-              `[View full run](${runUrl})`,
-              '',
-              '<details>',
-              '<summary>Failure log (secrets redacted via gitleaks)</summary>',
-              '',
-              '```',
-              summary || '(no failure block matched the extractor; see the run for full output)',
-              '```',
-              '',
-              '</details>',
-              '',
-              '*Posted automatically. The comment refreshes on every CI run.*',
-            ].join('\n');
-            const pr = context.payload.pull_request.number;
-            const { data: comments } = await github.rest.issues.listComments({
-              owner: context.repo.owner,
-              repo: context.repo.repo,
-              issue_number: pr,
-            });
-            const existing = comments.find(c => c.body && c.body.includes(marker));
-            if (existing) {
-              await github.rest.issues.updateComment({
-                owner: context.repo.owner,
-                repo: context.repo.repo,
-                comment_id: existing.id,
-                body,
-              });
-            } else {
-              await github.rest.issues.createComment({
-                owner: context.repo.owner,
-                repo: context.repo.repo,
-                issue_number: pr,
-                body,
-              });
-            }
-
-      - name: Resolve host-loop failure-summary comment on success
-        if: ${{ success() && github.event_name == 'pull_request' }}
-        uses: actions/github-script@3a2844b7e9c422d3c10d287c895573f7108da1b3  # v9.0.0 (2026-04-09)
-        with:
-          script: |
-            const marker = '<!-- host-loop-failure-summary -->';
-            const pr = context.payload.pull_request.number;
-            const { data: comments } = await github.rest.issues.listComments({
-              owner: context.repo.owner,
-              repo: context.repo.repo,
-              issue_number: pr,
-            });
-            const existing = comments.find(c => c.body && c.body.includes(marker));
-            if (existing) {
-              await github.rest.issues.updateComment({
-                owner: context.repo.owner,
-                repo: context.repo.repo,
-                comment_id: existing.id,
-                body: `${marker}\n## host-loop passing on \`${context.payload.pull_request.head.sha.slice(0,7)}\`\n\n_Cleared by the most recent green run._`,
-              });
-            }
+          log-file: /tmp/host-loop.log
+          marker: host-loop-failure-summary
+          title: host-loop
+          outcome: ${{ job.status }}
