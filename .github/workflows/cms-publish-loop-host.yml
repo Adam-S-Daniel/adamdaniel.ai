@@ -67,9 +67,15 @@ on:
 permissions:
   # The spec drives admin via a fine-grained PAT (CMS_E2E_PAT) — the
   # workflow itself only needs to read the repo to install deps and
-  # check out source, so contents:read is sufficient. The PAT carries
-  # its own contents:rw / pull-requests:rw scope.
+  # check out source, so contents:read is sufficient there. The PAT
+  # carries its own contents:rw / pull-requests:rw scope.
+  #
+  # `pull-requests: write` is needed by the post-failure-comment
+  # composite action so the default GITHUB_TOKEN can post the
+  # failure-summary comment via the issues comments API. Without
+  # this the github-script call 403s silently and no comment lands.
   contents: read
+  pull-requests: write
 
 defaults:
   run:

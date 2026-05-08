@@ -46,9 +46,16 @@ on:
 permissions:
   # Spec drives Decap with CMS_E2E_PAT for content writes; the
   # workflow itself only needs `contents: read` to install deps and
-  # checkout source. PAT carries Contents: r/w + Pull requests: r/w
-  # + Actions: r/w on the host repo.
+  # checkout source there. PAT carries Contents: r/w + Pull requests:
+  # r/w + Actions: r/w on the host repo.
+  #
+  # `pull-requests: write` is needed by the post-failure-comment
+  # composite action so the default GITHUB_TOKEN can post the
+  # failure-summary comment on the parent PR (resolved via the
+  # `pr_number` workflow input). Without it the github-script call
+  # 403s silently and no comment lands.
   contents: read
+  pull-requests: write
 
 concurrency:
   # Per-PR group keeps two preview-loop runs from racing on the same

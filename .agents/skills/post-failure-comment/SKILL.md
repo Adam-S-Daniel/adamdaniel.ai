@@ -52,7 +52,13 @@ For a workflow whose runtime gate matches the upload-artifact step (e.g. `vars.P
    - `prod-mutate-failure-summary` — `cms-publish-loop-prod.yml`
    - `preview-loop-failure-summary` — `cms-publish-loop-preview.yml`
 3. **Have `actions/checkout` run first.** The action shells out to `$GITHUB_WORKSPACE/scripts/extract-playwright-failures.sh` and `$GITHUB_WORKSPACE/scripts/scrub-secrets.js`. No checkout = no scripts.
-4. **Have the GitHub-script token write access.** The default `GITHUB_TOKEN` works for posting comments on the same repo. The composite action does NOT require `CMS_E2E_PAT`.
+4. **Grant `pull-requests: write` to the workflow.** The default `GITHUB_TOKEN` works for posting comments on the same repo, BUT only if the workflow's `permissions:` block explicitly grants it. Without this, the embedded `actions/github-script` call 403s silently — the workflow log shows the error but no comment is posted, which can fool a casual review. The composite action does NOT require `CMS_E2E_PAT`. Minimum block:
+
+   ```yaml
+   permissions:
+     contents: read
+     pull-requests: write
+   ```
 
 ## What the action does internally
 
@@ -71,9 +77,10 @@ Inputs to the embedded `actions/github-script` calls are passed via `env:` and r
 
 ## Common refactor pitfalls
 
+- **Missing `pull-requests: write` permission** — the most subtle and most common. The default `GITHUB_TOKEN` is read-only unless explicitly elevated; without elevation the comment-post 403s silently and the workflow looks like it ran the comment step but produced no comment. ALWAYS add `pull-requests: write` to a workflow's `permissions:` block when wiring this action in. Verified by listing PR comments after a deliberately-broken push (see "Testing your wiring" below).
 - **Forgetting `actions/checkout`** — happens when slotting the action into a one-step workflow. The action's extractor + scrubber require the repo on disk. Add a checkout step if there isn't one.
 - **Overlapping markers** — copy-pasting from another workflow without changing the marker. Always pick a globally-unique slug.
-- **Wrong outcome source** — `${{ job.status }}` is the canonical source for single-job workflows. For workflows with multiple dependent jobs (like `e2e-tests.yml`'s post-job), pass `${{ needs.<job>.result }}` instead.
+- **Wrong outcome source** — `${{ job.status }}` is the canonical source for single-job workflows. For workflows with multiple dependent jobs (like `e2e-tests.yml`'s post-job), pass `${{ needs.<job>.result }}` instead — and remember `needs.<job>.result` only reflects ONE upstream job. If the workflow has multiple matrix jobs that should all gate the comment, AND-combine them in an intermediate step.
 - **Skipping the gate on `pull_request`** — for workflows that ALSO fire on `schedule` or `workflow_dispatch`, the action's `if:` will skip posting (no PR context) but the gitleaks install still runs. To save runtime, add `&& github.event_name == 'pull_request'` to the caller's `if:` or use `pr-number` for explicit-target workflows.
 
 ## When NOT to use this

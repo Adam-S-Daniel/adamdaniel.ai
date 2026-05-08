@@ -638,6 +638,14 @@ Workflow logs are not directly readable by the Claude agent (no `gh` CLI, the Gi
 
 For workflows that don't fire on `pull_request` (e.g. `cms-publish-loop-preview.yml` on `workflow_dispatch`), pass `pr-number: ${{ inputs.pr_number }}` as well — the action falls back to looking up the head SHA via the API.
 
+**The caller MUST grant `pull-requests: write` to the workflow** (or to the calling job, if you scope per-job). Without it, the embedded `actions/github-script` call 403s silently and no comment lands. A typical block:
+
+```yaml
+permissions:
+  contents: read
+  pull-requests: write
+```
+
 The composite action at `.github/actions/post-failure-comment/action.yml`:
 
 1. Installs `gitleaks` to `$HOME/.local/bin` (no sudo, works in both the Playwright Docker container and on `ubuntu-latest`).
