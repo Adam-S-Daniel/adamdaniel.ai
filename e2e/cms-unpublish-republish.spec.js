@@ -105,10 +105,12 @@ async function writeFixtureOnMain({ fileText, message }) {
 //   - chain 1: publish (URL 4xx → 200)
 //   - chain 2: unpublish (URL 200 → 4xx)
 // Each is roughly the same shape as cms-publish-loop's mutation
-// (validate-content + auto-merge + deploy-production). Allow ~30 min
-// total with margin so a stuck pipeline fails the spec rather than
-// pegging the runner. Retries disabled — real-state mutation.
-const TEST_TIMEOUT_MS = 30 * 60 * 1000;
+// (validate-content + auto-merge + deploy-production). With each
+// URL-wait capped at 15 min (matching the prod-mutate spec's
+// budget after commit 880a34d) plus admin login + UI clicks +
+// cleanup, ~40 min total covers worst-case runner contention.
+// Retries disabled — real-state mutation.
+const TEST_TIMEOUT_MS = 40 * 60 * 1000;
 
 test.describe.configure({
   mode: "serial",
@@ -259,7 +261,7 @@ test("CMS unpublish + re-publish — flip published flag toggles URL visibility"
       page,
       pillId: PILL_PROD,
       urlCheck: async () => urlServesPost(page),
-      urlTimeoutMs: 12 * 60 * 1000,
+      urlTimeoutMs: 15 * 60 * 1000,
     });
   });
 
@@ -293,7 +295,7 @@ test("CMS unpublish + re-publish — flip published flag toggles URL visibility"
       page,
       pillId: PILL_PROD,
       urlCheck: async () => url404s(page),
-      urlTimeoutMs: 12 * 60 * 1000,
+      urlTimeoutMs: 15 * 60 * 1000,
     });
   });
 });
