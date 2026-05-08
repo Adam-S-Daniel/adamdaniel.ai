@@ -8,7 +8,7 @@ slug: e2e-mutation-canary
 date: 2099-01-01 00:00:00 +0000
 tags: []
 featured_image: ""
-published: true
+published: false
 sitemap: false
 publish_date: ""
 ---
@@ -27,12 +27,9 @@ serve at any public URL until the spec flips it to `true`. After the
 URL goes live and the spec asserts the deploy succeeded, a cleanup
 commit flips it back to `false` and the URL 404s again. `sitemap: false`
 
+
+
 e2e-prod-mutate:e2e-mutation-canary:1778180267725
-
-
-
-e2e-prod-mutate:e2e-mutation-canary:1778247272895
-
 
 
 and `robots: noindex,nofollow` are belt-and-suspenders so a stuck
