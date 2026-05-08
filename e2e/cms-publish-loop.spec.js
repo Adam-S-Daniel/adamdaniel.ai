@@ -97,13 +97,14 @@ function assertNotProdCanary(action) {
 //   3. The cleanup PR that resets the canary baseline.
 // Each PR waits on the full required-check suite (validate-content +
 // e2e shards + finalize) plus deploy-production on main. Worst-case
-// runtime per cycle is ~10 min when runners are warm; allow ~20 min
-// total so a stuck pipeline fails fast rather than holding a runner
-// for a full hour. Retries are explicitly disabled for the same
-// reason: the publish-loop is a real-state mutation and a retry just
-// re-runs the same broken chain after wasting another 20 min — the
-// failure mode is almost never transient.
-const TEST_TIMEOUT_MS = 35 * 60 * 1000;
+// runtime per cycle is ~10 min when runners are warm; the URL-wait
+// cap is 15 min per leg (forward + cleanup) so the spec fits in
+// ~40 min worst case. Stuck pipelines still fail fast rather than
+// holding a runner for a full hour. Retries are explicitly disabled
+// for the same reason: the publish-loop is a real-state mutation and
+// a retry just re-runs the same broken chain after wasting another
+// 40 min — the failure mode is almost never transient.
+const TEST_TIMEOUT_MS = 40 * 60 * 1000;
 
 test.describe.configure({
   mode: "serial",
@@ -371,7 +372,7 @@ test("CMS publish loop — host repo, target main", async ({ page }, testInfo) =
       // 10 min covers cms-editorial-workflow + auto-merge + required
       // checks + deploy-production + CDN propagation under runner
       // saturation.
-      urlTimeoutMs: 10 * 60 * 1000,
+      urlTimeoutMs: 15 * 60 * 1000,
     });
     await page.goto(PUBLIC_URL, { waitUntil: "domcontentloaded" });
     await captureStep(page, {
@@ -457,7 +458,7 @@ test("CMS publish loop — host repo, target main", async ({ page }, testInfo) =
         const text = await res.text();
         return !text.includes(marker) && text.includes(baselineBody);
       },
-      urlTimeoutMs: 10 * 60 * 1000,
+      urlTimeoutMs: 15 * 60 * 1000,
     });
   });
 

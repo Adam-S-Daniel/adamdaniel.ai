@@ -92,10 +92,12 @@ const PROD_CANARY = process.env.PROD_CANARY === "1";
 
 // Same envelope as cms-publish-loop.spec.js — the validate-content +
 // auto-merge + deploy-production + CloudFront invalidation chain caps
-// out around 12-15 minutes when runners are warm. Retries explicitly
-// disabled — this test mutates real prod state; retries just re-run
-// the same broken chain after another 15 min.
-const TEST_TIMEOUT_MS = 15 * 60 * 1000;
+// out around 12-15 minutes when runners are warm. Two URL waits
+// (forward + cleanup) at 15 min each + setup ≈ 40 min worst case
+// budget; typical happy-path run still completes in ~10-12 min.
+// Retries explicitly disabled — this test mutates real prod state;
+// retries just re-run the same broken chain after another 40 min.
+const TEST_TIMEOUT_MS = 40 * 60 * 1000;
 
 test.describe.configure({
   mode: "serial",
@@ -377,7 +379,7 @@ test("CMS publish loop — prod mutation playground (real _posts/ entry)", async
         if (res.status() !== 200) return false;
         return (await res.text()).includes(marker);
       },
-      urlTimeoutMs: 10 * 60 * 1000,
+      urlTimeoutMs: 15 * 60 * 1000,
     });
   });
 
@@ -440,7 +442,7 @@ test("CMS publish loop — prod mutation playground (real _posts/ entry)", async
         const s = res.status();
         return s >= 400 && s < 500;
       },
-      urlTimeoutMs: 10 * 60 * 1000,
+      urlTimeoutMs: 15 * 60 * 1000,
     });
   });
 });
