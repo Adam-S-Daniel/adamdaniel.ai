@@ -68,8 +68,16 @@ if finalize
   end
 
   # ─── failure-propagation step ─────────────────────────────────────
+  # The merge gate is a `run:` step that exits non-zero on shard
+  # failure. A `uses:` step (composite/external action) can ALSO carry
+  # an `if: needs.e2e.result == 'failure'` gate — the post-failure-
+  # comment fan-out does, for example — but it isn't the merge gate
+  # by definition (no `run:` body, can't `exit`). Restrict the search
+  # to `run:` steps so the matcher doesn't latch onto an unrelated
+  # composite-action call as a false positive.
   steps = finalize.fetch('steps', [])
   fail_step = steps.find do |s|
+    next false unless s.key?('run')
     s['name'].to_s.start_with?('Re-fail if any shard failed') ||
       s['if'].to_s.include?("needs.e2e.result == 'failure'")
   end
