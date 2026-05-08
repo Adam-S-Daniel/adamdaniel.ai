@@ -115,13 +115,16 @@
        state from the DOM and renders a link (or placeholder when
        Published is OFF / no slug yet). -->
 
-  <!-- Removes Decap's native "View Live" toolbar anchor — redundant
-       with the floating "Live Preview" button (#live-preview-link)
-       and the deploy-status / commit pills, and clips the publish
-       pill off-screen on narrow viewports. The override also keeps
-       the historical `live-url-derive.js`-based href rewrite contract
-       moot (the anchor no longer exists), but live-url-derive.js is
-       still loaded for the in-editor banner. -->
+  <!-- CSS-hides Decap's native "View Live" toolbar anchor — redundant
+       with the floating "Live Preview" button (#live-preview-link) and
+       the deploy-status / commit pills, and clips the publish pill
+       off-screen on narrow viewports. The anchor stays in the DOM
+       (React owns it; `removeChild` provoked a re-mount loop that
+       wedged publish-loop e2e runs on commit 503365a) but display:none
+       + visibility:hidden + aria-hidden remove it from layout, focus,
+       and the a11y tree. The override also keeps the historical
+       `live-url-derive.js`-based href rewrite contract moot, but
+       live-url-derive.js is still loaded for the in-editor banner. -->
   <script src="native-preview-href.js" defer></script>
 
   <!--

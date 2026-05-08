@@ -1,12 +1,13 @@
 /*
- * admin/native-preview-href.js — REMOVES Decap CMS's native "View Live"
- * toolbar anchor from the DOM whenever Decap (re-)renders it.
+ * admin/native-preview-href.js — HIDES Decap CMS's native "View Live"
+ * toolbar anchor whenever Decap (re-)renders it.
  *
- * Why remove (not rewrite): on narrow / mobile viewports the editor
- * toolbar (`Save | Published ▼ | Delete published entry | View Live |
- * adamdaniel.ai | <avatar> | <publishing pill>`) overflows the viewport
- * and pushes the deploy-status / commit pills off the right edge. The
- * native "View Live" link is redundant with two existing surfaces:
+ * Why hide (not rewrite, not remove): on narrow / mobile viewports the
+ * editor toolbar (`Save | Published ▼ | Delete published entry |
+ * View Live | adamdaniel.ai | <avatar> | <publishing pill>`) overflows
+ * the viewport and pushes the deploy-status / commit pills off the
+ * right edge. The native "View Live" link is redundant with two
+ * existing surfaces:
  *
  *   - the floating eye-icon "Live Preview" button
  *     (`#live-preview-link` in admin/index.html), which opens the
@@ -15,15 +16,24 @@
  *     deployed-commit pill (`#cms-commit-pill`), which surface the
  *     in-flight + last-known live state.
  *
- * Removing the redundant anchor reclaims the horizontal space the
+ * Hiding the redundant anchor reclaims the horizontal space the
  * deploy / commit pills need to stay inside the viewport on narrow
  * widths, with no loss of editor capability.
+ *
+ * Why CSS-hide instead of `removeChild`: Decap is React-driven and
+ * owns the anchor in its virtual DOM. Yanking it out of the live DOM
+ * provokes React to re-mount it on the next reconciliation pass,
+ * which our MutationObserver then re-removes — a fight loop that
+ * (per the failed `prod-mutate` and `host-loop` runs on commit
+ * 503365a) wedges the editor mid-flow. `display:none` leaves the
+ * anchor where React expects it; React doesn't observe inline styles,
+ * so reconciliation is a no-op and there's no fight.
  *
  * Historical note: this script previously REWROTE the anchor's `href`
  * to match `window.LiveURL.compute()` — necessary because Decap's
  * two-pass `preview_path` substitution diverged from Jekyll's
  * `permalink: /blog/:slug/` for date-prefixed Posts (the toolbar 404'd
- * on every Post). With the anchor removed, the rewrite is moot, but
+ * on every Post). With the anchor hidden the rewrite is moot, but
  * the live-url-derive.js dependency is kept since the in-editor banner
  * and any future toolbar surfaces will need it.
  *
@@ -82,34 +92,37 @@
     return anchors;
   }
 
-  // Marker so we don't log the same removal repeatedly when Decap's
+  // Marker so we don't log the same hide repeatedly when Decap's
   // re-renders churn through the same anchor instance multiple times.
+  // We DO re-apply the styles every pass even with the marker set —
+  // emotion can re-emit a `style` attribute from CSS-in-JS that
+  // clobbers our inline display:none, so re-asserting is cheap
+  // insurance.
   var HIDDEN_ATTR = "data-native-view-live-hidden";
 
   function hide() {
     var anchors = findToolbarAnchors();
     for (var i = 0; i < anchors.length; i++) {
       var a = anchors[i];
-      if (a.getAttribute(HIDDEN_ATTR) === "1") continue;
-      // Belt-and-braces: set display:none AND remove from the DOM.
-      // display:none alone covers the case where some emotion wrapper
-      // around the anchor relies on it being present in the layout
-      // tree; remove() covers the case where Decap re-uses the same
-      // anchor reference and our display:none gets clobbered. The
-      // MutationObserver below re-fires if Decap re-mounts a fresh
-      // anchor instance.
-      a.setAttribute(HIDDEN_ATTR, "1");
-      a.style.display = "none";
-      if (a.parentNode) {
-        try {
-          a.parentNode.removeChild(a);
-        } catch (e) {
-          // ignore — display:none above is the fallback.
-        }
+      var alreadyMarked = a.getAttribute(HIDDEN_ATTR) === "1";
+      // CSS-only hide. Don't `removeChild` — Decap is React-driven
+      // and React re-mounts elements it owns when it sees them
+      // missing from the DOM, which kicks our MutationObserver and
+      // re-fires this loop. display:none + visibility:hidden +
+      // pointer-events:none + aria-hidden gets the anchor out of
+      // the layout, the tab order, and the a11y tree without
+      // touching the DOM tree React reconciles against.
+      a.style.setProperty("display", "none", "important");
+      a.style.setProperty("visibility", "hidden", "important");
+      a.style.setProperty("pointer-events", "none", "important");
+      a.setAttribute("aria-hidden", "true");
+      a.setAttribute("tabindex", "-1");
+      if (!alreadyMarked) {
+        a.setAttribute(HIDDEN_ATTR, "1");
+        console.info(
+          "[native-preview-href] hid redundant native View Live anchor"
+        );
       }
-      console.info(
-        "[native-preview-href] removed redundant native View Live anchor"
-      );
     }
   }
 

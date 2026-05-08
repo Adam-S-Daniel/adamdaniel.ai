@@ -1,19 +1,22 @@
 // @lane: local — drives the local Decap admin shell; no real GitHub
 const { test, expect } = require("./base");
 
-// A1 runtime check — Decap's native "View Live" toolbar anchor is REMOVED
-// at runtime by admin/native-preview-href.js.
+// A1 runtime check — Decap's native "View Live" toolbar anchor is HIDDEN
+// at runtime by admin/native-preview-href.js (CSS-hide, not removeChild).
 //
-// Why removed (not rewritten): the native anchor is redundant with the
-// floating eye-icon "Live Preview" button (#live-preview-link in
+// Why hidden (not rewritten, not removed): the native anchor is redundant
+// with the floating eye-icon "Live Preview" button (#live-preview-link in
 // admin/index.html) and the deploy-status / commit pills. On narrow
 // viewports the toolbar overflows and the redundant anchor pushes the
 // publish-status pill off-screen. See admin/native-preview-href.js's
-// header comment for the full rationale.
+// header comment for the full rationale, including why removeChild is
+// off-limits (React fights any DOM-node removal it owns).
 //
 // This spec asserts that, after Decap mounts the editor toolbar, NO
 // `target="_blank" rel*="noopener"` anchor (other than the
-// site-rendered exclusions) remains inside the toolbar.
+// site-rendered exclusions) is VISIBLE in the toolbar — the anchor stays
+// in the DOM but display:none + visibility:hidden + aria-hidden keep it
+// out of layout, focus, and the a11y tree.
 
 const SEED_POST_SLUG = "2026-04-25-replacement-test-post-1";
 const SEED_POST_TITLE = "Replacement test post 1";
@@ -74,7 +77,7 @@ async function loadAdmin(page) {
   });
 }
 
-test.describe("CMS native View-Live anchor — runtime removal contract", () => {
+test.describe("CMS native View-Live anchor — runtime hide contract", () => {
   test.describe.configure({ mode: "serial", timeout: 180_000 });
 
   test.beforeEach(({ page }, testInfo) => {
@@ -84,7 +87,7 @@ test.describe("CMS native View-Live anchor — runtime removal contract", () => 
     );
   });
 
-  test("native toolbar View-Live anchor is removed from the DOM", async ({
+  test("native toolbar View-Live anchor is CSS-hidden", async ({
     page,
   }) => {
     test.fixme(
@@ -116,15 +119,22 @@ test.describe("CMS native View-Live anchor — runtime removal contract", () => 
     const toolbar = page.locator('[class*="EditorToolbar"]').first();
     await expect(toolbar).toBeVisible({ timeout: 30_000 });
 
-    // ── Assert NO native View Live anchor remains ─────────────────────
-    // The override script removes every `<a target="_blank"
+    // ── Assert NO native View Live anchor is VISIBLE ──────────────────
+    // The override script CSS-hides every `<a target="_blank"
     // rel*="noopener">` inside an `[class*="oolbar"]` ancestor that
     // isn't one of this site's own surfaces (live-preview-link,
     // cms-commit-pill, cms-prod-status-pill, cms-preview-build-pill).
+    // It does NOT remove the anchor from the DOM — Decap is React-
+    // driven and `removeChild` provoked React to re-mount the anchor
+    // on every reconciliation pass, which deadlocked the editor mid-
+    // flow on prod-mutate / host-loop. See
+    // admin/native-preview-href.js's header comment.
     //
-    // We poll because Decap may re-mount the toolbar a few times
-    // during initial render; the override fires on mutation, so the
-    // anchor is removed shortly after each mount.
+    // So the contract is "no VISIBLE non-excluded toolbar anchor",
+    // tested via getComputedStyle. We poll because Decap may re-mount
+    // the toolbar a few times during initial render; the override
+    // fires on mutation, so the anchor is hidden shortly after each
+    // mount.
     await expect
       .poll(
         async () => {
@@ -139,26 +149,32 @@ test.describe("CMS native View-Live anchor — runtime removal contract", () => 
               "cms-prod-status-pill",
               "cms-preview-build-pill",
             ]);
-            const remaining = [];
+            const visible = [];
             for (const tb of toolbars) {
               const as = tb.querySelectorAll(
                 'a[target="_blank"][rel*="noopener"][href]',
               );
               for (const a of as) {
                 if (excluded.has(a.id)) continue;
-                remaining.push(a.getAttribute("href") || "(no-href)");
+                const cs = window.getComputedStyle(a);
+                if (cs.display === "none" || cs.visibility === "hidden") {
+                  continue;
+                }
+                visible.push(a.getAttribute("href") || "(no-href)");
               }
             }
-            return remaining;
+            return visible;
           });
         },
         {
           timeout: 30_000,
           message:
-            "Native Decap View-Live anchor should be removed from the toolbar — " +
+            "Native Decap View-Live anchor should be CSS-hidden in the toolbar — " +
             "it's redundant with the floating Live Preview button and the " +
             "deploy-status / commit pills, and clips the publish pill off-screen " +
-            "on narrow viewports.",
+            "on narrow viewports. It stays in the DOM (so React doesn't fight " +
+            "us) but display:none + visibility:hidden + aria-hidden remove it " +
+            "from layout, focus, and the a11y tree.",
         },
       )
       .toEqual([]);

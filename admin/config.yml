@@ -45,13 +45,15 @@ collections:
   # therefore can't round-trip on their own.
   #
   # The static template divergence is now moot because
-  # `admin/native-preview-href.js` REMOVES Decap's native "View Live"
-  # anchor entirely (it was redundant with the floating Live Preview
-  # button + the deploy-status / commit pills, and it clipped the
-  # publish-status pill off-screen on narrow viewports). The
-  # `preview_path` value below is kept as a hint for any internal
-  # Decap logic that touches it (and as documentation of intent), but
-  # nothing user-facing reads it anymore.
+  # `admin/native-preview-href.js` CSS-hides Decap's native "View Live"
+  # anchor (it was redundant with the floating Live Preview button +
+  # the deploy-status / commit pills, and it clipped the publish-status
+  # pill off-screen on narrow viewports). The override stays in the DOM
+  # tree React reconciles against — `removeChild` provoked React to
+  # re-mount the anchor on every render, deadlocking publish-loop e2e
+  # runs on commit 503365a. The `preview_path` value below is kept as
+  # a hint for any internal Decap logic that touches it (and as
+  # documentation of intent), but nothing user-facing reads it anymore.
   #
   # Don't try to fix this with a static template change. `slug: ''` in
   # the seed posts means a naive `{{fields.slug}}` swap expands to
@@ -67,9 +69,9 @@ collections:
     delete: true
     # Decap auto-derives `{{slug}}` from the `slug` field if present, falling
     # back to `title`. The YYYY-MM-DD prefix is required by Jekyll's `_posts/`
-    # collection. The native "View Live" toolbar anchor is removed at runtime
-    # by admin/native-preview-href.js so the date-prefix divergence between
-    # this template and Jekyll's `permalink: /blog/:slug/` is moot.
+    # collection. The native "View Live" toolbar anchor is CSS-hidden at
+    # runtime by admin/native-preview-href.js so the date-prefix divergence
+    # between this template and Jekyll's `permalink: /blog/:slug/` is moot.
     slug: "{{year}}-{{month}}-{{day}}-{{slug}}"
     preview_path: "/blog/{{slug}}/"
     summary: "{{title}} ({{date | date('MMM D, YYYY')}}){{published | ternary('', ' — DRAFT')}}{{publish_date | ternary(' — Scheduled', '')}}"
