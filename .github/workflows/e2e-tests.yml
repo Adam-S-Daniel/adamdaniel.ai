@@ -76,19 +76,42 @@ jobs:
         # no extra gems. Keeps plugin behaviour covered even when no
         # Playwright spec exercises the same code path.
         run: |
+          set -o pipefail
           # `nullglob` so the loop is a no-op (rather than passing the
           # literal pattern to ruby) if the directory is ever emptied.
           shopt -s nullglob
           for t in _plugins_test/*_test.rb; do
             echo "==> $t"
             bundle exec ruby "$t"
-          done
+          done 2>&1 | tee /tmp/unit.log
 
       - name: Run sync-action-pin-comments tests
         # Pure-bash test for the action-pin comment-syncer. Stubs
         # `gh` via a path-shadowing wrapper, so this runs offline
         # and never hits the GitHub API. Sub-second.
-        run: bash scripts/sync-action-pin-comments.test.sh
+        run: |
+          set -o pipefail
+          bash scripts/sync-action-pin-comments.test.sh 2>&1 | tee -a /tmp/unit.log
+
+      # Failure-comment fan-out — see AGENTS.md "Failure-comment
+      # composite action". Two call sites (post / resolve), gitleaks-
+      # scrubbed via the composite action.
+      - name: Post failure summary
+        if: ${{ failure() && github.event_name == 'pull_request' }}
+        uses: ./.github/actions/post-failure-comment
+        with:
+          mode: post
+          log-file: /tmp/unit.log
+          marker: unit-failure-summary
+          title: unit
+
+      - name: Resolve failure summary on success
+        if: ${{ success() && github.event_name == 'pull_request' }}
+        uses: ./.github/actions/post-failure-comment
+        with:
+          mode: resolve
+          marker: unit-failure-summary
+          title: unit
 
   # Decide what e2e work is actually needed for this commit, and how
   # many shards to spin up. Hoisted out of the e2e matrix so the
@@ -122,6 +145,14 @@ jobs:
         with:
           node-version: '20'
 
+      - name: Init select log
+        # Single log file the failure-comment step reads from. Both
+        # run-blocks below tee-append into it so a select-side failure
+        # surfaces the actionable lines (image-tag mismatch or selector
+        # crash output) on the PR.
+        run: |
+          : > /tmp/select.log
+
       - name: Verify Playwright image version matches lockfile
         # Drift guard for the `mcr.microsoft.com/playwright:v<version>-noble`
         # container images used by every Playwright job in this repo.
@@ -137,6 +168,9 @@ jobs:
         # `package.json` may be a range like `^1.59.0`).
         run: |
           set -euo pipefail
+          # Tee everything to /tmp/select.log so a failure here lands in
+          # the PR comment via the post-failure-comment composite action.
+          exec > >(tee -a /tmp/select.log) 2>&1
           expected=$(node -p "require('./package-lock.json').packages['node_modules/@playwright/test'].version")
           echo "Lockfile @playwright/test version: $expected"
 
@@ -209,6 +243,9 @@ jobs:
           # as "no filtering".
           GITHUB_HEAD_REF: ${{ github.head_ref }}
         run: |
+          # Tee everything to /tmp/select.log so a failure here lands in
+          # the PR comment via the post-failure-comment composite action.
+          exec > >(tee -a /tmp/select.log) 2>&1
           git fetch origin main --depth=500 || true
           # Local-lane verdict (existing behaviour). TEST_LANE defaults
           # to `local` in the selector when the env var is empty, but
@@ -265,6 +302,30 @@ jobs:
           echo "real_scope=$real_scope" >> "$GITHUB_OUTPUT"
           echo "real_files=$real_files" >> "$GITHUB_OUTPUT"
           echo "Resolved: scope=$scope shard_count=$shard_count shards=$shards real_scope=$real_scope"
+
+      # Failure-comment fan-out — see AGENTS.md "Failure-comment
+      # composite action". Two call sites (post / resolve), gitleaks-
+      # scrubbed via the composite action. Select-side failures are
+      # rare but the failure mode (image-tag mismatch or selector
+      # crash) has a clear actionable error message that's worth
+      # surfacing inline rather than making the operator click into
+      # the run.
+      - name: Post failure summary
+        if: ${{ failure() && github.event_name == 'pull_request' }}
+        uses: ./.github/actions/post-failure-comment
+        with:
+          mode: post
+          log-file: /tmp/select.log
+          marker: select-failure-summary
+          title: select
+
+      - name: Resolve failure summary on success
+        if: ${{ success() && github.event_name == 'pull_request' }}
+        uses: ./.github/actions/post-failure-comment
+        with:
+          mode: resolve
+          marker: select-failure-summary
+          title: select
 
   e2e:
     needs: select
@@ -549,6 +610,26 @@ jobs:
           path: test-results/
           retention-days: 7
 
+      # Failure-comment fan-out — see AGENTS.md "Failure-comment
+      # composite action". Two call sites (post / resolve), gitleaks-
+      # scrubbed via the composite action.
+      - name: Post failure summary
+        if: ${{ failure() && github.event_name == 'pull_request' }}
+        uses: ./.github/actions/post-failure-comment
+        with:
+          mode: post
+          log-file: shard-output/playwright-output.log
+          marker: e2e-real-failure-summary
+          title: e2e-real
+
+      - name: Resolve failure summary on success
+        if: ${{ success() && github.event_name == 'pull_request' }}
+        uses: ./.github/actions/post-failure-comment
+        with:
+          mode: resolve
+          marker: e2e-real-failure-summary
+          title: e2e-real
+
   # G3 — `@parity` subset against prod, on every PR.
   #
   # The `TARGET=prod` env switch (e2e/base.js) overrides Playwright's
@@ -646,6 +727,26 @@ jobs:
             test-results/
             /tmp/parity-output.log
           retention-days: 7
+
+      # Failure-comment fan-out — see AGENTS.md "Failure-comment
+      # composite action". Two call sites (post / resolve), gitleaks-
+      # scrubbed via the composite action.
+      - name: Post failure summary
+        if: ${{ failure() && github.event_name == 'pull_request' }}
+        uses: ./.github/actions/post-failure-comment
+        with:
+          mode: post
+          log-file: /tmp/parity-output.log
+          marker: parity-failure-summary
+          title: parity
+
+      - name: Resolve failure summary on success
+        if: ${{ success() && github.event_name == 'pull_request' }}
+        uses: ./.github/actions/post-failure-comment
+        with:
+          mode: resolve
+          marker: parity-failure-summary
+          title: parity
 
   # ─── DO NOT WEAKEN WITHOUT READING THE FOLLOWING ────────────────────
   #

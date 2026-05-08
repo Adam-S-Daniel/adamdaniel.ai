@@ -182,13 +182,34 @@ test("CMS unpublish + re-publish — flip published flag toggles URL visibility"
   await test.step("Navigate to the unpublish-canary post entry", async () => {
     // Direct URL nav is deterministic and bypasses any
     // collection-list ordering quirks.
-    await page.goto(
-      `${PROD_ADMIN}#/collections/posts/entries/2099-01-02-${FIXTURE_SLUG}`,
-      { waitUntil: "domcontentloaded" },
-    );
-    await expect(page.getByRole("textbox", { name: /^Title$/i })).toBeVisible({
-      timeout: 30_000,
-    });
+    //
+    // Decap's hash-route entry mount is occasionally slow on cold
+    // CDN cache (especially right after a deploy-production), and
+    // the failure mode is a stuck Title field. Two-attempt retry:
+    // navigate → wait up to 60s for Title → on timeout, reload
+    // (forcing a fresh asset fetch) and try once more. 60s per
+    // leg, so worst-case ~120s before this step fails.
+    const titleLocator = page.getByRole("textbox", { name: /^Title$/i });
+    const targetUrl = `${PROD_ADMIN}#/collections/posts/entries/2099-01-02-${FIXTURE_SLUG}`;
+    let lastErr;
+    for (let attempt = 1; attempt <= 2; attempt++) {
+      try {
+        if (attempt === 1) {
+          await page.goto(targetUrl, { waitUntil: "domcontentloaded" });
+        } else {
+          console.warn(
+            `[unpublish-republish] Title field didn't appear within 60s on attempt 1; reloading and retrying`,
+          );
+          await page.reload({ waitUntil: "domcontentloaded" });
+        }
+        await expect(titleLocator).toBeVisible({ timeout: 60_000 });
+        lastErr = null;
+        break;
+      } catch (err) {
+        lastErr = err;
+      }
+    }
+    if (lastErr) throw lastErr;
   });
 
   await test.step("Verify the editor reads Published toggle as OFF (baseline)", async () => {

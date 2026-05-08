@@ -97,7 +97,11 @@ The caller-side gating in the patterns above is the only approach that has been 
 
 1. **Capture the log.** The Playwright invocation must `2>&1 | tee /tmp/<your-log>.log`. The action reads from this path verbatim. If the log is missing or empty, the action emits a "(no log captured)" comment instead of failing.
 2. **Pin a unique marker.** The action wraps `<your-marker>` as `<!-- your-marker -->`. Two workflows MUST NOT share a marker — they will clobber each other's comments. Existing markers in use:
-   - `e2e-failure-summary` — `e2e-tests.yml`
+   - `e2e-failure-summary` — `e2e-tests.yml` → `finalize` (aggregates the e2e matrix)
+   - `unit-failure-summary` — `e2e-tests.yml` → `unit`
+   - `e2e-real-failure-summary` — `e2e-tests.yml` → `e2e-real`
+   - `parity-failure-summary` — `e2e-tests.yml` → `parity`
+   - `select-failure-summary` — `e2e-tests.yml` → `select`
    - `host-loop-failure-summary` — `cms-publish-loop-host.yml`
    - `prod-mutate-failure-summary` — `cms-publish-loop-prod.yml`
    - `preview-loop-failure-summary` — `cms-publish-loop-preview.yml`
@@ -124,6 +128,17 @@ The action no-ops on `cancelled`, `skipped`, or `null` outcomes — those rarely
 ## Security: env vars, not interpolation
 
 Inputs to the embedded `actions/github-script` calls are passed via `env:` and read as `process.env.X`, **not** inlined as `${{ inputs.x }}` into the script body. This is the pattern the github-script README explicitly requires; inlining input strings into a JS body is a classic script-injection vector. If you extend the action with new fields, follow the same pattern.
+
+## Security: gitleaks pass-through is non-optional
+
+Every comment that lands on a PR via this action runs through `scripts/scrub-secrets.js` (which shells out to `gitleaks detect --no-git --source <log>`) inside the action's `Extract and scrub failure summary` step. There is **no caller-side switch** to disable it.
+
+If you extend the action with new modes or new emit-paths, keep the scrubber call on **every** code path that emits log content into a comment body. A leaked PAT, AWS key, or token in failure output that bypasses gitleaks would be visible to anyone with read access to the PR (which on a public repo means the open internet, including search-engine indexers). The pre-commit `scripts/secrets-scan.sh` hook prevents secrets from reaching local git history; the gitleaks pass-through here is the equivalent guard for everything that reaches a PR comment.
+
+Triple-check this when:
+- Adding a new `mode:` value (e.g. `digest`, `summary`, anything that emits log content).
+- Refactoring the extract / post sequence (don't accidentally hoist the github-script call above the scrubber).
+- Adding a new fallback path inside the action's `Extract and scrub failure summary` step.
 
 ## Common refactor pitfalls
 

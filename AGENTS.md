@@ -697,12 +697,18 @@ The composite action at `.github/actions/post-failure-comment/action.yml`:
 
 **Markers in use** (must be globally unique to avoid clobbering each other):
 
-| Marker | Workflow |
+| Marker | Workflow / job |
 |---|---|
-| `e2e-failure-summary` | `e2e-tests.yml` |
+| `e2e-failure-summary` | `e2e-tests.yml` → `finalize` (aggregates the e2e matrix) |
+| `unit-failure-summary` | `e2e-tests.yml` → `unit` |
+| `e2e-real-failure-summary` | `e2e-tests.yml` → `e2e-real` |
+| `parity-failure-summary` | `e2e-tests.yml` → `parity` |
+| `select-failure-summary` | `e2e-tests.yml` → `select` |
 | `host-loop-failure-summary` | `cms-publish-loop-host.yml` |
 | `prod-mutate-failure-summary` | `cms-publish-loop-prod.yml` |
 | `preview-loop-failure-summary` | `cms-publish-loop-preview.yml` |
+
+**Gitleaks pass-through is non-optional.** Every comment that lands on a PR via this action runs through `scripts/scrub-secrets.js` (which shells out to `gitleaks detect`) inside the action's `Extract and scrub failure summary` step. There is no caller-side switch to disable it; if you extend the action with a new mode, keep the scrubber call on every code path that emits log content into a comment body. A leaked PAT in failure output that bypasses gitleaks would be visible to anyone with read access to the PR — treat the scrubber the same as the secrets-scan pre-commit hook.
 
 **Security note.** The embedded `actions/github-script` calls receive their inputs as `env:` vars and read them via `process.env.X` — never inline `${{ inputs.x }}` directly into a script body. This pattern is what `actions/github-script`'s README explicitly requires, and it's a script-injection vector if you skip it. Same rule applies to any extension of the action.
 
