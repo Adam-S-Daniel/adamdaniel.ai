@@ -174,11 +174,24 @@ jobs:
       # workflow has no `pull_request` event, so we pass `pr-number`
       # explicitly — the action falls back to looking up the head
       # SHA via the API.
-      - name: Post / resolve failure summary
-        if: always()
+      # Two call sites — caller-side gating. workflow_dispatch
+      # has no `pull_request` payload, so pass `pr-number`
+      # explicitly and don't gate on `github.event_name`.
+      - name: Post failure summary
+        if: failure()
         uses: ./.github/actions/post-failure-comment
         with:
+          mode: post
           log-file: /tmp/preview-loop.log
+          marker: preview-loop-failure-summary
+          title: preview-loop
+          pr-number: ${{ inputs.pr_number }}
+
+      - name: Resolve failure summary on success
+        if: success()
+        uses: ./.github/actions/post-failure-comment
+        with:
+          mode: resolve
           marker: preview-loop-failure-summary
           title: preview-loop
           pr-number: ${{ inputs.pr_number }}

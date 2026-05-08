@@ -15,55 +15,83 @@ Built once; every Playwright-running workflow should call it.
 
 ## Caller convention
 
+The action is **mode-driven** with caller-side gating. Two call sites per workflow: one for the failure post, one for the green-run resolve. The action itself just does what its `mode` input tells it to — it does not try to detect job state.
+
 ### Single-job workflow (most common)
 
-The comment step lives in the SAME job as the Playwright run. Don't pass `outcome:` — the action's internal `failure()` / `success()` gates handle it.
+The comment step lives in the SAME job as the Playwright run.
 
 ```yaml
-- name: Post / resolve failure summary
-  if: ${{ always() && github.event_name == 'pull_request' }}
+- name: Post failure summary
+  if: ${{ failure() && github.event_name == 'pull_request' }}
   uses: ./.github/actions/post-failure-comment
   with:
+    mode: post
     log-file: /tmp/<your-log>.log
     marker: <unique-marker-slug>     # NO `<!-- -->` — the action wraps it
     title: <short label>             # shown in the comment heading
+
+- name: Resolve failure summary on success
+  if: ${{ success() && github.event_name == 'pull_request' }}
+  uses: ./.github/actions/post-failure-comment
+  with:
+    mode: resolve
+    marker: <unique-marker-slug>
+    title: <short label>
 ```
 
 ### Multi-job workflow
 
-The comment step lives in a DOWNSTREAM job (e.g. `finalize` after an `e2e` matrix). The `failure()` / `success()` functions reflect the FINALIZE job's state — not the matrix's — so you must pass `outcome:` explicitly:
+The comment step lives in a DOWNSTREAM job (e.g. `finalize` after an `e2e` matrix). `failure()` / `success()` reflect the FINALIZE job's state — not the matrix's — so gate on `needs.<job>.result` instead:
 
 ```yaml
-- uses: ./.github/actions/post-failure-comment
-  if: ${{ always() && github.event_name == 'pull_request' }}
-  with:
-    log-file: /tmp/playwright-output.log
-    marker: e2e-failure-summary
-    title: E2E tests
-    outcome: ${{ needs.e2e.result }}   # explicit: success|failure|cancelled|skipped
+- if: ${{ needs.e2e.result == 'failure' && github.event_name == 'pull_request' }}
+  uses: ./.github/actions/post-failure-comment
+  with: { mode: post, log-file: /tmp/playwright-output.log, marker: e2e-failure-summary, title: E2E tests }
+
+- if: ${{ needs.e2e.result == 'success' && github.event_name == 'pull_request' }}
+  uses: ./.github/actions/post-failure-comment
+  with: { mode: resolve, marker: e2e-failure-summary, title: E2E tests }
 ```
 
 ### Non-`pull_request` triggers
 
-For `workflow_dispatch` (or any event without a `github.event.pull_request` context), pass the parent PR explicitly:
+For `workflow_dispatch` (or any event without a `github.event.pull_request` context), pass the parent PR explicitly and drop the `github.event_name` part of the `if:`:
 
 ```yaml
-- uses: ./.github/actions/post-failure-comment
-  if: always()
+- if: failure()
+  uses: ./.github/actions/post-failure-comment
   with:
+    mode: post
     log-file: /tmp/<your-log>.log
     marker: <unique-marker-slug>
     title: <short label>
-    pr-number: ${{ inputs.pr_number }}   # or some other source of the PR #
+    pr-number: ${{ inputs.pr_number }}
+
+- if: success()
+  uses: ./.github/actions/post-failure-comment
+  with:
+    mode: resolve
+    marker: <unique-marker-slug>
+    title: <short label>
+    pr-number: ${{ inputs.pr_number }}
 ```
 
-### Gating the call
+### Gating the call further
 
-For a workflow whose runtime gate matches the upload-artifact step (e.g. `vars.PROD_PLAYGROUND_MODE == 'true'`), match the `if:` on the action call to the upload step's gate so the comment behaviour is consistent with the rest of the failure-handling chain.
+For a workflow whose runtime gate matches the upload-artifact step (e.g. `vars.PROD_PLAYGROUND_MODE == 'true'`), match the `if:` on each call to the upload step's gate so the comment behaviour is consistent with the rest of the failure-handling chain. For example:
 
-### NEVER pass `${{ job.status }}`
+```yaml
+if: ${{ failure() && vars.PROD_PLAYGROUND_MODE == 'true' }}
+if: ${{ success() && vars.PROD_PLAYGROUND_MODE == 'true' }}
+```
 
-`${{ job.status }}` does NOT reliably evaluate inside a composite action's `with:` block. Empirically observed: it expands to empty string mid-job, leaving `inputs.outcome` empty and silently skipping every internal step gated on `outcome == 'failure'`. Use the patterns above instead — single-job: omit; multi-job: `${{ needs.<job>.result }}`.
+### Patterns that DON'T work — don't repeat
+
+- **`${{ job.status }}`** in `with:` — silently expands to empty string inside a composite action's `with:` block. Two iterations confirmed: no comment ever lands.
+- **`failure()` / `success()` inside the action's own step `if:`** — unreliable in composite contexts; whatever GitHub Actions evaluates `failure()` against inside a composite step doesn't reflect the calling job's state in our case.
+
+The caller-side gating in the patterns above is the only approach that has been empirically confirmed to fire.
 
 ## Required upstream conditions
 

@@ -166,10 +166,23 @@ jobs:
       # PROD_PLAYGROUND_MODE for symmetry with the upload-artifact
       # step above — when playground mode is off, the test
       # self-skips and there's nothing meaningful to comment about.
-      - name: Post / resolve failure summary
-        if: ${{ always() && vars.PROD_PLAYGROUND_MODE == 'true' }}
+      # Two call sites — caller-side gating with `failure()` /
+      # `success()` is the canonical, well-tested pattern. The
+      # composite action is mode-driven and doesn't detect job
+      # state itself.
+      - name: Post failure summary
+        if: ${{ failure() && vars.PROD_PLAYGROUND_MODE == 'true' }}
         uses: ./.github/actions/post-failure-comment
         with:
+          mode: post
           log-file: /tmp/prod-mutate.log
+          marker: prod-mutate-failure-summary
+          title: prod-mutate
+
+      - name: Resolve failure summary on success
+        if: ${{ success() && vars.PROD_PLAYGROUND_MODE == 'true' }}
+        uses: ./.github/actions/post-failure-comment
+        with:
+          mode: resolve
           marker: prod-mutate-failure-summary
           title: prod-mutate

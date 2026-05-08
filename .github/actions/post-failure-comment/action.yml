@@ -9,6 +9,16 @@
 # `mcp__github__pull_request_read` to the agent, with no extra
 # infra (uses `actions/github-script` for the API call).
 #
+# DESIGN (v3): caller-side gating. Earlier versions tried to
+# detect job state inside the action via `${{ job.status }}` and
+# `failure()` / `success()` — both proved unreliable in this
+# composite context (no comment landed across multiple runs).
+# v3 makes the action mode-driven and pushes the gate to the
+# CALLER, where `failure()` / `success()` are the canonical,
+# well-tested workflow primitives. Result: two call sites per
+# workflow (one for failure, one for resolve), but the action
+# itself is dumb and reliable.
+#
 # Reuses scripts/extract-playwright-failures.sh and
 # scripts/scrub-secrets.js — both already used by
 # .github/workflows/e2e-tests.yml. Designed to work whether the
@@ -16,25 +26,40 @@
 # as a non-root user on `ubuntu-latest` — gitleaks installs to
 # `$HOME/.local/bin` either way, no sudo required.
 #
-# Usage (typical):
+# Usage (single-job workflow, fires on `pull_request`):
 #
-#   - uses: ./.github/actions/post-failure-comment
-#     if: ${{ always() && github.event_name == 'pull_request' }}
+#   - name: Post failure summary
+#     if: ${{ failure() && github.event_name == 'pull_request' }}
+#     uses: ./.github/actions/post-failure-comment
 #     with:
+#       mode: post
 #       log-file: /tmp/host-loop.log
 #       marker: host-loop-failure-summary
 #       title: host-loop
-#       outcome: ${{ job.status }}
 #
-# The action's INTERNAL steps gate on `outcome` so a green run
-# triggers only the resolve step (cheap), not gitleaks install.
+#   - name: Resolve failure summary on success
+#     if: ${{ success() && github.event_name == 'pull_request' }}
+#     uses: ./.github/actions/post-failure-comment
+#     with:
+#       mode: resolve
+#       marker: host-loop-failure-summary
+#       title: host-loop
+#
+# For workflow_dispatch (no pull_request payload), pass
+# `pr-number: ${{ inputs.pr_number }}` and drop the
+# `github.event_name == 'pull_request'` part of the `if:`.
 
 name: Post failure summary to PR
-description: Scrub a Playwright log via gitleaks and post (or update) a PR failure-summary comment.
+description: Scrub a Playwright log via gitleaks and post (or resolve) a PR failure-summary comment.
 
 inputs:
-  log-file:
-    description: Path to the captured Playwright/test log to scrub.
+  mode:
+    description: |
+      Either `post` (install gitleaks + scrub the log + post the
+      failure-summary comment) or `resolve` (stamp the existing
+      comment to "passing on <sha>"). The caller decides which
+      mode to invoke via its own `if: failure()` / `if: success()`
+      gate; the action does NOT detect job state itself.
     required: true
   marker:
     description: |
@@ -45,23 +70,13 @@ inputs:
   title:
     description: |
       Short label shown in the comment heading
-      (e.g. "host-loop", "prod-mutate", "e2e tests").
+      (e.g. "host-loop", "prod-mutate", "E2E tests").
     required: true
-  outcome:
+  log-file:
     description: |
-      Optional explicit outcome override. Use this when the
-      comment-posting JOB is downstream of the actual work job —
-      e.g. e2e-tests.yml's `finalize` job posts on behalf of the
-      `e2e` matrix, so it passes `${{ needs.e2e.result }}` here.
-      `success`, `failure`, `cancelled`, or `skipped`.
-
-      For single-job workflows where the comment step lives in the
-      SAME job as the work, leave this unset — the action uses
-      GitHub Actions' built-in `failure()` / `success()` functions
-      to detect job state. (`${{ job.status }}` does NOT reliably
-      evaluate inside a composite action's `with:` block; using
-      `failure()` / `success()` inside the action's step `if:`
-      clauses is the supported pattern.)
+      Path to the captured Playwright/test log to scrub. Required
+      when `mode: post`; ignored when `mode: resolve` (resolve
+      doesn't read the log).
     required: false
     default: ""
   gitleaks-version:
@@ -74,16 +89,29 @@ inputs:
       fires on `workflow_dispatch` (or any non-`pull_request`
       event), since `github.event.pull_request` is empty in that
       case. When unset, the action falls back to
-      `context.payload.pull_request.number` and gates on the
-      pull_request event.
+      `context.payload.pull_request.number`.
     required: false
     default: ""
 
 runs:
   using: composite
   steps:
+    - name: Sanity log
+      shell: bash
+      env:
+        ACTION_MODE: ${{ inputs.mode }}
+        ACTION_MARKER: ${{ inputs.marker }}
+        ACTION_LOG_FILE: ${{ inputs.log-file }}
+        ACTION_PR_NUMBER: ${{ inputs.pr-number }}
+      run: |
+        # Echo received inputs so a future workflow-log inspection
+        # confirms the action was invoked with the expected args.
+        # If a future maintainer sees no failure-summary comment on
+        # a failed run, this output is the first thing to check.
+        echo "::notice::post-failure-comment invoked: mode=${ACTION_MODE} marker=${ACTION_MARKER} log=${ACTION_LOG_FILE} pr-override=${ACTION_PR_NUMBER:-(none)} event=${GITHUB_EVENT_NAME}"
+
     - name: Install gitleaks
-      if: ${{ inputs.outcome == 'failure' || (inputs.outcome == '' && failure()) }}
+      if: ${{ inputs.mode == 'post' }}
       shell: bash
       env:
         GITLEAKS_VERSION: ${{ inputs.gitleaks-version }}
@@ -100,7 +128,7 @@ runs:
         "$HOME/.local/bin/gitleaks" version
 
     - name: Extract and scrub failure summary
-      if: ${{ inputs.outcome == 'failure' || (inputs.outcome == '' && failure()) }}
+      if: ${{ inputs.mode == 'post' }}
       shell: bash
       env:
         LOG_FILE: ${{ inputs.log-file }}
@@ -114,8 +142,8 @@ runs:
         # Ensure gitleaks is reachable for the node scrubber.
         export PATH="$HOME/.local/bin:$PATH"
 
-        if [ ! -s "$LOG_FILE" ]; then
-          echo "(no log captured at $LOG_FILE)" > /tmp/failures-final.txt
+        if [ -z "$LOG_FILE" ] || [ ! -s "$LOG_FILE" ]; then
+          echo "(no log captured${LOG_FILE:+ at $LOG_FILE})" > /tmp/failures-final.txt
           exit 0
         fi
 
@@ -134,7 +162,7 @@ runs:
         head -c 60000 /tmp/failures-clean.txt > /tmp/failures-final.txt
 
     - name: Post failure summary to PR
-      if: ${{ (inputs.outcome == 'failure' || (inputs.outcome == '' && failure())) && (github.event_name == 'pull_request' || inputs.pr-number != '') }}
+      if: ${{ inputs.mode == 'post' && (github.event_name == 'pull_request' || inputs.pr-number != '') }}
       uses: actions/github-script@3a2844b7e9c422d3c10d287c895573f7108da1b3  # v9.0.0 (2026-04-09)
       env:
         # Pass inputs via env vars to avoid script-injection: the
@@ -151,9 +179,6 @@ runs:
           const title = process.env.FAILURE_TITLE;
           const runUrl = `${context.serverUrl}/${context.repo.owner}/${context.repo.repo}/actions/runs/${context.runId}`;
 
-          // Resolve PR number + head SHA from either the
-          // pull_request payload or an explicit override. Override
-          // wins so workflow_dispatch jobs can target a specific PR.
           let pr;
           let sha;
           if (process.env.PR_NUMBER_OVERRIDE) {
@@ -210,7 +235,7 @@ runs:
           }
 
     - name: Resolve failure-summary comment on success
-      if: ${{ (inputs.outcome == 'success' || (inputs.outcome == '' && success())) && (github.event_name == 'pull_request' || inputs.pr-number != '') }}
+      if: ${{ inputs.mode == 'resolve' && (github.event_name == 'pull_request' || inputs.pr-number != '') }}
       uses: actions/github-script@3a2844b7e9c422d3c10d287c895573f7108da1b3  # v9.0.0 (2026-04-09)
       env:
         FAILURE_MARKER: ${{ inputs.marker }}

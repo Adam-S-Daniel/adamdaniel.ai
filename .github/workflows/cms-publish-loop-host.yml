@@ -199,10 +199,23 @@ jobs:
       # see AGENTS.md "Failure-comment composite action" for the
       # full convention and design notes. Distinct marker so it
       # doesn't clobber the e2e or prod-mutate comment.
-      - name: Post / resolve failure summary
-        if: ${{ always() && github.event_name == 'pull_request' }}
+      # Two call sites — caller-side gating is the canonical
+      # `failure()` / `success()` pattern. The composite action
+      # is mode-driven and doesn't try to detect job state itself
+      # (we tried; it's unreliable in composite contexts).
+      - name: Post failure summary
+        if: ${{ failure() && github.event_name == 'pull_request' }}
         uses: ./.github/actions/post-failure-comment
         with:
+          mode: post
           log-file: /tmp/host-loop.log
+          marker: host-loop-failure-summary
+          title: host-loop
+
+      - name: Resolve failure summary on success
+        if: ${{ success() && github.event_name == 'pull_request' }}
+        uses: ./.github/actions/post-failure-comment
+        with:
+          mode: resolve
           marker: host-loop-failure-summary
           title: host-loop

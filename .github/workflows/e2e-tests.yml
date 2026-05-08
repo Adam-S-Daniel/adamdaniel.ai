@@ -839,20 +839,27 @@ jobs:
       # ── Failure summary on the PR ────────────────────────────────
       # Surface the matrix's failure blocks as a PR comment so a
       # human (or agent) iterating on the PR can triage without
-      # needing workflow-log access. Delegated to the shared
-      # composite action at .github/actions/post-failure-comment;
-      # see AGENTS.md "Failure-comment composite action" for the
-      # full convention and design notes.
-      - name: Post / resolve failure summary
-        if: ${{ always() && github.event_name == 'pull_request' }}
+      # needing workflow-log access. Two call sites; gate on the
+      # upstream e2e matrix's result (this finalize job has its
+      # own status, which is irrelevant — what we care about is
+      # the matrix). See AGENTS.md "Failure-comment composite
+      # action" for the convention.
+      - name: Post failure summary
+        if: ${{ needs.e2e.result == 'failure' && github.event_name == 'pull_request' }}
         uses: ./.github/actions/post-failure-comment
         with:
+          mode: post
           log-file: /tmp/playwright-output.log
           marker: e2e-failure-summary
           title: E2E tests
-          # `needs.e2e.result` is `success`, `failure`, `cancelled`,
-          # or `skipped`. The action no-ops on cancelled/skipped.
-          outcome: ${{ needs.e2e.result }}
+
+      - name: Resolve failure summary on success
+        if: ${{ needs.e2e.result == 'success' && github.event_name == 'pull_request' }}
+        uses: ./.github/actions/post-failure-comment
+        with:
+          mode: resolve
+          marker: e2e-failure-summary
+          title: E2E tests
 
       # ─── DO NOT REMOVE OR SOFTEN — this step IS the merge gate ─────────
       # `e2e (1)` is required, but `e2e (2..4)` are not (dynamic shard

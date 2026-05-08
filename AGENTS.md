@@ -642,28 +642,40 @@ node scripts/generate-showcase.js                           # produces before/af
 Workflow logs are not directly readable by the Claude agent (no `gh` CLI, the GitHub MCP server has no `actions/runs/.../logs` tool, and unauthenticated `curl` to `api.github.com/.../actions/runs/.../logs` returns 403). To make CI failures triage-able from inside a PR conversation, every Playwright-running workflow forwards its captured log to a shared composite action:
 
 ```yaml
-- name: Post / resolve failure summary
-  if: ${{ always() && github.event_name == 'pull_request' }}
+# Caller-side gating — failure() / success() at the workflow
+# level is the canonical pattern. Two call sites: one for the
+# failure post, one for the green-run resolve.
+- name: Post failure summary
+  if: ${{ failure() && github.event_name == 'pull_request' }}
   uses: ./.github/actions/post-failure-comment
   with:
+    mode: post
     log-file: /tmp/<your-log>.log
     marker: <unique-marker-slug>     # NO `<!-- -->` — the action wraps it
     title: <short label>
+
+- name: Resolve failure summary on success
+  if: ${{ success() && github.event_name == 'pull_request' }}
+  uses: ./.github/actions/post-failure-comment
+  with:
+    mode: resolve
+    marker: <unique-marker-slug>
+    title: <short label>
 ```
 
-For SINGLE-job workflows (the comment step lives in the same job as Playwright), don't pass `outcome:` — the action uses `failure()` / `success()` internally to detect job state. For MULTI-job workflows (e.g. `e2e-tests.yml`'s `finalize` job posts on behalf of the upstream `e2e` matrix), pass an explicit override:
+The action is mode-driven and does NOT detect job state itself. Earlier versions tried `${{ job.status }}` (silently empty inside composite `with:` blocks) and `failure()` / `success()` inside the action's own step `if:` clauses (also unreliable for our composite case). v3 pushes the gate to the caller, where `failure()` / `success()` are well-tested workflow primitives.
+
+For MULTI-job workflows (e.g. `e2e-tests.yml`'s `finalize` job posting on behalf of the upstream `e2e` matrix), `failure()` / `success()` reflect only the FINALIZE job's state, not the matrix's. Gate on `needs.<job>.result` instead:
 
 ```yaml
-- uses: ./.github/actions/post-failure-comment
-  if: ${{ always() && github.event_name == 'pull_request' }}
-  with:
-    log-file: /tmp/playwright-output.log
-    marker: e2e-failure-summary
-    title: E2E tests
-    outcome: ${{ needs.e2e.result }}   # explicit override
-```
+- if: ${{ needs.e2e.result == 'failure' && github.event_name == 'pull_request' }}
+  uses: ./.github/actions/post-failure-comment
+  with: { mode: post, log-file: /tmp/playwright-output.log, marker: e2e-failure-summary, title: E2E tests }
 
-`${{ job.status }}` does NOT reliably evaluate inside a composite action's `with:` block, so DON'T pass that — leave `outcome:` unset for single-job and the action's internal `failure()` / `success()` gates handle it.
+- if: ${{ needs.e2e.result == 'success' && github.event_name == 'pull_request' }}
+  uses: ./.github/actions/post-failure-comment
+  with: { mode: resolve, marker: e2e-failure-summary, title: E2E tests }
+```
 
 For workflows that don't fire on `pull_request` (e.g. `cms-publish-loop-preview.yml` on `workflow_dispatch`), pass `pr-number: ${{ inputs.pr_number }}` as well — the action falls back to looking up the head SHA via the API.
 
