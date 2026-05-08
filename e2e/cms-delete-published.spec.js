@@ -1,4 +1,4 @@
-// @lane: real — drives Decap delete UI through the real GitHub delete-via-PR shim
+// @lane: real — drives Decap delete UI end-to-end against prod
 // @select-skip-when-head-ref-prefix: cms/
 //
 // On `cms/*` PRs (Decap-opened editorial PRs) this spec self-skips at
@@ -8,19 +8,19 @@
 
 /*
  * UI-driven coverage for the "Delete published entry" path. Decap's
- * delete button calls DELETE /repos/.../contents/{path} synchronously,
- * which the main-branch ruleset rejects with 422. The shim
- * (admin/publish-via-auto-merge.js) catches the 422 and dispatches
- * `.github/workflows/delete-via-pr.yml`, which opens a labelled PR;
- * cms-editorial-workflow.yml's auto-merge-when-ready job takes it
- * from there.
+ * delete UI uses the GitHub git data API directly (POST /git/trees →
+ * POST /git/commits → PATCH /git/refs/heads/main); auto-merge engages
+ * on the resulting `cms/<col>/<slug>` PR exactly like Save does, and
+ * cms-editorial-workflow.yml's `auto-merge-when-ready` job lands the
+ * delete once required checks pass.
  *
- * Without this spec we have no end-to-end signal that the chain
- * actually closes. Unit (e2e/publish-via-auto-merge.test.js) and the
- * route-mocked browser test
- * (e2e/publish-via-auto-merge-browser.spec.js) cover the shim itself;
- * this one verifies the workflow + the labelled PR + the auto-merge
- * happen for real on the host repo.
+ * (Historical note: Decap was previously assumed to call
+ * DELETE /repos/.../contents/{path}, hit the main-branch ruleset's
+ * 422 "rule violations", and bounce off a shim → delete-via-pr.yml
+ * recovery path. That recovery never fired because Decap's actual
+ * code uses the git data API. The shim's DELETE intercept and the
+ * workflow were removed once the spec confirmed the user-facing
+ * contract — URL 404s — held without them.)
  *
  * Gating: identical to cms-publish-loop.spec.js's host loop —
  * RUN_HOST_REPO_PUBLISH_LOOP=1 plus a CMS_E2E_PAT must be set.
@@ -62,8 +62,10 @@ const PROD_ADMIN = `${PROD_HOST}/admin/`;
 //   1. The cms/e2e/<slug> PR Decap opens when Save is clicked on the
 //      "+ New E2E Canary" form (replaces the earlier seedFixtureViaPr
 //      back door).
-//   2. The cms/delete/<slug> PR opened by delete-via-pr.yml after the
-//      shim catches the 422 — this is the real subject of the test.
+//   2. The cms/<col>/<slug> PR Decap opens when "Delete published
+//      entry" is clicked — Decap PATCHes the git ref directly via
+//      the data API; auto-merge engages once required checks pass.
+//      This is the real subject of the test.
 // Each is roughly the same shape (validate-content + auto-merge +
 // deploy-production + CloudFront propagation), capping out around
 // 12-15 min. Plus the in-browser drive of two full publish chains.
@@ -99,12 +101,13 @@ async function fileExistsOnMain(filePath) {
 }
 
 async function tryHardDelete(filePath, slug, runId, message) {
-  // Best-effort cleanup. The shim / delete-via-pr workflow normally
-  // removes the fixture as part of the test flow; this fallback runs
-  // only on test failure when the file is still on main. Direct
-  // DELETE /contents/{path} on main is blocked by the ruleset, so we
-  // open a labelled fixture-removal PR and let auto-merge land it
-  // (same path the success case uses, just initiated from cleanup).
+  // Best-effort cleanup. The Decap UI's delete normally removes the
+  // fixture via the cms/<col>/<slug> auto-merge path during the test
+  // flow; this fallback runs only on test failure when the file is
+  // still on main. Direct DELETE /contents/{path} on main is blocked
+  // by the ruleset, so we open a labelled fixture-removal PR and let
+  // auto-merge land it (same path the success case uses, just
+  // initiated from cleanup).
   try {
     await removeFixtureViaPr({
       slug,

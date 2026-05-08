@@ -39,7 +39,6 @@ on:
       - '.github/workflows/cms-publish-loop-prod.yml'
       - '.github/workflows/deploy-preview.yml'
       - '.github/workflows/deploy-production.yml'
-      - '.github/workflows/delete-via-pr.yml'
       # OAuth proxy + admin-flow shim/helpers — same reasoning. An edit
       # here can change the click → API → workflow chain editors hit.
       - 'oauth-proxy/lambda.py'

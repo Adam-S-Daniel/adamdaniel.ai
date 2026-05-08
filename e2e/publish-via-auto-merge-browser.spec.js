@@ -26,10 +26,10 @@ const SHIM_SRC = fs.readFileSync(
 
 /**
  * Self-contained HTML fixture: the shim plus a minimal harness that
- * exposes window.__callMerge / window.__callDelete. We don't load
- * Decap here — the goal is to prove the shim does the right thing in
- * a real browser fetch context. Decap's actual UI is exercised by
- * cms-publish-loop.spec.js against prod.
+ * exposes window.__callMerge. We don't load Decap here — the goal is
+ * to prove the shim does the right thing in a real browser fetch
+ * context. Decap's actual UI is exercised by cms-publish-loop.spec.js
+ * against prod.
  */
 const FIXTURE_HTML = `<!doctype html>
 <html><head><meta charset="utf-8"><title>publish-via-auto-merge fixture</title></head>
@@ -55,14 +55,6 @@ const FIXTURE_HTML = `<!doctype html>
       const text = await res.text();
       return { status: res.status, body: text ? JSON.parse(text) : null };
     };
-    window.__callDelete = async (p) => {
-      const res = await fetch(
-        "https://api.github.com/repos/Adam-S-Daniel/adamdaniel.ai/contents/" + p,
-        { method: "DELETE", headers: ghHeaders() }
-      );
-      const text = await res.text();
-      return { status: res.status, body: text ? JSON.parse(text) : null };
-    };
   </script>
 </body></html>`;
 
@@ -82,13 +74,13 @@ test.describe("publish-via-auto-merge.js — browser context", () => {
     });
   });
 
-  test("shim installs in browser context with both matchers", async ({ page }) => {
+  test("shim installs in browser context with the merge matcher", async ({ page }) => {
     await page.setContent(FIXTURE_HTML);
     const status = await page.evaluate(() => ({
       installed: !!window.__publishViaAutoMergeInstalled,
       kinds: window.__publishViaAutoMerge && window.__publishViaAutoMerge.matchers,
     }));
-    expect(status).toEqual({ installed: true, kinds: ["merge", "delete"] });
+    expect(status).toEqual({ installed: true, kinds: ["merge"] });
   });
 
   test("PUT /pulls/N/merge → 422 rule violation → cms/ready label POST → synthetic merged: true", async ({ page }) => {
@@ -128,35 +120,6 @@ test.describe("publish-via-auto-merge.js — browser context", () => {
     // credential available at that point.
     expect(labelPostHeaders.authorization).toBe("Bearer fake-token");
     expect(labelPostHeaders["x-github-api-version"]).toBe("2022-11-28");
-  });
-
-  test("DELETE /contents/{path} → 422 rule violation → workflow dispatch → synthetic 200", async ({ page }) => {
-    let dispatchBody = null;
-
-    await page.route(/\/contents\/.+/, async (route) => {
-      await route.fulfill({
-        status: 422,
-        contentType: "application/json",
-        body: JSON.stringify({ message: "Repository rule violations found" }),
-      });
-    });
-    await page.route(/\/actions\/workflows\/delete-via-pr\.yml\/dispatches$/, async (route) => {
-      dispatchBody = JSON.parse(route.request().postData());
-      await route.fulfill({ status: 204, body: "" });
-    });
-
-    await page.setContent(FIXTURE_HTML);
-    const result = await page.evaluate(() =>
-      window.__callDelete("_posts/2026-04-25-replacement-test-post-1.md"),
-    );
-
-    expect(result.status).toBe(200);
-    expect(result.body.commit.sha).toBe("pending-delete-pr");
-    expect(result.body.content).toBeNull();
-    expect(dispatchBody.ref).toBe("main");
-    expect(dispatchBody.inputs.path).toBe(
-      "_posts/2026-04-25-replacement-test-post-1.md",
-    );
   });
 
   test("non-422 responses pass through without recovery", async ({ page }) => {
@@ -231,26 +194,4 @@ test.describe("publish-via-auto-merge.js — browser context", () => {
     expect(result.body.message).toMatch(/rule violations/i);
   });
 
-  test("DELETE recovery handles URL-encoded paths", async ({ page }) => {
-    let dispatchBody = null;
-    await page.route(/\/contents\/.+/, async (route) => {
-      await route.fulfill({
-        status: 422,
-        contentType: "application/json",
-        body: JSON.stringify({ message: "Repository rule violations found" }),
-      });
-    });
-    await page.route(/\/actions\/workflows\/delete-via-pr\.yml\/dispatches$/, async (route) => {
-      dispatchBody = JSON.parse(route.request().postData());
-      await route.fulfill({ status: 204, body: "" });
-    });
-
-    await page.setContent(FIXTURE_HTML);
-    await page.evaluate(() =>
-      window.__callDelete(encodeURIComponent("_posts/2026-04-25-replacement-test-post-1.md")),
-    );
-    expect(dispatchBody.inputs.path).toBe(
-      "_posts/2026-04-25-replacement-test-post-1.md",
-    );
-  });
 });

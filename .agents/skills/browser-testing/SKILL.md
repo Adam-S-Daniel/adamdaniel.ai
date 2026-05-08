@@ -187,11 +187,11 @@ Other specs that already use the right pattern: `cms-page-crud.spec.js`, `cms-pr
 
 ### Never bypass the UI in a UI test
 
-Codified in AGENTS.md too. The mistake to avoid: when a Decap UI click is reliably broken (e.g., empirically the "Delete published entry" button stopped firing today), the temptation is to swap the UI click for `page.evaluate(fetch(...))` against the GitHub API or call the shim's `__callDelete` directly. Don't. The whole point of `cms-publish-loop*` and `cms-delete-published` specs is to validate that the editor's click does what we expect end-to-end. A bypass test passes while the UI is silently broken — exactly the regression the spec exists to catch.
+Codified in AGENTS.md too. The mistake to avoid: when a Decap UI click is reliably broken (e.g., empirically the "Delete published entry" button stopped firing today), the temptation is to swap the UI click for `page.evaluate(fetch(...))` against the GitHub API or call the shim's `__callMerge` directly. Don't. The whole point of `cms-publish-loop*` and `cms-delete-published` specs is to validate that the editor's click does what we expect end-to-end. A bypass test passes while the UI is silently broken — exactly the regression the spec exists to catch.
 
 If the UI looks broken, suspect (in order): `delete:` flag on the collection, missing dialog handler, anchored regex on the confirm-button label not matching the live label, missing `force: true` on a click intercepted by an overlay, Decap version drift. All of these have bit cms-delete-published in the past — see git log e2e/cms-delete-published.spec.js for the genealogy.
 
-The route-mocked unit specs (`publish-via-auto-merge-browser.spec.js`) exercise the shim's internal contract without Decap. Those CAN call `__callDelete` directly because that's their entire reason for existing. The real-network specs must not.
+The route-mocked unit specs (`publish-via-auto-merge-browser.spec.js`) exercise the shim's internal contract without Decap. Those CAN call `__callMerge` directly because that's their entire reason for existing. The real-network specs must not.
 
 ### UI-driven cleanup + `test.afterAll()` harness safety net
 
