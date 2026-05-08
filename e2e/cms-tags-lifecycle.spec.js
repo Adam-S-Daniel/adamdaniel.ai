@@ -218,11 +218,23 @@ test("CMS — tags lifecycle (host repo, target main)", async ({ page }, testInf
   await test.step("Fill Name + Description and Save", async () => {
     await page.getByRole("textbox", { name: /^Name$/i }).fill(TAG_NAME);
 
-    // Description is a `text` widget (multi-line plain text). Decap
-    // renders it as a textbox with the field's accessible name.
-    const descField = page.getByRole("textbox", { name: /^Description$/i });
+    // Description is a `text` widget (multi-line). Decap renders the
+    // body as a contenteditable element whose accessible name is NOT
+    // bound to the field's "Description" label, so
+    // getByRole("textbox", { name: /Description/i }) doesn't match
+    // (run #25582963426 hit exactly this on cms-tags-lifecycle.spec.js:224
+    // — 30 s timeout looking for the named role). Use the same pattern
+    // cms-publish-loop.spec.js uses for the Body field: grab the LAST
+    // contenteditable role=textbox on the page. In the Tags editor
+    // there's only one contenteditable widget (Description sits below
+    // the plain-string Name field), so `.last()` reliably resolves to
+    // the Description textarea.
+    const descField = page
+      .locator('[role="textbox"][contenteditable="true"]')
+      .last();
     await expect(descField).toBeVisible({ timeout: 30_000 });
-    await descField.fill(TAG_DESCRIPTION);
+    await descField.click();
+    await descField.pressSequentially(TAG_DESCRIPTION);
 
     await page.getByRole("button", { name: /^Save$/i }).click();
     await expect(page.getByText(/Changes saved/i).first()).toBeVisible({
