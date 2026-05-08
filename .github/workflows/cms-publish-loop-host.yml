@@ -206,4 +206,3 @@ jobs:
           log-file: /tmp/host-loop.log
           marker: host-loop-failure-summary
           title: host-loop
-          outcome: ${{ job.status }}

@@ -15,7 +15,9 @@ Built once; every Playwright-running workflow should call it.
 
 ## Caller convention
 
-For a workflow that fires on `pull_request`:
+### Single-job workflow (most common)
+
+The comment step lives in the SAME job as the Playwright run. Don't pass `outcome:` — the action's internal `failure()` / `success()` gates handle it.
 
 ```yaml
 - name: Post / resolve failure summary
@@ -25,10 +27,25 @@ For a workflow that fires on `pull_request`:
     log-file: /tmp/<your-log>.log
     marker: <unique-marker-slug>     # NO `<!-- -->` — the action wraps it
     title: <short label>             # shown in the comment heading
-    outcome: ${{ job.status }}       # success | failure | cancelled
 ```
 
-For a workflow that fires on `workflow_dispatch` (or any non-`pull_request` event), pass the parent PR explicitly:
+### Multi-job workflow
+
+The comment step lives in a DOWNSTREAM job (e.g. `finalize` after an `e2e` matrix). The `failure()` / `success()` functions reflect the FINALIZE job's state — not the matrix's — so you must pass `outcome:` explicitly:
+
+```yaml
+- uses: ./.github/actions/post-failure-comment
+  if: ${{ always() && github.event_name == 'pull_request' }}
+  with:
+    log-file: /tmp/playwright-output.log
+    marker: e2e-failure-summary
+    title: E2E tests
+    outcome: ${{ needs.e2e.result }}   # explicit: success|failure|cancelled|skipped
+```
+
+### Non-`pull_request` triggers
+
+For `workflow_dispatch` (or any event without a `github.event.pull_request` context), pass the parent PR explicitly:
 
 ```yaml
 - uses: ./.github/actions/post-failure-comment
@@ -37,11 +54,16 @@ For a workflow that fires on `workflow_dispatch` (or any non-`pull_request` even
     log-file: /tmp/<your-log>.log
     marker: <unique-marker-slug>
     title: <short label>
-    outcome: ${{ job.status }}
     pr-number: ${{ inputs.pr_number }}   # or some other source of the PR #
 ```
 
-For a workflow whose runtime gate matches the upload-artifact step (e.g. `vars.PROD_PLAYGROUND_MODE == 'true'`), match the `if:` to the upload step's gate so the comment-step inheritance is consistent.
+### Gating the call
+
+For a workflow whose runtime gate matches the upload-artifact step (e.g. `vars.PROD_PLAYGROUND_MODE == 'true'`), match the `if:` on the action call to the upload step's gate so the comment behaviour is consistent with the rest of the failure-handling chain.
+
+### NEVER pass `${{ job.status }}`
+
+`${{ job.status }}` does NOT reliably evaluate inside a composite action's `with:` block. Empirically observed: it expands to empty string mid-job, leaving `inputs.outcome` empty and silently skipping every internal step gated on `outcome == 'failure'`. Use the patterns above instead — single-job: omit; multi-job: `${{ needs.<job>.result }}`.
 
 ## Required upstream conditions
 

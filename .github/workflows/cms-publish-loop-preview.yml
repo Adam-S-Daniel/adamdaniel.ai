@@ -181,5 +181,4 @@ jobs:
           log-file: /tmp/preview-loop.log
           marker: preview-loop-failure-summary
           title: preview-loop
-          outcome: ${{ job.status }}
           pr-number: ${{ inputs.pr_number }}

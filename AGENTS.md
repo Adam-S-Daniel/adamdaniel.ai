@@ -633,8 +633,21 @@ Workflow logs are not directly readable by the Claude agent (no `gh` CLI, the Gi
     log-file: /tmp/<your-log>.log
     marker: <unique-marker-slug>     # NO `<!-- -->` — the action wraps it
     title: <short label>
-    outcome: ${{ job.status }}
 ```
+
+For SINGLE-job workflows (the comment step lives in the same job as Playwright), don't pass `outcome:` — the action uses `failure()` / `success()` internally to detect job state. For MULTI-job workflows (e.g. `e2e-tests.yml`'s `finalize` job posts on behalf of the upstream `e2e` matrix), pass an explicit override:
+
+```yaml
+- uses: ./.github/actions/post-failure-comment
+  if: ${{ always() && github.event_name == 'pull_request' }}
+  with:
+    log-file: /tmp/playwright-output.log
+    marker: e2e-failure-summary
+    title: E2E tests
+    outcome: ${{ needs.e2e.result }}   # explicit override
+```
+
+`${{ job.status }}` does NOT reliably evaluate inside a composite action's `with:` block, so DON'T pass that — leave `outcome:` unset for single-job and the action's internal `failure()` / `success()` gates handle it.
 
 For workflows that don't fire on `pull_request` (e.g. `cms-publish-loop-preview.yml` on `workflow_dispatch`), pass `pr-number: ${{ inputs.pr_number }}` as well — the action falls back to looking up the head SHA via the API.
 

@@ -173,4 +173,3 @@ jobs:
           log-file: /tmp/prod-mutate.log
           marker: prod-mutate-failure-summary
           title: prod-mutate
-          outcome: ${{ job.status }}
