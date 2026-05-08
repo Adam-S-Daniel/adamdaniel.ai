@@ -43,6 +43,7 @@ on:
       - e2e/cms-publish-loop.spec.js
       - e2e/cms-delete-published.spec.js
       - e2e/cms-unpublish-republish.spec.js
+      - e2e/cms-tags-lifecycle.spec.js
       - e2e/cms-fixture-pr.js
       - e2e/decap-pat.js
       - e2e/github-actions-poll.js
@@ -177,6 +178,7 @@ jobs:
             e2e/cms-publish-loop.spec.js \
             e2e/cms-delete-published.spec.js \
             e2e/cms-unpublish-republish.spec.js \
+            e2e/cms-tags-lifecycle.spec.js \
             --project=chromium-desktop \
             --reporter=list \
             --max-failures=1 \
