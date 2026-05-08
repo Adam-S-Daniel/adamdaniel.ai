@@ -319,6 +319,22 @@ Sibling to the `cms-publish-loop` and `cms-publish-loop-preview` specs, but oper
 
 When all three pass, the spec runs against `https://adamdaniel.ai/admin/`: it resets the canary fixture to `published: false`, drives Decap to toggle Published → ON, waits for the cms/... PR Decap opens, waits for `validate-content` + auto-merge + `deploy-production.yml`, fetches `/blog/e2e-mutation-canary/`, asserts the run-unique marker is live, and resets the fixture back to `published: false`.
 
+### `sweep-stale-cms-prs.yml`
+
+Cleans up automation-only artefacts that crashed test runs leak. Runs daily at 04:00 UTC (two hours before the host-loop's 06:00 cron) plus `workflow_dispatch` with `dry_run` and `threshold_hours` inputs.
+
+**Three-tier sweep, all age-gated by `THRESHOLD_HOURS` (default 6h):**
+
+| Tier | What it sweeps | Branch deleted? | Opt-out |
+|---|---|---|---|
+| 1 | Open PRs on `cms/e2e/*` or `cms/e2e-fixture/*` branches (no label needed — these prefixes have no human use case). | Yes (`gh pr close --delete-branch`). | `keep` label on the PR. |
+| 2 | Open PRs labelled `automated-test`, regardless of branch prefix. Catches `cms/posts/*` leaks from prod-mutate runs. | No (Decap reuses `cms/<col>/<slug>` per entry; the next run's `closeStaleDecapPrOnBranch` handles the handoff). | `keep` label on the PR. |
+| 3 | Branches matching the same Tier 1 prefix safelist that have NO open PR (a crashed run pushed a branch but died before opening a PR). Direct ref delete via the git refs API. | Yes (it's the whole point). | `[sweep-keep]` in the tip commit message (the PR-level `keep` label can't apply when there's no PR). |
+
+A separate job step (`if: !inputs.dry_run`) sweeps stale `_e2e/canary-delete-*` fixtures left on `main` by opening a `cms/e2e-fixture/sweep-…` PR labelled `cms/ready`, which auto-merges via the editorial-workflow.
+
+**Pagination convention.** `gh pr list` defaults to `--limit 30` and silently truncates above that — `--paginate` is NOT a flag for `gh pr list` (gh-api-only). Every `gh pr list` in this workflow uses `--limit 1000` for top-level listing or `--limit 1` for existence checks. `gh api` calls that return arrays use `--paginate` with `?per_page=100`. New listing calls in this or related workflows MUST follow this convention; a 31st-orphan-silently-survives bug is invisible until the orphan rate climbs and is hard to diagnose because the workflow looks like it succeeded.
+
 ### Contributor Manual
 
 `docs/CONTRIBUTOR_MANUAL.md` is **assembled by the e2e tests**. Specs call `captureStep(page, { section, step, title, body })` from `e2e/manual-capture.js` at meaningful moments. The collator at `scripts/build-contributor-manual.js` reads the `manual-capture/*.json` records and builds the manual with embedded screenshots from `docs/manual-screenshots/`.

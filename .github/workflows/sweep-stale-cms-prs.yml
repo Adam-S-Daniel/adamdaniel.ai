@@ -111,9 +111,16 @@ jobs:
           echo "::notice::Sweep — automated-test PRs > ${THRESHOLD_HOURS}h. DRY_RUN=${DRY_RUN}"
 
           for pattern in "${TEST_ONLY_PATTERNS[@]}"; do
+            # `gh pr list` defaults to `--limit 30` and silently
+            # truncates above that. `--paginate` is NOT a flag here
+            # (gh-api-only); use `--limit <high>` to widen the page.
+            # 1000 is comfortable headroom — at steady state we
+            # expect <30 stale PRs per prefix, but a multi-day
+            # outage of this sweep can easily push past 30.
             gh pr list \
               --state open \
               --search "head:${pattern}" \
+              --limit 1000 \
               --json number,headRefName,createdAt,labels,title \
               --jq '.[]' | while read -r pr_json; do
               num=$(echo "$pr_json" | jq -r '.number')
@@ -173,9 +180,12 @@ jobs:
           # run's `closeStaleDecapPrOnBranch` is responsible for the
           # branch-delete handoff.
           echo "::notice::Tier 2 — sweeping automated-test labelled PRs > ${THRESHOLD_HOURS}h"
+          # Same `--limit` rationale as Tier 1: default 30 is the
+          # silent-truncation trap. Widen to 1000.
           gh pr list \
             --state open \
             --label automated-test \
+            --limit 1000 \
             --json number,headRefName,createdAt,labels,title \
             --jq '.[]' | while read -r pr_json; do
             num=$(echo "$pr_json" | jq -r '.number')
@@ -244,9 +254,11 @@ jobs:
 
               # Skip if any open PR points at this branch — Tier 1 / 2
               # already own that case and use --delete-branch.
-              open_count=$(gh pr list --state open --search "head:${branch}" --json number --jq 'length')
+              # `--limit 1` is sufficient: we only need existence,
+              # not the full list. Cheaper API call too.
+              open_count=$(gh pr list --state open --search "head:${branch}" --limit 1 --json number --jq 'length')
               if [ "$open_count" != "0" ]; then
-                echo "skip BRANCH ${branch} — has ${open_count} open PR(s)"
+                echo "skip BRANCH ${branch} — has open PR(s)"
                 continue
               fi
 
