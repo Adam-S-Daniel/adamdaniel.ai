@@ -332,11 +332,20 @@
     a.id = id;
     a.target = "_blank";
     a.rel = "noopener";
-    // Inline-block so it sits in the toolbar's natural row, between
-    // the built-in Preview link and the Save/Publish menu.
+    // Inline-block so it sits in the toolbar's natural row. We
+    // insert at the LEFT of the toolbar (before the action group)
+    // rather than appending to the right — on narrow / mobile
+    // viewports the right-anchored toolbar overflows the viewport
+    // and clips trailing children. Anchoring to the left keeps the
+    // "Publishing…" spinner visible regardless of width.
+    //
+    // `order:-1` is set so that even if Decap wraps children in a
+    // flex container with arbitrary order values, the pill still
+    // floats to the start of the row.
     a.style.cssText = [
       "display:none",
-      "margin-left:0.5rem",
+      "order:-1",
+      "margin-right:0.5rem",
       "padding:0.2rem 0.55rem",
       "background:rgba(255,255,255,0.95)",
       "border:1px solid #d0d7de",
@@ -359,7 +368,18 @@
     var toolbar = findToolbar();
     if (!toolbar) return null;
     var pill = existing || buildPill(id);
-    toolbar.appendChild(pill);
+    // Insert at the START of the toolbar (before the existing
+    // action group) so the pill stays inside the viewport on narrow
+    // widths. The toolbar overflows to the right on mobile, so a
+    // right-appended child gets clipped; a left-prepended one stays
+    // visible. `insertBefore(pill, toolbar.firstChild)` is
+    // equivalent to `prepend(pill)` but works in IE-era polyfill
+    // setups without an extra shim.
+    if (toolbar.firstChild) {
+      toolbar.insertBefore(pill, toolbar.firstChild);
+    } else {
+      toolbar.appendChild(pill);
+    }
     return pill;
   }
 

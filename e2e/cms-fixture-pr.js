@@ -236,6 +236,15 @@ async function seedFixtureViaPr({
   // pushing the spec's TEST_TIMEOUT_MS into needing a parallel
   // bump.
   timeoutMs = 25 * 60 * 1000,
+  // Fire-and-forget mode for harness-cleanup paths (e.g. the
+  // afterAll safety-net in cms-publish-loop.spec.js). When true,
+  // return as soon as the PR is opened + labelled — don't wait
+  // for the merge. The editorial-workflow auto-merges in the
+  // background; the daily sweep cleans up any orphan PR that
+  // can't merge (empty diff because another worker raced ahead,
+  // CI failure, etc.). Default false — production callers in
+  // the spec's own cleanup leg need the wait-for-merge guarantee.
+  skipWaitForMerge = false,
 } = {}) {
   if (!slug || !runId || !filePath || !bodyText || !message) {
     throw new Error(
@@ -257,6 +266,12 @@ async function seedFixtureViaPr({
           `Branch: \`${branch}\`. Auto-merges via the \`cms/ready\` label once \`validate-content\` + the e2e shards land.`,
     });
     await addReadyLabel({ repo, prNumber: pr.number });
+    if (skipWaitForMerge) {
+      // Caller doesn't care when the PR merges, only that it's
+      // open and queued for auto-merge. Return the open PR
+      // descriptor; the editorial-workflow handles the rest.
+      return pr;
+    }
     return await waitForMerge({ repo, prNumber: pr.number, timeoutMs });
   } catch (e) {
     await closePrAndDeleteBranch({

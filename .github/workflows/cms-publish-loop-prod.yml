@@ -43,9 +43,15 @@ on:
 permissions:
   # The spec drives admin via a fine-grained PAT (CMS_E2E_PAT) — the
   # workflow itself only needs to read the repo to install deps and
-  # check out source, so contents:read is sufficient. The PAT carries
-  # its own contents:rw / pull-requests:rw scope.
+  # check out source, so contents:read is sufficient there. The PAT
+  # carries its own contents:rw / pull-requests:rw scope.
+  #
+  # `pull-requests: write` is needed by the post-failure-comment
+  # composite action so the default GITHUB_TOKEN can post the
+  # failure-summary comment via the issues comments API. Without
+  # this the github-script call 403s silently and no comment lands.
   contents: read
+  pull-requests: write
 
 defaults:
   run:
@@ -149,3 +155,34 @@ jobs:
             test-results/
             /tmp/prod-mutate.log
           retention-days: 14
+
+      # Surface the Playwright failure block as a PR comment so a
+      # human (or agent) iterating on the PR can triage without
+      # needing workflow-log access. Delegated to the shared
+      # composite action at .github/actions/post-failure-comment;
+      # see AGENTS.md "Failure-comment composite action" for the
+      # full convention and design notes. Distinct marker so it
+      # doesn't clobber the e2e or host-loop comment. Gated on
+      # PROD_PLAYGROUND_MODE for symmetry with the upload-artifact
+      # step above — when playground mode is off, the test
+      # self-skips and there's nothing meaningful to comment about.
+      # Two call sites — caller-side gating with `failure()` /
+      # `success()` is the canonical, well-tested pattern. The
+      # composite action is mode-driven and doesn't detect job
+      # state itself.
+      - name: Post failure summary
+        if: ${{ failure() && vars.PROD_PLAYGROUND_MODE == 'true' }}
+        uses: ./.github/actions/post-failure-comment
+        with:
+          mode: post
+          log-file: /tmp/prod-mutate.log
+          marker: prod-mutate-failure-summary
+          title: prod-mutate
+
+      - name: Resolve failure summary on success
+        if: ${{ success() && vars.PROD_PLAYGROUND_MODE == 'true' }}
+        uses: ./.github/actions/post-failure-comment
+        with:
+          mode: resolve
+          marker: prod-mutate-failure-summary
+          title: prod-mutate

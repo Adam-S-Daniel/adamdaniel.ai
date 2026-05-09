@@ -11,7 +11,7 @@ name: Sweep stale automated-test PRs
 # Scope — DELIBERATELY conservative
 # ────────────────────────────────────
 #
-# Two-tier sweep, both age-gated by the same threshold:
+# Three-tier sweep, all age-gated by the same threshold:
 #
 # **Tier 1 — branch prefix safelist** (no label required). Branches
 # that ONLY exist as automation artefacts:
@@ -39,6 +39,14 @@ name: Sweep stale automated-test PRs
 # auto-deleted in this tier — Decap reuses `cms/<col>/<slug>` per
 # entry and the next test run's `closeStaleDecapPrOnBranch`
 # handles the branch handoff.
+#
+# **Tier 3 — orphaned branches with no open PR** (same prefix
+# safelist as Tier 1). A crashed run can push a branch and die
+# before opening a PR; or a PR can be closed without
+# `--delete-branch`. Either way, the branch lingers on origin
+# forever. Tier 3 deletes the ref directly via the git refs API
+# when no open PR points at it. Per-branch opt-out: include
+# `[sweep-keep]` in the tip commit message.
 #
 # Trigger model:
 #   - Daily cron at 04:00 UTC, two hours before the host-loop
@@ -103,9 +111,16 @@ jobs:
           echo "::notice::Sweep — automated-test PRs > ${THRESHOLD_HOURS}h. DRY_RUN=${DRY_RUN}"
 
           for pattern in "${TEST_ONLY_PATTERNS[@]}"; do
+            # `gh pr list` defaults to `--limit 30` and silently
+            # truncates above that. `--paginate` is NOT a flag here
+            # (gh-api-only); use `--limit <high>` to widen the page.
+            # 1000 is comfortable headroom — at steady state we
+            # expect <30 stale PRs per prefix, but a multi-day
+            # outage of this sweep can easily push past 30.
             gh pr list \
               --state open \
               --search "head:${pattern}" \
+              --limit 1000 \
               --json number,headRefName,createdAt,labels,title \
               --jq '.[]' | while read -r pr_json; do
               num=$(echo "$pr_json" | jq -r '.number')
@@ -165,9 +180,12 @@ jobs:
           # run's `closeStaleDecapPrOnBranch` is responsible for the
           # branch-delete handoff.
           echo "::notice::Tier 2 — sweeping automated-test labelled PRs > ${THRESHOLD_HOURS}h"
+          # Same `--limit` rationale as Tier 1: default 30 is the
+          # silent-truncation trap. Widen to 1000.
           gh pr list \
             --state open \
             --label automated-test \
+            --limit 1000 \
             --json number,headRefName,createdAt,labels,title \
             --jq '.[]' | while read -r pr_json; do
             num=$(echo "$pr_json" | jq -r '.number')
@@ -193,6 +211,86 @@ jobs:
                 "Closed by sweep-stale-cms-prs.yml — \`automated-test\`-labelled PR open for ${age_h}h, longer than the ${THRESHOLD_HOURS}h threshold. Add the \`keep\` label and reopen if this was deliberate." \
                 || echo "::warning::failed to close #${num} (might already be closed or merged)"
             fi
+          done
+
+          # ── Tier 3: orphaned BRANCHES with no open PR ───────────
+          # A crashed run can push a branch and die before opening a
+          # PR; or a PR can be closed without `--delete-branch`. Either
+          # way, the branch lingers on origin forever. Tier 1 / Tier 2
+          # only handle branches that still have an OPEN PR — anything
+          # else falls through to here.
+          #
+          # Same prefix safelist as Tier 1 (`cms/e2e/`,
+          # `cms/e2e-fixture/`) — DO NOT broaden. Other `cms/<col>/`
+          # prefixes can host real editor drafts and `claude/...` is
+          # used by human + agent authors.
+          #
+          # Per-branch opt-out: because Tier 3 by definition operates
+          # on branches with NO open PR, the `keep` LABEL doesn't
+          # apply. Instead, include `[sweep-keep]` anywhere in the tip
+          # commit message to hold an orphan for debugging.
+          echo "::notice::Tier 3 — sweeping orphaned branches > ${THRESHOLD_HOURS}h with no open PR"
+          for pattern in "${TEST_ONLY_PATTERNS[@]}"; do
+            # Paginate: branches list is capped at 100/page, and at
+            # steady state we may accumulate hundreds of orphans.
+            gh api --paginate "repos/${GH_REPO}/branches?per_page=100" \
+              --jq ".[] | select(.name | startswith(\"${pattern}\")) | .name" \
+              | while read -r branch; do
+              [ -z "$branch" ] && continue
+
+              # Belt-and-braces: re-verify prefix (mirrors Tier 1's
+              # client-side guard). Never delete a branch whose name
+              # doesn't start with one of the safelisted prefixes.
+              prefix_ok=false
+              for p in "${TEST_ONLY_PATTERNS[@]}"; do
+                case "$branch" in
+                  "$p"*) prefix_ok=true; break;;
+                esac
+              done
+              if [ "$prefix_ok" != "true" ]; then
+                echo "::warning::skip BRANCH ${branch} — prefix not in TEST_ONLY_PATTERNS (unexpected API result)"
+                continue
+              fi
+
+              # Skip if any open PR points at this branch — Tier 1 / 2
+              # already own that case and use --delete-branch.
+              # `--limit 1` is sufficient: we only need existence,
+              # not the full list. Cheaper API call too.
+              open_count=$(gh pr list --state open --search "head:${branch}" --limit 1 --json number --jq 'length')
+              if [ "$open_count" != "0" ]; then
+                echo "skip BRANCH ${branch} — has open PR(s)"
+                continue
+              fi
+
+              # Branch tip metadata: committer date + commit message
+              # (for [sweep-keep] opt-out).
+              branch_json=$(gh api "repos/${GH_REPO}/branches/${branch}" 2>/dev/null || echo '')
+              if [ -z "$branch_json" ]; then
+                echo "::warning::skip BRANCH ${branch} — failed to fetch metadata"
+                continue
+              fi
+              tip_date=$(echo "$branch_json" | jq -r '.commit.commit.committer.date')
+              tip_msg=$(echo "$branch_json" | jq -r '.commit.commit.message')
+              tip_ts=$(date -u -d "$tip_date" +%s)
+
+              if echo "$tip_msg" | grep -qF '[sweep-keep]'; then
+                echo "skip BRANCH ${branch} — tip commit has [sweep-keep] marker"
+                continue
+              fi
+
+              if [ "$tip_ts" -ge "$THRESHOLD_TS" ]; then
+                echo "skip BRANCH ${branch} — only $(( ($(date -u +%s) - tip_ts) / 60 )) min old"
+                continue
+              fi
+
+              age_h=$(( ($(date -u +%s) - tip_ts) / 3600 ))
+              echo "delete BRANCH ${branch} — ${age_h}h old"
+              if [ "$DRY_RUN" != "true" ]; then
+                # Direct ref delete via API — works without a checkout.
+                gh api -X DELETE "repos/${GH_REPO}/git/refs/heads/${branch}" \
+                  || echo "::warning::failed to delete BRANCH ${branch} (might already be gone)"
+              fi
+            done
           done
 
           echo "::notice::Sweep complete. DRY_RUN=${DRY_RUN}"

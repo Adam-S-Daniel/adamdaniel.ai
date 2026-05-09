@@ -76,19 +76,42 @@ jobs:
         # no extra gems. Keeps plugin behaviour covered even when no
         # Playwright spec exercises the same code path.
         run: |
+          set -o pipefail
           # `nullglob` so the loop is a no-op (rather than passing the
           # literal pattern to ruby) if the directory is ever emptied.
           shopt -s nullglob
           for t in _plugins_test/*_test.rb; do
             echo "==> $t"
             bundle exec ruby "$t"
-          done
+          done 2>&1 | tee /tmp/unit.log
 
       - name: Run sync-action-pin-comments tests
         # Pure-bash test for the action-pin comment-syncer. Stubs
         # `gh` via a path-shadowing wrapper, so this runs offline
         # and never hits the GitHub API. Sub-second.
-        run: bash scripts/sync-action-pin-comments.test.sh
+        run: |
+          set -o pipefail
+          bash scripts/sync-action-pin-comments.test.sh 2>&1 | tee -a /tmp/unit.log
+
+      # Failure-comment fan-out — see AGENTS.md "Failure-comment
+      # composite action". Two call sites (post / resolve), gitleaks-
+      # scrubbed via the composite action.
+      - name: Post failure summary
+        if: ${{ failure() && github.event_name == 'pull_request' }}
+        uses: ./.github/actions/post-failure-comment
+        with:
+          mode: post
+          log-file: /tmp/unit.log
+          marker: unit-failure-summary
+          title: unit
+
+      - name: Resolve failure summary on success
+        if: ${{ success() && github.event_name == 'pull_request' }}
+        uses: ./.github/actions/post-failure-comment
+        with:
+          mode: resolve
+          marker: unit-failure-summary
+          title: unit
 
   # Decide what e2e work is actually needed for this commit, and how
   # many shards to spin up. Hoisted out of the e2e matrix so the
@@ -122,6 +145,14 @@ jobs:
         with:
           node-version: '20'
 
+      - name: Init select log
+        # Single log file the failure-comment step reads from. Both
+        # run-blocks below tee-append into it so a select-side failure
+        # surfaces the actionable lines (image-tag mismatch or selector
+        # crash output) on the PR.
+        run: |
+          : > /tmp/select.log
+
       - name: Verify Playwright image version matches lockfile
         # Drift guard for the `mcr.microsoft.com/playwright:v<version>-noble`
         # container images used by every Playwright job in this repo.
@@ -137,6 +168,9 @@ jobs:
         # `package.json` may be a range like `^1.59.0`).
         run: |
           set -euo pipefail
+          # Tee everything to /tmp/select.log so a failure here lands in
+          # the PR comment via the post-failure-comment composite action.
+          exec > >(tee -a /tmp/select.log) 2>&1
           expected=$(node -p "require('./package-lock.json').packages['node_modules/@playwright/test'].version")
           echo "Lockfile @playwright/test version: $expected"
 
@@ -209,6 +243,9 @@ jobs:
           # as "no filtering".
           GITHUB_HEAD_REF: ${{ github.head_ref }}
         run: |
+          # Tee everything to /tmp/select.log so a failure here lands in
+          # the PR comment via the post-failure-comment composite action.
+          exec > >(tee -a /tmp/select.log) 2>&1
           git fetch origin main --depth=500 || true
           # Local-lane verdict (existing behaviour). TEST_LANE defaults
           # to `local` in the selector when the env var is empty, but
@@ -265,6 +302,30 @@ jobs:
           echo "real_scope=$real_scope" >> "$GITHUB_OUTPUT"
           echo "real_files=$real_files" >> "$GITHUB_OUTPUT"
           echo "Resolved: scope=$scope shard_count=$shard_count shards=$shards real_scope=$real_scope"
+
+      # Failure-comment fan-out — see AGENTS.md "Failure-comment
+      # composite action". Two call sites (post / resolve), gitleaks-
+      # scrubbed via the composite action. Select-side failures are
+      # rare but the failure mode (image-tag mismatch or selector
+      # crash) has a clear actionable error message that's worth
+      # surfacing inline rather than making the operator click into
+      # the run.
+      - name: Post failure summary
+        if: ${{ failure() && github.event_name == 'pull_request' }}
+        uses: ./.github/actions/post-failure-comment
+        with:
+          mode: post
+          log-file: /tmp/select.log
+          marker: select-failure-summary
+          title: select
+
+      - name: Resolve failure summary on success
+        if: ${{ success() && github.event_name == 'pull_request' }}
+        uses: ./.github/actions/post-failure-comment
+        with:
+          mode: resolve
+          marker: select-failure-summary
+          title: select
 
   e2e:
     needs: select
@@ -549,6 +610,26 @@ jobs:
           path: test-results/
           retention-days: 7
 
+      # Failure-comment fan-out — see AGENTS.md "Failure-comment
+      # composite action". Two call sites (post / resolve), gitleaks-
+      # scrubbed via the composite action.
+      - name: Post failure summary
+        if: ${{ failure() && github.event_name == 'pull_request' }}
+        uses: ./.github/actions/post-failure-comment
+        with:
+          mode: post
+          log-file: shard-output/playwright-output.log
+          marker: e2e-real-failure-summary
+          title: e2e-real
+
+      - name: Resolve failure summary on success
+        if: ${{ success() && github.event_name == 'pull_request' }}
+        uses: ./.github/actions/post-failure-comment
+        with:
+          mode: resolve
+          marker: e2e-real-failure-summary
+          title: e2e-real
+
   # G3 — `@parity` subset against prod, on every PR.
   #
   # The `TARGET=prod` env switch (e2e/base.js) overrides Playwright's
@@ -646,6 +727,26 @@ jobs:
             test-results/
             /tmp/parity-output.log
           retention-days: 7
+
+      # Failure-comment fan-out — see AGENTS.md "Failure-comment
+      # composite action". Two call sites (post / resolve), gitleaks-
+      # scrubbed via the composite action.
+      - name: Post failure summary
+        if: ${{ failure() && github.event_name == 'pull_request' }}
+        uses: ./.github/actions/post-failure-comment
+        with:
+          mode: post
+          log-file: /tmp/parity-output.log
+          marker: parity-failure-summary
+          title: parity
+
+      - name: Resolve failure summary on success
+        if: ${{ success() && github.event_name == 'pull_request' }}
+        uses: ./.github/actions/post-failure-comment
+        with:
+          mode: resolve
+          marker: parity-failure-summary
+          title: parity
 
   # ─── DO NOT WEAKEN WITHOUT READING THE FOLLOWING ────────────────────
   #
@@ -837,122 +938,29 @@ jobs:
           done
 
       # ── Failure summary on the PR ────────────────────────────────
-      # Without log access from outside the workflow, a failed CI
-      # run is opaque to anyone (or any agent) iterating on a PR.
-      # Surface the actual Playwright failure blocks as a PR
-      # comment, scrubbed of secrets via gitleaks first.
-      - name: Determine if any shard failed
-        id: e2e-status
-        if: always()
-        # `needs.e2e.result` is "success" only when every matrix
-        # entry succeeded; "failure" when any failed; "cancelled"
-        # when any was cancelled.
-        run: |
-          if [ "${{ needs.e2e.result }}" = "failure" ]; then
-            echo "failed=true" >> "$GITHUB_OUTPUT"
-          else
-            echo "failed=false" >> "$GITHUB_OUTPUT"
-          fi
-
-      - name: Install gitleaks
-        if: steps.e2e-status.outputs.failed == 'true'
-        env:
-          GITLEAKS_VERSION: 8.21.2
-        run: |
-          # No `sudo` here: the Playwright container runs as root by
-          # default, so `tar -xzC /usr/local/bin` works directly. Adding
-          # `sudo` would fail because sudo isn't installed in the image.
-          curl -sSfL "https://github.com/gitleaks/gitleaks/releases/download/v${GITLEAKS_VERSION}/gitleaks_${GITLEAKS_VERSION}_linux_x64.tar.gz" \
-            | tar -xzC /usr/local/bin gitleaks
-          gitleaks version
-
-      - name: Extract and scrub failure summary
-        if: steps.e2e-status.outputs.failed == 'true'
-        run: |
-          bash scripts/extract-playwright-failures.sh /tmp/playwright-output.log > /tmp/failures-raw.txt || true
-          if [ ! -s /tmp/failures-raw.txt ]; then
-            # Fallback: send the tail of the log so the comment isn't empty.
-            tail -c 80000 /tmp/playwright-output.log > /tmp/failures-raw.txt
-          fi
-          node scripts/scrub-secrets.js /tmp/failures-raw.txt /tmp/failures-clean.txt
-          # Truncate to fit comfortably in a GitHub comment
-          # (the hard cap is ~65 535 chars; leave headroom for the
-          # surrounding markdown).
-          head -c 60000 /tmp/failures-clean.txt > /tmp/failures-final.txt
-
-      - name: Post failure summary to PR
-        if: steps.e2e-status.outputs.failed == 'true'
-        uses: actions/github-script@3a2844b7e9c422d3c10d287c895573f7108da1b3  # v9.0.0 (2026-04-09)
+      # Surface the matrix's failure blocks as a PR comment so a
+      # human (or agent) iterating on the PR can triage without
+      # needing workflow-log access. Two call sites; gate on the
+      # upstream e2e matrix's result (this finalize job has its
+      # own status, which is irrelevant — what we care about is
+      # the matrix). See AGENTS.md "Failure-comment composite
+      # action" for the convention.
+      - name: Post failure summary
+        if: ${{ needs.e2e.result == 'failure' && github.event_name == 'pull_request' }}
+        uses: ./.github/actions/post-failure-comment
         with:
-          script: |
-            const fs = require('fs');
-            const summary = fs.readFileSync('/tmp/failures-final.txt', 'utf8');
-            const sha = context.payload.pull_request.head.sha.slice(0, 7);
-            const runUrl = `${context.serverUrl}/${context.repo.owner}/${context.repo.repo}/actions/runs/${context.runId}`;
+          mode: post
+          log-file: /tmp/playwright-output.log
+          marker: e2e-failure-summary
+          title: E2E tests
 
-            const body = [
-              '<!-- e2e-failure-summary -->',
-              `## ❌ E2E test failures on \`${sha}\``,
-              '',
-              `[View full run](${runUrl})`,
-              '',
-              '<details>',
-              '<summary>Failure log (secrets redacted via gitleaks)</summary>',
-              '',
-              '```',
-              summary || '(no failure block matched the extractor; see the run for full output)',
-              '```',
-              '',
-              '</details>',
-              '',
-              '*Posted automatically. The comment refreshes on every CI run; the most recent failures are always shown here.*',
-            ].join('\n');
-
-            const pr = context.payload.pull_request.number;
-            const { data: comments } = await github.rest.issues.listComments({
-              owner: context.repo.owner,
-              repo: context.repo.repo,
-              issue_number: pr,
-            });
-            const marker = '<!-- e2e-failure-summary -->';
-            const existing = comments.find(c => c.body && c.body.includes(marker));
-            if (existing) {
-              await github.rest.issues.updateComment({
-                owner: context.repo.owner,
-                repo: context.repo.repo,
-                comment_id: existing.id,
-                body,
-              });
-            } else {
-              await github.rest.issues.createComment({
-                owner: context.repo.owner,
-                repo: context.repo.repo,
-                issue_number: pr,
-                body,
-              });
-            }
-
-      - name: Resolve failure-summary comment on success
-        if: always() && steps.e2e-status.outputs.failed != 'true'
-        uses: actions/github-script@3a2844b7e9c422d3c10d287c895573f7108da1b3  # v9.0.0 (2026-04-09)
+      - name: Resolve failure summary on success
+        if: ${{ needs.e2e.result == 'success' && github.event_name == 'pull_request' }}
+        uses: ./.github/actions/post-failure-comment
         with:
-          script: |
-            const pr = context.payload.pull_request.number;
-            const { data: comments } = await github.rest.issues.listComments({
-              owner: context.repo.owner,
-              repo: context.repo.repo,
-              issue_number: pr,
-            });
-            const marker = '<!-- e2e-failure-summary -->';
-            const existing = comments.find(c => c.body && c.body.includes(marker));
-            if (existing) {
-              await github.rest.issues.updateComment({
-                owner: context.repo.owner,
-                repo: context.repo.repo,
-                comment_id: existing.id,
-                body: `${marker}\n## ✅ E2E tests passing on \`${context.payload.pull_request.head.sha.slice(0,7)}\`\n\n_Cleared by the most recent green run._`,
-              });
-            }
+          mode: resolve
+          marker: e2e-failure-summary
+          title: E2E tests
 
       # ─── DO NOT REMOVE OR SOFTEN — this step IS the merge gate ─────────
       # `e2e (1)` is required, but `e2e (2..4)` are not (dynamic shard

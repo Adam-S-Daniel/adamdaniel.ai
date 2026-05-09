@@ -110,9 +110,17 @@ This is the same `delete: false` symptom from §5 — the menu rendered, but Dec
 
 The publish-loop is the only test that exercises the live Decap → editorial-workflow → auto-merge → deploy-production chain. When it's broken, the only pre-prod safety net for the actual publish flow is broken. Every minute the user spends restarting cancelled runs without diagnosing the open PR queue is a minute the canary is silently red. The first action when one of these workflows looks "stuck" is *always* `gh pr list --state open --search "head:cms"`.
 
+## Cleanup vs triage
+
+Don't manually close every orphan PR you find — `.github/workflows/sweep-stale-cms-prs.yml` runs nightly at 04:00 UTC and handles the routine cases. Triage that finds the *root cause* of why the sweep alone isn't enough is the goal; if you're just closing leftovers, use the workflow's `workflow_dispatch` with `dry_run: false` instead.
+
+The sweep has three tiers: branch-prefix safelist (closes + deletes), `automated-test` label (closes only — Decap reuses branches), and orphaned branches with no open PR (deletes). Per-PR opt-out via the `keep` label; per-branch opt-out via `[sweep-keep]` in the tip commit message. See AGENTS.md "`sweep-stale-cms-prs.yml`" for the full table.
+
+**Pagination rule** (applies to any future addition): `gh pr list` defaults to `--limit 30` and silently truncates above that. `--paginate` is NOT a flag for `gh pr list` — that's gh-api-only. Always `--limit 1000` for top-level listings, `--limit 1` for existence checks. The sweep workflow's comments document this inline; mirror it in any new sweep tier or related cleanup script.
+
 ## Reference
 
-- Workflows: `.github/workflows/cms-publish-loop-host.yml`, `cms-publish-loop-prod.yml`, `canary-prod.yml`
+- Workflows: `.github/workflows/cms-publish-loop-host.yml`, `cms-publish-loop-prod.yml`, `canary-prod.yml`, `sweep-stale-cms-prs.yml`
 - Specs: `e2e/cms-publish-loop.spec.js`, `e2e/cms-publish-loop-prod-mutate.spec.js`, `e2e/cms-publish-loop-preview.spec.js`, `e2e/cms-delete-published.spec.js`, `e2e/cms-preview-pr-self-contained.spec.js`
 - Spec-helper that owns the timeout: `e2e/github-actions-poll.js#waitForMerge` (the `Timed out waiting for PR #N to merge` error originates here)
 - Content-fixture discovery (the de-coupled pattern that prevents PR-CI failures when fixtures change): `e2e/content-fixtures.js`

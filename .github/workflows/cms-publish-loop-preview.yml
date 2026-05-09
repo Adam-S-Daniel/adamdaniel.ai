@@ -46,9 +46,16 @@ on:
 permissions:
   # Spec drives Decap with CMS_E2E_PAT for content writes; the
   # workflow itself only needs `contents: read` to install deps and
-  # checkout source. PAT carries Contents: r/w + Pull requests: r/w
-  # + Actions: r/w on the host repo.
+  # checkout source there. PAT carries Contents: r/w + Pull requests:
+  # r/w + Actions: r/w on the host repo.
+  #
+  # `pull-requests: write` is needed by the post-failure-comment
+  # composite action so the default GITHUB_TOKEN can post the
+  # failure-summary comment on the parent PR (resolved via the
+  # `pr_number` workflow input). Without it the github-script call
+  # 403s silently and no comment lands.
   contents: read
+  pull-requests: write
 
 concurrency:
   # Per-PR group keeps two preview-loop runs from racing on the same
@@ -160,3 +167,31 @@ jobs:
             test-results/**
           if-no-files-found: ignore
           retention-days: 14
+
+      # Surface the failure block as a PR comment on the parent PR
+      # (resolved via the workflow_dispatch input). See AGENTS.md
+      # "Failure-comment composite action" for the pattern. This
+      # workflow has no `pull_request` event, so we pass `pr-number`
+      # explicitly — the action falls back to looking up the head
+      # SHA via the API.
+      # Two call sites — caller-side gating. workflow_dispatch
+      # has no `pull_request` payload, so pass `pr-number`
+      # explicitly and don't gate on `github.event_name`.
+      - name: Post failure summary
+        if: failure()
+        uses: ./.github/actions/post-failure-comment
+        with:
+          mode: post
+          log-file: /tmp/preview-loop.log
+          marker: preview-loop-failure-summary
+          title: preview-loop
+          pr-number: ${{ inputs.pr_number }}
+
+      - name: Resolve failure summary on success
+        if: success()
+        uses: ./.github/actions/post-failure-comment
+        with:
+          mode: resolve
+          marker: preview-loop-failure-summary
+          title: preview-loop
+          pr-number: ${{ inputs.pr_number }}

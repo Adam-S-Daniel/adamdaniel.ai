@@ -33,7 +33,16 @@ async function gh(pathname, init = {}) {
   });
   if (!res.ok) {
     const body = await res.text();
-    throw new Error(`GitHub API ${res.status} ${res.statusText} on ${url}: ${body.slice(0, 300)}`);
+    // Attach the HTTP status as a numeric `status` property so
+    // callers can branch on it without parsing the message string
+    // (e.g. retry on 409 conflicts in optimistic-concurrency PUTs).
+    // Message kept verbatim for log compatibility.
+    const err = new Error(
+      `GitHub API ${res.status} ${res.statusText} on ${url}: ${body.slice(0, 300)}`,
+    );
+    err.status = res.status;
+    err.responseBody = body;
+    throw err;
   }
   return res.json();
 }

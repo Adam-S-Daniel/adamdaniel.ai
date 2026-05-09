@@ -105,10 +105,12 @@ async function writeFixtureOnMain({ fileText, message }) {
 //   - chain 1: publish (URL 4xx → 200)
 //   - chain 2: unpublish (URL 200 → 4xx)
 // Each is roughly the same shape as cms-publish-loop's mutation
-// (validate-content + auto-merge + deploy-production). Allow ~30 min
-// total with margin so a stuck pipeline fails the spec rather than
-// pegging the runner. Retries disabled — real-state mutation.
-const TEST_TIMEOUT_MS = 30 * 60 * 1000;
+// (validate-content + auto-merge + deploy-production). With each
+// URL-wait capped at 15 min (matching the prod-mutate spec's
+// budget after commit 880a34d) plus admin login + UI clicks +
+// cleanup, ~40 min total covers worst-case runner contention.
+// Retries disabled — real-state mutation.
+const TEST_TIMEOUT_MS = 40 * 60 * 1000;
 
 test.describe.configure({
   mode: "serial",
@@ -182,13 +184,34 @@ test("CMS unpublish + re-publish — flip published flag toggles URL visibility"
   await test.step("Navigate to the unpublish-canary post entry", async () => {
     // Direct URL nav is deterministic and bypasses any
     // collection-list ordering quirks.
-    await page.goto(
-      `${PROD_ADMIN}#/collections/posts/entries/2099-01-02-${FIXTURE_SLUG}`,
-      { waitUntil: "domcontentloaded" },
-    );
-    await expect(page.getByRole("textbox", { name: /^Title$/i })).toBeVisible({
-      timeout: 30_000,
-    });
+    //
+    // Decap's hash-route entry mount is occasionally slow on cold
+    // CDN cache (especially right after a deploy-production), and
+    // the failure mode is a stuck Title field. Two-attempt retry:
+    // navigate → wait up to 60s for Title → on timeout, reload
+    // (forcing a fresh asset fetch) and try once more. 60s per
+    // leg, so worst-case ~120s before this step fails.
+    const titleLocator = page.getByRole("textbox", { name: /^Title$/i });
+    const targetUrl = `${PROD_ADMIN}#/collections/posts/entries/2099-01-02-${FIXTURE_SLUG}`;
+    let lastErr;
+    for (let attempt = 1; attempt <= 2; attempt++) {
+      try {
+        if (attempt === 1) {
+          await page.goto(targetUrl, { waitUntil: "domcontentloaded" });
+        } else {
+          console.warn(
+            `[unpublish-republish] Title field didn't appear within 60s on attempt 1; reloading and retrying`,
+          );
+          await page.reload({ waitUntil: "domcontentloaded" });
+        }
+        await expect(titleLocator).toBeVisible({ timeout: 60_000 });
+        lastErr = null;
+        break;
+      } catch (err) {
+        lastErr = err;
+      }
+    }
+    if (lastErr) throw lastErr;
   });
 
   await test.step("Verify the editor reads Published toggle as OFF (baseline)", async () => {
@@ -238,7 +261,7 @@ test("CMS unpublish + re-publish — flip published flag toggles URL visibility"
       page,
       pillId: PILL_PROD,
       urlCheck: async () => urlServesPost(page),
-      urlTimeoutMs: 12 * 60 * 1000,
+      urlTimeoutMs: 15 * 60 * 1000,
     });
   });
 
@@ -272,7 +295,7 @@ test("CMS unpublish + re-publish — flip published flag toggles URL visibility"
       page,
       pillId: PILL_PROD,
       urlCheck: async () => url404s(page),
-      urlTimeoutMs: 12 * 60 * 1000,
+      urlTimeoutMs: 15 * 60 * 1000,
     });
   });
 });

@@ -43,6 +43,7 @@ on:
       - e2e/cms-publish-loop.spec.js
       - e2e/cms-delete-published.spec.js
       - e2e/cms-unpublish-republish.spec.js
+      - e2e/cms-tags-lifecycle.spec.js
       - e2e/cms-fixture-pr.js
       - e2e/decap-pat.js
       - e2e/github-actions-poll.js
@@ -67,9 +68,15 @@ on:
 permissions:
   # The spec drives admin via a fine-grained PAT (CMS_E2E_PAT) — the
   # workflow itself only needs to read the repo to install deps and
-  # check out source, so contents:read is sufficient. The PAT carries
-  # its own contents:rw / pull-requests:rw scope.
+  # check out source, so contents:read is sufficient there. The PAT
+  # carries its own contents:rw / pull-requests:rw scope.
+  #
+  # `pull-requests: write` is needed by the post-failure-comment
+  # composite action so the default GITHUB_TOKEN can post the
+  # failure-summary comment via the issues comments API. Without
+  # this the github-script call 403s silently and no comment lands.
   contents: read
+  pull-requests: write
 
 defaults:
   run:
@@ -171,6 +178,7 @@ jobs:
             e2e/cms-publish-loop.spec.js \
             e2e/cms-delete-published.spec.js \
             e2e/cms-unpublish-republish.spec.js \
+            e2e/cms-tags-lifecycle.spec.js \
             --project=chromium-desktop \
             --reporter=list \
             --max-failures=1 \
@@ -185,3 +193,31 @@ jobs:
             test-results/
             /tmp/host-loop.log
           retention-days: 14
+
+      # Surface the Playwright failure block as a PR comment so a
+      # human (or agent) iterating on the PR can triage without
+      # needing workflow-log access. Delegated to the shared
+      # composite action at .github/actions/post-failure-comment;
+      # see AGENTS.md "Failure-comment composite action" for the
+      # full convention and design notes. Distinct marker so it
+      # doesn't clobber the e2e or prod-mutate comment.
+      # Two call sites — caller-side gating is the canonical
+      # `failure()` / `success()` pattern. The composite action
+      # is mode-driven and doesn't try to detect job state itself
+      # (we tried; it's unreliable in composite contexts).
+      - name: Post failure summary
+        if: ${{ failure() && github.event_name == 'pull_request' }}
+        uses: ./.github/actions/post-failure-comment
+        with:
+          mode: post
+          log-file: /tmp/host-loop.log
+          marker: host-loop-failure-summary
+          title: host-loop
+
+      - name: Resolve failure summary on success
+        if: ${{ success() && github.event_name == 'pull_request' }}
+        uses: ./.github/actions/post-failure-comment
+        with:
+          mode: resolve
+          marker: host-loop-failure-summary
+          title: host-loop

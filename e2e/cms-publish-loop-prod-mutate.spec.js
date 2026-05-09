@@ -92,10 +92,12 @@ const PROD_CANARY = process.env.PROD_CANARY === "1";
 
 // Same envelope as cms-publish-loop.spec.js — the validate-content +
 // auto-merge + deploy-production + CloudFront invalidation chain caps
-// out around 12-15 minutes when runners are warm. Retries explicitly
-// disabled — this test mutates real prod state; retries just re-run
-// the same broken chain after another 15 min.
-const TEST_TIMEOUT_MS = 15 * 60 * 1000;
+// out around 12-15 minutes when runners are warm. Two URL waits
+// (forward + cleanup) at 15 min each + setup ≈ 40 min worst case
+// budget; typical happy-path run still completes in ~10-12 min.
+// Retries explicitly disabled — this test mutates real prod state;
+// retries just re-run the same broken chain after another 40 min.
+const TEST_TIMEOUT_MS = 40 * 60 * 1000;
 
 test.describe.configure({
   mode: "serial",
@@ -124,19 +126,49 @@ async function fetchFixtureFromMain() {
  * caller passes the entire file (front matter + body) so the cleanup
  * step can force `published: false` regardless of what state the
  * editor left it in.
+ *
+ * Optimistic-concurrency retry: GitHub's Contents API requires the
+ * caller to submit the current blob SHA; if main advances between
+ * our `fetchFixtureFromMain()` and the PUT, the API rejects with
+ * 409 ("is at <new> but expected <stale>"). The race window is
+ * narrow but real — concurrent harness cleanups from other workers
+ * and any unrelated commit landing on main can both trip it.
+ *
+ * Resolution: catch a 409, re-fetch the SHA, retry the PUT. Cap
+ * at 4 attempts (1 initial + 3 retries) to bound runtime; in
+ * practice a single retry succeeds because main is rarely advancing
+ * faster than ~1 commit/sec, and our PUT is idempotent (writing
+ * the same baseline content yields the same end state regardless
+ * of which retry wins).
  */
 async function writeFixtureOnMain({ fileText, message }) {
-  const current = await fetchFixtureFromMain();
-  return gh(`/repos/${HOST_REPO}/contents/${FIXTURE_PATH}`, {
-    method: "PUT",
-    headers: { "Content-Type": "application/json" },
-    body: JSON.stringify({
-      message,
-      content: toContentBase64(fileText),
-      sha: current.sha,
-      branch: "main",
-    }),
-  });
+  const MAX_ATTEMPTS = 4;
+  let lastErr;
+  for (let attempt = 1; attempt <= MAX_ATTEMPTS; attempt++) {
+    const current = await fetchFixtureFromMain();
+    try {
+      return await gh(`/repos/${HOST_REPO}/contents/${FIXTURE_PATH}`, {
+        method: "PUT",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          message,
+          content: toContentBase64(fileText),
+          sha: current.sha,
+          branch: "main",
+        }),
+      });
+    } catch (err) {
+      lastErr = err;
+      if (err && err.status === 409 && attempt < MAX_ATTEMPTS) {
+        console.warn(
+          `[writeFixtureOnMain] 409 conflict on attempt ${attempt}; re-fetching SHA and retrying (main advanced under us)`,
+        );
+        continue;
+      }
+      throw err;
+    }
+  }
+  throw lastErr;
 }
 
 // Read the front matter `published` value from a file's text. Matches
@@ -377,7 +409,7 @@ test("CMS publish loop — prod mutation playground (real _posts/ entry)", async
         if (res.status() !== 200) return false;
         return (await res.text()).includes(marker);
       },
-      urlTimeoutMs: 10 * 60 * 1000,
+      urlTimeoutMs: 15 * 60 * 1000,
     });
   });
 
@@ -440,7 +472,7 @@ test("CMS publish loop — prod mutation playground (real _posts/ entry)", async
         const s = res.status();
         return s >= 400 && s < 500;
       },
-      urlTimeoutMs: 10 * 60 * 1000,
+      urlTimeoutMs: 15 * 60 * 1000,
     });
   });
 });

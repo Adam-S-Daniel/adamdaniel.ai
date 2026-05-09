@@ -1,57 +1,69 @@
 /*
- * admin/native-preview-href.js — rewrites Decap CMS's native "View Live"
- * toolbar anchor href on every form mutation so it points at the same URL
- * the in-editor banner uses (`live-url-derive.js`'s `compute()`).
+ * admin/native-preview-href.js — HIDES Decap CMS's native "View Live"
+ * toolbar anchor whenever Decap (re-)renders it.
  *
- * Why this exists: Decap's per-collection `preview_path:` runs through a
- * TWO-PASS expansion. For Posts, `slug:` is `"{{year}}-{{month}}-{{day}}-{{slug}}"`
- * (Jekyll's `_posts/` folder requires the date-prefixed filename); that runs
- * first and produces the FILE slug. Then `preview_path: "/blog/{{slug}}/"`
- * substitutes `{{slug}}` with the FILE slug, NOT the entry's URL slug. That
- * diverges from `permalink: /blog/:slug/` in `_config.yml` which strips the
- * `_posts/` date prefix → the toolbar 404s on every Post.
+ * Why hide (not rewrite, not remove): on narrow / mobile viewports the
+ * editor toolbar (`Save | Published ▼ | Delete published entry |
+ * View Live | adamdaniel.ai | <avatar> | <publishing pill>`) overflows
+ * the viewport and pushes the deploy-status / commit pills off the
+ * right edge. The native "View Live" link is redundant with two
+ * existing surfaces:
  *
- * The `slug:` template can't be fixed without breaking Jekyll. The
- * `preview_path` template can't be fixed either: a naive `{{fields.slug}}`
- * swap expands to empty when the explicit slug field is blank (which it is
- * for many seed entries) → `/blog//`. The only path that matches the live
- * site is JS that mirrors the same `explicit slug → slugified title` chain
- * the banner already does — which is exactly what `window.LiveURL.compute()`
- * encapsulates.
+ *   - the floating eye-icon "Live Preview" button
+ *     (`#live-preview-link` in admin/index.html), which opens the
+ *     /preview/ WYSIWYG in a new tab, and
+ *   - the deploy-status pill (`#cms-prod-status-pill`) plus the
+ *     deployed-commit pill (`#cms-commit-pill`), which surface the
+ *     in-flight + last-known live state.
  *
- * So: this script finds Decap's native toolbar anchor (the one Decap renders
- * at the top of the entry editor with `target="_blank"` to open the
- * `preview_path`-resolved URL) and rewrites its `href` whenever the form
- * mutates or the hash changes. The static `preview_path` value is now
- * decorative — kept as a hint for any internal Decap logic that touches it,
- * but no longer the source of truth.
+ * Hiding the redundant anchor reclaims the horizontal space the
+ * deploy / commit pills need to stay inside the viewport on narrow
+ * widths, with no loss of editor capability.
+ *
+ * Why CSS-hide instead of `removeChild`: Decap is React-driven and
+ * owns the anchor in its virtual DOM. Yanking it out of the live DOM
+ * provokes React to re-mount it on the next reconciliation pass,
+ * which our MutationObserver then re-removes — a fight loop that
+ * (per the failed `prod-mutate` and `host-loop` runs on commit
+ * 503365a) wedges the editor mid-flow. `display:none` leaves the
+ * anchor where React expects it; React doesn't observe inline styles,
+ * so reconciliation is a no-op and there's no fight.
+ *
+ * Historical note: this script previously REWROTE the anchor's `href`
+ * to match `window.LiveURL.compute()` — necessary because Decap's
+ * two-pass `preview_path` substitution diverged from Jekyll's
+ * `permalink: /blog/:slug/` for date-prefixed Posts (the toolbar 404'd
+ * on every Post). With the anchor hidden the rewrite is moot, but
+ * the live-url-derive.js dependency is kept since the in-editor banner
+ * and any future toolbar surfaces will need it.
  *
  * Selector strategy:
- *   - Decap's component class names are emotion-generated and churn between
- *     versions. The toolbar's emotion `label:` has been observed as both
- *     `EditorToolbar` and `ToolbarContainer` across recent releases; we
- *     match both via a `[class*="oolbar"]` substring (covers either, and
- *     emotion never strips that substring from a labelled component).
- *   - Inside that, the PreviewLink is an `<a>` with `target="_blank"` and
- *     `rel*="noopener"`.
- *   - Exclude the floating
- *     "Live Preview" button (`#live-preview-link`), and the deployed-commit
- *     pill (`#cms-commit-pill`) — those are also `target="_blank"` anchors
- *     in the same document and would otherwise match.
+ *   - Decap's component class names are emotion-generated and churn
+ *     between versions. The toolbar's emotion `label:` has been
+ *     observed as both `EditorToolbar` and `ToolbarContainer` across
+ *     recent releases; we match both via a `[class*="oolbar"]`
+ *     substring (covers either, and emotion never strips that
+ *     substring from a labelled component).
+ *   - Inside that, the native PreviewLink is an `<a>` with
+ *     `target="_blank"` and `rel*="noopener"`.
+ *   - Exclude this site's own toolbar surfaces (live-preview-link,
+ *     cms-commit-pill, cms-prod-status-pill, cms-preview-build-pill)
+ *     — those are also `target="_blank"` anchors in the same document
+ *     and would otherwise match.
  */
 (function () {
   "use strict";
 
-  // Excluded anchor IDs — these are surfaces this site renders itself, not
-  // Decap's native toolbar. Rewriting their href would clobber what those
+  // Excluded anchor IDs — these are surfaces this site renders itself,
+  // not Decap's native toolbar. Hiding them would clobber what those
   // affordances are pointing at.
   var EXCLUDE_IDS = [
     "live-preview-link",
     "cms-commit-pill",
     // The deploy-status pills inject INTO the toolbar with their own
     // target="_blank" links pointing at GitHub Actions runs. Without
-    // this exclusion the override would rewrite their hrefs to
-    // compute()'s live URL on every form mutation, defeating them.
+    // this exclusion they'd match the native-anchor selector and get
+    // hidden along with the View Live link.
     "cms-prod-status-pill",
     "cms-preview-build-pill",
   ];
@@ -80,54 +92,58 @@
     return anchors;
   }
 
-  function rewrite() {
-    if (!window.LiveURL || typeof window.LiveURL.compute !== "function") {
-      return; // derive script not loaded yet
-    }
-    var data = window.LiveURL.compute();
-    if (!data || !data.url) return; // no destination computed; leave Decap's
-                                    // placeholder alone.
+  // Marker so we don't log the same hide repeatedly when Decap's
+  // re-renders churn through the same anchor instance multiple times.
+  // We DO re-apply the styles every pass even with the marker set —
+  // emotion can re-emit a `style` attribute from CSS-in-JS that
+  // clobbers our inline display:none, so re-asserting is cheap
+  // insurance.
+  var HIDDEN_ATTR = "data-native-view-live-hidden";
+
+  function hide() {
     var anchors = findToolbarAnchors();
     for (var i = 0; i < anchors.length; i++) {
       var a = anchors[i];
-      // Only rewrite if the href actually differs — avoids a write storm
-      // on every observed mutation.
-      if (a.getAttribute("href") !== data.url) {
-        a.setAttribute("href", data.url);
-      }
-      if (a.getAttribute("target") !== "_blank") {
-        a.setAttribute("target", "_blank");
-      }
-      var rel = a.getAttribute("rel") || "";
-      if (rel.indexOf("noopener") === -1) {
-        a.setAttribute("rel", (rel ? rel + " " : "") + "noopener");
+      var alreadyMarked = a.getAttribute(HIDDEN_ATTR) === "1";
+      // CSS-only hide. Don't `removeChild` — Decap is React-driven
+      // and React re-mounts elements it owns when it sees them
+      // missing from the DOM, which kicks our MutationObserver and
+      // re-fires this loop. display:none + visibility:hidden +
+      // pointer-events:none + aria-hidden gets the anchor out of
+      // the layout, the tab order, and the a11y tree without
+      // touching the DOM tree React reconciles against.
+      a.style.setProperty("display", "none", "important");
+      a.style.setProperty("visibility", "hidden", "important");
+      a.style.setProperty("pointer-events", "none", "important");
+      a.setAttribute("aria-hidden", "true");
+      a.setAttribute("tabindex", "-1");
+      if (!alreadyMarked) {
+        a.setAttribute(HIDDEN_ATTR, "1");
+        console.info(
+          "[native-preview-href] hid redundant native View Live anchor"
+        );
       }
     }
   }
 
   var pending = false;
-  function scheduleRewrite() {
+  function scheduleHide() {
     if (pending) return;
     pending = true;
     requestAnimationFrame(function () {
       pending = false;
-      rewrite();
+      hide();
     });
   }
 
-  // Mutations re-rewrite when Decap (re)renders the toolbar — including the
-  // initial mount, hash navigations between entries, and field updates that
-  // change the computed URL.
-  new MutationObserver(scheduleRewrite).observe(document.body, {
+  // Mutations re-hide when Decap (re)renders the toolbar — including
+  // the initial mount, hash navigations between entries, and field
+  // updates that re-render the toolbar action group.
+  new MutationObserver(scheduleHide).observe(document.body, {
     childList: true,
     subtree: true,
-    attributes: true,
-    attributeFilter: ["href"],
   });
-  // Input / change events catch toggle flips and typed values immediately.
-  document.addEventListener("input", scheduleRewrite, true);
-  document.addEventListener("change", scheduleRewrite, true);
-  // Hash changes navigate between entries — re-rewrite for the new context.
-  window.addEventListener("hashchange", scheduleRewrite);
-  scheduleRewrite();
+  // Hash changes navigate between entries — re-hide for the new context.
+  window.addEventListener("hashchange", scheduleHide);
+  scheduleHide();
 })();

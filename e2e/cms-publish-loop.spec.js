@@ -97,13 +97,14 @@ function assertNotProdCanary(action) {
 //   3. The cleanup PR that resets the canary baseline.
 // Each PR waits on the full required-check suite (validate-content +
 // e2e shards + finalize) plus deploy-production on main. Worst-case
-// runtime per cycle is ~10 min when runners are warm; allow ~20 min
-// total so a stuck pipeline fails fast rather than holding a runner
-// for a full hour. Retries are explicitly disabled for the same
-// reason: the publish-loop is a real-state mutation and a retry just
-// re-runs the same broken chain after wasting another 20 min — the
-// failure mode is almost never transient.
-const TEST_TIMEOUT_MS = 35 * 60 * 1000;
+// runtime per cycle is ~10 min when runners are warm; the URL-wait
+// cap is 15 min per leg (forward + cleanup) so the spec fits in
+// ~40 min worst case. Stuck pipelines still fail fast rather than
+// holding a runner for a full hour. Retries are explicitly disabled
+// for the same reason: the publish-loop is a real-state mutation and
+// a retry just re-runs the same broken chain after wasting another
+// 40 min — the failure mode is almost never transient.
+const TEST_TIMEOUT_MS = 40 * 60 * 1000;
 
 test.describe.configure({
   mode: "serial",
@@ -142,7 +143,7 @@ async function composeCanaryFile(bodyText) {
  * job — same path prod content edits use — then blocks until the PR
  * merges. Returns the merged-PR descriptor.
  */
-async function writeCanaryViaPr({ runId, bodyText, message, prTitle, prBody }) {
+async function writeCanaryViaPr({ runId, bodyText, message, prTitle, prBody, skipWaitForMerge }) {
   assertNotProdCanary("write to the canary file via a labelled PR");
   const newFile = await composeCanaryFile(bodyText);
   return seedFixtureViaPr({
@@ -152,6 +153,7 @@ async function writeCanaryViaPr({ runId, bodyText, message, prTitle, prBody }) {
     bodyText: newFile,
     message,
     prTitle,
+    skipWaitForMerge,
     prBody,
   });
 }
@@ -371,7 +373,7 @@ test("CMS publish loop — host repo, target main", async ({ page }, testInfo) =
       // 10 min covers cms-editorial-workflow + auto-merge + required
       // checks + deploy-production + CDN propagation under runner
       // saturation.
-      urlTimeoutMs: 10 * 60 * 1000,
+      urlTimeoutMs: 15 * 60 * 1000,
     });
     await page.goto(PUBLIC_URL, { waitUntil: "domcontentloaded" });
     await captureStep(page, {
@@ -457,7 +459,7 @@ test("CMS publish loop — host repo, target main", async ({ page }, testInfo) =
         const text = await res.text();
         return !text.includes(marker) && text.includes(baselineBody);
       },
-      urlTimeoutMs: 10 * 60 * 1000,
+      urlTimeoutMs: 15 * 60 * 1000,
     });
   });
 
@@ -487,6 +489,13 @@ test("CMS publish loop — host repo, target main", async ({ page }, testInfo) =
 test.afterAll(async () => {
   if (PROD_CANARY) return; // daily canary probe doesn't mutate
   if (!getPat()) return; // PAT-less local runs can't write anyway
+  // Bump the hook timeout from Playwright's 30s default. The
+  // safety-net path opens a PR + applies a label via the GitHub
+  // API; with API rate-limit retries and worker contention (8
+  // browser projects in the matrix all run this afterAll), 30s
+  // is too tight even with skipWaitForMerge below. 2 min covers
+  // even the slowest API hiccup without holding a runner long.
+  test.setTimeout(2 * 60 * 1000);
   const CanaryFile = require("./canary-content").findCanary("post");
   let current;
   try {
@@ -512,10 +521,20 @@ test.afterAll(async () => {
     "[cleanup-harness] canary on main still contains a marker after the UI cleanup; opening fixture PR to restore baseline",
   );
   const baselineBody = CanaryFile.baseline;
+  // Fire-and-forget: open the cleanup PR + apply cms/ready, then
+  // return without waiting for auto-merge. The editorial-workflow
+  // auto-merges in the background. Without this, the afterAll
+  // would block on seedFixtureViaPr's 25-minute waitForMerge while
+  // Playwright's 30s hook timeout kills it — the failure mode
+  // empirically observed across 8 browser projects on PR #517 run
+  // 25580846437. The daily sweep workflow handles any orphan PRs
+  // (empty-diff because another worker won the race, or CI
+  // failure) so leaking a few cleanup PRs is acceptable here.
   await writeCanaryViaPr({
     runId: `harness-cleanup-${Date.now()}`,
     bodyText: `${baselineBody}\n\nThis URL exists so the automated end-to-end publish-loop tests have a stable\ntarget to assert against on both preview-pr<N>.adamdaniel.ai and\nadamdaniel.ai. The body is replaced during a test run and reset to this\nbaseline in cleanup, so the public URL always renders innocuous content\nbetween runs.\n\nIf this is the only thing you can see, no test is currently in progress.`,
     message: `test(canary): harness safety-net reset of post baseline (UI cleanup left a marker)`,
+    skipWaitForMerge: true,
   });
 });
 

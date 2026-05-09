@@ -319,6 +319,22 @@ Sibling to the `cms-publish-loop` and `cms-publish-loop-preview` specs, but oper
 
 When all three pass, the spec runs against `https://adamdaniel.ai/admin/`: it resets the canary fixture to `published: false`, drives Decap to toggle Published → ON, waits for the cms/... PR Decap opens, waits for `validate-content` + auto-merge + `deploy-production.yml`, fetches `/blog/e2e-mutation-canary/`, asserts the run-unique marker is live, and resets the fixture back to `published: false`.
 
+### `sweep-stale-cms-prs.yml`
+
+Cleans up automation-only artefacts that crashed test runs leak. Runs daily at 04:00 UTC (two hours before the host-loop's 06:00 cron) plus `workflow_dispatch` with `dry_run` and `threshold_hours` inputs.
+
+**Three-tier sweep, all age-gated by `THRESHOLD_HOURS` (default 6h):**
+
+| Tier | What it sweeps | Branch deleted? | Opt-out |
+|---|---|---|---|
+| 1 | Open PRs on `cms/e2e/*` or `cms/e2e-fixture/*` branches (no label needed — these prefixes have no human use case). | Yes (`gh pr close --delete-branch`). | `keep` label on the PR. |
+| 2 | Open PRs labelled `automated-test`, regardless of branch prefix. Catches `cms/posts/*` leaks from prod-mutate runs. | No (Decap reuses `cms/<col>/<slug>` per entry; the next run's `closeStaleDecapPrOnBranch` handles the handoff). | `keep` label on the PR. |
+| 3 | Branches matching the same Tier 1 prefix safelist that have NO open PR (a crashed run pushed a branch but died before opening a PR). Direct ref delete via the git refs API. | Yes (it's the whole point). | `[sweep-keep]` in the tip commit message (the PR-level `keep` label can't apply when there's no PR). |
+
+A separate job step (`if: !inputs.dry_run`) sweeps stale `_e2e/canary-delete-*` fixtures left on `main` by opening a `cms/e2e-fixture/sweep-…` PR labelled `cms/ready`, which auto-merges via the editorial-workflow.
+
+**Pagination convention.** `gh pr list` defaults to `--limit 30` and silently truncates above that — `--paginate` is NOT a flag for `gh pr list` (gh-api-only). Every `gh pr list` in this workflow uses `--limit 1000` for top-level listing or `--limit 1` for existence checks. `gh api` calls that return arrays use `--paginate` with `?per_page=100`. New listing calls in this or related workflows MUST follow this convention; a 31st-orphan-silently-survives bug is invisible until the orphan rate climbs and is hard to diagnose because the workflow looks like it succeeded.
+
 ### Contributor Manual
 
 `docs/CONTRIBUTOR_MANUAL.md` is **assembled by the e2e tests**. Specs call `captureStep(page, { section, step, title, body })` from `e2e/manual-capture.js` at meaningful moments. The collator at `scripts/build-contributor-manual.js` reads the `manual-capture/*.json` records and builds the manual with embedded screenshots from `docs/manual-screenshots/`.
@@ -620,6 +636,83 @@ node scripts/generate-showcase.js                           # produces before/af
 ```
 
 `scripts/generate-showcase.js` displays each snapshot as a before/after side-by-side pair (3.5s per slide) and records the session as `recordings/visual-regression-showcase.webm`. If no `-before` directory exists (first run), it shows current baselines only. The `-before` directory is auto-cleaned after the video is written.
+
+## Failure-comment composite action
+
+Workflow logs are not directly readable by the Claude agent (no `gh` CLI, the GitHub MCP server has no `actions/runs/.../logs` tool, and unauthenticated `curl` to `api.github.com/.../actions/runs/.../logs` returns 403). To make CI failures triage-able from inside a PR conversation, every Playwright-running workflow forwards its captured log to a shared composite action:
+
+```yaml
+# Caller-side gating — failure() / success() at the workflow
+# level is the canonical pattern. Two call sites: one for the
+# failure post, one for the green-run resolve.
+- name: Post failure summary
+  if: ${{ failure() && github.event_name == 'pull_request' }}
+  uses: ./.github/actions/post-failure-comment
+  with:
+    mode: post
+    log-file: /tmp/<your-log>.log
+    marker: <unique-marker-slug>     # NO `<!-- -->` — the action wraps it
+    title: <short label>
+
+- name: Resolve failure summary on success
+  if: ${{ success() && github.event_name == 'pull_request' }}
+  uses: ./.github/actions/post-failure-comment
+  with:
+    mode: resolve
+    marker: <unique-marker-slug>
+    title: <short label>
+```
+
+The action is mode-driven and does NOT detect job state itself. Earlier versions tried `${{ job.status }}` (silently empty inside composite `with:` blocks) and `failure()` / `success()` inside the action's own step `if:` clauses (also unreliable for our composite case). v3 pushes the gate to the caller, where `failure()` / `success()` are well-tested workflow primitives.
+
+For MULTI-job workflows (e.g. `e2e-tests.yml`'s `finalize` job posting on behalf of the upstream `e2e` matrix), `failure()` / `success()` reflect only the FINALIZE job's state, not the matrix's. Gate on `needs.<job>.result` instead:
+
+```yaml
+- if: ${{ needs.e2e.result == 'failure' && github.event_name == 'pull_request' }}
+  uses: ./.github/actions/post-failure-comment
+  with: { mode: post, log-file: /tmp/playwright-output.log, marker: e2e-failure-summary, title: E2E tests }
+
+- if: ${{ needs.e2e.result == 'success' && github.event_name == 'pull_request' }}
+  uses: ./.github/actions/post-failure-comment
+  with: { mode: resolve, marker: e2e-failure-summary, title: E2E tests }
+```
+
+For workflows that don't fire on `pull_request` (e.g. `cms-publish-loop-preview.yml` on `workflow_dispatch`), pass `pr-number: ${{ inputs.pr_number }}` as well — the action falls back to looking up the head SHA via the API.
+
+**The caller MUST grant `pull-requests: write` to the workflow** (or to the calling job, if you scope per-job). Without it, the embedded `actions/github-script` call 403s silently and no comment lands. A typical block:
+
+```yaml
+permissions:
+  contents: read
+  pull-requests: write
+```
+
+The composite action at `.github/actions/post-failure-comment/action.yml`:
+
+1. Installs `gitleaks` to `$HOME/.local/bin` (no sudo, works in both the Playwright Docker container and on `ubuntu-latest`).
+2. Runs `scripts/extract-playwright-failures.sh` against the captured log to pull just the numbered failure blocks; falls back to `tail -c 80000` if the extractor finds nothing.
+3. Pipes the result through `scripts/scrub-secrets.js` (gitleaks-backed) and truncates to 60 KB to fit in a GitHub comment.
+4. Posts (or updates, via marker-based dedup) a PR comment under `<!-- <marker> -->`.
+5. Resolves the comment to a "passing on `<sha>`" stub on the next green run.
+
+**Markers in use** (must be globally unique to avoid clobbering each other):
+
+| Marker | Workflow / job |
+|---|---|
+| `e2e-failure-summary` | `e2e-tests.yml` → `finalize` (aggregates the e2e matrix) |
+| `unit-failure-summary` | `e2e-tests.yml` → `unit` |
+| `e2e-real-failure-summary` | `e2e-tests.yml` → `e2e-real` |
+| `parity-failure-summary` | `e2e-tests.yml` → `parity` |
+| `select-failure-summary` | `e2e-tests.yml` → `select` |
+| `host-loop-failure-summary` | `cms-publish-loop-host.yml` |
+| `prod-mutate-failure-summary` | `cms-publish-loop-prod.yml` |
+| `preview-loop-failure-summary` | `cms-publish-loop-preview.yml` |
+
+**Gitleaks pass-through is non-optional.** Every comment that lands on a PR via this action runs through `scripts/scrub-secrets.js` (which shells out to `gitleaks detect`) inside the action's `Extract and scrub failure summary` step. There is no caller-side switch to disable it; if you extend the action with a new mode, keep the scrubber call on every code path that emits log content into a comment body. A leaked PAT in failure output that bypasses gitleaks would be visible to anyone with read access to the PR — treat the scrubber the same as the secrets-scan pre-commit hook.
+
+**Security note.** The embedded `actions/github-script` calls receive their inputs as `env:` vars and read them via `process.env.X` — never inline `${{ inputs.x }}` directly into a script body. This pattern is what `actions/github-script`'s README explicitly requires, and it's a script-injection vector if you skip it. Same rule applies to any extension of the action.
+
+The full convention (when to use, when NOT to use, common refactor pitfalls, how to test wiring) lives in the `post-failure-comment` skill (`.agents/skills/post-failure-comment/SKILL.md`).
 
 ## Preview environment flow
 
