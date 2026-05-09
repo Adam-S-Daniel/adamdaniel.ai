@@ -174,10 +174,27 @@ jobs:
           # feedback + earlier log availability (live logs only
           # become tailable after the job ends, so an early bail
           # surfaces them sooner).
+          # Spec order is deliberate. Each spec triggers ~2 deploys
+          # (forward + cleanup leg) on prod, and deploy-production
+          # serializes via `concurrency: { group: production,
+          # cancel-in-progress: false }`. By the time spec N runs,
+          # roughly 2*(N-1) deploys are queued ahead of it, and each
+          # deploy is ~5-7 min. Each spec's URL-wait cap is 15 min,
+          # so spec 1 has ~3 deploys of headroom (queue 0 → ~7 min
+          # for its own deploy + 8 min slack), spec 2 has ~1
+          # deploy of headroom (queue 2 → ~17-21 min total — over
+          # the 15 min cap; relies on actual deploy times being on
+          # the lower end). Specs 3 and 4 run on borrowed time
+          # under any contention. cms-unpublish-republish is the
+          # most failure-prone (PR #698 confirmed this empirically),
+          # so put it FIRST so its publish + unpublish legs both
+          # land while the queue is shallow. Tags-lifecycle is the
+          # least time-sensitive (single-cycle assertions, no
+          # follow-up on the same fixture) so it goes last.
           npx playwright test \
+            e2e/cms-unpublish-republish.spec.js \
             e2e/cms-publish-loop.spec.js \
             e2e/cms-delete-published.spec.js \
-            e2e/cms-unpublish-republish.spec.js \
             e2e/cms-tags-lifecycle.spec.js \
             --project=chromium-desktop \
             --reporter=list \
