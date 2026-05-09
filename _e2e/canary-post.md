@@ -18,13 +18,27 @@ target to assert against on both preview-pr<N>.adamdaniel.ai and
 
 adamdaniel.ai. The body is replaced during a test run and reset to this
 
-e2e-publish-loop:post:1778331643822
+e2e-publish-loop:post:177833164382Adam Daniel — E2E canary post (do not edit by hand).
+
+
+
+This URL exists so the automated end-to-end publish-loop tests have a stable
+
+target to assert against on both preview-pr<N>.adamdaniel.ai and
+
+adamdaniel.ai. The body is replaced during a test run and reset to this
+
+baseline in cleanup, so the public URL always renders innocuous content
+
+between runs.
+
+
+
+If this is the only thing you can see, no test is currently in progress.
 
 
 
 e2e-publish-loop:post:1778338674431
-
-
 
 baseline in cleanup, so the public URL always renders innocuous content
 
