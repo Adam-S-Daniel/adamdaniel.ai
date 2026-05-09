@@ -486,15 +486,31 @@ test("CMS publish loop — host repo, target main", async ({ page }, testInfo) =
 // API-driven path is restricted to the harness-cleanup safety net
 // — it never replaces the UI-driven cleanup leg, only fires when
 // that leg has demonstrably failed to complete.
-test.afterAll(async () => {
+test.afterAll(async ({}, testInfo) => {
   if (PROD_CANARY) return; // daily canary probe doesn't mutate
   if (!getPat()) return; // PAT-less local runs can't write anyway
+  // Single-worker coordination: only the FIRST worker (workerIndex
+  // 0) attempts the safety-net cleanup. Without this gate, all 8
+  // browser-project workers in the e2e-tests matrix observe the
+  // same stale-marker state on main and each open their OWN
+  // cleanup PR — the cms/e2e-fixture/seed-canary-post-harness-
+  // cleanup-* fan-out. Each PR auto-merges and triggers
+  // deploy-production, which has `concurrency: { group: production,
+  // cancel-in-progress: false }` — so deploys queue 8 deep,
+  // unrelated specs (e.g. cms-unpublish-republish) sit at the back
+  // of the queue, and their 15-min URL-wait cap blows. PR #517's
+  // host-loop on commit bdae10a (run #25583629495) hit exactly
+  // this. With workerIndex===0 gating, one stale-marker event on
+  // main → one cleanup PR → one deploy → queue stays shallow.
+  //
+  // host-loop's own workflow only spawns one worker
+  // (--project=chromium-desktop) so the gate is a no-op there;
+  // the e2e-tests matrix is the path that fans out.
+  if (testInfo.workerIndex !== 0) return;
   // Bump the hook timeout from Playwright's 30s default. The
   // safety-net path opens a PR + applies a label via the GitHub
-  // API; with API rate-limit retries and worker contention (8
-  // browser projects in the matrix all run this afterAll), 30s
-  // is too tight even with skipWaitForMerge below. 2 min covers
-  // even the slowest API hiccup without holding a runner long.
+  // API; under runner contention 30s is too tight even with
+  // skipWaitForMerge below. 2 min covers the worst case.
   test.setTimeout(2 * 60 * 1000);
   const CanaryFile = require("./canary-content").findCanary("post");
   let current;
