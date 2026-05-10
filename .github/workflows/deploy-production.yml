@@ -65,12 +65,37 @@ permissions:
   # production deploys for the github backend, so this fills the gap.
   deployments: write
 
-# Allow only one concurrent deployment, skipping runs queued between the run
-# in-progress and latest queued.  We do NOT cancel in-progress runs, so that
-# a production deploy is never interrupted mid-flight.
+# Allow only one concurrent deployment. `cancel-in-progress: true`
+# means a newer push to main cancels any in-flight deploy and starts a
+# fresh one against the latest tip.
+#
+# Why we accept the mid-flight cancel: deploy steps are
+#   1. jekyll build (offline, idempotent)
+#   2. aws s3 sync (per-file PUTs)
+#   3. CloudFront invalidation
+# A cancel during step 1 is a clean abort. A cancel during step 2 may
+# leave some object versions newer and others older for the cancel
+# window — but the next deploy resumes the sync to the latest main and
+# fixes it. CloudFront keeps serving cached responses through the gap;
+# the invalidation only fires after a complete sync.
+#
+# The previous setting (cancel-in-progress: false) caused queue-blow
+# under bursty pushes: cms-publish-loop-host runs four publish specs
+# that each open a cms/* PR which auto-merges, queueing four deploys.
+# Each spec's URL-wait cap (15 min, deploy-pill.js) is sized for ONE
+# deploy in flight; the 3rd/4th spec's deploy sat behind the queue and
+# the URL never reflected within budget. With `cancel-in-progress:
+# true`, the 1st-3rd deploys cancel as 4-N newer commits arrive, and
+# the final deploy carries main's tip with all four commits — every
+# spec's URL-wait is served by that one final deploy.
+#
+# For the bursty case the net effect is: 1 successful deploy serves N
+# specs' URL waits in ~one deploy duration, vs. N queued deploys in
+# ~N deploy durations under the old setting. Aggregate prod deploy
+# rate goes DOWN under bursts, not up.
 concurrency:
   group: "production"
-  cancel-in-progress: false
+  cancel-in-progress: true
 
 jobs:
   deploy:
