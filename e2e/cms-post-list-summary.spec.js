@@ -77,7 +77,13 @@ function findSummaryLine(collectionChunk) {
   return null;
 }
 
-test.describe("Decap CMS posts-list summary template", () => {
+test.describe(
+  "Decap CMS posts-list summary template",
+  // Tagged @admin-read: reads admin/config*.yml + drives local /admin
+  // shell, no GitHub writes — runs on chromium-desktop-3k +
+  // webkit-iphone16 only. See playwright.config.js.
+  { tag: ["@admin-read"] },
+  () => {
   test.describe.configure({ mode: "serial" });
 
   for (const configPath of CONFIGS) {

@@ -264,7 +264,15 @@ const PROBES = [
   },
 ];
 
-test.describe("@parity Manual walkthrough — CONTRIBUTOR_MANUAL probes", () => {
+test.describe(
+  "@parity Manual walkthrough — CONTRIBUTOR_MANUAL probes",
+  // Tagged @admin-screenshots: drives local /admin to capture
+  // contributor-manual screenshots. Runs on chromium-desktop-3k ONLY
+  // (single-browser by design — `manual-capture.js` writes screenshots
+  // to project-INDEPENDENT paths, so two parallel projects would
+  // race + last-write-wins). See playwright.config.js.
+  { tag: ["@admin-screenshots"] },
+  () => {
   test.describe.configure({ mode: "serial", timeout: 300_000 });
 
   test.beforeEach(({ page }, info) => {

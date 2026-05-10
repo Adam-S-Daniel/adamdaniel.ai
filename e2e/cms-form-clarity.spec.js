@@ -201,7 +201,13 @@ const FIXTURES = [
   },
 ];
 
-test.describe("Decap CMS form-clarity hint snapshots", () => {
+test.describe(
+  "Decap CMS form-clarity hint snapshots",
+  // Tagged @admin-read: drives local /admin shell, no GitHub writes —
+  // runs on chromium-desktop-3k + webkit-iphone16 only. See
+  // playwright.config.js for the matrix routing contract.
+  { tag: ["@admin-read"] },
+  () => {
   test.describe.configure({ mode: "serial" });
 
   for (const { file, label, expected } of FIXTURES) {
