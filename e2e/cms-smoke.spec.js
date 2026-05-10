@@ -26,7 +26,12 @@ function removeSmokeTagFile() {
   if (fs.existsSync(SMOKE_TAG_FILE)) fs.unlinkSync(SMOKE_TAG_FILE);
 }
 
-test.describe("/admin/ Decap CMS smoke test", () => {
+test.describe(
+  "/admin/ Decap CMS smoke test",
+  // Tagged @admin-write: drives /admin/* + writes (Decap Save, decap-server, etc.).
+  // Runs on chromium-desktop-3k only. See playwright.config.js.
+  { tag: ["@admin-write"] },
+  () => {
   // The local backend mutates the working tree. Run on a single project
   // and serially to avoid two browsers racing to write/delete the same
   // file at the same time.
@@ -40,10 +45,6 @@ test.describe("/admin/ Decap CMS smoke test", () => {
   });
 
   test.beforeEach(({ page }, testInfo) => {
-    test.skip(
-      testInfo.project.name !== "chromium-desktop",
-      "Single project — Decap is heavy to load and the local backend isn't safe to drive in parallel.",
-    );
     page.on("pageerror", (err) =>
       console.log(`[pageerror] ${err.name}: ${err.message}`),
     );

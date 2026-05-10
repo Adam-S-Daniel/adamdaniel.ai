@@ -129,13 +129,12 @@ async function url404s(page) {
   return s >= 400 && s < 500;
 }
 
-test("CMS unpublish + re-publish — flip published flag toggles URL visibility", async ({
+test(
+  "CMS unpublish + re-publish — flip published flag toggles URL visibility",
+  { tag: ["@admin-write"] },
+  async ({
   page,
 }, testInfo) => {
-  test.skip(
-    testInfo.project.name !== "chromium-desktop",
-    "Real-network test — runs once on chromium-desktop only.",
-  );
   test.skip(!getPat(), "CMS_E2E_PAT not set — host-repo unpublish spec disabled.");
   test.skip(
     process.env.RUN_HOST_REPO_PUBLISH_LOOP !== "1",
@@ -309,6 +308,14 @@ test("CMS unpublish + re-publish — flip published flag toggles URL visibility"
 test.afterAll(async () => {
   if (PROD_CANARY) return; // daily canary probe doesn't mutate
   if (!getPat()) return; // PAT-less runs can't write anyway
+  // Mirror the test-body skip: this hook recovers from a failed
+  // mid-mutation in THIS run. Outside the host-loop workflow the
+  // body never runs, so there's nothing to clean up — and reading +
+  // writing the canary from e.g. e2e-real while host-loop is
+  // mid-flight on a parallel run races the Contents API SHA and
+  // returns 409. Only cleanup in the same context that owns the
+  // mutation.
+  if (process.env.RUN_HOST_REPO_PUBLISH_LOOP !== "1") return;
   let current;
   try {
     current = await fetchFixtureFromMain();

@@ -126,13 +126,12 @@ async function writeCanaryViaPr({ runId, bodyText, message }) {
   });
 }
 
-test("@lane:real CMS preview-PR-mimicry harness — cms/<slug> branch lifecycle", async ({
+test(
+  "@lane:real CMS preview-PR-mimicry harness — cms/<slug> branch lifecycle",
+  { tag: ["@admin-write"] },
+  async ({
   page,
 }, testInfo) => {
-  test.skip(
-    testInfo.project.name !== "chromium-desktop",
-    "Real-network spike harness — runs once on chromium-desktop only.",
-  );
   test.skip(
     PROD_CANARY,
     "PROD_CANARY=1 — daily canary probe is read-only; this spec mutates state.",

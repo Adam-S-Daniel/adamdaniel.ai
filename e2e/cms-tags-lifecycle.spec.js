@@ -105,6 +105,14 @@ test.beforeEach(({ page }) => {
 test.afterAll(async () => {
   if (PROD_CANARY) return;
   if (!getPat()) return;
+  // Mirror the test-body skip: this hook recovers from a failed
+  // mid-mutation in THIS run. Outside the host-loop workflow the
+  // body never runs, so there's nothing to clean up — and reading
+  // the tag file from e.g. e2e-real while host-loop is mid-flight
+  // on a parallel run can fire spurious cleanup PRs against the
+  // in-flight mutation. Only cleanup in the same context that
+  // owns the mutation.
+  if (process.env.RUN_HOST_REPO_PUBLISH_LOOP !== "1") return;
   // Bump the hook timeout — the API calls (createBranch + deleteFile +
   // openPr + addReadyLabel) take a few seconds total but can stretch
   // under runner contention. 2 min covers the worst case.
@@ -167,11 +175,10 @@ test.afterAll(async () => {
   }
 });
 
-test("CMS — tags lifecycle (host repo, target main)", async ({ page }, testInfo) => {
-  test.skip(
-    testInfo.project.name !== "chromium-desktop",
-    "Tags-lifecycle is real-network and real-GitHub — runs once on chromium-desktop only.",
-  );
+test(
+  "CMS — tags lifecycle (host repo, target main)",
+  { tag: ["@admin-write"] },
+  async ({ page }, testInfo) => {
   test.skip(
     PROD_CANARY,
     "PROD_CANARY=1 — daily canary probe doesn't run mutation specs.",

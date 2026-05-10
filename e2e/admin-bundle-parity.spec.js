@@ -120,14 +120,16 @@ async function findLatestOpenPrNumber(request) {
   }
 }
 
-test.describe("@parity admin bundle byte-parity", () => {
+test.describe(
+  "@parity admin bundle byte-parity",
+  // Tagged @admin-read: drives /admin/* but is read-only (DOM contract,
+  // mocked APIs, byte parity, etc.). Runs on chromium-desktop-3k +
+  // webkit-iphone16. See playwright.config.js.
+  { tag: ["@admin-read"] },
+  () => {
   test.describe.configure({ timeout: 120_000 });
 
   test.beforeEach(({}, testInfo) => {
-    test.skip(
-      testInfo.project.name !== "chromium-desktop",
-      "HEAD-only network walk — one project is enough.",
-    );
   });
 
   test("prod and preview admin bundles are byte-identical to the working tree", async ({

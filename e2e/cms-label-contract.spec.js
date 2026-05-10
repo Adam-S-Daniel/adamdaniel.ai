@@ -41,7 +41,13 @@ function labelsCreatedByValidateContent(yml) {
   );
 }
 
-test.describe("Label namespace contract: Decap ↔ cms-editorial-workflow.yml", () => {
+test.describe(
+  "Label namespace contract: Decap ↔ cms-editorial-workflow.yml",
+  // Tagged @admin-read: drives /admin/* but is read-only (DOM contract,
+  // mocked APIs, byte parity, etc.). Runs on chromium-desktop-3k +
+  // webkit-iphone16. See playwright.config.js.
+  { tag: ["@admin-read"] },
+  () => {
   test.describe.configure({ timeout: 120_000 });
 
   test("auto-merge listens for the same `cms/ready` label that validate-content creates", () => {
@@ -63,10 +69,6 @@ test.describe("Label namespace contract: Decap ↔ cms-editorial-workflow.yml", 
 
   test.describe("Runtime: Decap status namespace matches workflow listener", () => {
     test.beforeEach(async ({ page }, testInfo) => {
-      test.skip(
-        testInfo.project.name !== "chromium-desktop",
-        "Single project — Decap behaviour isn't browser-specific.",
-      );
     });
 
     test("Save → no `decap-cms/`-prefixed status string leaks into repoFilesUnpublished", async ({

@@ -105,14 +105,16 @@ async function loadAdmin(page) {
   });
 }
 
-test.describe("Decap editorial workflow — existing-entry editor is editable", () => {
+test.describe(
+  "Decap editorial workflow — existing-entry editor is editable",
+  // Tagged @admin-read: drives /admin/* but is read-only (DOM contract,
+  // mocked APIs, byte parity, etc.). Runs on chromium-desktop-3k +
+  // webkit-iphone16. See playwright.config.js.
+  { tag: ["@admin-read"] },
+  () => {
   test.describe.configure({ mode: "serial", timeout: 180_000 });
 
   test.beforeEach(async ({ page }, testInfo) => {
-    test.skip(
-      testInfo.project.name !== "chromium-desktop",
-      "Single project — Decap is heavy to load and the in-browser test-repo backend isn't meaningfully different across browsers.",
-    );
   });
 
   // ── Regression test for the read-only-form bug ─────────────────────

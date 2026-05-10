@@ -191,10 +191,6 @@ test.describe(
   });
 
   test.beforeEach(({ page }, testInfo) => {
-    test.skip(
-      testInfo.project.name !== "chromium-desktop",
-      "Single project — local-backend mutates the working tree, and the publish-loop simulation is heavy.",
-    );
     page.on("pageerror", (err) =>
       console.log(`[pageerror] ${err.name}: ${err.message}`),
     );

@@ -21,14 +21,16 @@ const {
 // the published file changes and no unpublished entry appears — both
 // assertions flip and the spec fails loudly.
 
-test.describe("Editorial workflow stays ON — Save creates a draft, never mutates main", () => {
+test.describe(
+  "Editorial workflow stays ON — Save creates a draft, never mutates main",
+  // Tagged @admin-read: drives /admin/* but is read-only (DOM contract,
+  // mocked APIs, byte parity, etc.). Runs on chromium-desktop-3k +
+  // webkit-iphone16. See playwright.config.js.
+  { tag: ["@admin-read"] },
+  () => {
   test.describe.configure({ mode: "serial", timeout: 180_000 });
 
   test.beforeEach(async ({ page }, testInfo) => {
-    test.skip(
-      testInfo.project.name !== "chromium-desktop",
-      "Single project — editorial-workflow plumbing isn't browser-specific.",
-    );
   });
 
   test("Save on an existing post lands as an unpublished draft, not on main", async ({

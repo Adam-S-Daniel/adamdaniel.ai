@@ -123,14 +123,16 @@ async function openCollectionEditor(page, collection) {
   await expect(editorMounted.first()).toBeVisible({ timeout: 60_000 });
 }
 
-test.describe("@parity admin link crawler", () => {
+test.describe(
+  "@parity admin link crawler",
+  // Tagged @admin-read: drives /admin/* but is read-only (DOM contract,
+  // mocked APIs, byte parity, etc.). Runs on chromium-desktop-3k +
+  // webkit-iphone16. See playwright.config.js.
+  { tag: ["@admin-read"] },
+  () => {
   test.describe.configure({ timeout: 240_000 });
 
   test.beforeEach(({ page }, testInfo) => {
-    test.skip(
-      testInfo.project.name !== "chromium-desktop",
-      "Heavy admin walk — one project is enough.",
-    );
     test.skip(
       TARGET === "prod",
       "Crawler drives /admin/index-local.html (local_backend: true). prod has no local proxy, so login can't populate the sidebar.",

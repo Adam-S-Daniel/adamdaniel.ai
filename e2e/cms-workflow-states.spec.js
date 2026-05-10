@@ -115,14 +115,16 @@ async function setStatus(page, menuLabel) {
   await item.click();
 }
 
-test.describe("Decap editorial workflow — state transitions (B5)", () => {
+test.describe(
+  "Decap editorial workflow — state transitions (B5)",
+  // Tagged @admin-read: drives /admin/* but is read-only (DOM contract,
+  // mocked APIs, byte parity, etc.). Runs on chromium-desktop-3k +
+  // webkit-iphone16. See playwright.config.js.
+  { tag: ["@admin-read"] },
+  () => {
   test.describe.configure({ mode: "serial", timeout: 240_000 });
 
   test.beforeEach(async ({ page }, testInfo) => {
-    test.skip(
-      testInfo.project.name !== "chromium-desktop",
-      "Single project — Decap workflow plumbing isn't browser-specific.",
-    );
   });
 
   // ── 1. draft → review ───────────────────────────────────────────────

@@ -11,12 +11,14 @@ const { captureStep } = require("./manual-capture");
 // Tests are gated to chromium-desktop because the contract is DOM-level,
 // not visual — the cross-browser matrix is covered by visual-regression.
 
-test.describe("Live preview shell at /preview/", () => {
+test.describe(
+  "Live preview shell at /preview/",
+  // Tagged @admin-read: drives /admin/* but is read-only (DOM contract,
+  // mocked APIs, byte parity, etc.). Runs on chromium-desktop-3k +
+  // webkit-iphone16. See playwright.config.js.
+  { tag: ["@admin-read"] },
+  () => {
   test.beforeEach(async ({}, testInfo) => {
-    test.skip(
-      testInfo.project.name !== "chromium-desktop",
-      "DOM contract — one browser is enough",
-    );
   });
 
   test("serves 200 with the site chrome and preview root", async ({ page }) => {

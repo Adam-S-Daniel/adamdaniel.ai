@@ -46,12 +46,14 @@ async function loadBridgeHarness(page) {
   );
 }
 
-test.describe("admin preview bridge", () => {
+test.describe(
+  "admin preview bridge",
+  // Tagged @admin-read: drives /admin/* but is read-only (DOM contract,
+  // mocked APIs, byte parity, etc.). Runs on chromium-desktop-3k +
+  // webkit-iphone16. See playwright.config.js.
+  { tag: ["@admin-read"] },
+  () => {
   test.beforeEach(async ({}, testInfo) => {
-    test.skip(
-      testInfo.project.name !== "chromium-desktop",
-      "Unit-style — one browser is enough",
-    );
   });
 
   test("registers a postSave event listener with Decap", async ({ page }) => {

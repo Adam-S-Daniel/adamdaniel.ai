@@ -199,11 +199,10 @@ function todayUtcIso() {
   return new Date().toISOString().slice(0, 10);
 }
 
-test("CMS publish loop — prod mutation playground (real _posts/ entry)", async ({ page }, testInfo) => {
-  test.skip(
-    testInfo.project.name !== "chromium-desktop",
-    "Prod-mutation playground is real-network — runs once on chromium-desktop only.",
-  );
+test(
+  "CMS publish loop — prod mutation playground (real _posts/ entry)",
+  { tag: ["@admin-write"] },
+  async ({ page }, testInfo) => {
   test.skip(
     !getPat(),
     "CMS_E2E_PAT not set — prod-mutation playground disabled.",
@@ -485,6 +484,13 @@ test("CMS publish loop — prod mutation playground (real _posts/ entry)", async
 test.afterAll(async () => {
   if (PROD_CANARY) return;
   if (!getPat()) return;
+  // Mirror the test-body skip: this hook recovers from a failed
+  // mid-mutation in THIS run. Outside the cms-publish-loop-prod
+  // workflow the body never runs, so there's nothing to clean up
+  // — and reading the canary from e.g. e2e-real while a parallel
+  // prod-mutate is mid-flight races the Contents API SHA. Only
+  // cleanup in the same context that owns the mutation.
+  if (process.env.RUN_PROD_MUTATE_PLAYGROUND !== "1") return;
   let current;
   try {
     current = await fetchFixtureFromMain();

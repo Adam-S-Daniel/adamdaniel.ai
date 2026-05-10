@@ -282,10 +282,6 @@ test.describe(
 
   test.beforeEach(({ page }, testInfo) => {
     test.skip(
-      testInfo.project.name !== "chromium-desktop",
-      "Single project — manual walkthrough probes drive Decap, which is heavy and not safe in parallel.",
-    );
-    test.skip(
       TARGET === "prod",
       "Probes drive /admin/index-local.html (local_backend: true). prod has no local proxy, so login can't populate the sidebar.",
     );

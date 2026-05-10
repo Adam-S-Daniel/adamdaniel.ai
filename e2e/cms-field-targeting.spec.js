@@ -29,14 +29,16 @@ function splitFrontMatter(content) {
   return { frontMatter: m[1], body: m[2] };
 }
 
-test.describe("Body sentinel lands in the body, not the excerpt", () => {
+test.describe(
+  "Body sentinel lands in the body, not the excerpt",
+  // Tagged @admin-read: drives /admin/* but is read-only (DOM contract,
+  // mocked APIs, byte parity, etc.). Runs on chromium-desktop-3k +
+  // webkit-iphone16. See playwright.config.js.
+  { tag: ["@admin-read"] },
+  () => {
   test.describe.configure({ mode: "serial", timeout: 180_000 });
 
   test.beforeEach(async ({ page }, testInfo) => {
-    test.skip(
-      testInfo.project.name !== "chromium-desktop",
-      "Single project — markdown editor focus isn't browser-specific.",
-    );
   });
 
   test("typing the sentinel into the Body widget saves it to the body, leaves excerpt empty", async ({

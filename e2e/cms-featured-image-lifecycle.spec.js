@@ -180,17 +180,18 @@ async function publishNow(page) {
     .click();
 }
 
-test.describe("Featured-image lifecycle: set → replace → clear", () => {
+test.describe(
+  "Featured-image lifecycle: set → replace → clear",
+  // Tagged @admin-write: drives /admin/* + writes (Decap Save, decap-server, etc.).
+  // Runs on chromium-desktop-3k only. See playwright.config.js.
+  { tag: ["@admin-write"] },
+  () => {
   test.describe.configure({ mode: "serial", timeout: 240_000 });
 
   test.beforeAll(() => cleanup());
   test.afterAll(() => cleanup());
 
   test.beforeEach(({ page }, testInfo) => {
-    test.skip(
-      testInfo.project.name !== "chromium-desktop",
-      "Single project — local backend mutates the working tree.",
-    );
     page.on("pageerror", (err) =>
       console.log(`[pageerror] ${err.name}: ${err.message}`),
     );

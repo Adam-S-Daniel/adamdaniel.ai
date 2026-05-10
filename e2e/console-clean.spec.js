@@ -152,12 +152,14 @@ function isAllowlisted(text) {
 
 const CONTENT_URLS = buildContentUrls();
 
-test.describe("Console-clean content pages @parity", () => {
+test.describe(
+  "Console-clean content pages @parity",
+  // Tagged @admin-read: drives /admin/* but is read-only (DOM contract,
+  // mocked APIs, byte parity, etc.). Runs on chromium-desktop-3k +
+  // webkit-iphone16. See playwright.config.js.
+  { tag: ["@admin-read"] },
+  () => {
   test.beforeEach(({}, testInfo) => {
-    test.skip(
-      testInfo.project.name !== "chromium-desktop",
-      "Same HTML/JS runs on every browser; one is enough to catch errors.",
-    );
   });
 
   for (const url of CONTENT_URLS) {

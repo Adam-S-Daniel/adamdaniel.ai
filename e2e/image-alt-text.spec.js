@@ -91,12 +91,14 @@ function shouldSkip(urlPath) {
   return false;
 }
 
-test.describe("@parity image alt-text audit", () => {
+test.describe(
+  "@parity image alt-text audit",
+  // Tagged @admin-read: drives /admin/* but is read-only (DOM contract,
+  // mocked APIs, byte parity, etc.). Runs on chromium-desktop-3k +
+  // webkit-iphone16. See playwright.config.js.
+  { tag: ["@admin-read"] },
+  () => {
   test.beforeEach(({ page }, testInfo) => {
-    test.skip(
-      testInfo.project.name !== "chromium-desktop",
-      "Static-content contract — one browser project is sufficient.",
-    );
   });
 
   test("every <img> on every sitemap URL has alt, role=presentation, or aria-hidden", async ({

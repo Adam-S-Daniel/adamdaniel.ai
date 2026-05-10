@@ -77,14 +77,16 @@ async function loadAdmin(page) {
   });
 }
 
-test.describe("CMS native View-Live anchor — runtime hide contract", () => {
+test.describe(
+  "CMS native View-Live anchor — runtime hide contract",
+  // Tagged @admin-read: drives /admin/* but is read-only (DOM contract,
+  // mocked APIs, byte parity, etc.). Runs on chromium-desktop-3k +
+  // webkit-iphone16. See playwright.config.js.
+  { tag: ["@admin-read"] },
+  () => {
   test.describe.configure({ mode: "serial", timeout: 180_000 });
 
   test.beforeEach(({ page }, testInfo) => {
-    test.skip(
-      testInfo.project.name !== "chromium-desktop",
-      "Single project — Decap is heavy to load and the in-browser test-repo backend isn't meaningfully different across browsers.",
-    );
   });
 
   test("native toolbar View-Live anchor is CSS-hidden", async ({
