@@ -196,6 +196,15 @@ module.exports = defineConfig({
       // mutations) and screenshot-deterministic specs run on
       // chromium-desktop-3k only.
       grep: ADMIN_TAGS_READ,
+      // cms-link-crawler is a server-side link-health crawler (HEAD
+      // 200/302/304 against every `<a href>` in /admin/*) — viewport
+      // is irrelevant to what it actually validates. On the iPhone 16
+      // viewport Decap collapses the left rail into an overlay
+      // <aside> that intercepts pointer events when the crawler walks
+      // collection→entry, so the spec spins on a click that can't
+      // land. Skip it on the mobile lane; chromium-desktop-3k still
+      // exercises the full crawl.
+      testIgnore: /cms-link-crawler\.spec\.js$/,
     },
   ],
 });
