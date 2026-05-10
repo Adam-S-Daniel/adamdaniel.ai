@@ -100,7 +100,7 @@ jobs:
         run: |
           # Limit to chromium-desktop — capture is a single-project responsibility.
           npx playwright test \
-            --project=chromium-desktop \
+            --project=chromium-desktop-3k \
             e2e/cms-smoke.spec.js \
             e2e/cms-publish-flow.spec.js \
             e2e/cms-editorial-workflow.spec.js \

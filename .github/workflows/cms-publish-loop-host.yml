@@ -179,7 +179,7 @@ jobs:
             e2e/cms-delete-published.spec.js \
             e2e/cms-unpublish-republish.spec.js \
             e2e/cms-tags-lifecycle.spec.js \
-            --project=chromium-desktop \
+            --project=chromium-desktop-3k \
             --reporter=list \
             --max-failures=1 \
             2>&1 | tee /tmp/host-loop.log

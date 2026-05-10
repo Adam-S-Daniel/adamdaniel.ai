@@ -152,7 +152,7 @@ jobs:
           # the workflow shape symmetric.
           npx playwright test \
             e2e/cms-publish-loop-preview.spec.js \
-            --project=chromium-desktop \
+            --project=chromium-desktop-3k \
             --reporter=list \
             --max-failures=1 \
             2>&1 | tee /tmp/preview-loop.log
