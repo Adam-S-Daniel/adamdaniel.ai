@@ -484,6 +484,13 @@ test(
 test.afterAll(async () => {
   if (PROD_CANARY) return;
   if (!getPat()) return;
+  // Mirror the test-body skip: this hook recovers from a failed
+  // mid-mutation in THIS run. Outside the cms-publish-loop-prod
+  // workflow the body never runs, so there's nothing to clean up
+  // — and reading the canary from e.g. e2e-real while a parallel
+  // prod-mutate is mid-flight races the Contents API SHA. Only
+  // cleanup in the same context that owns the mutation.
+  if (process.env.RUN_PROD_MUTATE_PLAYGROUND !== "1") return;
   let current;
   try {
     current = await fetchFixtureFromMain();

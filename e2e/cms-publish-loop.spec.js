@@ -488,6 +488,14 @@ test(
 test.afterAll(async ({}, testInfo) => {
   if (PROD_CANARY) return; // daily canary probe doesn't mutate
   if (!getPat()) return; // PAT-less local runs can't write anyway
+  // Mirror the test-body skip: this hook recovers from a failed
+  // mid-mutation in THIS run. Outside the host-loop workflow the
+  // body never runs, so there's nothing to clean up — and reading
+  // the canary marker from e.g. e2e-real while host-loop is
+  // mid-flight on a parallel run can fire spurious cleanup PRs
+  // against the in-flight mutation. Only cleanup in the same
+  // context that owns the mutation.
+  if (process.env.RUN_HOST_REPO_PUBLISH_LOOP !== "1") return;
   // Single-worker coordination: only the FIRST worker (workerIndex
   // 0) attempts the safety-net cleanup. Without this gate, all 8
   // browser-project workers in the e2e-tests matrix observe the
