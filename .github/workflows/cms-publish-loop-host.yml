@@ -174,6 +174,19 @@ jobs:
           # feedback + earlier log availability (live logs only
           # become tailable after the job ends, so an early bail
           # surfaces them sooner).
+          #
+          # `--workers=1` serialises the four specs. They all mutate
+          # prod via Decap → cms/* PR → auto-merge → deploy-production.
+          # With this PR's coalesce change (cancel-in-progress: true),
+          # parallel deploys collapse to one final deploy, but the
+          # deploy-pill UI stays "in flight" continuously through the
+          # burst — and the spec asserts the pill returns to its
+          # hidden terminal state via `waitForFunction(... display ===
+          # "none")` (deploy-pill.js:121). With overlapping deploys
+          # the pill never hides within the 2-min terminal-wait, so
+          # serialising the specs is the precondition for the
+          # coalesce change to land. Total wall-clock grows to
+          # ~30-45 min, well under the 90-min host-loop timeout.
           npx playwright test \
             e2e/cms-publish-loop.spec.js \
             e2e/cms-delete-published.spec.js \
@@ -182,6 +195,7 @@ jobs:
             --project=chromium-desktop \
             --reporter=list \
             --max-failures=1 \
+            --workers=1 \
             2>&1 | tee /tmp/host-loop.log
 
       - name: Upload test results on failure
