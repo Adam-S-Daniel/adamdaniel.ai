@@ -237,16 +237,37 @@ jobs:
           # deploy-production.yml like every other non-bot push.
           github-token: ${{ secrets.CMS_E2E_PAT }}
           script: |
-            await github.graphql(`
-              mutation($pullRequestId: ID!) {
-                enablePullRequestAutoMerge(input: {
-                  pullRequestId: $pullRequestId,
-                  mergeMethod: SQUASH,
-                  commitHeadline: "publish: ${context.payload.pull_request.title}"
-                }) {
-                  pullRequest {
-                    autoMergeRequest { enabledAt }
+            // The synonym labels (`cms/ready`, `decap-cms/ready`,
+            // `decap-cms/pending_publish`) can arrive after the PR has
+            // already merged — e.g. Decap applies `decap-cms/pending_publish`
+            // and the shim's `cms/ready` in quick succession, the first
+            // run enables auto-merge, GitHub squashes immediately, and
+            // the second `labeled` event then fires this job against a
+            // PR whose state is already MERGED. `enablePullRequestAutoMerge`
+            // responds with the GraphQL error "Pull request is already
+            // merged" in that case. The desired end state — merged — is
+            // already achieved, so swallow that specific error and exit
+            // success rather than failing the run and tripping the
+            // stuck-PR triage path.
+            try {
+              await github.graphql(`
+                mutation($pullRequestId: ID!) {
+                  enablePullRequestAutoMerge(input: {
+                    pullRequestId: $pullRequestId,
+                    mergeMethod: SQUASH,
+                    commitHeadline: "publish: ${context.payload.pull_request.title}"
+                  }) {
+                    pullRequest {
+                      autoMergeRequest { enabledAt }
+                    }
                   }
                 }
+              `, { pullRequestId: context.payload.pull_request.node_id });
+            } catch (err) {
+              const msg = String(err && err.message || err);
+              if (/pull request is already merged/i.test(msg)) {
+                core.info(`PR #${context.payload.pull_request.number} is already merged; nothing to do.`);
+                return;
               }
-            `, { pullRequestId: context.payload.pull_request.node_id });
+              throw err;
+            }
