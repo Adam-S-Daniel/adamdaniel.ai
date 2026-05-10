@@ -357,6 +357,23 @@ jobs:
       # honours the same env var. The companion `e2e-real` job
       # carries the GitHub-backed lane on its own runner.
       TEST_LANE: local
+      # Public-page projects only — admin specs (tagged @admin-write
+      # / @admin-read / @admin-screenshots) are excluded from these
+      # 8 projects via `grepInvert` in playwright.config.js. The
+      # dedicated `e2e-admin` job below runs the admin lane on
+      # chromium-desktop-3k + webkit-iphone16. Splitting the two
+      # matrices decouples their concerns (different viewports,
+      # different tag scopes, different secret needs, different
+      # failure modes) and keeps shard timing predictable per lane.
+      PUBLIC_PROJECT_FLAGS: >-
+        --project=chromium-desktop
+        --project=chromium-laptop
+        --project=chromium-mobile
+        --project=firefox-desktop
+        --project=webkit-tablet
+        --project=chromium-large-text
+        --project=chromium-light
+        --project=chromium-forced-colors
     container:
       image: mcr.microsoft.com/playwright:v1.59.1-noble
     strategy:
@@ -428,6 +445,7 @@ jobs:
         run: |
           set -o pipefail
           npx playwright test \
+            $PUBLIC_PROJECT_FLAGS \
             --shard=${{ matrix.shard }}/${{ needs.select.outputs.shard_count }} \
             --reporter=blob,list \
             2>&1 | tee shard-output/playwright-output.log
@@ -442,6 +460,7 @@ jobs:
         run: |
           set -o pipefail
           npx playwright test ${{ needs.select.outputs.files }} \
+            $PUBLIC_PROJECT_FLAGS \
             --shard=${{ matrix.shard }}/${{ needs.select.outputs.shard_count }} \
             --reporter=blob,list \
             2>&1 | tee shard-output/playwright-output.log
@@ -452,7 +471,9 @@ jobs:
         # Always-run baseline keeps a smoke check on every PR so a
         # broken selector or harness regression can't sneak through.
         # No `--shard` flag — the select job collapses scope=skip to a
-        # single matrix entry, so there's nothing to split.
+        # single matrix entry, so there's nothing to split. No project
+        # filter either — the three baseline files are pure-Node /
+        # config-fs tests and don't fan out per project.
         run: |
           set -o pipefail
           npx playwright test \
@@ -485,6 +506,165 @@ jobs:
           name: test-results-shard-${{ matrix.shard }}
           path: test-results/
           retention-days: 7
+
+  # ── Admin-lane matrix ────────────────────────────────────────────
+  # Sister to the `e2e` matrix above. Runs the two admin Playwright
+  # projects — chromium-desktop-3k (every @admin-write / @admin-read /
+  # @admin-screenshots tag) and webkit-iphone16 (@admin-read only) —
+  # which together exercise the /admin/* surface contributors actually
+  # touch. The 8 public projects' grepInvert filters keep admin tests
+  # OUT of the `e2e` matrix; this job's --project filters keep public
+  # tests OUT of admin.
+  #
+  # Single shard for now: ~38 admin tests on chromium-desktop-3k +
+  # ~18 on webkit-iphone16 = ~56 tuples, well-served by Playwright's
+  # default in-process worker parallelism on one runner. If admin
+  # runtime becomes the long pole, hoist the matrix to
+  # `shard: [1,2]` (and update finalize_gate_test.rb's job-name list).
+  #
+  # Always runs when the workflow fires (mirrors the `e2e` job — no
+  # job-level `if:` gate). On baseline-only diffs (`scope == skip`)
+  # the playwright invocation steps below are gated off so the
+  # container does its bring-up + immediate-exit, which is the
+  # cheapest path that still produces a stable `e2e-admin` check
+  # context. Required-status-checks needs the context to always
+  # exist; gating the JOB on scope would create the missing-check
+  # merge-block trap.
+  e2e-admin:
+    needs: select
+    runs-on: ubuntu-latest
+    env:
+      # See the e2e job above for HOME=/root rationale.
+      HOME: /root
+      TEST_LANE: local
+      # Admin projects only — see playwright.config.js for the
+      # ADMIN_TAGS_ALL / ADMIN_TAGS_READ regex contracts these
+      # projects grep on.
+      ADMIN_PROJECT_FLAGS: >-
+        --project=chromium-desktop-3k
+        --project=webkit-iphone16
+    container:
+      image: mcr.microsoft.com/playwright:v1.59.1-noble
+    steps:
+      - name: Checkout
+        uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd  # v6.0.2 (2026-01-09)
+
+      - name: Install Ruby toolchain prerequisites
+        # Same reason as the e2e job — libyaml-0-2 + build-essential
+        # aren't in the Playwright noble image but ruby/setup-ruby +
+        # bundler need them. Several admin specs (cms-page-crud,
+        # cms-link-crawler, etc.) reach into _site/ for parity probes
+        # and need Jekyll built locally.
+        run: |
+          apt-get update -qq
+          apt-get install -y -qq --no-install-recommends libyaml-0-2 build-essential
+
+      - name: Setup Ruby
+        uses: ruby/setup-ruby@c4e5b1316158f92e3d49443a9d58b31d25ac0f8f  # v1.302.0 (2026-04-15)
+        with:
+          ruby-version: '3.2'
+          bundler-cache: true
+
+      - name: Setup Node
+        uses: actions/setup-node@48b55a011bda9f5d6aeb4c2d9c7362e8dae4041e  # v6.4.0 (2026-04-20)
+        with:
+          node-version: '20'
+          cache: 'npm'
+
+      - name: Install npm dependencies
+        run: npm ci
+
+      - name: Prepare shard output dir
+        run: mkdir -p shard-output
+
+      - name: Run Playwright admin tests (full matrix)
+        if: needs.select.outputs.scope == 'all'
+        id: pw-admin-full
+        env:
+          # Same self-skip semantics + fork safety as the e2e job —
+          # cms-publish-loop.spec.js, cms-publish-loop-preview.spec.js,
+          # cms-publish-loop-prod-mutate.spec.js, etc., all gate on
+          # workflow-specific env opt-ins (RUN_HOST_REPO_PUBLISH_LOOP,
+          # RUN_PROD_MUTATE_PLAYGROUND), so the PAT being present here
+          # only enables the read-side fixture fetches their bodies
+          # need before they self-skip.
+          CMS_E2E_PAT: ${{ secrets.CMS_E2E_PAT }}
+        run: |
+          set -o pipefail
+          npx playwright test \
+            $ADMIN_PROJECT_FLAGS \
+            --reporter=blob,list \
+            2>&1 | tee shard-output/playwright-output.log
+
+      - name: Run Playwright admin tests (selected subset)
+        if: needs.select.outputs.scope == 'subset'
+        id: pw-admin-subset
+        env:
+          CMS_E2E_PAT: ${{ secrets.CMS_E2E_PAT }}
+        # If the diff selected zero admin specs, this invocation runs
+        # zero tests across the admin projects and exits clean — no
+        # special-case needed.
+        run: |
+          set -o pipefail
+          npx playwright test ${{ needs.select.outputs.files }} \
+            $ADMIN_PROJECT_FLAGS \
+            --reporter=blob,list \
+            2>&1 | tee shard-output/playwright-output.log
+
+      # Upload steps use `if-no-files-found: ignore` so the
+      # baseline-only path (scope=skip → no playwright invocation
+      # → no blob/log/results dirs) doesn't fail the job. The
+      # required-check shape stays green even on those runs.
+      - name: Upload admin blob report
+        if: ${{ !cancelled() }}
+        uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a  # v7.0.1 (2026-04-10)
+        with:
+          # Same `blob-report-*` prefix as the e2e shards so the
+          # finalize job's merged HTML report covers both lanes.
+          name: blob-report-admin
+          path: blob-report
+          if-no-files-found: ignore
+          retention-days: 1
+
+      - name: Upload admin shard log
+        if: ${{ !cancelled() }}
+        uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a  # v7.0.1 (2026-04-10)
+        with:
+          name: shard-log-admin
+          path: shard-output/playwright-output.log
+          if-no-files-found: ignore
+          retention-days: 1
+
+      - name: Upload admin test results
+        if: ${{ !cancelled() }}
+        uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a  # v7.0.1 (2026-04-10)
+        with:
+          # Same `test-results-shard-*` prefix as the e2e shards so the
+          # finalize job's per-test-frames merge picks up admin captures.
+          name: test-results-shard-admin
+          path: test-results/
+          if-no-files-found: ignore
+          retention-days: 7
+
+      # Failure-comment fan-out — see AGENTS.md "Failure-comment
+      # composite action". Distinct marker so it doesn't clobber the
+      # e2e (public-lane), e2e-real, or parity comments.
+      - name: Post failure summary
+        if: ${{ failure() && github.event_name == 'pull_request' }}
+        uses: ./.github/actions/post-failure-comment
+        with:
+          mode: post
+          log-file: shard-output/playwright-output.log
+          marker: e2e-admin-failure-summary
+          title: e2e-admin
+
+      - name: Resolve failure summary on success
+        if: ${{ success() && github.event_name == 'pull_request' }}
+        uses: ./.github/actions/post-failure-comment
+        with:
+          mode: resolve
+          marker: e2e-admin-failure-summary
+          title: e2e-admin
 
   # G5 — GitHub-backed (`@lane: real`) lane.
   #
@@ -751,16 +931,18 @@ jobs:
   # ─── DO NOT WEAKEN WITHOUT READING THE FOLLOWING ────────────────────
   #
   # `finalize` is the merge gate for the entire e2e matrix. Only `e2e
-  # (1)` is also a required check; `e2e (2)`, `e2e (3)`, `e2e (4)` are
-  # NOT required (the matrix is dynamically sized — see Layer 2 in
-  # `e2e/select-specs.js` — and required-status-checks can't depend on
-  # contexts that may not fire). Coverage on shards 2-4 is enforced
-  # solely by the "Re-fail if any shard failed" step at the bottom of
-  # this job: it greps `needs.e2e.result == 'failure'` and exits 1,
-  # making `finalize` itself fail and blocking the merge.
+  # (1)` and `e2e-admin` are also required checks; `e2e (2)`, `e2e (3)`,
+  # `e2e (4)` are NOT required (the public matrix is dynamically sized
+  # — see Layer 2 in `e2e/select-specs.js` — and required-status-checks
+  # can't depend on contexts that may not fire). Coverage on shards 2-4
+  # of the public matrix is enforced solely by the "Re-fail if any
+  # matrix failed" step at the bottom of this job: it propagates either
+  # `needs.e2e.result == 'failure'` or `needs.e2e-admin.result ==
+  # 'failure'` into a non-zero exit, making `finalize` itself fail and
+  # blocking the merge.
   #
-  # If you weaken or delete that step, the matrix's shards-2-4 verdict
-  # silently stops gating merges. The lint at
+  # If you weaken or delete that step, the public matrix's shards-2-4
+  # verdict silently stops gating merges. The lint at
   # `_plugins_test/finalize_gate_test.rb` will fail the build if you
   # try, but the lint can be sidestepped — please do not.
   #
@@ -768,11 +950,11 @@ jobs:
   #   - finalize remains in .github/rulesets/main.json's required list
   #   - finalize keeps `if: !cancelled()` (otherwise GHA skips it on
   #     shard failure and the gate evaporates differently)
-  #   - finalize keeps `needs: [e2e]` (no propagation without the
-  #     dependency)
+  #   - finalize keeps `needs: [e2e, e2e-admin]` (no propagation
+  #     without the dependency)
   finalize:
     if: ${{ !cancelled() }}
-    needs: [e2e]
+    needs: [e2e, e2e-admin]
     runs-on: ubuntu-latest
     # Use the same Playwright container as the `e2e` matrix — the
     # `merge-reports` step needs the same `@playwright/test` version
@@ -938,13 +1120,16 @@ jobs:
           done
 
       # ── Failure summary on the PR ────────────────────────────────
-      # Surface the matrix's failure blocks as a PR comment so a
-      # human (or agent) iterating on the PR can triage without
+      # Surface the public-matrix's failure blocks as a PR comment so
+      # a human (or agent) iterating on the PR can triage without
       # needing workflow-log access. Two call sites; gate on the
       # upstream e2e matrix's result (this finalize job has its
       # own status, which is irrelevant — what we care about is
-      # the matrix). See AGENTS.md "Failure-comment composite
-      # action" for the convention.
+      # the matrix). The admin matrix posts its own
+      # `<!-- e2e-admin-failure-summary -->` comment from inside
+      # the e2e-admin job; `finalize` only owns the public-lane
+      # comment. See AGENTS.md "Failure-comment composite action"
+      # for the convention.
       - name: Post failure summary
         if: ${{ needs.e2e.result == 'failure' && github.event_name == 'pull_request' }}
         uses: ./.github/actions/post-failure-comment
@@ -963,21 +1148,23 @@ jobs:
           title: E2E tests
 
       # ─── DO NOT REMOVE OR SOFTEN — this step IS the merge gate ─────────
-      # `e2e (1)` is required, but `e2e (2..4)` are not (dynamic shard
-      # count would create the missing-check trap). This step's `exit 1`
-      # is the only thing that converts a shard-2/3/4 failure into a
-      # `finalize` failure, which IS required, and therefore blocks the
-      # merge. Removing this step (or replacing `exit 1` with `exit 0`,
-      # or inverting the `if`, or dropping the `needs.e2e.result ==
-      # 'failure'` predicate) silently opens the gate for any shard-2-4
-      # failure to land on main.
+      # `e2e (1)` and `e2e-admin` are required, but `e2e (2..4)` are
+      # not (the public matrix's dynamic shard count would create the
+      # missing-check trap). This step's `exit 1` is the only thing
+      # that converts a public-shard-2/3/4 failure (or any e2e-admin
+      # failure that GHA didn't already block on) into a `finalize`
+      # failure, which IS required, and therefore blocks the merge.
+      # Removing this step (or replacing `exit 1` with `exit 0`, or
+      # inverting the `if`, or dropping the `needs.<job>.result ==
+      # 'failure'` predicate) silently opens the gate for any
+      # shard-2-4 failure to land on main.
       #
       # `_plugins_test/finalize_gate_test.rb` enforces the structural
       # invariants here. If you have a real reason to change this step,
       # update the lint in the same PR and put the rationale in the
       # commit message.
-      - name: Re-fail if any shard failed
-        if: needs.e2e.result == 'failure'
+      - name: Re-fail if any matrix failed
+        if: ${{ needs.e2e.result == 'failure' || needs.e2e-admin.result == 'failure' }}
         run: |
-          echo "One or more matrix shards failed."
+          echo "One or more matrix shards failed (e2e=${{ needs.e2e.result }}, e2e-admin=${{ needs.e2e-admin.result }})."
           exit 1
