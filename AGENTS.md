@@ -548,7 +548,11 @@ If `gitleaks` isn't on `PATH`, the hook fails with install instructions for macO
 
 Every e2e test runs across a matrix of browsers, viewports, text sizes, and color settings. The matrix is defined in `playwright.config.js` as Playwright projects.
 
-### Browser matrix (8 projects)
+### Browser matrix (10 projects, two lanes)
+
+The matrix is split into a **public-page lane** (8 projects, full browser × viewport diversity for the rendered site) and an **admin lane** (2 projects, the only two browsers admin UI is exercised on). Project routing is tag-based — see "Tag-based filtering" below.
+
+**Public-page lane** — runs every spec that does NOT carry an `@admin-*` tag. Each project's `grepInvert: /@admin-write\b|@admin-read\b|@admin-screenshots\b/` excludes admin specs.
 
 | Project | Browser | Viewport | Special |
 |---|---|---|---|
@@ -560,6 +564,30 @@ Every e2e test runs across a matrix of browsers, viewports, text sizes, and colo
 | `chromium-large-text` | Chromium | 1920×1080 | Root font 20px |
 | `chromium-light` | Chromium | 1920×1080 | `colorScheme: light` |
 | `chromium-forced-colors` | Chromium | 1920×1080 | `forcedColors: active` |
+
+**Admin lane** — runs only specs tagged `@admin-write`, `@admin-read`, or `@admin-screenshots`. Public-page specs do NOT run on these projects.
+
+| Project | Browser | Viewport | Tags accepted |
+|---|---|---|---|
+| `chromium-desktop-3k` | Chromium | 3000×1500 | `@admin-write` + `@admin-read` + `@admin-screenshots` |
+| `webkit-iphone16` | WebKit | 393×852 (deviceScaleFactor 3, isMobile, hasTouch) | `@admin-read` only |
+
+The two admin projects intentionally cover the two browsers a real contributor uses: Chrome on a high-DPI desktop and Safari on iPhone 16. No Windows project — see "Tag-based filtering" for the rationale.
+
+### Tag-based filtering
+
+Specs that drive the admin UI are tagged via Playwright's `{ tag: [...] }` option on `test.describe(...)` or `test(...)`. The tag controls which projects the spec runs on:
+
+| Tag | Meaning | Runs on |
+|---|---|---|
+| `@admin-write` | Drives `/admin/*` AND mutates state (Decap Save → `cms/*` PR, decap-server FS write, etc.) | `chromium-desktop-3k` only — single browser is sufficient and writes are heavy/serial |
+| `@admin-read` | Drives `/admin/*` but is read-only (DOM contract, HTTP byte parity, mocked APIs) | `chromium-desktop-3k` + `webkit-iphone16` — engine-dependent admin UI assertions need both |
+| `@admin-screenshots` | Manual-walkthrough specs that emit `docs/manual-screenshots/*.png` via `manual-capture.js` | `chromium-desktop-3k` only — `manual-capture.js` writes to project-INDEPENDENT paths, so two parallel projects would race + last-write-wins |
+| *(untagged)* | Public-page specs (`tags.spec.js`, `feeds-and-share.spec.js`, `visual-regression.spec.js`, etc.) | All 8 public-lane projects |
+
+**Why word-bounded regexes** (`/@admin-read\b/`): Playwright's `grep` is substring-matching by default. Without the `\b`, `/@admin-read/` would match a hypothetical future tag like `@admin-readonly`, silently routing it to the wrong project. The `\b` anchors at the tag's end so `@admin-read` matches only itself.
+
+**Tag the test.describe, not the test title.** The tag-in-title pattern (`test("foo @admin-read", ...)`) works but pollutes the test name in reports. The `{ tag: [...] }` option keeps titles clean and is the modern Playwright API.
 
 #### iOS-anything is WebKit
 

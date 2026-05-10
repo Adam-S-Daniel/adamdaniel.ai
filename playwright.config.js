@@ -4,6 +4,42 @@ const DESKTOP = { width: 1920, height: 1080 };
 const LAPTOP = { width: 1366, height: 768 };
 const TABLET = { width: 768, height: 1024 };
 const MOBILE = { width: 375, height: 667 };
+// 3K-monitor approximation. The admin UI is exercised at this resolution
+// (and ONLY this resolution among Chromium projects) so a contributor
+// running Chrome on a 3K display sees the same affordances the test
+// matrix asserts.
+const DESKTOP_3K = { width: 3000, height: 1500 };
+// iPhone 16 portrait viewport. The 393×852 logical viewport and 3x DPR
+// match Apple's published spec; it's the single WebKit surface the
+// admin UI is exercised on (per AGENTS.md "iOS-anything is WebKit",
+// this also covers iOS Chrome / Edge / Firefox since iOS bans
+// third-party rendering engines).
+const IPHONE_16 = { width: 393, height: 852 };
+
+// Tag-based browser-matrix filtering.
+//
+// Admin specs are tagged via Playwright's `{ tag: ['@admin-write' | ...] }`
+// option on `test.describe(...)` or `test(...)`. Three admin tags exist:
+//
+//   @admin-write       — drives /admin/* AND writes (Decap Save → cms/* PR,
+//                        decap-server FS write, etc.). Runs on
+//                        chromium-desktop-3k ONLY. Single-browser by
+//                        design: writes are heavy and serial.
+//   @admin-read        — drives /admin/* but is read-only (DOM contract,
+//                        HTTP byte parity, mocked APIs). Runs on
+//                        chromium-desktop-3k AND webkit-iphone16 — the
+//                        two engines admin UI actually needs to render in.
+//   @admin-screenshots — manual-walkthrough-* specs. They write to
+//                        docs/manual-screenshots/ (project-INDEPENDENT
+//                        paths, so two parallel projects would race and
+//                        last-write-wins). Run on chromium-desktop-3k
+//                        ONLY for screenshot determinism.
+//
+// `\b` (word boundary) on the tag name prevents future tag-name prefix
+// collisions: `/@admin-read\b/` matches `@admin-read` but NOT a
+// hypothetical `@admin-readonly`.
+const ADMIN_TAGS_ALL = /@admin-write\b|@admin-read\b|@admin-screenshots\b/;
+const ADMIN_TAGS_READ = /@admin-read\b/;
 
 // G3 — `TARGET=` env switch. Local is the default for every dev run and
 // the existing CI matrix; preview/prod skip the local Jekyll + decap-server
@@ -84,38 +120,46 @@ module.exports = defineConfig({
     ? [["html", { open: "never" }], ["list"]]
     : [["list"]],
   projects: [
-    // Browsers × viewports
+    // ── Public-page lane (7 projects) ─────────────────────────────
+    // Browser × viewport diversity for public-facing pages
+    // (/, /blog/<slug>/, /tags/, /tags/<slug>/, /tags/<slug>/feed.xml,
+    // /sitemap.xml, /404.html, etc.). Each project EXCLUDES admin tags
+    // via grepInvert so admin specs only run on the dedicated admin
+    // projects below.
     {
       name: "chromium-desktop",
       use: { browserName: "chromium", viewport: DESKTOP },
+      grepInvert: ADMIN_TAGS_ALL,
     },
     {
       name: "chromium-laptop",
       use: { browserName: "chromium", viewport: LAPTOP },
+      grepInvert: ADMIN_TAGS_ALL,
     },
     {
       name: "chromium-mobile",
       use: { browserName: "chromium", viewport: MOBILE },
+      grepInvert: ADMIN_TAGS_ALL,
     },
     {
       name: "firefox-desktop",
       use: { browserName: "firefox", viewport: DESKTOP },
+      grepInvert: ADMIN_TAGS_ALL,
     },
     {
       name: "webkit-tablet",
       use: { browserName: "webkit", viewport: TABLET },
+      grepInvert: ADMIN_TAGS_ALL,
     },
-
-    // Text size
     {
       name: "chromium-large-text",
       use: { browserName: "chromium", viewport: DESKTOP, rootFontSize: "20px" },
+      grepInvert: ADMIN_TAGS_ALL,
     },
-
-    // Color settings
     {
       name: "chromium-light",
       use: { browserName: "chromium", viewport: DESKTOP, colorScheme: "light" },
+      grepInvert: ADMIN_TAGS_ALL,
     },
     {
       name: "chromium-forced-colors",
@@ -124,6 +168,34 @@ module.exports = defineConfig({
         viewport: DESKTOP,
         forcedColors: "active",
       },
+      grepInvert: ADMIN_TAGS_ALL,
+    },
+
+    // ── Admin lane (2 projects) ───────────────────────────────────
+    // The admin UI only needs to render correctly in the two engines
+    // a contributor actually uses: Chromium at 3K-monitor scale and
+    // WebKit at iPhone 16. See `ADMIN_TAGS_*` above for the routing
+    // contract — tags are added per spec via `{ tag: [...] }` on
+    // `test.describe(...)` or `test(...)`.
+    {
+      name: "chromium-desktop-3k",
+      use: { browserName: "chromium", viewport: DESKTOP_3K },
+      // Runs every admin tag (write, read, and screenshots).
+      grep: ADMIN_TAGS_ALL,
+    },
+    {
+      name: "webkit-iphone16",
+      use: {
+        browserName: "webkit",
+        viewport: IPHONE_16,
+        deviceScaleFactor: 3,
+        isMobile: true,
+        hasTouch: true,
+      },
+      // Read-only admin specs only — writes (cms/* PR creation, FS
+      // mutations) and screenshot-deterministic specs run on
+      // chromium-desktop-3k only.
+      grep: ADMIN_TAGS_READ,
     },
   ],
 });

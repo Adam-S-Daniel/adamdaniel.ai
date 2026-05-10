@@ -270,7 +270,14 @@ const sections = guideExists
   ? parseSections(fs.readFileSync(GUIDE_PATH, "utf8"))
   : [];
 
-test.describe("Manual walkthrough — docs/CONTENT_GUIDE.md @parity", () => {
+test.describe(
+  "Manual walkthrough — docs/CONTENT_GUIDE.md @parity",
+  // Tagged @admin-screenshots: drives local /admin to capture
+  // content-guide screenshots. Runs on chromium-desktop-3k ONLY
+  // (single-browser by design — see manual-walkthrough-contributor
+  // for the rationale). See playwright.config.js.
+  { tag: ["@admin-screenshots"] },
+  () => {
   test.describe.configure({ mode: "serial", timeout: 180_000 });
 
   test.beforeEach(({ page }, testInfo) => {

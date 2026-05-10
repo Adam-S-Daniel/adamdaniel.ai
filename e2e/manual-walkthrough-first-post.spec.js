@@ -160,7 +160,16 @@ async function measure(label, budgetMs, fn) {
   }
 }
 
-test.describe("First-post walkthrough — full create → publish → verify cycle", () => {
+test.describe(
+  "First-post walkthrough — full create → publish → verify cycle",
+  // Tagged @admin-screenshots: drives local /admin through full
+  // publish-loop to capture first-post-walkthrough screenshots.
+  // Single-browser by design — manual-capture writes to project-
+  // INDEPENDENT paths. (Also writes via local decap-server, but
+  // since we're already pinned to one browser for screenshots, no
+  // separate @admin-write tag needed.) See playwright.config.js.
+  { tag: ["@admin-screenshots"] },
+  () => {
   // 10-minute envelope — full publish loop with explicit Jekyll rebuild
   // and on-disk polls is slower than a single-leg spec; 600s gives the
   // whole thing room without inviting a runaway.
