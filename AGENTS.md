@@ -105,6 +105,47 @@ Editors get a WYSIWYG preview of the page they're editing without publishing. Th
 
 **Per-keystroke updates:** the bridge uses Decap's `postSave` event, which fires on every save (including auto-saves), not on every keystroke. Decap also exposes `CMS.registerPreviewTemplate` for inline previews — we don't use it because the `/preview/` real-layout approach renders with the actual Jekyll layouts, which an inline preview can't match without duplicating the layout HTML.
 
+### Embedding HTML / Widgets
+
+Authors can drop a block of raw HTML / JS / CSS into any markdown body — useful for interactive widgets, demos, or anything that doesn't fit Markdown's grammar. Markdown and HTML coexist in the same body: kramdown passes block-level HTML through verbatim, and the markdown around the embed continues to render normally.
+
+**Toolbar (preferred).** The Decap markdown toolbar exposes an "HTML Embed" button on every body field (registered globally via `admin/editor-component-html-embed.js`, which calls `CMS.registerEditorComponent`). Clicking it opens a code field for HTML; saving stores the block on disk wrapped in sentinel comments:
+
+```
+<!-- html-embed:start -->
+<div class="post-embed">
+…author HTML / JS / CSS…
+</div>
+<!-- html-embed:end -->
+```
+
+The sentinels let the editor round-trip the block between rich-text and raw modes without re-escaping.
+
+**Raw-mode fallback.** Switching the body to "raw" mode and pasting the same sentinel block by hand works identically. Bare block-level HTML (no sentinels) also renders — kramdown passes it through — but only the sentinel form re-hydrates as a single editable component when you flip back to rich-text mode.
+
+**Reusable widgets — `/assets/widgets/<name>/`.** For widgets used across multiple posts, drop shared assets into a per-widget folder under `assets/widgets/`:
+
+- `assets/widgets/<name>/widget.css`
+- `assets/widgets/<name>/widget.js`
+
+Reference them from inside the embed:
+
+```html
+<link rel="stylesheet" href="/assets/widgets/<name>/widget.css">
+<div id="<name>-root"></div>
+<script src="/assets/widgets/<name>/widget.js" defer></script>
+```
+
+Files under `assets/` are copied through by Jekyll without any config change.
+
+**Preview caveat.** `/preview/` renders the embed visually (marked.js → innerHTML), but `<script>` tags inserted via `innerHTML` do **not** execute. A banner appears at the top of the preview whenever an embed is detected. For full-fidelity testing of JS-bearing widgets, use the PR preview environment.
+
+**Markdown inside the embed.** kramdown defaults (`parse_block_html: false`) deliberately don't parse markdown inside the wrapper `<div>`. Author the embed as pure HTML; if you need prose around the widget, place it before/after the embed block.
+
+**Security note.** No CSP is enforced today, so inline `<script>` and `<style>` work without ceremony. If a CSP is added later, allowlist either the inline payloads (via hashes/nonces) or migrate widgets into `/assets/widgets/` and allowlist that path. The trust model is "authors are committers" — embeds land via the standard editorial-workflow PR review.
+
+End-to-end coverage lives in `e2e/cms-html-embed.spec.js`.
+
 ## Analytics
 
 Real-user monitoring is via Amazon CloudWatch RUM, deployed as a sibling CloudFormation stack `adamdaniel-ai-rum` (see `infrastructure/rum/`). The Jekyll snippet in `_includes/analytics/cloudwatch-rum.html` is a no-op unless **both** `JEKYLL_ENV=production` AND `site.analytics.cloudwatch_rum.app_monitor_id` are set, so local `jekyll serve` and PR previews stay silent. Identity-pool / app-monitor IDs are non-sensitive (visible in the rendered page source) so they live in `_config.yml`, not GitHub secrets. End-to-end test: `e2e/analytics-cloudwatch-rum.test.js`. Full deploy + tuning notes: [`ANALYTICS_SETUP.md`](ANALYTICS_SETUP.md).

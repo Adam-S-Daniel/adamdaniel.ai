@@ -96,7 +96,7 @@ const PROD_HINTS = {
       "ON = goes live on the next deploy. Leave OFF to schedule a future publish via the Publish Date below — the scheduled-posts workflow flips this toggle on when the date arrives.",
     publish_date:
       "Optional. Future date/time (UTC) to auto-publish this post. Only honoured when Published above is OFF — if Published is ON, the post goes live immediately and this field is ignored.",
-    body: "Full post content. Supports Markdown, images, code blocks, and embeds. For a real-layout preview that updates on every Save, open /preview/?collection=posts in a second browser tab and snap it next to the editor.",
+    body: "Full post content. Supports Markdown, images, code blocks, and HTML embeds (toolbar → 'HTML Embed' button — drops a block of raw HTML / JS / CSS that round-trips between rich-text and raw modes). For a real-layout preview that updates on every Save, open /preview/?collection=posts in a second browser tab and snap it next to the editor.",
   },
   tags: {
     name: "Tag label shown on posts (e.g. 'Machine Learning', 'Python')",
