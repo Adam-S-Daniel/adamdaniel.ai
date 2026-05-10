@@ -533,6 +533,14 @@ main {
   border-bottom-color: var(--text-bright);
 }
 
+/* HTML Embed wrapper emitted by the Decap "HTML Embed" editor component
+   (admin/editor-component-html-embed.js). Vertical rhythm only — author
+   markup inside the wrapper styles itself. */
+.post-embed {
+  display: block;
+  margin: 1.5rem 0;
+}
+
 .featured-image {
   width: 100%;
   max-height: 400px;

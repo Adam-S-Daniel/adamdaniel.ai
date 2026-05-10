@@ -147,7 +147,7 @@ collections:
         label: Body
         widget: markdown
         required: true
-        hint: "Full post content. Supports Markdown, images, code blocks, and embeds. For a real-layout preview that updates on every Save, open /preview/?collection=posts in a second browser tab and snap it next to the editor."
+        hint: "Full post content. Supports Markdown, images, code blocks, and HTML embeds (toolbar → 'HTML Embed' button — drops a block of raw HTML / JS / CSS that round-trips between rich-text and raw modes). For a real-layout preview that updates on every Save, open /preview/?collection=posts in a second browser tab and snap it next to the editor."
         modes:
           - rich_text
           - raw

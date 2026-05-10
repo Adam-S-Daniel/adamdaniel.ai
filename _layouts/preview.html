@@ -53,6 +53,30 @@ layout: default
     color: var(--text-muted, #8ab0e8);
     letter-spacing: 0.04em;
   }
+
+  /* Advisory shown when the rendered body contains an HTML embed. The
+     preview pipes markdown through marked.js → innerHTML, so <script>
+     tags inside an embed do NOT execute here. The banner points authors
+     at the PR preview environment, where the page loads as a real
+     document and scripts run normally. */
+  #preview-embed-banner {
+    position: fixed; top: 0; left: 0; right: 0;
+    z-index: 90;
+    padding: 0.5rem 1rem;
+    background: rgba(40, 90, 255, 0.12);
+    border-bottom: 1px solid rgba(40, 90, 255, 0.4);
+    color: var(--text-primary, #d8e4ff);
+    font-family: 'Helvetica Neue', Arial, sans-serif;
+    font-size: 0.8rem;
+    text-align: center;
+    letter-spacing: 0.02em;
+  }
+  #preview-embed-banner code {
+    font-family: 'SF Mono', 'Fira Code', monospace;
+    font-size: 0.9em;
+    background: rgba(40, 90, 255, 0.18);
+    padding: 0.05em 0.35em; border-radius: 3px;
+  }
 </style>
 
 <div id="preview-empty-state">
@@ -60,6 +84,11 @@ layout: default
   <p>Hit <code>Save</code> or <code>Publish now</code> on the entry you're
   editing in the admin tab — this preview will fill in automatically.</p>
   <p class="hint">Keep this tab open while you edit.</p>
+</div>
+
+<div id="preview-embed-banner" hidden>
+  This post contains an HTML embed. <code>&lt;script&gt;</code> tags do not
+  execute in this preview — open the PR preview environment for full fidelity.
 </div>
 
 <div class="preview-root" data-preview-root>
@@ -254,6 +283,18 @@ layout: default
       setHTML("body", renderMarkdown(fields.body));
     } else if ("description" in fields) {
       setHTML("body", renderMarkdown(fields.description));
+    }
+
+    // Show the embed advisory whenever the rendered body contains an
+    // <div class="post-embed"> wrapper (the marker the "HTML Embed"
+    // editor component emits). innerHTML doesn't execute <script>, so
+    // authors need to know they should test JS-bearing widgets on the
+    // PR preview environment.
+    var embedBanner = document.getElementById("preview-embed-banner");
+    if (embedBanner) {
+      var bodySlot = slot("body");
+      var hasEmbed = !!(bodySlot && bodySlot.querySelector(".post-embed"));
+      embedBanner.hidden = !hasEmbed;
     }
 
     if (collection === "posts") {
