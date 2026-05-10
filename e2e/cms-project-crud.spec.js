@@ -26,7 +26,12 @@ function removeSmokeFile() {
   if (fs.existsSync(SMOKE_FILE)) fs.unlinkSync(SMOKE_FILE);
 }
 
-test.describe("Projects collection: create / edit / delete", () => {
+test.describe(
+  "Projects collection: create / edit / delete",
+  // Tagged @admin-write: drives /admin/* + writes (Decap Save, decap-server, etc.).
+  // Runs on chromium-desktop-3k only. See playwright.config.js.
+  { tag: ["@admin-write"] },
+  () => {
   test.describe.configure({ mode: "serial", timeout: 240_000 });
 
   test.beforeAll(() => {
@@ -36,10 +41,6 @@ test.describe("Projects collection: create / edit / delete", () => {
   test.afterAll(() => removeSmokeFile());
 
   test.beforeEach(({ page }, testInfo) => {
-    test.skip(
-      testInfo.project.name !== "chromium-desktop",
-      "Single project — local backend mutates the working tree.",
-    );
     page.on("pageerror", (err) =>
       console.log(`[pageerror] ${err.name}: ${err.message}`),
     );

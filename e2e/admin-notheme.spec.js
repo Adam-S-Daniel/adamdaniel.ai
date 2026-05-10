@@ -13,12 +13,14 @@ const { test, expect } = require("./base");
 // fails — pointing future maintainers at the editor-facing escape hatch
 // they need to ship alongside any new theme.
 
-test.describe("/admin/?notheme — cobalt theme is not shipped", () => {
+test.describe(
+  "/admin/?notheme — cobalt theme is not shipped",
+  // Tagged @admin-read: drives /admin/* but is read-only (DOM contract,
+  // mocked APIs, byte parity, etc.). Runs on chromium-desktop-3k +
+  // webkit-iphone16. See playwright.config.js.
+  { tag: ["@admin-read"] },
+  () => {
   test.beforeEach(({ page }, testInfo) => {
-    test.skip(
-      testInfo.project.name !== "chromium-desktop",
-      "DOM contract — one browser is enough.",
-    );
     page.on("pageerror", (err) =>
       console.log(`[pageerror] ${err.name}: ${err.message}`),
     );

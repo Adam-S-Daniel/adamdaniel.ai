@@ -128,11 +128,10 @@ async function tryHardDelete(filePath, slug, runId, message) {
   }
 }
 
-test("Delete published entry — UI click → public URL 404s", async ({ page }, testInfo) => {
-  test.skip(
-    testInfo.project.name !== "chromium-desktop",
-    "Delete-published flow is real-network — runs once on chromium-desktop only.",
-  );
+test(
+  "Delete published entry — UI click → public URL 404s",
+  { tag: ["@admin-write"] },
+  async ({ page }, testInfo) => {
   test.skip(
     !getPat(),
     "CMS_E2E_PAT not set — host-repo delete-published spec disabled.",

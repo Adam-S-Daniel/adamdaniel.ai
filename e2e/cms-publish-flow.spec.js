@@ -90,7 +90,12 @@ function jekyllBuild() {
   });
 }
 
-test.describe("CMS publish flow: create → build → browse to live URL", () => {
+test.describe(
+  "CMS publish flow: create → build → browse to live URL",
+  // Tagged @admin-write: drives /admin/* + writes (Decap Save, decap-server, etc.).
+  // Runs on chromium-desktop-3k only. See playwright.config.js.
+  { tag: ["@admin-write"] },
+  () => {
   test.describe.configure({ mode: "serial", timeout: 240_000 });
 
   test.beforeAll(() => {
@@ -101,10 +106,6 @@ test.describe("CMS publish flow: create → build → browse to live URL", () =>
   });
 
   test.beforeEach(({ page }, testInfo) => {
-    test.skip(
-      testInfo.project.name !== "chromium-desktop",
-      "Single project — Jekyll rebuild is too expensive for the full matrix.",
-    );
     page.on("pageerror", (err) =>
       console.log(`[pageerror] ${err.name}: ${err.message}`),
     );

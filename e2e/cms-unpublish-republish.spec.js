@@ -129,13 +129,12 @@ async function url404s(page) {
   return s >= 400 && s < 500;
 }
 
-test("CMS unpublish + re-publish — flip published flag toggles URL visibility", async ({
+test(
+  "CMS unpublish + re-publish — flip published flag toggles URL visibility",
+  { tag: ["@admin-write"] },
+  async ({
   page,
 }, testInfo) => {
-  test.skip(
-    testInfo.project.name !== "chromium-desktop",
-    "Real-network test — runs once on chromium-desktop only.",
-  );
   test.skip(!getPat(), "CMS_E2E_PAT not set — host-repo unpublish spec disabled.");
   test.skip(
     process.env.RUN_HOST_REPO_PUBLISH_LOOP !== "1",

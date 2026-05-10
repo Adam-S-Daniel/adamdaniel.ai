@@ -199,11 +199,10 @@ function todayUtcIso() {
   return new Date().toISOString().slice(0, 10);
 }
 
-test("CMS publish loop — prod mutation playground (real _posts/ entry)", async ({ page }, testInfo) => {
-  test.skip(
-    testInfo.project.name !== "chromium-desktop",
-    "Prod-mutation playground is real-network — runs once on chromium-desktop only.",
-  );
+test(
+  "CMS publish loop — prod mutation playground (real _posts/ entry)",
+  { tag: ["@admin-write"] },
+  async ({ page }, testInfo) => {
   test.skip(
     !getPat(),
     "CMS_E2E_PAT not set — prod-mutation playground disabled.",

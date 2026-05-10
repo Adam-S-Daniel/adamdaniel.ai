@@ -28,14 +28,16 @@ const REGRESSION_JSON = {
   ],
 };
 
-test.describe("/admin/reviews/ visual-diff stats", () => {
+test.describe(
+  "/admin/reviews/ visual-diff stats",
+  // Tagged @admin-read: drives /admin/* but is read-only (DOM contract,
+  // mocked APIs, byte parity, etc.). Runs on chromium-desktop-3k +
+  // webkit-iphone16. See playwright.config.js.
+  { tag: ["@admin-read"] },
+  () => {
   test("renders stat grid and per-page list from regression.json", async ({
     page,
   }, testInfo) => {
-    test.skip(
-      testInfo.project.name !== "chromium-desktop",
-      "Single project — the stats logic is browser-agnostic and the spec is heavy",
-    );
 
     // Pre-seed the auth token so the dashboard skips the sign-in screen.
     await page.addInitScript((token) => {
@@ -156,10 +158,6 @@ test.describe("/admin/reviews/ visual-diff stats", () => {
   test("falls back gracefully when regression.json is unavailable", async ({
     page,
   }, testInfo) => {
-    test.skip(
-      testInfo.project.name !== "chromium-desktop",
-      "Single project — the fallback path is browser-agnostic",
-    );
 
     await page.addInitScript((token) => {
       localStorage.setItem("gh_reviews_token", token);
@@ -243,10 +241,6 @@ test.describe("/admin/reviews/ visual-diff stats", () => {
   test("any rendered ControlHint has ≥ 4.5:1 contrast on its background", async ({
     page,
   }, testInfo) => {
-    test.skip(
-      testInfo.project.name !== "chromium-desktop",
-      "Single project — contrast math is browser-agnostic",
-    );
 
     await page.addInitScript((token) => {
       localStorage.setItem("gh_reviews_token", token);

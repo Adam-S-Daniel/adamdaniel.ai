@@ -27,14 +27,16 @@ function majorMinor(v) {
   return m ? `${m[1]}.${m[2]}` : v;
 }
 
-test.describe("Decap bundle version matches the pinned tag", () => {
+test.describe(
+  "Decap bundle version matches the pinned tag",
+  // Tagged @admin-read: drives /admin/* but is read-only (DOM contract,
+  // mocked APIs, byte parity, etc.). Runs on chromium-desktop-3k +
+  // webkit-iphone16. See playwright.config.js.
+  { tag: ["@admin-read"] },
+  () => {
   test.describe.configure({ timeout: 120_000 });
 
   test.beforeEach(async ({ page }, testInfo) => {
-    test.skip(
-      testInfo.project.name !== "chromium-desktop",
-      "Single project — version check is bundle-level, not browser-dependent.",
-    );
     page.on("pageerror", (err) =>
       console.log(`[pageerror] ${err.name}: ${err.message}`),
     );

@@ -7,13 +7,15 @@ const path = require("path");
 const AFTER_DIR = path.join(__dirname, "visual-regression.spec.js-snapshots");
 const BEFORE_DIR = AFTER_DIR + "-before";
 
-test.describe("Visual change guard", () => {
+test.describe(
+  "Visual change guard",
+  // Tagged @admin-read: drives /admin/* but is read-only (DOM contract,
+  // mocked APIs, byte parity, etc.). Runs on chromium-desktop-3k +
+  // webkit-iphone16. See playwright.config.js.
+  { tag: ["@admin-read"] },
+  () => {
   test("snapshot updates are present and bounded", async ({}, testInfo) => {
     // Pure file comparison — only needs to run once, not per-project.
-    test.skip(
-      testInfo.project.name !== "chromium-desktop",
-      "Runs once on chromium-desktop only",
-    );
     test.skip(
       !fs.existsSync(BEFORE_DIR),
       "No -before directory (not a snapshot update workflow)",

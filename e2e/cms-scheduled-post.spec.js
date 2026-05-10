@@ -43,17 +43,18 @@ function removeSmokePost() {
   if (f) fs.unlinkSync(f);
 }
 
-test.describe("Schedule a post for future publishing", () => {
+test.describe(
+  "Schedule a post for future publishing",
+  // Tagged @admin-write: drives /admin/* + writes (Decap Save, decap-server, etc.).
+  // Runs on chromium-desktop-3k only. See playwright.config.js.
+  { tag: ["@admin-write"] },
+  () => {
   test.describe.configure({ mode: "serial", timeout: 240_000 });
 
   test.beforeAll(() => removeSmokePost());
   test.afterAll(() => removeSmokePost());
 
   test.beforeEach(({ page }, testInfo) => {
-    test.skip(
-      testInfo.project.name !== "chromium-desktop",
-      "Single project — local backend mutates the working tree.",
-    );
     page.on("pageerror", (err) =>
       console.log(`[pageerror] ${err.name}: ${err.message}`),
     );

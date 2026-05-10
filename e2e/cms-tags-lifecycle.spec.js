@@ -167,11 +167,10 @@ test.afterAll(async () => {
   }
 });
 
-test("CMS — tags lifecycle (host repo, target main)", async ({ page }, testInfo) => {
-  test.skip(
-    testInfo.project.name !== "chromium-desktop",
-    "Tags-lifecycle is real-network and real-GitHub — runs once on chromium-desktop only.",
-  );
+test(
+  "CMS — tags lifecycle (host repo, target main)",
+  { tag: ["@admin-write"] },
+  async ({ page }, testInfo) => {
   test.skip(
     PROD_CANARY,
     "PROD_CANARY=1 — daily canary probe doesn't run mutation specs.",

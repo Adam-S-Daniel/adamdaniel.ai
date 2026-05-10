@@ -91,11 +91,10 @@ async function writeCanaryOnBranch({ branch, bodyText, message }) {
   });
 }
 
-test("CMS publish loop — preview env, target PR head branch", async ({ page }, testInfo) => {
-  test.skip(
-    testInfo.project.name !== "chromium-desktop",
-    "Preview publish-loop is real-network — runs once on chromium-desktop only.",
-  );
+test(
+  "CMS publish loop — preview env, target PR head branch",
+  { tag: ["@admin-write"] },
+  async ({ page }, testInfo) => {
   test.skip(!getPat(), "CMS_E2E_PAT not set — preview publish-loop disabled.");
   test.skip(
     !PR_NUMBER || !PR_HEAD_REF,

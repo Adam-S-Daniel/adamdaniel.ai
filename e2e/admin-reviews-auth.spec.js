@@ -14,14 +14,16 @@ const { test, expect } = require("./base");
 // to the opener — that's a faithful model of how the real popup
 // communicates back across the same-origin window.opener bridge.
 
-test.describe("/admin/reviews/ OAuth handshake", () => {
+test.describe(
+  "/admin/reviews/ OAuth handshake",
+  // Tagged @admin-read: drives /admin/* but is read-only (DOM contract,
+  // mocked APIs, byte parity, etc.). Runs on chromium-desktop-3k +
+  // webkit-iphone16. See playwright.config.js.
+  { tag: ["@admin-read"] },
+  () => {
   test("replies to authorizing handshake and stores the access token", async ({
     page,
   }, testInfo) => {
-    test.skip(
-      testInfo.project.name !== "chromium-desktop",
-      "Single project — the handshake is browser-agnostic and the spec is heavy",
-    );
 
     await page.addInitScript(() => {
       // Capture the popup the dashboard opens. The fake popup acts as

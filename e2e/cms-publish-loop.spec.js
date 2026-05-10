@@ -158,11 +158,10 @@ async function writeCanaryViaPr({ runId, bodyText, message, prTitle, prBody, ski
   });
 }
 
-test("CMS publish loop — host repo, target main", async ({ page }, testInfo) => {
-  test.skip(
-    testInfo.project.name !== "chromium-desktop",
-    "Publish-loop is real-network and real-GitHub — runs once on chromium-desktop only.",
-  );
+test(
+  "CMS publish loop — host repo, target main",
+  { tag: ["@admin-write"] },
+  async ({ page }, testInfo) => {
   test.skip(
     PROD_CANARY,
     "PROD_CANARY=1 — daily canary probe runs the read-only @canary-readonly test instead.",
@@ -582,10 +581,6 @@ test("@canary-readonly production canary URLs serve their baselines", async ({
   test.skip(
     !PROD_CANARY,
     "PROD_CANARY=1 not set — canary-readonly probe is gated to the daily workflow.",
-  );
-  test.skip(
-    testInfo.project.name !== "chromium-desktop",
-    "Canary probe runs once on chromium-desktop only — read-only HTTP fetches don't need the matrix.",
   );
 
   // Hard guard: never expose the test runner to a CMS_E2E_PAT in this

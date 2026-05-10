@@ -124,14 +124,16 @@ async function setupHealthPage(page, opts = {}) {
   }, token);
 }
 
-test.describe("/admin/reviews/health.html QA dashboard", () => {
+test.describe(
+  "/admin/reviews/health.html QA dashboard",
+  // Tagged @admin-read: drives /admin/* but is read-only (DOM contract,
+  // mocked APIs, byte parity, etc.). Runs on chromium-desktop-3k +
+  // webkit-iphone16. See playwright.config.js.
+  { tag: ["@admin-read"] },
+  () => {
   test("renders one widget per known workflow with success indicator", async ({
     page,
   }, testInfo) => {
-    test.skip(
-      testInfo.project.name !== "chromium-desktop",
-      "Single project — the dashboard logic is browser-agnostic and the spec is heavy",
-    );
 
     await setupHealthPage(page);
     await installMocks(page);
@@ -168,10 +170,6 @@ test.describe("/admin/reviews/health.html QA dashboard", () => {
   test("failure response renders red error indicator", async ({
     page,
   }, testInfo) => {
-    test.skip(
-      testInfo.project.name !== "chromium-desktop",
-      "Single project — the failure render path is browser-agnostic",
-    );
 
     await setupHealthPage(page);
     await installMocks(page, {
@@ -202,10 +200,6 @@ test.describe("/admin/reviews/health.html QA dashboard", () => {
   test("404 response renders graceful 'not deployed' fallback", async ({
     page,
   }, testInfo) => {
-    test.skip(
-      testInfo.project.name !== "chromium-desktop",
-      "Single project — the 404 fallback path is browser-agnostic",
-    );
 
     await setupHealthPage(page);
     await installMocks(page, {
@@ -252,10 +246,6 @@ test.describe("/admin/reviews/health.html QA dashboard", () => {
   test("localStorage cache prevents re-fetch within 60s", async ({
     page,
   }, testInfo) => {
-    test.skip(
-      testInfo.project.name !== "chromium-desktop",
-      "Single project — caching is browser-agnostic",
-    );
 
     await setupHealthPage(page);
 
@@ -288,10 +278,6 @@ test.describe("/admin/reviews/health.html QA dashboard", () => {
   test("Refresh button busts cache and re-fetches", async ({
     page,
   }, testInfo) => {
-    test.skip(
-      testInfo.project.name !== "chromium-desktop",
-      "Single project — cache invalidation is browser-agnostic",
-    );
 
     await setupHealthPage(page);
 
