@@ -8,7 +8,7 @@ slug: e2e-unpublish-canary
 date: 2099-01-02 00:00:00 +0000
 tags: []
 featured_image: ""
-published: false
+published: true
 sitemap: false
 publish_date: ""
 ---
