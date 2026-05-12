@@ -3,7 +3,7 @@ title: Test html widget post
 date: 2026-05-10 22:19:00 -0400
 published: true
 ---
-
+Check this out:
 
 <!-- html-embed:start -->
 <div class="post-embed">
@@ -33,8 +33,8 @@ published: true
   <table class="bws-table">
     <thead>
       <tr>
-        <th>Language</th>
         <th>Model</th>
+        <th>Language</th>
         <th>Duration</th>
         <th>Cost</th>
         <th>Tests Quality</th>
@@ -72,7 +72,7 @@ published: true
   text-align: left;
   padding: 0.3em 0.6em;
   border-bottom: 1px solid;
-  white-space: nowrap;
+  /* white-space: nowrap; */
 }
 .bws-widget .bws-table th { border-bottom-width: 2px; }
 .bws-widget .bws-table td:nth-child(n+3) { font-variant-numeric: tabular-nums; }
@@ -103,46 +103,46 @@ published: true
   // [language, model, dur_tier, dur_label, cost_tier, cost_label,
   //  tests_tier, tests_label, wf_tier, wf_label]
   var ROWS = [
-    ["default","opus47-1m-medium","A+","4.6min","B-","$1.18","B+","3.9","B","3.8"],
-    ["default","opus47-200k-medium","A+","4.2min","B-","$1.18","B","3.8","B","3.8"],
-    ["typescript-bun","opus47-1m-medium","A-","5.5min","C+","$1.33","B+","4.0","B","3.8"],
-    ["powershell","opus47-200k-medium","B+","5.8min","C","$1.53","B+","3.9","B+","3.9"],
-    ["powershell-tool","opus47-1m-medium","B+","5.9min","C","$1.54","B+","3.9","B+","4.1"],
-    ["powershell-tool","opus47-200k-medium","B+","5.7min","C","$1.53","B+","4.1","B","3.6"],
-    ["bash","opus47-1m-medium","A+","4.4min","B-","$1.16","B-","3.4","B-","3.4"],
-    ["default","sonnet46-1m-medium","B+","5.9min","B-","$1.06","B","3.8","B-","3.4"],
-    ["typescript-bun","opus46-200k","B","6.2min","C+","$1.30","B","3.7","B","3.7"],
-    ["powershell","sonnet46-1m-medium","C","8.4min","B-","$1.19","A-","4.2","C+","3.1"],
-    ["typescript-bun","opus47-200k-medium","C+","7.6min","C","$1.56","B+","4.0","B","3.7"],
-    ["powershell","opus47-1m-medium","B-","7.1min","C","$1.70","B","3.6","B","3.5"],
-    ["typescript-bun","sonnet46-1m-medium","C+","7.7min","C+","$1.30","B","3.8","B","3.7"],
-    ["bash","opus47-200k-medium","A-","5.1min","C+","$1.42","C+","3.1","B","3.7"],
-    ["default","opus47-1m-high","C+","8.0min","D+","$2.20","B+","4.0","B","3.6"],
-    ["typescript-bun","sonnet46-200k","C-","9.0min","C","$1.50","B+","3.9","B","3.8"],
-    ["default","opus46-200k","B","6.4min","C+","$1.37","B","3.6","C+","3.1"],
-    ["powershell","opus47-1m-high","D+","10.3min","D","$2.80","A-","4.1","B+","4.0"],
-    ["default","opus47-1m-xhigh","D+","10.4min","D-","$3.30","A","4.4","B","3.8"],
-    ["typescript-bun","opus47-1m-high","C-","8.9min","D","$2.75","A-","4.3","B","3.8"],
-    ["powershell-tool","opus46-200k","C","8.1min","C","$1.56","B","3.8","B","3.6"],
-    ["default","sonnet46-200k","D+","9.9min","C+","$1.47","B+","3.9","B-","3.4"],
-    ["default","haiku45-200k","A","4.8min","A+","$0.38","C-","2.4","C","2.7"],
-    ["bash","opus46-200k","C","8.3min","C","$1.63","B+","4.1","C+","3.1"],
-    ["powershell","opus46-200k","C-","8.8min","C","$1.79","B","3.5","B","3.8"],
-    ["powershell","sonnet46-200k","D","11.2min","C","$1.63","B+","3.9","B-","3.4"],
-    ["bash","sonnet46-200k","D","11.3min","C","$1.62","B","3.6","B","3.5"],
-    ["powershell","opus47-1m-xhigh","D-","12.5min","D-","$3.72","A-","4.2","B","3.8"],
-    ["powershell","haiku45-200k*","B","6.4min","A","$0.54","D+","2.0","B-","3.2"],
-    ["powershell-tool","opus47-1m-high","D-","11.8min","D-","$3.55","B+","3.9","B+","3.9"],
-    ["typescript-bun","opus47-1m-xhigh","D-","12.3min","D-","$3.57","B+","4.1","B+","3.9"],
-    ["powershell-tool","sonnet46-200k","D","10.7min","C+","$1.47","B-","3.4","B","3.6"],
-    ["bash","opus47-1m-xhigh","D","10.6min","D","$3.09","B","3.8","B+","4.1"],
-    ["powershell-tool","sonnet46-1m-medium","D+","10.1min","C","$1.52","B","3.6","C+","3.1"],
-    ["typescript-bun","haiku45-200k","A-","5.5min","A","$0.48","D","1.9","C+","3.1"],
-    ["powershell-tool","opus47-1m-xhigh*","D-","12.4min","D-","$3.88","B+","4.0","B","3.6"],
-    ["bash","sonnet46-1m-medium","C","8.2min","B-","$1.19","C","2.9","B-","3.2"],
-    ["powershell-tool","haiku45-200k","B-","7.2min","A","$0.48","C-","2.4","C-","2.4"],
-    ["bash","opus47-1m-high","D+","10.5min","D+","$2.56","B-","3.4","C+","3.0"],
-    ["bash","haiku45-200k","C+","7.6min","B+","$0.70","D","1.9","C-","2.5"]
+    ["default","opus47 1m medium","A+","4.6min","B-","$1.18","B+","3.9","B","3.8"],
+    ["default","opus47 200k medium","A+","4.2min","B-","$1.18","B","3.8","B","3.8"],
+    ["typescript-bun","opus47 1m medium","A-","5.5min","C+","$1.33","B+","4.0","B","3.8"],
+    ["pwsh","opus47 200k medium","B+","5.8min","C","$1.53","B+","3.9","B+","3.9"],
+    ["pwsh-tool","opus47 1m medium","B+","5.9min","C","$1.54","B+","3.9","B+","4.1"],
+    ["pwsh-tool","opus47 200k medium","B+","5.7min","C","$1.53","B+","4.1","B","3.6"],
+    ["bash","opus47 1m medium","A+","4.4min","B-","$1.16","B-","3.4","B-","3.4"],
+    ["default","sonnet46 1m medium","B+","5.9min","B-","$1.06","B","3.8","B-","3.4"],
+    ["typescript-bun","opus46 200k","B","6.2min","C+","$1.30","B","3.7","B","3.7"],
+    ["pwsh","sonnet46 1m medium","C","8.4min","B-","$1.19","A-","4.2","C+","3.1"],
+    ["typescript-bun","opus47 200k medium","C+","7.6min","C","$1.56","B+","4.0","B","3.7"],
+    ["pwsh","opus47 1m medium","B-","7.1min","C","$1.70","B","3.6","B","3.5"],
+    ["typescript-bun","sonnet46 1m medium","C+","7.7min","C+","$1.30","B","3.8","B","3.7"],
+    ["bash","opus47 200k medium","A-","5.1min","C+","$1.42","C+","3.1","B","3.7"],
+    ["default","opus47 1m high","C+","8.0min","D+","$2.20","B+","4.0","B","3.6"],
+    ["typescript-bun","sonnet46 200k","C-","9.0min","C","$1.50","B+","3.9","B","3.8"],
+    ["default","opus46 200k","B","6.4min","C+","$1.37","B","3.6","C+","3.1"],
+    ["pwsh","opus47 1m high","D+","10.3min","D","$2.80","A-","4.1","B+","4.0"],
+    ["default","opus47 1m xhigh","D+","10.4min","D-","$3.30","A","4.4","B","3.8"],
+    ["typescript-bun","opus47 1m high","C-","8.9min","D","$2.75","A-","4.3","B","3.8"],
+    ["pwsh-tool","opus46 200k","C","8.1min","C","$1.56","B","3.8","B","3.6"],
+    ["default","sonnet46 200k","D+","9.9min","C+","$1.47","B+","3.9","B-","3.4"],
+    ["default","haiku45 200k","A","4.8min","A+","$0.38","C-","2.4","C","2.7"],
+    ["bash","opus46 200k","C","8.3min","C","$1.63","B+","4.1","C+","3.1"],
+    ["pwsh","opus46 200k","C-","8.8min","C","$1.79","B","3.5","B","3.8"],
+    ["pwsh","sonnet46 200k","D","11.2min","C","$1.63","B+","3.9","B-","3.4"],
+    ["bash","sonnet46 200k","D","11.3min","C","$1.62","B","3.6","B","3.5"],
+    ["pwsh","opus47 1m xhigh","D-","12.5min","D-","$3.72","A-","4.2","B","3.8"],
+    ["pwsh","haiku45 200k*","B","6.4min","A","$0.54","D+","2.0","B-","3.2"],
+    ["pwsh-tool","opus47 1m high","D-","11.8min","D-","$3.55","B+","3.9","B+","3.9"],
+    ["typescript-bun","opus47 1m xhigh","D-","12.3min","D-","$3.57","B+","4.1","B+","3.9"],
+    ["pwsh-tool","sonnet46 200k","D","10.7min","C+","$1.47","B-","3.4","B","3.6"],
+    ["bash","opus47 1m xhigh","D","10.6min","D","$3.09","B","3.8","B+","4.1"],
+    ["pwsh-tool","sonnet46 1m medium","D+","10.1min","C","$1.52","B","3.6","C+","3.1"],
+    ["typescript-bun","haiku45 200k","A-","5.5min","A","$0.48","D","1.9","C+","3.1"],
+    ["pwsh-tool","opus47 1m xhigh*","D-","12.4min","D-","$3.88","B+","4.0","B","3.6"],
+    ["bash","sonnet46 1m medium","C","8.2min","B-","$1.19","C","2.9","B-","3.2"],
+    ["pwsh-tool","haiku45 200k","B-","7.2min","A","$0.48","C-","2.4","C-","2.4"],
+    ["bash","opus47 1m high","D+","10.5min","D+","$2.56","B-","3.4","C+","3.0"],
+    ["bash","haiku45 200k","C+","7.6min","B+","$0.70","D","1.9","C-","2.5"]
   ];
 
   var KEYS = ["tests", "workflow", "duration", "cost"];
@@ -174,8 +174,8 @@ published: true
       var r = scored[i].row;
       html +=
         "<tr>" +
-        "<td>" + r[0] + "</td>" +
         "<td>" + r[1] + "</td>" +
+        "<td>" + r[0] + "</td>" +
         "<td>" + r[2] + " (" + r[3] + ")</td>" +
         "<td>" + r[4] + " (" + r[5] + ")</td>" +
         "<td>" + r[6] + " (" + r[7] + ")</td>" +
