@@ -153,6 +153,11 @@ Check this out. Removed "pwsh-tool","opus 4.7 1m xhi*" and
     return w;
   }
 
+  function parseNum(s) {
+    var m = String(s).match(/-?\d+(?:\.\d+)?/);
+    return m ? parseFloat(m[0]) : 0;
+  }
+
   function render() {
     var w = readWeights();
     KEYS.forEach(function (k) {
@@ -164,9 +169,18 @@ Check this out. Removed "pwsh-tool","opus 4.7 1m xhi*" and
         (w.workflow / 100) * TIER_RANK[r[8]] +
         (w.duration / 100) * TIER_RANK[r[2]] +
         (w.cost     / 100) * TIER_RANK[r[4]];
-      return { row: r, score: score };
+      // Tiebreaker: lower minutes/dollars is better, higher tests/workflow is better.
+      var tiebreak =
+        (w.duration / 100) * parseNum(r[3]) +
+        (w.cost     / 100) * parseNum(r[5]) -
+        (w.tests    / 100) * parseNum(r[7]) -
+        (w.workflow / 100) * parseNum(r[9]);
+      return { row: r, score: score, tiebreak: tiebreak };
     });
-    scored.sort(function (a, b) { return a.score - b.score; });
+    scored.sort(function (a, b) {
+      if (a.score !== b.score) return a.score - b.score;
+      return a.tiebreak - b.tiebreak;
+    });
     var html = "";
     for (var i = 0; i < scored.length; i++) {
       var r = scored[i].row;
