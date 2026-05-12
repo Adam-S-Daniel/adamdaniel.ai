@@ -88,7 +88,7 @@ jobs:
         run: git fetch origin main
 
       - name: Setup Ruby
-        uses: ruby/setup-ruby@c4e5b1316158f92e3d49443a9d58b31d25ac0f8f  # v1.302.0 (2026-04-15)
+        uses: ruby/setup-ruby@c4e5b1316158f92e3d49443a9d58b31d25ac0f8f  # v1.306.0 (2026-04-26)
         with:
           ruby-version: '3.2'
           bundler-cache: true
@@ -166,7 +166,7 @@ jobs:
       # `approve-regression` still functions as the merge gate.
       - name: Configure AWS credentials
         if: github.actor != 'dependabot[bot]'
-        uses: aws-actions/configure-aws-credentials@d979d5b3a71173a29b74b5b88418bfda9437d885  # v6.1.0 (2026-04-06)
+        uses: aws-actions/configure-aws-credentials@d979d5b3a71173a29b74b5b88418bfda9437d885  # v6.1.1 (2026-05-05)
         with:
           role-to-assume: ${{ secrets.AWS_ROLE_ARN }}
           aws-region: ${{ env.AWS_REGION }}
