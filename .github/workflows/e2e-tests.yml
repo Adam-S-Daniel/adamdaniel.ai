@@ -66,7 +66,7 @@ jobs:
         uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd  # v6.0.2 (2026-01-09)
 
       - name: Setup Ruby
-        uses: ruby/setup-ruby@c4e5b1316158f92e3d49443a9d58b31d25ac0f8f  # v1.302.0 (2026-04-15)
+        uses: ruby/setup-ruby@c4e5b1316158f92e3d49443a9d58b31d25ac0f8f  # v1.306.0 (2026-04-26)
         with:
           ruby-version: '3.2'
           bundler-cache: true
@@ -405,7 +405,7 @@ jobs:
         # directly (sitemap, image-alt-text, draft-isolation, the cms
         # lifecycle suite) — the webServer's build is what produces
         # those for the spec to read.
-        uses: ruby/setup-ruby@c4e5b1316158f92e3d49443a9d58b31d25ac0f8f  # v1.302.0 (2026-04-15)
+        uses: ruby/setup-ruby@c4e5b1316158f92e3d49443a9d58b31d25ac0f8f  # v1.306.0 (2026-04-26)
         with:
           ruby-version: '3.2'
           bundler-cache: true
@@ -560,7 +560,7 @@ jobs:
           apt-get install -y -qq --no-install-recommends libyaml-0-2 build-essential
 
       - name: Setup Ruby
-        uses: ruby/setup-ruby@c4e5b1316158f92e3d49443a9d58b31d25ac0f8f  # v1.302.0 (2026-04-15)
+        uses: ruby/setup-ruby@c4e5b1316158f92e3d49443a9d58b31d25ac0f8f  # v1.306.0 (2026-04-26)
         with:
           ruby-version: '3.2'
           bundler-cache: true
@@ -720,7 +720,7 @@ jobs:
         # Several @lane:real specs still reach into `_site/` for
         # local-vs-real parity comparisons; the webServer skips its
         # build when TARGET isn't local, so build explicitly here.
-        uses: ruby/setup-ruby@c4e5b1316158f92e3d49443a9d58b31d25ac0f8f  # v1.302.0 (2026-04-15)
+        uses: ruby/setup-ruby@c4e5b1316158f92e3d49443a9d58b31d25ac0f8f  # v1.306.0 (2026-04-26)
         with:
           ruby-version: '3.2'
           bundler-cache: true
@@ -866,7 +866,7 @@ jobs:
         # webServer doesn't run `bundle exec jekyll build`, so we
         # have to do it explicitly here. Without this, those specs
         # bail in `beforeAll` with "_site/sitemap.xml not found".
-        uses: ruby/setup-ruby@c4e5b1316158f92e3d49443a9d58b31d25ac0f8f  # v1.302.0 (2026-04-15)
+        uses: ruby/setup-ruby@c4e5b1316158f92e3d49443a9d58b31d25ac0f8f  # v1.306.0 (2026-04-26)
         with:
           ruby-version: '3.2'
           bundler-cache: true

@@ -73,7 +73,7 @@ jobs:
           token: ${{ secrets.CMS_E2E_PAT }}
 
       - name: Setup Ruby
-        uses: ruby/setup-ruby@c4e5b1316158f92e3d49443a9d58b31d25ac0f8f  # v1.302.0 (2026-04-15)
+        uses: ruby/setup-ruby@c4e5b1316158f92e3d49443a9d58b31d25ac0f8f  # v1.306.0 (2026-04-26)
         with:
           ruby-version: '3.2'
           bundler-cache: true
@@ -137,7 +137,7 @@ jobs:
         # targets `main`, so the `main` ruleset's required-checks
         # (validate-content, scan, select, unit, parity, e2e (1),
         # finalize) still gate the merge.
-        uses: peter-evans/create-pull-request@5f6978faf089d4d20b00c7766989d076bb2fc7f1  # v7.0.8 (2025-04-22)
+        uses: peter-evans/create-pull-request@5f6978faf089d4d20b00c7766989d076bb2fc7f1  # v8.1.1 (2026-04-10)
         with:
           # CMS_E2E_PAT instead of GITHUB_TOKEN: see the Checkout
           # step above for why (repo's Workflow-permissions toggle
