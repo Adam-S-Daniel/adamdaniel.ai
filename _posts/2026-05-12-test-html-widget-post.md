@@ -3,7 +3,7 @@ title: Test html widget post
 date: 2026-05-10 22:19:00 -0400
 published: true
 ---
-Check this out.
+Check this out. Removed "pwsh-tool","opus 4.7 1m xhi*" and 
 
 <!-- html-embed:start -->
 <div class="post-embed">
@@ -131,14 +131,12 @@ Check this out.
     ["pwsh","sonnet 46 200k","D","11.2min","C","$1.63","B+","3.9","B-","3.4"],
     ["bash","sonnet 46 200k","D","11.3min","C","$1.62","B","3.6","B","3.5"],
     ["pwsh","opus 4.7 1m xhi","D-","12.5min","D-","$3.72","A-","4.2","B","3.8"],
-    ["pwsh","haiku 45 200k*","B","6.4min","A","$0.54","D+","2.0","B-","3.2"],
     ["pwsh-tool","opus 4.7 1m hi","D-","11.8min","D-","$3.55","B+","3.9","B+","3.9"],
     ["ts-bun","opus 4.7 1m xhi","D-","12.3min","D-","$3.57","B+","4.1","B+","3.9"],
     ["pwsh-tool","sonnet 46 200k","D","10.7min","C+","$1.47","B-","3.4","B","3.6"],
     ["bash","opus 4.7 1m xhi","D","10.6min","D","$3.09","B","3.8","B+","4.1"],
     ["pwsh-tool","sonnet 46 1m med","D+","10.1min","C","$1.52","B","3.6","C+","3.1"],
     ["ts-bun","haiku 45 200k","A-","5.5min","A","$0.48","D","1.9","C+","3.1"],
-    ["pwsh-tool","opus 4.7 1m xhi*","D-","12.4min","D-","$3.88","B+","4.0","B","3.6"],
     ["bash","sonnet 46 1m med","C","8.2min","B-","$1.19","C","2.9","B-","3.2"],
     ["pwsh-tool","haiku 45 200k","B-","7.2min","A","$0.48","C-","2.4","C-","2.4"],
     ["bash","opus 4.7 1m hi","D+","10.5min","D+","$2.56","B-","3.4","C+","3.0"],
