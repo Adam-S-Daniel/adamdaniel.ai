@@ -5,22 +5,10 @@ published: true
 ---
 Check this out.
 
-
-
 <!-- html-embed:start -->
 <div class="post-embed">
 <div class="bws-widget">
   <div class="bws-sliders">
-    <div class="bws-slider-row">
-      <label class="bws-label" for="bws-tests">Tests Quality</label>
-      <input class="bws-range" type="range" id="bws-tests" min="0" max="100" step="0.5" value="40">
-      <span class="bws-pct" id="bws-tests-pct">40.0%</span>
-    </div>
-    <div class="bws-slider-row">
-      <label class="bws-label" for="bws-workflow">Code Maintainability</label>
-      <input class="bws-range" type="range" id="bws-workflow" min="0" max="100" step="0.5" value="25">
-      <span class="bws-pct" id="bws-workflow-pct">25.0%</span>
-    </div>
     <div class="bws-slider-row">
       <label class="bws-label" for="bws-duration">Duration</label>
       <input class="bws-range" type="range" id="bws-duration" min="0" max="100" step="0.5" value="17.5">
@@ -30,6 +18,16 @@ Check this out.
       <label class="bws-label" for="bws-cost">Cost</label>
       <input class="bws-range" type="range" id="bws-cost" min="0" max="100" step="0.5" value="17.5">
       <span class="bws-pct" id="bws-cost-pct">17.5%</span>
+    </div>
+    <div class="bws-slider-row">
+      <label class="bws-label" for="bws-tests">Tests Quality</label>
+      <input class="bws-range" type="range" id="bws-tests" min="0" max="100" step="0.5" value="40">
+      <span class="bws-pct" id="bws-tests-pct">40.0%</span>
+    </div>
+    <div class="bws-slider-row">
+      <label class="bws-label" for="bws-workflow">Code Maintainability</label>
+      <input class="bws-range" type="range" id="bws-workflow" min="0" max="100" step="0.5" value="25">
+      <span class="bws-pct" id="bws-workflow-pct">25.0%</span>
     </div>
   </div>
   <table class="bws-table">
