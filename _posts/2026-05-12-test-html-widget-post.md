@@ -37,8 +37,8 @@ Check this out:
         <th>Language</th>
         <th>Duration</th>
         <th>Cost</th>
-        <th>Tests Quality</th>
-        <th>Code Maintainability</th>
+        <th>Tests</th>
+        <th>Code</th>
       </tr>
     </thead>
     <tbody id="bws-tbody"></tbody>
