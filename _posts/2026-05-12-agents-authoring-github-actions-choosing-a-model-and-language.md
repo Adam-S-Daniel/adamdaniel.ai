@@ -1,9 +1,9 @@
 ---
-title: Agents Authoring GitHub Actions- Choosing a Model and Language
+title: Introducing GHA-bench
 date: 2026-05-12 10:55:00 -0400
 published: true
 ---
-Check this out. Removed "pwsh-tool","opus 4.7 1m xhi*" and 
+[GHA-bench](https://github.com/Adam-S-Daniel/GHA-bench) is a benchmark and a set of evals for coding agents’ authoring of GitHub Actions using different languages. I will post insights agent/scripting-language combinations on completing GitHub Actions scripting tasks Choosing a Model and LanguageI built some evals and benchmarks  https://github.com/Adam-S-Daniel/compare-agent-scripting-by-language
 
 <!-- html-embed:start -->
 <div class="post-embed">
