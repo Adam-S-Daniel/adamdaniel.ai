@@ -244,6 +244,6 @@ Adjust the sliders according to your priorities.
 </div>
 <!-- html-embed:end -->
 
-*\* When allowed to choose, the agents [always](<>) choose Python.*
+*\* When allowed to choose, the agents [always](https://github.com/search?q=repo%3AAdam-S-Daniel%2FGHA-bench+path%3A.py+path%3A%2F%5Eresults%5C%2F2026-05-06_173435%5C%2Ftasks%5C%2F%5B%5E%5C%2F%5D%2B%5C%2F%5B%5E%5C%2F%5D%2B-%5B%5E%5C%2F%5D%2B%5C%2F%2F&type=code) choose Python.*
 
-*\*\* Agents run their tests locally in [a container ](<>)that leverages [nektos act](<>) to emulate a GitHub-hosted runner.*
+*\*\* Agents run their tests locally in [a container](https://github.com/Adam-S-Daniel/GHA-bench/blob/main/Dockerfile.act) that leverages [nektos act](<>) to emulate a GitHub-hosted runner.*
