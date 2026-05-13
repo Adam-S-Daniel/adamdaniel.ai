@@ -10,7 +10,7 @@ published: true
 
 ## How it works
 
-Agents (currently a variety of Anthropic models set to various effort levels, driven by Claude Code) are given [set of tasks](https://github.com/Adam-S-Daniel/GHA-bench/blob/main/benchmark-instructions-v4.md#tasks) they must automate using GitHub Actions either using a particular scripting language or whichever they want.\* They must use Test-Driven Development (TDD)-- basically "write tests first, and don't come back until they all pass".\**
+Agents (currently a variety of Anthropic models set to various effort levels, driven by Claude Code) are given [set of tasks](https://github.com/Adam-S-Daniel/GHA-bench/blob/main/benchmark-instructions-v4.md#tasks) they must automate using GitHub Actions, either using a particular scripting language or whichever they want.\* They must use Test-Driven Development (TDD)-- basically "write tests first, and don't come back until they all pass".\**
 
 A panel of judges (Google Gemini and Claude Haiku) then [evaluates](https://github.com/Adam-S-Daniel/GHA-bench/blob/main/AGENTS.md#:~:text=Evaluate%20test%20%2B%20deliverable%20quality) the comprehensiveness of the tests and the quality of the code.
 
