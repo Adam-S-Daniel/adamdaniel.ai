@@ -245,4 +245,5 @@ Adjust the sliders according to your priorities.
 <!-- html-embed:end -->
 
 *\* When allowed to choose, the agents [always](<>) choose Python.*
+
 *\*\* Agents run their tests locally in [a container ](<>)that leverages [nektos act](<>) to emulate a GitHub-hosted runner.*
