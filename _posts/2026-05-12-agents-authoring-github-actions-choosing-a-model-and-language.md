@@ -6,7 +6,15 @@ excerpt: GHA-bench is a benchmark and a set of evals for how well different
   coding agents author and test GitHub Actions using different languages.
 published: true
 ---
-[GHA-bench](https://github.com/Adam-S-Daniel/GHA-bench) is a benchmark and a set of evals for how well different coding agents author and test GitHub Actions using different languages. agent/scripting-language combinations on completing GitHub Actions scripting tasks Choosing a Model and Language built some evals and benchmarks  https://github.com/Adam-S-Daniel/compare-agent-scripting-by-language
+[GHA-bench](https://github.com/Adam-S-Daniel/GHA-bench) is a benchmark and a set of evals for how well different coding agents author and test GitHub Actions.
+
+## How it works
+
+Agents are given [set of tasks](https://github.com/Adam-S-Daniel/GHA-bench/blob/main/benchmark-instructions-v4.md#tasks) to automate using GitHub actions and are either told to use a particular scripting language or left to choose for themselves.\* They must use Test-Driven Development (TDD)\**-- write tests and don't come back until they all pass. https://github.com/Adam-S-Daniel/GHA-bench/blob/main/AGENTS.md#:~:text=Evaluate%20test%20%2B%20deliverable%20quality 
+
+## Which model, effort level and scripting language should you use?
+
+agent/scripting-language combinations 
 
 <!-- html-embed:start -->
 <div class="post-embed">
@@ -233,3 +241,6 @@ published: true
 </script>
 </div>
 <!-- html-embed:end -->
+
+*\* When allowed to choose, the agents [always](<>) choose Python.*
+*\*\* Agents run their tests locally in [a container ](<>)that leverages [nektos act](<>) to emulate a GitHub-hosted runner.*
