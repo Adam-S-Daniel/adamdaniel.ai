@@ -1,9 +1,12 @@
 ---
 title: Introducing GHA-bench
-date: 2026-05-12 10:55:00 -0400
+slug: introducing-gha-bench
+date: 2026-05-13 08:51:00 -0400
+excerpt: GHA-bench is a benchmark and a set of evals for how well different
+  coding agents author and test GitHub Actions using different languages.
 published: true
 ---
-[GHA-bench](https://github.com/Adam-S-Daniel/GHA-bench) is a benchmark and a set of evals for coding agents’ authoring of GitHub Actions using different languages.  averages per task.  I will post insights agent/scripting-language combinations on completing GitHub Actions scripting tasks Choosing a Model and LanguageI built some evals and benchmarks  https://github.com/Adam-S-Daniel/compare-agent-scripting-by-language
+[GHA-bench](https://github.com/Adam-S-Daniel/GHA-bench) is a benchmark and a set of evals for how well different coding agents author and test GitHub Actions using different languages. agent/scripting-language combinations on completing GitHub Actions scripting tasks Choosing a Model and Language built some evals and benchmarks  https://github.com/Adam-S-Daniel/compare-agent-scripting-by-language
 
 <!-- html-embed:start -->
 <div class="post-embed">
