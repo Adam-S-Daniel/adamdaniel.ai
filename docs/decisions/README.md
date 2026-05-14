@@ -67,3 +67,4 @@ PRs, issues, commits, external links. Anchor the ADR to artefacts that won't go 
 | # | Title | Status |
 |---|---|---|
 | [0001](0001-canary-body-widget-text.md) | Use `widget: text` for the e2e canary collection body in Decap CMS | Accepted |
+| [0002](0002-stuck-pr-diagnostic-two-layer.md) | Diagnose stuck PRs via a two-layer, always-exit-0, read-only catch | Accepted |

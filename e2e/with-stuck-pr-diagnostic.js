@@ -1,5 +1,8 @@
 /*
- * In-spec hook for `scripts/diagnose-stuck-pr.js`.
+ * In-spec hook for `scripts/diagnose-stuck-pr.js`. This is Layer 1 of the
+ * two-layer stuck-PR diagnostic — see
+ * `docs/decisions/0002-stuck-pr-diagnostic-two-layer.md` for the
+ * always-exit-0 / read-only / why-two-layers rationale.
  *
  * Long-wait helpers in this codebase (`waitForMerge`, `fetchPublicUrl`,
  * `waitForChangeReflected`, `waitForCmsPullRequest`, `waitForWorkflowRun`,
