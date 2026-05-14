@@ -84,6 +84,10 @@ test("buildManual emits sections in order and embeds screenshots", () => {
   assert.ok(s1 > 0 && s2 > s1);
   // Embedded screenshot path is relative to docs/
   assert.ok(md.includes("manual-screenshots/logging-in/1.1-open-admin.png"));
+  // Screenshot URL is shown beneath the image as a clickable link
+  assert.ok(
+    md.includes("<sub>[manual-screenshots/logging-in/1.1-open-admin.png](manual-screenshots/logging-in/1.1-open-admin.png)</sub>"),
+  );
   // Footer with spec + test reference
   assert.ok(md.includes("`e2e/cms-publish-loop.spec.js`"));
 });
