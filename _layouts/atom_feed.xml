@@ -33,7 +33,7 @@
     <published>{{ post.date | date_to_xmlschema }}</published>
     <updated>{{ post.date | date_to_xmlschema }}</updated>
     <id>{{ post.id | absolute_url | xml_escape }}</id>
-    <content type="html" xml:base="{{ post.url | absolute_url | xml_escape }}"><![CDATA[{{ post.content | strip }}]]></content>
+    <content type="html" xml:base="{{ post.url | absolute_url | xml_escape }}">{{ post.content | strip | xml_escape }}</content>
     {%- if site.author %}
     <author>
       <name>{{ site.author.name | xml_escape }}</name>
