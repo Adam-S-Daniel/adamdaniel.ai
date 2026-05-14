@@ -233,10 +233,19 @@ test(
 
   await test.step("Fill Title and Body", async () => {
     await page.getByRole("textbox", { name: /^Title$/i }).fill(title);
-    // Markdown widget renders as a contenteditable rich-text editor;
-    // last-of-type matches the body editor (the title is a separate
-    // simple textbox that already has its own role-name match).
-    const body = page.locator('[role="textbox"][contenteditable="true"]').last();
+    // The e2e collection's body is `widget: text` (plain textarea),
+    // NOT `widget: markdown`. The switch happened in commit 0346acc
+    // ("fix(cms): canary e2e body uses widget: text to defeat Slate
+    // newline-doubling") — see PR #882 for the case study and
+    // `e2e/canary-content.test.js` for the lock-down lint. The old
+    // contenteditable selector left here pointed at the Slate
+    // markdown editor; on a `widget: text` form it matches nothing
+    // and `body.click()` times out at 30s. Mirror `cms-publish-loop`
+    // and `cms-publish-loop-preview`, which already use `textarea`.
+    // Only one textarea is rendered on the e2e new-entry form (Title
+    // is a `<input>`, the hidden widget fields aren't textareas), so
+    // an unqualified `textarea` selector is unambiguous.
+    const body = page.locator("textarea").last();
     await body.click();
     await body.pressSequentially(
       `Throw-away fixture from run ${runId}. Used by cms-delete-published.spec.js to exercise the editorial-workflow delete path.`,
