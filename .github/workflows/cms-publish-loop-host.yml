@@ -54,7 +54,7 @@ on:
       - _e2e/canary-post.md
       - _e2e/canary-page.md
       - _e2e/canary-project.md
-      - _posts/2099-01-02-e2e-unpublish-canary.md
+      - _posts/2024-01-02-e2e-unpublish-canary.md
       - playwright.config.js
       - package.json
       - package-lock.json

@@ -1,7 +1,7 @@
 ---
 title: "E2E Unpublish Canary"
 slug: e2e-unpublish-canary
-date: 2099-01-02 00:00:00 +0000
+date: 2024-01-02 00:00:00 +0000
 excerpt: "Fixture used by the cms-unpublish-republish spec. Never serves at a public URL until a test flips published: true; resets back to false in cleanup."
 tags: []
 featured_image: ''
