@@ -266,10 +266,15 @@ test(
     // baseline and left a perpetually-open conflicting cms/e2e/* PR
     // (see PR #882). The textarea preserves typed text verbatim.
     //
-    // Only one textarea is rendered on the canary edit page (Title is a
-    // single-line input, date/technology/hidden fields are not
-    // textareas), so an unqualified `textarea` selector is unambiguous.
-    const body = page.locator("textarea").last();
+    // The `:visible` filter is required: Decap renders an extra
+    // `<textarea tabindex="-1" aria-hidden="true">` (clipboard shadow
+    // input) that an unqualified `textarea.last()` may pick up,
+    // depending on when it's appended to the DOM relative to the
+    // visible body textarea. The race is timing-sensitive — schedule
+    // runs historically won it, PR runs reliably lose it. Filter to
+    // visible textareas to be deterministic. Precedent for the
+    // `:visible` Playwright pseudo-class: cms-smoke.spec.js:250.
+    const body = page.locator("textarea:visible").last();
     await body.click();
     // Move to the end of the existing body; appending the marker keeps
     // the canonical baseline body intact, so the diff is purely
@@ -430,7 +435,11 @@ test(
     // resulting file matches `baselineFullBody` byte-for-byte and the
     // cms/e2e/canary-post PR Decap opens here has no spurious diff
     // against the API-path setup-reset / safety-net writes.
-    const body = page.locator("textarea").last();
+    //
+    // `:visible` filter mirrors step 3 — Decap renders a hidden
+    // clipboard textarea that an unqualified `.last()` may pick up
+    // depending on DOM-append timing.
+    const body = page.locator("textarea:visible").last();
     await body.click();
     await page.keyboard.press("Control+A");
     await page.keyboard.press("Backspace");
