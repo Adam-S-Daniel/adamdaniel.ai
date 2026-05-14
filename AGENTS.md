@@ -409,6 +409,12 @@ Belt-and-suspenders for the class of bug PR #882 represents — a Decap-opened `
 
 **Why CMS_E2E_PAT, not GITHUB_TOKEN:** the resolver closes the PR via `PATCH /repos/<o>/<r>/pulls/<N>` with `{state: 'closed'}`. PR-state changes authored by `GITHUB_TOKEN` don't fire downstream workflows (e.g. preview-teardown); the PAT lets those fire. Same reason `cms-editorial-workflow.yml`'s `auto-merge-when-ready` job uses the PAT.
 
+### Architecture Decision Records
+
+Non-obvious decisions — the kind that invite "let's just change it back" without context — live as Nygard-style ADRs under [`docs/decisions/`](docs/decisions/). The README there has the format, the index, and the when-to-write-one rules. New ADRs are numbered `NNNN-kebab-title.md` starting at `0001`; the README's index gets a new row in the same commit.
+
+If you find yourself writing a long PR description explaining *why* a one-line config change isn't crazy, that's the signal to write an ADR instead and link to it from the PR.
+
 ### Contributor Manual
 
 `docs/CONTRIBUTOR_MANUAL.md` is **assembled by the e2e tests**. Specs call `captureStep(page, { section, step, title, body })` from `e2e/manual-capture.js` at meaningful moments. The collator at `scripts/build-contributor-manual.js` reads the `manual-capture/*.json` records and builds the manual with embedded screenshots from `docs/manual-screenshots/`.
