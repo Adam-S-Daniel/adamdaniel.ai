@@ -173,7 +173,10 @@ function renderRecord(record) {
     out.push("");
   }
   if (record.screenshot) {
-    out.push(`![${record.title}](${relPath(record.screenshot)})`);
+    const rel = relPath(record.screenshot);
+    out.push(`![${record.title}](${rel})`);
+    out.push("");
+    out.push(`<sub>[${rel}](${rel})</sub>`);
     out.push("");
   }
   out.push(

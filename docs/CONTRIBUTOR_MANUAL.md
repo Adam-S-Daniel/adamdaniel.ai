@@ -29,6 +29,8 @@ Visit `/admin/` to open the editor. Decap shows a single login button — click 
 
 ![Open the admin](manual-screenshots/logging-in/1-1-open-the-admin.png)
 
+<sub>[manual-screenshots/logging-in/1-1-open-the-admin.png](manual-screenshots/logging-in/1-1-open-the-admin.png)</sub>
+
 <sub>Captured by `e2e/cms-smoke.spec.js` → _admin loads, logs in, creates a tag, saves it, deletes it_ on `chromium-desktop-3k` at 2026-05-13T14:25:21.890Z.</sub>
 
 ---
@@ -41,6 +43,8 @@ After login, the sidebar lists every collection defined in `admin/config.yml` �
 
 ![Land on the collections list](manual-screenshots/browsing-collections/1-2-land-on-the-collections-list.png)
 
+<sub>[manual-screenshots/browsing-collections/1-2-land-on-the-collections-list.png](manual-screenshots/browsing-collections/1-2-land-on-the-collections-list.png)</sub>
+
 <sub>Captured by `e2e/cms-smoke.spec.js` → _admin loads, logs in, creates a tag, saves it, deletes it_ on `chromium-desktop-3k` at 2026-05-13T14:25:22.744Z.</sub>
 
 ### 2.1. Open a collection
@@ -48,6 +52,8 @@ After login, the sidebar lists every collection defined in `admin/config.yml` �
 Each collection lands on its own index page — a list of every entry on disk plus a New button. The Tags collection is the simplest schema (name + description) so it loads instantly; Posts and Projects can take a couple seconds on a cold cache.
 
 ![Open a collection](manual-screenshots/browsing-collections/2-1-open-a-collection.png)
+
+<sub>[manual-screenshots/browsing-collections/2-1-open-a-collection.png](manual-screenshots/browsing-collections/2-1-open-a-collection.png)</sub>
 
 <sub>Captured by `e2e/cms-smoke.spec.js` → _admin loads, logs in, creates a tag, saves it, deletes it_ on `chromium-desktop-3k` at 2026-05-13T14:25:23.526Z.</sub>
 
@@ -61,6 +67,8 @@ The Posts edit form renders every field declared in `admin/config.yml`: Title, U
 
 ![The Posts edit form](manual-screenshots/editing-a-post/3-1-the-posts-edit-form.png)
 
+<sub>[manual-screenshots/editing-a-post/3-1-the-posts-edit-form.png](manual-screenshots/editing-a-post/3-1-the-posts-edit-form.png)</sub>
+
 <sub>Captured by `e2e/cms-smoke.spec.js` → _Posts edit form: every declared field renders with visible content_ on `chromium-desktop-3k` at 2026-05-13T14:25:29.332Z.</sub>
 
 ### 3.2. Open an existing post in the editorial workflow
@@ -68,6 +76,8 @@ The Posts edit form renders every field declared in `admin/config.yml`: Title, U
 Editorial workflow mode loads the existing entry into a fully editable form. Every widget — Title, Slug, Date, Body, Tags, Featured Image — is enabled (no read-only state) and the toolbar shows a Status dropdown plus a Delete published entry button.
 
 ![Open an existing post in the editorial workflow](manual-screenshots/editing-a-post/3-2-open-an-existing-post-in-the-editorial-workflow.png)
+
+<sub>[manual-screenshots/editing-a-post/3-2-open-an-existing-post-in-the-editorial-workflow.png](manual-screenshots/editing-a-post/3-2-open-an-existing-post-in-the-editorial-workflow.png)</sub>
 
 <sub>Captured by `e2e/cms-editorial-workflow.spec.js` → _opening an existing post renders all fields editable + Delete button enabled_ on `chromium-desktop-3k` at 2026-05-13T14:25:08.926Z.</sub>
 
@@ -81,6 +91,8 @@ With `publish_mode: editorial_workflow`, the toolbar's primary action is **Save*
 
 ![Save in editorial workflow](manual-screenshots/marking-ready-and-publishing/5-1-save-in-editorial-workflow.png)
 
+<sub>[manual-screenshots/marking-ready-and-publishing/5-1-save-in-editorial-workflow.png](manual-screenshots/marking-ready-and-publishing/5-1-save-in-editorial-workflow.png)</sub>
+
 <sub>Captured by `e2e/cms-editorial-workflow.spec.js` → _editing an existing post and saving creates a workflow draft_ on `chromium-desktop-3k` at 2026-05-13T14:25:13.631Z.</sub>
 
 ### 6.1. Filled-out post ready to publish
@@ -88,6 +100,8 @@ With `publish_mode: editorial_workflow`, the toolbar's primary action is **Save*
 Title, slug, body, tags, and the Published toggle are all set. In editorial workflow mode (production), the toolbar shows **Save** and a separate Status dropdown; clicking Save opens a PR in draft. Setting the dropdown to **Ready** is what triggers the auto-merge.
 
 ![Filled-out post ready to publish](manual-screenshots/marking-ready-and-publishing/6-1-filled-out-post-ready-to-publish.png)
+
+<sub>[manual-screenshots/marking-ready-and-publishing/6-1-filled-out-post-ready-to-publish.png](manual-screenshots/marking-ready-and-publishing/6-1-filled-out-post-ready-to-publish.png)</sub>
 
 <sub>Captured by `e2e/cms-publish-flow.spec.js` → _create a post in Decap, rebuild, and assert /blog/<slug>/ renders it_ on `chromium-desktop-3k` at 2026-05-13T14:25:09.729Z.</sub>
 
@@ -97,6 +111,8 @@ Decap's primary button is a split control. Clicking the Publish trigger opens a 
 
 ![Publish menu open](manual-screenshots/marking-ready-and-publishing/6-2-publish-menu-open.png)
 
+<sub>[manual-screenshots/marking-ready-and-publishing/6-2-publish-menu-open.png](manual-screenshots/marking-ready-and-publishing/6-2-publish-menu-open.png)</sub>
+
 <sub>Captured by `e2e/cms-publish-flow.spec.js` → _create a post in Decap, rebuild, and assert /blog/<slug>/ renders it_ on `chromium-desktop-3k` at 2026-05-13T14:25:10.042Z.</sub>
 
 ### 6.3. Published post live
@@ -104,6 +120,8 @@ Decap's primary button is a split control. Clicking the Publish trigger opens a 
 After the publish settles, the post is reachable at its public URL — here `/blog/<slug>/`. In production the same URL pattern is served by CloudFront once `deploy-production.yml` finishes its `aws s3 sync` and invalidation, typically within ~2 minutes of the merge.
 
 ![Published post live](manual-screenshots/marking-ready-and-publishing/6-3-published-post-live.png)
+
+<sub>[manual-screenshots/marking-ready-and-publishing/6-3-published-post-live.png](manual-screenshots/marking-ready-and-publishing/6-3-published-post-live.png)</sub>
 
 <sub>Captured by `e2e/cms-publish-flow.spec.js` → _create a post in Decap, rebuild, and assert /blog/<slug>/ renders it_ on `chromium-desktop-3k` at 2026-05-13T14:25:14.057Z.</sub>
 
@@ -117,6 +135,8 @@ On the local backend the file is written straight into the working tree (here, `
 
 ![Saved entry](manual-screenshots/verifying-on-the-public-site/7-1-saved-entry.png)
 
+<sub>[manual-screenshots/verifying-on-the-public-site/7-1-saved-entry.png](manual-screenshots/verifying-on-the-public-site/7-1-saved-entry.png)</sub>
+
 <sub>Captured by `e2e/cms-smoke.spec.js` → _admin loads, logs in, creates a tag, saves it, deletes it_ on `chromium-desktop-3k` at 2026-05-13T14:25:24.652Z.</sub>
 
 ---
@@ -129,6 +149,8 @@ The toolbar's Delete button is only available once the entry exists on disk — 
 
 ![Delete entry button](manual-screenshots/deleting-an-entry/8-1-delete-entry-button.png)
 
+<sub>[manual-screenshots/deleting-an-entry/8-1-delete-entry-button.png](manual-screenshots/deleting-an-entry/8-1-delete-entry-button.png)</sub>
+
 <sub>Captured by `e2e/cms-smoke.spec.js` → _admin loads, logs in, creates a tag, saves it, deletes it_ on `chromium-desktop-3k` at 2026-05-13T14:25:24.958Z.</sub>
 
 ### 8.2. Entry removed
@@ -136,6 +158,8 @@ The toolbar's Delete button is only available once the entry exists on disk — 
 Once the deletion lands, Decap routes back to the collection index and the entry is gone from the list. On the local backend the source file is also removed from disk; in production the deletion PR removes it from `main` once the workflow auto-merges.
 
 ![Entry removed](manual-screenshots/deleting-an-entry/8-2-entry-removed.png)
+
+<sub>[manual-screenshots/deleting-an-entry/8-2-entry-removed.png](manual-screenshots/deleting-an-entry/8-2-entry-removed.png)</sub>
 
 <sub>Captured by `e2e/cms-smoke.spec.js` → _admin loads, logs in, creates a tag, saves it, deletes it_ on `chromium-desktop-3k` at 2026-05-13T14:25:25.332Z.</sub>
 
