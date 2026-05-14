@@ -375,10 +375,17 @@ collections:
         label: Robots
         widget: hidden
         default: "noindex,nofollow"
+      # `widget: text` (plain textarea), NOT `widget: markdown`. The
+      # markdown widget round-trips through Slate; soft line wraps inside
+      # a paragraph come back doubled as paragraph breaks, and paragraph
+      # breaks triple. The `cms-publish-loop.spec.js` step-9a UI cleanup
+      # types the canonical baseline body through this field and then
+      # publishes — with the markdown widget, the published file
+      # disagrees with the typed text, producing perpetually open
+      # `cms/e2e/canary-*` PRs that conflict with main once the
+      # next run's safety-net pushes a clean baseline (see PR #882).
+      # `e2e/canary-content.test.js` locks this in.
       - name: body
         label: Body
-        widget: markdown
+        widget: text
         required: true
-        modes:
-          - rich_text
-          - raw
