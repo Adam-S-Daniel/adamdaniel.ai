@@ -182,12 +182,20 @@ jobs:
           aws-region:     ${{ env.AWS_REGION }}
 
       - name: Sync to S3
+        # See deploy-production.yml's "Sync to S3" step for the
+        # `--exclude` rationale: the local-dev / e2e-test admin shells
+        # have to stay in `_site_preview/` for the local Playwright
+        # suite but never need to be public.
         run: |
           PR_NUMBER=${{ github.event.pull_request.number }}
           aws s3 sync ./_site_preview \
             "s3://${PREVIEW_BUCKET}/pr-${PR_NUMBER}/" \
             --delete \
-            --cache-control "no-cache, must-revalidate"
+            --cache-control "no-cache, must-revalidate" \
+            --exclude 'admin/index-local.html' \
+            --exclude 'admin/config-local.yml' \
+            --exclude 'admin/index-test.html' \
+            --exclude 'admin/config-test.yml'
 
       - name: Sync to S3 — per-CMS-slug alias
         if: steps.cms_slug.outputs.slug != ''
@@ -196,13 +204,18 @@ jobs:
         # number. Same files; CloudFront routes the right subdomain to
         # the right prefix. No --delete on a "second" sync would orphan
         # files when an entry shrinks; we still --delete here so the
-        # alias matches pr-<N> exactly.
+        # alias matches pr-<N> exactly. Same --exclude set as the
+        # primary sync — keep the two in lockstep.
         run: |
           SLUG='${{ steps.cms_slug.outputs.slug }}'
           aws s3 sync ./_site_preview \
             "s3://${PREVIEW_BUCKET}/cms-${SLUG}/" \
             --delete \
-            --cache-control "no-cache, must-revalidate"
+            --cache-control "no-cache, must-revalidate" \
+            --exclude 'admin/index-local.html' \
+            --exclude 'admin/config-local.yml' \
+            --exclude 'admin/index-test.html' \
+            --exclude 'admin/config-test.yml'
 
       - name: Invalidate CloudFront cache
         if: env.CLOUDFRONT_DISTRIBUTION_ID != ''
