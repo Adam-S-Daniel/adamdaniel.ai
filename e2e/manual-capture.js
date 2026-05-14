@@ -116,6 +116,7 @@ async function captureStep(page, opts) {
     title,
     body,
     screenshot: screenshotRel,
+    url: page.url(),
     spec: path.relative(REPO_ROOT, testInfo.file).split(path.sep).join("/"),
     test: testInfo.title,
     project: testInfo.project.name,
