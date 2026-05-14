@@ -240,12 +240,19 @@ test(
     // `e2e/canary-content.test.js` for the lock-down lint. The old
     // contenteditable selector left here pointed at the Slate
     // markdown editor; on a `widget: text` form it matches nothing
-    // and `body.click()` times out at 30s. Mirror `cms-publish-loop`
-    // and `cms-publish-loop-preview`, which already use `textarea`.
-    // Only one textarea is rendered on the e2e new-entry form (Title
-    // is a `<input>`, the hidden widget fields aren't textareas), so
-    // an unqualified `textarea` selector is unambiguous.
-    const body = page.locator("textarea").last();
+    // and `body.click()` times out at 30s.
+    //
+    // The `:visible` filter is required on the NEW-entry form (this
+    // spec navigates to `#/collections/e2e/new`) — that form renders
+    // an extra `<textarea tabindex="-1" aria-hidden="true">` clipboard
+    // shadow input, and an unqualified `textarea.last()` picks that
+    // hidden textarea up instead of the visible body field. Sibling
+    // specs (cms-publish-loop, cms-publish-loop-preview) navigate to
+    // an EXISTING entry edit page (`/collections/e2e/entries/<slug>`)
+    // which doesn't render that hidden textarea, so a plain
+    // `textarea.last()` works there. The `:visible` pseudo-class is
+    // a Playwright built-in (precedent: cms-smoke.spec.js:250).
+    const body = page.locator("textarea:visible").last();
     await body.click();
     await body.pressSequentially(
       `Throw-away fixture from run ${runId}. Used by cms-delete-published.spec.js to exercise the editorial-workflow delete path.`,
