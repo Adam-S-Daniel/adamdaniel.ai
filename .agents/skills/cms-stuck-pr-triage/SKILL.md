@@ -20,6 +20,17 @@ Most user-facing symptoms ("stuck for 30 min", "cancelled and restarted three ti
 - A workflow run was just cancelled and a new one was kicked off — before suggesting any workflow changes, finish this triage.
 - After landing changes that affect e2e spec selection (`select-specs.js`, lane filtering, FANOUT_PATTERNS, the spec set itself), proactively audit open `cms/*` PRs whose CI ran against the pre-fix tree.
 
+## Shortcut: look at the auto-generated diagnostic first
+
+Most of the manual procedure below has been automated. When a publish-loop / preview-loop / prod-mutate workflow times out on a `Timed out waiting` line, two PR comments land on the failing run's PR:
+
+1. `host-loop-failure-summary` (or `preview-loop-failure-summary`, `prod-mutate-failure-summary`) — the scrubbed Playwright failure block. **The wait-helper's error message itself now includes an inline diagnostic** appended by `e2e/with-stuck-pr-diagnostic.js`, so most of the time the answer is right there inside the failure block.
+2. `host-loop-stuck-pr-diagnostic` (or `preview-loop-stuck-pr-diagnostic`, `prod-mutate-stuck-pr-diagnostic`) — the **workflow-level catch-all**, posted by a `Diagnose stuck PRs` step that runs only when the log contains `Timed out waiting`. Covers the outer-Playwright-timeout case where the wait helper never got to augment its error.
+
+Both comments are produced by `scripts/diagnose-stuck-pr.js` (read-only, 25-s timebox, always exits 0). The diagnostic enumerates open `cms/*` PRs, classifies each by `mergeable_state`, labels `dirty` PRs as **newline-only → `auto-resolve-newline-conflict.yml` will close on next run** vs **not auto-resolvable; manual rebase needed**, lists failing required checks for `blocked` PRs, and (for URL-class timeouts) reports the `deploy-production` queue depth.
+
+**Read the diagnostic before running the procedure below.** It usually points at the offending PR directly. The procedure remains here as the manual fallback for cases the diagnostic flagged as `indeterminate` or where a human judgement call is needed.
+
 ## Procedure
 
 ### 1. List the open `cms/*` PRs and their merge state

@@ -13,6 +13,7 @@
  *   - sleeps with simple polynomial backoff so the API isn't hammered
  */
 const { HOST_REPO, getPat } = require("./decap-pat");
+const { augmentTimeoutError } = require("./with-stuck-pr-diagnostic");
 
 const API_ROOT = "https://api.github.com";
 
@@ -128,8 +129,14 @@ async function waitForCmsPullRequest({
     }
     await sleep(pollMs);
   }
-  throw new Error(
-    `Timed out waiting for Decap to open a ${headBranchPrefix}* PR with a ${filePath} change containing marker ${canaryMarker}`,
+  throw await augmentTimeoutError(
+    new Error(
+      `Timed out waiting for Decap to open a ${headBranchPrefix}* PR with a ${filePath} change containing marker ${canaryMarker}`,
+    ),
+    {
+      waitingFor: `Decap to open ${headBranchPrefix}* PR (marker ${canaryMarker} on ${filePath})`,
+      kind: "pr-open",
+    },
   );
 }
 
@@ -167,7 +174,10 @@ async function waitForMerge({
     }
     await sleep(pollMs);
   }
-  throw new Error(`Timed out waiting for PR #${prNumber} to merge.`);
+  throw await augmentTimeoutError(
+    new Error(`Timed out waiting for PR #${prNumber} to merge.`),
+    { waitingFor: `PR #${prNumber} to merge`, kind: "merge", waitPrNumber: prNumber },
+  );
 }
 
 async function waitForAutoMergeEnabled({
@@ -187,7 +197,14 @@ async function waitForAutoMergeEnabled({
     if (pr.auto_merge && pr.auto_merge.enabled_by) return pr;
     await sleep(pollMs);
   }
-  throw new Error(`Timed out waiting for auto-merge to be enabled on PR #${prNumber}.`);
+  throw await augmentTimeoutError(
+    new Error(`Timed out waiting for auto-merge to be enabled on PR #${prNumber}.`),
+    {
+      waitingFor: `auto-merge to be enabled on PR #${prNumber}`,
+      kind: "auto-merge-enabled",
+      waitPrNumber: prNumber,
+    },
+  );
 }
 
 async function waitForWorkflowRun({
@@ -257,14 +274,20 @@ async function waitForWorkflowRun({
     }
     await sleep(pollMs);
   }
-  throw new Error(
-    `Timed out waiting for ${workflow} on ${branch || headSha}; last seen ${
-      lastSeen ? `${lastSeen.status}/${lastSeen.conclusion}` : "no runs"
-    }${
-      cancelledSeen.size > 0
-        ? ` (also saw ${cancelledSeen.size} cancelled run(s) before timeout)`
-        : ""
-    }.`,
+  throw await augmentTimeoutError(
+    new Error(
+      `Timed out waiting for ${workflow} on ${branch || headSha}; last seen ${
+        lastSeen ? `${lastSeen.status}/${lastSeen.conclusion}` : "no runs"
+      }${
+        cancelledSeen.size > 0
+          ? ` (also saw ${cancelledSeen.size} cancelled run(s) before timeout)`
+          : ""
+      }.`,
+    ),
+    {
+      waitingFor: `${workflow} on ${branch || headSha} (expected ${expectedConclusion})`,
+      kind: "workflow",
+    },
   );
 }
 
@@ -280,7 +303,15 @@ async function fetchPublicUrl(url, { timeoutMs = 240_000, pollMs = 6_000, expect
     } catch (_) { /* network blip — keep polling */ }
     await sleep(pollMs);
   }
-  throw new Error(`Timed out waiting for ${url} to expose ${expectContent ? JSON.stringify(expectContent) : "200 OK"}.`);
+  throw await augmentTimeoutError(
+    new Error(
+      `Timed out waiting for ${url} to expose ${expectContent ? JSON.stringify(expectContent) : "200 OK"}.`,
+    ),
+    {
+      waitingFor: `URL ${url} to serve ${expectContent ? "expected content" : "200 OK"}`,
+      kind: "url",
+    },
+  );
 }
 
 async function getDefaultBranchHeadSha({ repo = HOST_REPO, branch = "main" } = {}) {

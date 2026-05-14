@@ -195,3 +195,39 @@ jobs:
           marker: preview-loop-failure-summary
           title: preview-loop
           pr-number: ${{ inputs.pr_number }}
+
+      # Stuck-PR diagnostic — see cms-publish-loop-host.yml for the
+      # rationale. Gated on "Timed out waiting" in the log to stay
+      # quiet on non-timeout failures.
+      - name: Diagnose stuck PRs
+        if: ${{ failure() && hashFiles('/tmp/preview-loop.log') != '' }}
+        env:
+          GH_TOKEN: ${{ secrets.CMS_E2E_PAT || secrets.GITHUB_TOKEN }}
+          GH_REPO: ${{ github.repository }}
+          WAITING_FOR: 'preview-loop spec (see Playwright log for the specific wait)'
+        run: |
+          set -uo pipefail
+          if grep -q 'Timed out waiting' /tmp/preview-loop.log 2>/dev/null; then
+            node scripts/diagnose-stuck-pr.js > /tmp/preview-loop-stuck-pr-diagnostic.md || true
+          else
+            echo "_no 'Timed out waiting' lines in log; stuck-PR diagnostic skipped_" > /tmp/preview-loop-stuck-pr-diagnostic.md
+          fi
+
+      - name: Post stuck-PR diagnostic
+        if: ${{ failure() && hashFiles('/tmp/preview-loop-stuck-pr-diagnostic.md') != '' }}
+        uses: ./.github/actions/post-failure-comment
+        with:
+          mode: post
+          log-file: /tmp/preview-loop-stuck-pr-diagnostic.md
+          marker: preview-loop-stuck-pr-diagnostic
+          title: preview-loop stuck-PR diagnostic
+          pr-number: ${{ inputs.pr_number }}
+
+      - name: Resolve stuck-PR diagnostic on success
+        if: success()
+        uses: ./.github/actions/post-failure-comment
+        with:
+          mode: resolve
+          marker: preview-loop-stuck-pr-diagnostic
+          title: preview-loop stuck-PR diagnostic
+          pr-number: ${{ inputs.pr_number }}
