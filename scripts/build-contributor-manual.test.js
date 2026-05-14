@@ -20,6 +20,7 @@ const sample = [
     title: "Click sign-in",
     body: "Click it.",
     screenshot: "docs/manual-screenshots/logging-in/1.2-click-sign-in.png",
+    url: "https://preview-pr123.adamdaniel.ai/admin/#/collections/posts",
     spec: "e2e/cms-publish-loop.spec.js",
     test: "publish loop",
     project: "chromium-desktop",
@@ -31,6 +32,7 @@ const sample = [
     title: "Open admin",
     body: "Visit /admin/.",
     screenshot: "docs/manual-screenshots/logging-in/1.1-open-admin.png",
+    url: "https://preview-pr123.adamdaniel.ai/admin/",
     spec: "e2e/cms-publish-loop.spec.js",
     test: "publish loop",
     project: "chromium-desktop",
@@ -42,6 +44,7 @@ const sample = [
     title: "Pick the Posts collection",
     body: "",
     screenshot: "docs/manual-screenshots/editing/2.1-pick-posts.png",
+    url: "https://preview-pr123.adamdaniel.ai/admin/#/collections/posts",
     spec: "e2e/cms-publish-loop.spec.js",
     test: "publish loop",
     project: "chromium-desktop",
@@ -84,9 +87,9 @@ test("buildManual emits sections in order and embeds screenshots", () => {
   assert.ok(s1 > 0 && s2 > s1);
   // Embedded screenshot path is relative to docs/
   assert.ok(md.includes("manual-screenshots/logging-in/1.1-open-admin.png"));
-  // Screenshot URL is shown beneath the image as a clickable link
+  // Browser URL captured at screenshot time is shown beneath the image as a clickable link
   assert.ok(
-    md.includes("<sub>[manual-screenshots/logging-in/1.1-open-admin.png](manual-screenshots/logging-in/1.1-open-admin.png)</sub>"),
+    md.includes("<sub>URL: [https://preview-pr123.adamdaniel.ai/admin/](https://preview-pr123.adamdaniel.ai/admin/)</sub>"),
   );
   // Footer with spec + test reference
   assert.ok(md.includes("`e2e/cms-publish-loop.spec.js`"));
