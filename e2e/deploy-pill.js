@@ -36,6 +36,8 @@
  *   3. The pill never went to the failure state during the wait.
  */
 
+const { augmentTimeoutError } = require("./with-stuck-pr-diagnostic");
+
 const PILL_PROD = "cms-prod-status-pill";
 const PILL_PREVIEW = "cms-preview-build-pill";
 
@@ -107,10 +109,13 @@ async function waitForChangeReflected({
   }
 
   if (!urlReflected) {
-    throw new Error(
-      `Timed out waiting for the URL to reflect the change within ${urlTimeoutMs}ms. ` +
-        `The deploy-triggering action may not have fired the chain, or the chain may ` +
-        `still be running past this budget. Check the pill state for in-flight clues.`,
+    throw await augmentTimeoutError(
+      new Error(
+        `Timed out waiting for the URL to reflect the change within ${urlTimeoutMs}ms. ` +
+          `The deploy-triggering action may not have fired the chain, or the chain may ` +
+          `still be running past this budget. Check the pill state for in-flight clues.`,
+      ),
+      { waitingFor: "URL to reflect change (deploy chain)", kind: "url" },
     );
   }
 

@@ -186,3 +186,38 @@ jobs:
           mode: resolve
           marker: prod-mutate-failure-summary
           title: prod-mutate
+
+      # Stuck-PR diagnostic — see the corresponding block in
+      # cms-publish-loop-host.yml for the rationale and design.
+      # Gated by `grep 'Timed out waiting'` so it stays quiet on
+      # non-timeout failures.
+      - name: Diagnose stuck PRs
+        if: ${{ failure() && vars.PROD_PLAYGROUND_MODE == 'true' && hashFiles('/tmp/prod-mutate.log') != '' }}
+        env:
+          GH_TOKEN: ${{ secrets.CMS_E2E_PAT || secrets.GITHUB_TOKEN }}
+          GH_REPO: ${{ github.repository }}
+          WAITING_FOR: 'prod-mutate spec (see Playwright log for the specific wait)'
+        run: |
+          set -uo pipefail
+          if grep -q 'Timed out waiting' /tmp/prod-mutate.log 2>/dev/null; then
+            node scripts/diagnose-stuck-pr.js > /tmp/prod-mutate-stuck-pr-diagnostic.md || true
+          else
+            echo "_no 'Timed out waiting' lines in log; stuck-PR diagnostic skipped_" > /tmp/prod-mutate-stuck-pr-diagnostic.md
+          fi
+
+      - name: Post stuck-PR diagnostic
+        if: ${{ failure() && vars.PROD_PLAYGROUND_MODE == 'true' && hashFiles('/tmp/prod-mutate-stuck-pr-diagnostic.md') != '' }}
+        uses: ./.github/actions/post-failure-comment
+        with:
+          mode: post
+          log-file: /tmp/prod-mutate-stuck-pr-diagnostic.md
+          marker: prod-mutate-stuck-pr-diagnostic
+          title: prod-mutate stuck-PR diagnostic
+
+      - name: Resolve stuck-PR diagnostic on success
+        if: ${{ success() && vars.PROD_PLAYGROUND_MODE == 'true' }}
+        uses: ./.github/actions/post-failure-comment
+        with:
+          mode: resolve
+          marker: prod-mutate-stuck-pr-diagnostic
+          title: prod-mutate stuck-PR diagnostic
