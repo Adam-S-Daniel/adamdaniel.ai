@@ -149,13 +149,13 @@ test(
   });
 
   await test.step("Insert run marker into body and Save", async () => {
-    // Mirror cms-publish-loop.spec.js's working selector: the pinned
-    // Decap version no longer exposes "Body" / "Content" as the
-    // textbox's accessible name (run #25470209346 hit a 720s timeout
-    // on `getByRole("textbox", { name: /Body|Content/i })`). Grab the
-    // last contenteditable textbox on the page; the live preview
-    // iframe is not a textbox, so .last() lands on the editor body.
-    const body = page.locator('[role="textbox"][contenteditable="true"]').last();
+    // The e2e collection's body is `widget: text` (plain textarea) per
+    // admin/config.yml — it used to be `widget: markdown` (Slate
+    // WYSIWYG) but the Slate serializer doubled every soft line wrap
+    // on save (PR #882). The textarea preserves typed text verbatim.
+    // Title is a single-line `<input>`; date/technology/hidden fields
+    // are not textareas — `textarea` is unambiguous on this view.
+    const body = page.locator("textarea").last();
     await body.click();
     await body.press("End");
     await body.pressSequentially(`\n\n${marker}\n`);
@@ -241,19 +241,13 @@ test(
       timeout: 30_000,
     });
 
-    const body = page.locator('[role="textbox"][contenteditable="true"]').last();
+    // `widget: text` plain textarea — see the marker-insert step above
+    // for the rationale.
+    const body = page.locator("textarea").last();
     await body.click();
     await page.keyboard.press("Control+A");
     await page.keyboard.press("Backspace");
-    await body.pressSequentially(
-      `${baselineBody}\n\n` +
-        "This URL exists so the automated end-to-end publish-loop tests have a stable\n" +
-        "target to assert against on both preview-pr<N>.adamdaniel.ai and\n" +
-        "adamdaniel.ai. The body is replaced during a test run and reset to this\n" +
-        "baseline in cleanup, so the public URL always renders innocuous content\n" +
-        "between runs.\n\n" +
-        "If this is the only thing you can see, no test is currently in progress.\n",
-    );
+    await body.pressSequentially(`${CANARY.baselineBody}\n`);
 
     await page.getByRole("button", { name: /^Save$/i }).click();
     await expect(page.getByText(/Changes saved/i).first()).toBeVisible({
@@ -306,19 +300,29 @@ test.afterAll(async () => {
     return;
   }
   const decoded = Buffer.from(current.content, "base64").toString("utf8");
+  // Two kinds of "UI cleanup left mutation" — see the host-loop
+  // afterAll for the rationale. Body-equality check guards against
+  // formatting drift (PR #882) in addition to the marker regex.
+  const fmEnd = decoded.indexOf("\n---\n", 4);
+  const fileBody = fmEnd < 0 ? decoded : decoded.slice(fmEnd + 5).replace(/^\n+/, "").replace(/\n+$/, "");
+  const expectedBody = CANARY.baselineBody;
   const hasMarker = /e2e-publish-loop:[a-z]+:\d+/.test(decoded);
-  if (!hasMarker) {
+  const bodyDrift = fileBody !== expectedBody;
+  if (!hasMarker && !bodyDrift) {
     console.log(
       "[cleanup-harness] preview canary at baseline; UI-driven cleanup succeeded — no safety net needed",
     );
     return;
   }
+  const reason = hasMarker
+    ? "marker still present after UI cleanup"
+    : "body diverges from canonical baseline (formatting drift)";
   console.warn(
-    `[cleanup-harness] canary on ${PR_HEAD_REF} still contains a marker after the UI cleanup; restoring via Contents API`,
+    `[cleanup-harness] canary on ${PR_HEAD_REF}: ${reason}; restoring via Contents API`,
   );
   await writeCanaryOnBranch({
     branch: PR_HEAD_REF,
-    bodyText: `${CANARY.baseline}\n\nThis URL exists so the automated end-to-end publish-loop tests have a stable\ntarget to assert against on both preview-pr<N>.adamdaniel.ai and\nadamdaniel.ai. The body is replaced during a test run and reset to this\nbaseline in cleanup, so the public URL always renders innocuous content\nbetween runs.\n\nIf this is the only thing you can see, no test is currently in progress.`,
-    message: `test(canary): harness safety-net reset of page baseline (UI cleanup left a marker)`,
+    bodyText: expectedBody,
+    message: `test(canary): harness safety-net reset of page baseline (${reason})`,
   });
 });

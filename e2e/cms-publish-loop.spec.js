@@ -187,6 +187,12 @@ test(
   const runId = Date.now();
   const marker = makeMarker(CANARY.id, runId);
   const baselineBody = CANARY.baseline;
+  // Full canonical body (title sentence + explanatory paragraphs +
+  // footer) — the single source of truth for both the API-path resets
+  // (setup + safety-net) and the UI-path cleanup. See
+  // `e2e/canary-content.js`. Keeping it in one place eliminates the
+  // drift risk between the three sites that write the baseline back.
+  const baselineFullBody = CANARY.baselineBody;
 
   // ── 0a. Close any stale Decap editorial-workflow PR on the
   // canary's fixed branch ────────────────────────────────────────
@@ -216,7 +222,7 @@ test(
     if (!currentBody.includes(baselineBody)) {
       await writeCanaryViaPr({
         runId: `setup-${runId}`,
-        bodyText: `${baselineBody}\n\nThis URL exists so the automated end-to-end publish-loop tests have a stable\ntarget to assert against on both preview-pr<N>.adamdaniel.ai and\nadamdaniel.ai. The body is replaced during a test run and reset to this\nbaseline in cleanup, so the public URL always renders innocuous content\nbetween runs.\n\nIf this is the only thing you can see, no test is currently in progress.`,
+        bodyText: baselineFullBody,
         message: "test(canary): reset post baseline before publish-loop run",
       });
     }
@@ -253,13 +259,21 @@ test(
 
   // ── 3. Edit body and save as draft ──────────────────────────────
   await test.step("Insert run marker into body and Save", async () => {
-    // The body is a markdown widget. Append the marker; Decap's editor accepts
-    // plain text typing in either rich-text or raw modes. The pinned Decap
-    // version no longer exposes "Body" as the textbox's accessible name —
-    // mirror cms-publish-flow.spec.js and grab the last contenteditable
-    // textbox on the page (the live preview iframe is not a textbox).
-    const body = page.locator('[role="textbox"][contenteditable="true"]').last();
+    // The body is a `widget: text` plain textarea (admin/config.yml on
+    // the e2e collection). It used to be `widget: markdown` (Slate
+    // WYSIWYG) but Slate's serializer doubled every soft line wrap on
+    // save, so the cleanup leg produced a body that disagreed with the
+    // baseline and left a perpetually-open conflicting cms/e2e/* PR
+    // (see PR #882). The textarea preserves typed text verbatim.
+    //
+    // Only one textarea is rendered on the canary edit page (Title is a
+    // single-line input, date/technology/hidden fields are not
+    // textareas), so an unqualified `textarea` selector is unambiguous.
+    const body = page.locator("textarea").last();
     await body.click();
+    // Move to the end of the existing body; appending the marker keeps
+    // the canonical baseline body intact, so the diff is purely
+    // additive and the safety-net's marker-regex check still trips.
     await body.press("End");
     await body.pressSequentially(`\n\n${marker}\n`);
 
@@ -409,24 +423,18 @@ test(
       timeout: 30_000,
     });
 
-    // Replace the body content with the canonical baseline. Decap's
-    // markdown widget renders the body as a contenteditable. Click
-    // it, select all, delete, then type the baseline back. This
-    // produces the same end-state as the fixture-PR cleanup but
-    // through the editor's normal Save flow.
-    const body = page.locator('[role="textbox"][contenteditable="true"]').last();
+    // Replace the body content with the canonical baseline. The body is
+    // a `widget: text` plain textarea (see step 3 for why the e2e
+    // collection no longer uses `widget: markdown`). Click, select all,
+    // delete, retype. The textarea writes typed bytes verbatim, so the
+    // resulting file matches `baselineFullBody` byte-for-byte and the
+    // cms/e2e/canary-post PR Decap opens here has no spurious diff
+    // against the API-path setup-reset / safety-net writes.
+    const body = page.locator("textarea").last();
     await body.click();
     await page.keyboard.press("Control+A");
     await page.keyboard.press("Backspace");
-    await body.pressSequentially(
-      `${baselineBody}\n\n` +
-        "This URL exists so the automated end-to-end publish-loop tests have a stable\n" +
-        "target to assert against on both preview-pr<N>.adamdaniel.ai and\n" +
-        "adamdaniel.ai. The body is replaced during a test run and reset to this\n" +
-        "baseline in cleanup, so the public URL always renders innocuous content\n" +
-        "between runs.\n\n" +
-        "If this is the only thing you can see, no test is currently in progress.\n",
-    );
+    await body.pressSequentially(`${baselineFullBody}\n`);
 
     await page.getByRole("button", { name: /^Save$/i }).click();
     await expect(page.getByText(/Changes saved/i).first()).toBeVisible({
@@ -530,20 +538,37 @@ test.afterAll(async ({}, testInfo) => {
     return;
   }
   const decoded = Buffer.from(current.content, "base64").toString("utf8");
-  // The forward leg adds markers shaped `e2e-publish-loop:post:<runId>`.
-  // If any are present in the file body, the UI cleanup didn't fully
-  // restore baseline — fix it via the API path.
+  // Two kinds of "UI cleanup left mutation":
+  //
+  //   1. Marker still present — forward leg's `e2e-publish-loop:post:
+  //      <runId>` survived in the body. UI cleanup didn't run or didn't
+  //      remove it.
+  //
+  //   2. Formatting drift — marker is gone, but the body has been
+  //      mangled (e.g., extra blank lines from a `widget: markdown`
+  //      Slate round-trip; PR #882 is the case study, fixed by
+  //      switching to `widget: text`). The marker-regex below would
+  //      have missed this — the next `setup` step at the top of this
+  //      spec would have re-opened the same conflicting PR forever.
+  //
+  // Body-equality is checked against the canonical
+  // `buildBaselineBody()` output so any divergence triggers recovery,
+  // not just markers.
+  const fmEnd = decoded.indexOf("\n---\n", 4);
+  const fileBody = fmEnd < 0 ? decoded : decoded.slice(fmEnd + 5).replace(/^\n+/, "").replace(/\n+$/, "");
+  const expectedBody = CanaryFile.baselineBody;
   const hasMarker = /e2e-publish-loop:[a-z]+:\d+/.test(decoded);
-  if (!hasMarker) {
+  const bodyDrift = fileBody !== expectedBody;
+  if (!hasMarker && !bodyDrift) {
     console.log(
       "[cleanup-harness] canary at baseline; UI-driven cleanup succeeded — no API safety net needed",
     );
     return;
   }
-  console.warn(
-    "[cleanup-harness] canary on main still contains a marker after the UI cleanup; opening fixture PR to restore baseline",
-  );
-  const baselineBody = CanaryFile.baseline;
+  const reason = hasMarker
+    ? "canary on main still contains a marker after the UI cleanup"
+    : "canary on main body diverges from canonical baseline (formatting drift)";
+  console.warn(`[cleanup-harness] ${reason}; opening fixture PR to restore baseline`);
   // Fire-and-forget: open the cleanup PR + apply cms/ready, then
   // return without waiting for auto-merge. The editorial-workflow
   // auto-merges in the background. Without this, the afterAll
@@ -555,8 +580,8 @@ test.afterAll(async ({}, testInfo) => {
   // failure) so leaking a few cleanup PRs is acceptable here.
   await writeCanaryViaPr({
     runId: `harness-cleanup-${Date.now()}`,
-    bodyText: `${baselineBody}\n\nThis URL exists so the automated end-to-end publish-loop tests have a stable\ntarget to assert against on both preview-pr<N>.adamdaniel.ai and\nadamdaniel.ai. The body is replaced during a test run and reset to this\nbaseline in cleanup, so the public URL always renders innocuous content\nbetween runs.\n\nIf this is the only thing you can see, no test is currently in progress.`,
-    message: `test(canary): harness safety-net reset of post baseline (UI cleanup left a marker)`,
+    bodyText: expectedBody,
+    message: `test(canary): harness safety-net reset of post baseline (${reason})`,
     skipWaitForMerge: true,
   });
 });

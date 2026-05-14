@@ -236,3 +236,45 @@ jobs:
           mode: resolve
           marker: host-loop-failure-summary
           title: host-loop
+
+      # Stuck-PR diagnostic — fires only when the Playwright log
+      # contains "Timed out waiting" (signature of the helper-level
+      # throws in e2e/github-actions-poll.js and e2e/deploy-pill.js).
+      # In-spec the same diagnostic is already appended to the test's
+      # error message via `e2e/with-stuck-pr-diagnostic.js`, but the
+      # workflow-level run is the catch-all for outer-Playwright-
+      # timeouts (40 min cap) where the helper-level throw never
+      # gets to augment its error. Read-only by construction; safe
+      # under PROD_CANARY contexts. See AGENTS.md
+      # `auto-resolve-newline-conflict.yml` section for how the
+      # diagnostic composes with the auto-resolver.
+      - name: Diagnose stuck PRs
+        if: ${{ failure() && github.event_name == 'pull_request' && hashFiles('/tmp/host-loop.log') != '' }}
+        env:
+          GH_TOKEN: ${{ secrets.CMS_E2E_PAT || secrets.GITHUB_TOKEN }}
+          GH_REPO: ${{ github.repository }}
+          WAITING_FOR: 'host-loop spec (see Playwright log for the specific wait)'
+        run: |
+          set -uo pipefail
+          if grep -q 'Timed out waiting' /tmp/host-loop.log 2>/dev/null; then
+            node scripts/diagnose-stuck-pr.js > /tmp/host-loop-stuck-pr-diagnostic.md || true
+          else
+            echo "_no 'Timed out waiting' lines in log; stuck-PR diagnostic skipped_" > /tmp/host-loop-stuck-pr-diagnostic.md
+          fi
+
+      - name: Post stuck-PR diagnostic
+        if: ${{ failure() && github.event_name == 'pull_request' && hashFiles('/tmp/host-loop-stuck-pr-diagnostic.md') != '' }}
+        uses: ./.github/actions/post-failure-comment
+        with:
+          mode: post
+          log-file: /tmp/host-loop-stuck-pr-diagnostic.md
+          marker: host-loop-stuck-pr-diagnostic
+          title: host-loop stuck-PR diagnostic
+
+      - name: Resolve stuck-PR diagnostic on success
+        if: ${{ success() && github.event_name == 'pull_request' }}
+        uses: ./.github/actions/post-failure-comment
+        with:
+          mode: resolve
+          marker: host-loop-stuck-pr-diagnostic
+          title: host-loop stuck-PR diagnostic
