@@ -141,6 +141,30 @@ jobs:
           apt-get install -y -qq --no-install-recommends gh
           gh --version
 
+      # Stuck-PR diagnostic — read-only classifier of open `cms/*` PRs
+      # and the `deploy-production.yml` queue. Most canary failures fall
+      # into one of four buckets (see the issue body below); two of
+      # those — content drift from a crashed/stuck publish-loop, and a
+      # stalled deploy-production — show up in this report. The other
+      # two (5xx, layout break) get a benign "no candidates" section.
+      # Always exits 0 by design (see scripts/diagnose-stuck-pr.js
+      # header). Read-only, safe under PROD_CANARY=1. We do NOT gate
+      # on `grep 'Timed out waiting'` like the publish-loop wiring
+      # does: the canary's failure signature is an HTTP assertion, not
+      # a wait timeout, and the diagnostic is signal-positive for the
+      # content-drift / deploy-stall cases that dominate canary
+      # incidents.
+      - name: Diagnose stuck PRs
+        if: failure() && steps.probe.outcome == 'failure'
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          GH_REPO: ${{ github.repository }}
+          WAITING_FOR: 'production canary content match (read-only HTTP probe of _e2e/canary-* URLs)'
+          WAITING_FOR_KIND: url
+        run: |
+          set -uo pipefail
+          node scripts/diagnose-stuck-pr.js > /tmp/canary-stuck-pr-diagnostic.md || true
+
       - name: Open issue on canary failure
         if: failure() && steps.probe.outcome == 'failure'
         env:
@@ -151,6 +175,15 @@ jobs:
           # GitHub's ~65k-char limit even after gh CLI's framing.
           tail -c 50000 /tmp/canary-output.log > /tmp/canary-tail.log || true
           DATE=$(date -u '+%Y-%m-%d %H:%M UTC')
+
+          # Inline the stuck-PR diagnostic if the previous step produced
+          # one. Empty/missing file falls through to an explanatory stub
+          # so the issue body's structure stays predictable.
+          if [ -s /tmp/canary-stuck-pr-diagnostic.md ]; then
+            DIAGNOSTIC=$(cat /tmp/canary-stuck-pr-diagnostic.md)
+          else
+            DIAGNOSTIC="_Stuck-PR diagnostic produced no output._"
+          fi
 
           # If a canary issue is already open, comment on it instead of
           # opening a duplicate. A stuck deploy producing 7 days of
@@ -184,6 +217,8 @@ jobs:
           \`\`\`
           $(cat /tmp/canary-tail.log)
           \`\`\`
+
+          ${DIAGNOSTIC}
 
           This issue auto-opens from \`.github/workflows/canary-prod.yml\`.
           Close once the next scheduled run (or a manual \`workflow_dispatch\`)

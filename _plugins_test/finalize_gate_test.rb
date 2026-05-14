@@ -85,9 +85,21 @@ if finalize
   steps = finalize.fetch('steps', [])
   fail_step = steps.find do |s|
     next false unless s.key?('run')
-    s['name'].to_s.start_with?('Re-fail if any matrix failed') ||
-      s['name'].to_s.start_with?('Re-fail if any shard failed') ||
-      s['if'].to_s.include?("needs.e2e.result == 'failure'")
+    next true if s['name'].to_s.start_with?('Re-fail if any matrix failed')
+    next true if s['name'].to_s.start_with?('Re-fail if any shard failed')
+    # Rename safety net: if the canonical name is gone, fall back to
+    # the signature of an exit-on-failure step (gates on a matrix's
+    # failure result AND the run body literally calls `exit <non-zero>`).
+    # The exit-on-failure conjunct is what distinguishes the merge
+    # gate from other failure-gated steps in finalize — the
+    # `post-failure-comment` composite and the stuck-PR diagnostic
+    # (see ADR 0002) also gate on `needs.e2e.result == 'failure'` but
+    # intentionally do NOT exit. Without the exit conjunct here, the
+    # lint would false-match the first of those steps and report the
+    # merge gate as broken.
+    next false unless s['if'].to_s.include?("needs.e2e.result == 'failure'") ||
+                      s['if'].to_s.include?("needs.e2e-admin.result == 'failure'")
+    s['run'].to_s.match?(/(^|\n)\s*exit\s+[1-9]\d*\s*$/m)
   end
 
   if fail_step.nil?

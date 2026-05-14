@@ -1147,6 +1147,51 @@ jobs:
           marker: e2e-failure-summary
           title: E2E tests
 
+      # Stuck-PR diagnostic — single-shot wrapper-level catch for the
+      # whole e2e matrix. Mirrors the wiring in cms-publish-loop-*.yml
+      # (see ADR 0002), but runs ONCE here in `finalize` against the
+      # merged log instead of per-shard. That keeps the GitHub-API call
+      # budget at ~10/run regardless of shard count, addressing the v1
+      # concern in ADR 0002 about multiplying API cost by the shard
+      # matrix. The in-spec wrapper (`e2e/with-stuck-pr-diagnostic.js`)
+      # already attaches the diagnostic to the failing test's error
+      # message for wait-helper throws inside test code; this
+      # workflow-level layer is the catch-all for outer-Playwright-
+      # timeout kills (40-min cap) where the in-spec wrap never ran.
+      # Gated on `grep 'Timed out waiting'` so non-timeout failures
+      # (assertion errors, DOM mismatches, image-tag drift) don't get
+      # a misleading stuck-PR comment they have to disregard.
+      - name: Diagnose stuck PRs
+        if: ${{ needs.e2e.result == 'failure' && github.event_name == 'pull_request' && hashFiles('/tmp/playwright-output.log') != '' }}
+        env:
+          GH_TOKEN: ${{ secrets.CMS_E2E_PAT || secrets.GITHUB_TOKEN }}
+          GH_REPO: ${{ github.repository }}
+          WAITING_FOR: 'e2e matrix (see Playwright log for the specific wait)'
+        run: |
+          set -uo pipefail
+          if grep -q 'Timed out waiting' /tmp/playwright-output.log 2>/dev/null; then
+            node scripts/diagnose-stuck-pr.js > /tmp/e2e-stuck-pr-diagnostic.md || true
+          else
+            echo "_no 'Timed out waiting' lines in merged shard log; stuck-PR diagnostic skipped_" > /tmp/e2e-stuck-pr-diagnostic.md
+          fi
+
+      - name: Post stuck-PR diagnostic
+        if: ${{ needs.e2e.result == 'failure' && github.event_name == 'pull_request' && hashFiles('/tmp/e2e-stuck-pr-diagnostic.md') != '' }}
+        uses: ./.github/actions/post-failure-comment
+        with:
+          mode: post
+          log-file: /tmp/e2e-stuck-pr-diagnostic.md
+          marker: e2e-stuck-pr-diagnostic
+          title: E2E tests stuck-PR diagnostic
+
+      - name: Resolve stuck-PR diagnostic on success
+        if: ${{ needs.e2e.result == 'success' && github.event_name == 'pull_request' }}
+        uses: ./.github/actions/post-failure-comment
+        with:
+          mode: resolve
+          marker: e2e-stuck-pr-diagnostic
+          title: E2E tests stuck-PR diagnostic
+
       # ─── DO NOT REMOVE OR SOFTEN — this step IS the merge gate ─────────
       # `e2e (1)` and `e2e-admin` are required, but `e2e (2..4)` are
       # not (the public matrix's dynamic shard count would create the
