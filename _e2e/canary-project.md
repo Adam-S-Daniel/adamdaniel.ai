@@ -14,7 +14,7 @@ canary_id: project
 Adam Daniel — E2E canary project (do not edit by hand).
 
 This URL exists so the automated end-to-end publish-loop tests have a stable
-target to assert against on both preview-pr&lt;N&gt;.adamdaniel.ai and
+target to assert against on both preview-pr<N>.adamdaniel.ai and
 adamdaniel.ai. The body is replaced during a test run and reset to this
 baseline in cleanup, so the public URL always renders innocuous content
 between runs.

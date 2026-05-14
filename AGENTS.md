@@ -184,6 +184,7 @@ Quick reference. When you change one of the listed paths, the workflow either ru
 | `secrets-scan.yml` | `pull_request`, `push` to `main`, weekly `schedule`, `workflow_dispatch` | **none, intentionally** — gitleaks must scan the entire diff / history regardless of file type | n/a |
 | `skills-mirror.yml` | `push` and `pull_request` to `main` | `paths` (positive) | `.agents/skills/**`, `.claude/skills/**`, `scripts/{bootstrap,verify-skills-mirror,secrets-scan}.{sh,ps1}`, `tests/**`, the workflow itself, `secrets-scan.yml` |
 | `visual-regression.yml` | `pull_request` | `paths` (positive) | templates / rendering / styling: `_layouts/**`, `_includes/**`, `_plugins/**`, `_data/**`, `admin/**`, `_config.yml`, `Gemfile*`, root `index.html` / `404.html` / `robots.txt` / `preview.md`, `assets/css/**`, `assets/js/**`, `assets/images/logo.svg`; pipeline tools (`e2e/{detect-changed-pages,compute-visual-diffs,generate-video,regression-video}.{js,sh,spec.js}`, `playwright.regression.config.js`, the workflow itself). **CMS-managed content is intentionally excluded** (`_posts/**`, `_tags/**`, `_projects/**`, `pages/**`, `_e2e/**`, `assets/images/uploads/**`) — content-only PRs guarantee pixel diffs, so the regression video adds runner time without signal. |
+| `auto-resolve-newline-conflict.yml` | `workflow_run` (after `cms-editorial-workflow`), `workflow_dispatch` | n/a (event-driven, gated by script's PR allowlists) | n/a |
 
 When you add a new workflow, append it to this table in the same commit.
 
@@ -375,6 +376,44 @@ Cleans up automation-only artefacts that crashed test runs leak. Runs daily at 0
 A separate job step (`if: !inputs.dry_run`) sweeps stale `_e2e/canary-delete-*` fixtures left on `main` by opening a `cms/e2e-fixture/sweep-…` PR labelled `cms/ready`, which auto-merges via the editorial-workflow.
 
 **Pagination convention.** `gh pr list` defaults to `--limit 30` and silently truncates above that — `--paginate` is NOT a flag for `gh pr list` (gh-api-only). Every `gh pr list` in this workflow uses `--limit 1000` for top-level listing or `--limit 1` for existence checks. `gh api` calls that return arrays use `--paginate` with `?per_page=100`. New listing calls in this or related workflows MUST follow this convention; a 31st-orphan-silently-survives bug is invisible until the orphan rate climbs and is hard to diagnose because the workflow looks like it succeeded.
+
+### `auto-resolve-newline-conflict.yml`
+
+Belt-and-suspenders for the class of bug PR #882 represents — a Decap-opened `cms/<col>/<slug>` PR whose only diff vs main is newline-mangling (`\n` → `\n\n`, `\n\n` → `\n\n\n\n`, blank between `---` and body eaten — the Slate WYSIWYG round-trip signature). When a sibling cleanup PR has already landed the canonical baseline to main, the still-open Decap PR conflicts with main even though both canonical-collapse forms are identical. Without this resolver the PR sits in `dirty` state until a human notices.
+
+**Triggers:**
+
+- `workflow_run` on completion of `cms-editorial-workflow.yml`. Decap pushes a commit every time the editor saves, which fires the editorial workflow; the `workflow_run` rendezvous lets the resolver look ~10–20 s after each push, by which time `mergeable_state` has settled. (`pull_request: synchronize` doesn't surface `mergeable_state` synchronously and would fan out per-keystroke runs.)
+- `workflow_dispatch` with a PR number + optional `dry_run` for on-demand resolution.
+
+**Gates (enforced in `scripts/auto-resolve-newline-conflict.js`):**
+
+| Gate | Allows |
+|---|---|
+| PR state | `open` |
+| Mergeable state | `dirty` only (skips `clean`, `unknown`, `blocked`, etc.) |
+| Head ref | `cms/{e2e,e2e-fixture,posts,pages,projects,tags}/...` |
+| Author | `decap-cms[bot]`, `Adam-S-Daniel` |
+| Head repo | Same as base repo (no forks) |
+| Idempotency | A `<!-- key:<base-sha>:<head-sha> -->` comment marker — already-resolved (base, head) pairs are skipped |
+| Per-file path | Must match `PATH_ALLOWLIST`: canary fixtures, `_posts/**.md`, `pages/**.md`, `_projects/**.md`, `_tags/**.md` |
+| Per-file status | Not `removed` or `added` (only `modified` files — a CMS PR adding a new file has real intent) |
+| Per-file content | No markdown code fences on either side (intentional blank lines may exist) |
+| Per-file equivalence | `canonical(base) === canonical(head)` where `canonical(s) = s.replace(/\n+/g, '\n')` |
+
+**Action when ALL gates pass:** close the PR with a sticky comment listing the files inspected. Force-pushing a rebase would result in an empty-diff PR (since the canonical resolution converges to main's content for every allowlisted file), so close is simpler and lower-risk. The PR's `cms/ready` auto-merge intent doesn't matter — closing skips the merge entirely.
+
+**Action when ANY gate fails:** post a sticky comment listing the reasons; leave the PR open for human review. The same comment marker prevents the next push from re-posting the same diagnostic.
+
+**Why a script + workflow instead of inline shell:** the equivalence check, allowlist matching, and idempotency-comment parsing are easier to unit-test than to inline. `scripts/auto-resolve-newline-conflict.test.js` (29 tests via `node --test`) covers `canonical()` on the three observed Slate transforms, all four allowlist functions, and end-to-end `run()` happy/sad paths with mocked `fetch`. New regression cases just add a test, not a workflow re-run.
+
+**Why CMS_E2E_PAT, not GITHUB_TOKEN:** the resolver closes the PR via `PATCH /repos/<o>/<r>/pulls/<N>` with `{state: 'closed'}`. PR-state changes authored by `GITHUB_TOKEN` don't fire downstream workflows (e.g. preview-teardown); the PAT lets those fire. Same reason `cms-editorial-workflow.yml`'s `auto-merge-when-ready` job uses the PAT.
+
+### Architecture Decision Records
+
+Non-obvious decisions — the kind that invite "let's just change it back" without context — live as Nygard-style ADRs under [`docs/decisions/`](docs/decisions/). The README there has the format, the index, and the when-to-write-one rules. New ADRs are numbered `NNNN-kebab-title.md` starting at `0001`; the README's index gets a new row in the same commit.
+
+If you find yourself writing a long PR description explaining *why* a one-line config change isn't crazy, that's the signal to write an ADR instead and link to it from the PR.
 
 ### Contributor Manual
 

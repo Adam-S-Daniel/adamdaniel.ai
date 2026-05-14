@@ -15,6 +15,20 @@ test.describe("Canary content invariants", () => {
       // here means the canary doesn't reset to the same content the
       // descriptor claims.
       expect(src, `${c.path} body must contain the baseline string`).toContain(c.baseline);
+      // The FULL canonical body (title sentence + explanatory paragraphs
+      // + footer) must also match the checked-in file byte-for-byte.
+      // Without this assertion the canary file could drift gradually —
+      // e.g., a Decap WYSIWYG round-trip doubles newlines (PR #882) —
+      // and the publish-loop spec's UI cleanup would silently produce a
+      // mangled cms/e2e/* PR that disagrees with the API-path setup
+      // reset, leaving conflicting PRs in their wake.
+      const fmEnd = src.indexOf("\n---\n", 4);
+      expect(fmEnd, `${c.path} must have a closing front-matter delimiter`).toBeGreaterThan(0);
+      const fileBody = src.slice(fmEnd + 5).replace(/^\n+/, "").replace(/\n+$/, "");
+      expect(
+        fileBody,
+        `${c.path} body must match the canonical buildBaselineBody() output verbatim — newline drift (often from a Decap markdown-widget round-trip) breaks the publish-loop cleanup contract`,
+      ).toBe(c.baselineBody);
       expect(src).toContain(`canary_id: ${c.id}`);
       expect(src).toContain(`permalink: ${c.publicPath}`);
       expect(src).toMatch(/^layout: canary$/m);
@@ -47,6 +61,42 @@ test.describe("Canary content invariants", () => {
     expect(cfg).toMatch(/^\s{4}folder: _e2e\s*$/m);
     expect(cfg).toMatch(/^\s{4}create: true\s*$/m);
     expect(cfg).toMatch(/^\s{4}delete: true\s*$/m);
+
+    // The body field MUST be `widget: text` (plain HTML textarea), not
+    // `widget: markdown` (Slate WYSIWYG). With `widget: markdown`,
+    // saving via the editor round-trips through Slate and every soft
+    // line wrap inside a paragraph comes back doubled as a paragraph
+    // break (PR #882: `\n` → `\n\n`, `\n\n` → `\n\n\n\n`, plus the
+    // blank line between frontmatter `---` and the first paragraph
+    // gets eaten). The publish-loop spec's UI cleanup then produces a
+    // file that disagrees with the canonical baseline; the cms/e2e/*
+    // PR Decap opens conflicts with main as soon as the next run's
+    // safety-net pushes a clean baseline.
+    const e2eStart = cfg.search(/^\s{2}- name: e2e\s*$/m);
+    expect(e2eStart, "e2e collection must be present").toBeGreaterThan(-1);
+    // Slice from the e2e collection start to the next top-level
+    // collection (or EOF) so the body-field regex can't match a body
+    // field from a different collection (posts/projects/pages).
+    const nextCollection = cfg.slice(e2eStart + 1).search(/^\s{2}- name: \w/m);
+    const e2eBlock =
+      nextCollection < 0
+        ? cfg.slice(e2eStart)
+        : cfg.slice(e2eStart, e2eStart + 1 + nextCollection);
+    expect(e2eBlock).toMatch(/^\s{6}- name: body\s*$/m);
+    expect(
+      e2eBlock,
+      "e2e body field MUST be widget: text — widget: markdown breaks the publish-loop cleanup contract (see PR #882)",
+    ).toMatch(/^\s{6}- name: body\s*\n(?:\s{6,}.+\n)*?\s{8}widget: text\s*$/m);
+    // Negative assertion: explicitly forbid the dangerous widget on the
+    // e2e body. (The positive assertion above would catch a missing
+    // `widget: text`, but a misindented `widget: markdown` could
+    // theoretically slip through; this makes the intent loud.)
+    const e2eBody = e2eBlock.match(
+      /^\s{6}- name: body\s*\n(?:\s{6,}.+\n)+?(?=\s{0,6}-|\s{0,4}- name|\Z)/m,
+    );
+    if (e2eBody) {
+      expect(e2eBody[0]).not.toMatch(/^\s{8}widget: markdown\s*$/m);
+    }
   });
 
   test("_config.yml registers the e2e collection with the right permalink", () => {
