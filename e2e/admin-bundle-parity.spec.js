@@ -34,6 +34,12 @@ const crypto = require("crypto");
 //     so config-* files are not byte-identical by design. The
 //     allowlisted-delta invariant is owned by the sibling spec
 //     `cms-config-preview-delta.spec.js` (G1).
+//   - admin/index-local.html, admin/index-test.html — local-dev /
+//     e2e-test admin shells. They're built into `_site/` so the
+//     local Playwright suite can hit them via `jekyll build && serve
+//     _site`, but deploy-{production,preview}.yml drop them from
+//     the S3 sync (`--exclude`) — they wire up localhost-only
+//     backends and have no business being on the CDN.
 
 const PROD_BASE = "https://adamdaniel.ai";
 const ADMIN_PREFIX = "admin";
@@ -64,6 +70,11 @@ function isExcluded(relPath) {
   // they're mutated by the preview pipeline.
   if (relPath === "commit.json") return true;
   if (/^config[^/]*\.ya?ml$/.test(relPath)) return true;
+  // Local-dev / test admin entry points are deliberately omitted from
+  // both deploy syncs — they only need to exist in the local-served
+  // `_site/`. Don't expect them on prod or preview URLs.
+  if (relPath === "index-local.html") return true;
+  if (relPath === "index-test.html") return true;
   return false;
 }
 
