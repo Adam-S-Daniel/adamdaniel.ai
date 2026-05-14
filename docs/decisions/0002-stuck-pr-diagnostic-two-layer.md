@@ -68,9 +68,24 @@ outer budget at the spec layer. It can be disabled with
 its newline-only-conflict classification stays in sync with what the
 auto-resolver will actually do on its next run.
 
-Wired only into the three publish-loop workflows. `canary-prod.yml` and
-`e2e-tests.yml` are intentionally out of scope (see "Alternatives
-considered" below).
+Initial scope (v1) wired only the three publish-loop workflows. The
+v2 follow-up extends the workflow-level layer to `canary-prod.yml` and
+`e2e-tests.yml` — with two surfacing-contract adaptations rather than
+literal copies of the publish-loop pattern (see "Alternatives
+considered" below):
+
+- `canary-prod.yml`: the diagnostic runs on `steps.probe.outcome ==
+  'failure'` (not gated on `Timed out waiting`, since the canary's
+  failure signature is an HTTP/DOM assertion) and is **embedded into
+  the `production-canary` issue body** rather than posted via
+  `post-failure-comment`. The issue-open step composes the body; the
+  diagnostic markdown is inlined as a section between the truncated
+  log and the "Close once green" footer.
+- `e2e-tests.yml`: the diagnostic runs **once in `finalize`** against
+  the merged shard log (`/tmp/playwright-output.log`), not per shard,
+  and posts via `post-failure-comment` with marker
+  `e2e-stuck-pr-diagnostic`. Single-shot wiring keeps the GitHub-API
+  call budget at ~10/run regardless of the dynamic shard count.
 
 ## Consequences
 
@@ -119,10 +134,15 @@ considered" below).
 - **Two GitHub-API call budgets per failure.** When both layers fire on
   the same run (rare; usually only one will), they each spend up to
   ~10 API calls. Still well under any token quota.
-- **`canary-prod.yml` and `e2e-tests.yml` are blind spots.** They
-  surface timeouts via different paths (issues vs PR comments; many
-  sharded jobs vs one); wiring them in needs a different surfacing
-  contract. Captured as a future follow-up rather than forced into v1.
+- **`canary-prod.yml` and `e2e-tests.yml` use different surfacing
+  contracts than the publish-loop workflows.** Closed in v2 by giving
+  each its own minimal adaptation: canary embeds the diagnostic in its
+  `production-canary` issue body (no PR to post against); e2e runs the
+  diagnostic exactly once in `finalize` against the merged shard log
+  (instead of per shard, which would multiply API cost). The trade-off
+  is that future contributors maintain two slightly different wiring
+  shapes rather than one — but each shape matches the workflow's
+  existing failure-surfacing path, so the local cost is small.
 - **One more cross-script dependency.** `scripts/diagnose-stuck-pr.js`
   now imports from `scripts/auto-resolve-newline-conflict.js`. Renaming
   or restructuring either script breaks the other. Tests on both sides
@@ -195,17 +215,42 @@ the failure mode isn't `Timed out waiting`. The skill's SKILL.md gains
 a "Shortcut: look at the auto-generated diagnostic first" section to
 point operators at the new comments.
 
-### Wire `canary-prod.yml` and `e2e-tests.yml` now
+### Wire `canary-prod.yml` and `e2e-tests.yml` in v2 (chosen approach)
 
-Rejected for v1 scope. `canary-prod.yml` posts results to an issue, not
-a PR — surfacing the diagnostic there needs a different
-`post-failure-comment` invocation than the publish-loop wiring (issue
-ID vs PR number). `e2e-tests.yml` runs many sharded jobs across the
-browser matrix; the in-spec layer already covers the wait-helper case
-there, and adding the workflow-level step to every shard would
-multiply the API-call cost by the shard count for little additional
-signal. Both are tracked as follow-ups, to be addressed if the
-diagnostic proves out in the publish-loop case.
+Initially rejected for v1, then landed in v2 after the publish-loop
+wiring proved out. The v2 choice is to give each workflow its own
+minimal adaptation rather than force both into the publish-loop
+shape:
+
+- **`canary-prod.yml`** posts results to a `production-canary` issue,
+  not a PR. Reusing `post-failure-comment` would require either
+  inventing an `issue-number` mode on the action or pre-translating
+  issues into a PR-shaped call site — both add surface area for one
+  failure path. The simpler shape: run `node
+  scripts/diagnose-stuck-pr.js` in a `failure() && probe.outcome ==
+  'failure'` step, capture its stdout to a tmp file, and `cat` it into
+  the issue body the existing step already composes. No gating on
+  `Timed out waiting` because the canary's failure signature is an
+  HTTP/DOM assertion against the prod canary URLs, not a wait
+  timeout; the diagnostic's `deploy-production.yml` queue check and
+  open-`cms/*`-PR scan map directly to two of the four
+  canary-failure modes the issue body already enumerates.
+- **`e2e-tests.yml`** runs many sharded jobs across the browser
+  matrix. Adding the workflow-level step to every shard would
+  multiply the API-call cost by the shard count (up to 4× the
+  publish-loop budget) for largely-duplicate signal — the diagnostic
+  classifies the same set of open `cms/*` PRs regardless of which
+  shard tripped. The simpler shape: add the step exactly once in
+  `finalize`, which already aggregates per-shard logs into a single
+  `/tmp/playwright-output.log` for the failure-summary comment. Gated
+  on `grep 'Timed out waiting'` in that merged log (publish-loop
+  pattern) so non-timeout failures don't pull a stuck-PR comment. The
+  marker `e2e-stuck-pr-diagnostic` is distinct from
+  `e2e-failure-summary` so the two comments don't clobber each other.
+
+In both cases the in-spec wrapper continues to attach the diagnostic
+to the failing test's error message for in-test timeout throws; the
+workflow-level layer remains the outer-Playwright-timeout catch-all.
 
 ## How to verify
 
