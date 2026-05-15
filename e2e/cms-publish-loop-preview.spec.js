@@ -155,7 +155,12 @@ test(
     // on save (PR #882). The textarea preserves typed text verbatim.
     // Title is a single-line `<input>`; date/technology/hidden fields
     // are not textareas — `textarea` is unambiguous on this view.
-    const body = page.locator("textarea").last();
+    // `:visible` filter — Decap appends a hidden clipboard textarea
+    // (tabindex=-1 aria-hidden=true) whose append timing races with
+    // `.last()` resolution. See cms-publish-loop.spec.js step 3 for
+    // the full incident note. Mirroring the filter keeps the preview
+    // and prod publish-loop specs aligned.
+    const body = page.locator("textarea:visible").last();
     await body.click();
     await body.press("End");
     await body.pressSequentially(`\n\n${marker}\n`);
@@ -243,7 +248,12 @@ test(
 
     // `widget: text` plain textarea — see the marker-insert step above
     // for the rationale.
-    const body = page.locator("textarea").last();
+    // `:visible` filter — Decap appends a hidden clipboard textarea
+    // (tabindex=-1 aria-hidden=true) whose append timing races with
+    // `.last()` resolution. See cms-publish-loop.spec.js step 3 for
+    // the full incident note. Mirroring the filter keeps the preview
+    // and prod publish-loop specs aligned.
+    const body = page.locator("textarea:visible").last();
     await body.click();
     await page.keyboard.press("Control+A");
     await page.keyboard.press("Backspace");

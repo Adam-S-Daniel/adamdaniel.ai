@@ -10,7 +10,7 @@
 //
 // allowed: literal slug used for known fixture
 // (`/blog/e2e-unpublish-canary/` is the rendered URL of the dedicated
-// fixture `_posts/2099-01-02-e2e-unpublish-canary.md`; this spec
+// fixture `_posts/2024-01-02-e2e-unpublish-canary.md`; this spec
 // references it deliberately as the test target. File-scope pragma
 // per `e2e/blog-slug-literal-lint.test.js`.)
 
@@ -28,8 +28,14 @@
  * regression in either flow should fail one spec without obscuring
  * the other.
  *
- * Fixture: `_posts/2099-01-02-e2e-unpublish-canary.md` is shipped
+ * Fixture: `_posts/2024-01-02-e2e-unpublish-canary.md` is shipped
  * with `published: false` so the URL is hidden in the steady state.
+ * The date is intentionally in the past — Jekyll's default `future:
+ * false` setting skips future-dated posts during build even when
+ * `published: true`, which would make the re-publish leg's URL wait
+ * time out forever (the post never appears in the deploy). Use a
+ * past date so `published: true/false` is the only knob that
+ * controls public visibility.
  * The spec:
  *   1. Drives Decap UI to open the entry, asserts the Published
  *      toggle reads the baseline state (off).
@@ -59,7 +65,7 @@ const { waitForChangeReflected, PILL_PROD } = require("./deploy-pill");
 
 const PROD_HOST = "https://adamdaniel.ai";
 const PROD_ADMIN = `${PROD_HOST}/admin/`;
-const FIXTURE_PATH = "_posts/2099-01-02-e2e-unpublish-canary.md";
+const FIXTURE_PATH = "_posts/2024-01-02-e2e-unpublish-canary.md";
 const FIXTURE_TITLE = "E2E Unpublish Canary";
 const FIXTURE_SLUG = "e2e-unpublish-canary";
 const PUBLIC_URL = `${PROD_HOST}/blog/${FIXTURE_SLUG}/`;
@@ -191,7 +197,7 @@ test(
     // (forcing a fresh asset fetch) and try once more. 60s per
     // leg, so worst-case ~120s before this step fails.
     const titleLocator = page.getByRole("textbox", { name: /^Title$/i });
-    const targetUrl = `${PROD_ADMIN}#/collections/posts/entries/2099-01-02-${FIXTURE_SLUG}`;
+    const targetUrl = `${PROD_ADMIN}#/collections/posts/entries/2024-01-02-${FIXTURE_SLUG}`;
     let lastErr;
     for (let attempt = 1; attempt <= 2; attempt++) {
       try {
@@ -337,13 +343,13 @@ test.afterAll(async () => {
     "[cleanup-harness] unpublish-canary on main is still published: true after the UI cleanup; restoring baseline via Contents API",
   );
   // Rebuild the fixture body at baseline. Mirrors the file shipped at
-  // `_posts/2099-01-02-e2e-unpublish-canary.md` — keep these in sync if
+  // `_posts/2024-01-02-e2e-unpublish-canary.md` — keep these in sync if
   // the fixture's frontmatter changes.
   const baselineFileText = [
     "---",
     `title: "${FIXTURE_TITLE}"`,
     `slug: ${FIXTURE_SLUG}`,
-    "date: 2099-01-02 00:00:00 +0000",
+    "date: 2024-01-02 00:00:00 +0000",
     'excerpt: "Fixture used by the cms-unpublish-republish spec. Never serves at a public URL until a test flips published: true; resets back to false in cleanup."',
     "tags: []",
     "featured_image: ''",
