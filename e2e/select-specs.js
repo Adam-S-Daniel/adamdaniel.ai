@@ -53,6 +53,7 @@ const HEAVY = new Set([
   "e2e/cms-publish-loop-preview.spec.js",
   "e2e/cms-publish-loop-prod-mutate.spec.js",
   "e2e/cms-delete-published.spec.js",
+  "e2e/cms-delete-published-preview.spec.js",
 ]);
 
 // Files that fan out to "every spec is potentially affected". Includes
@@ -156,6 +157,27 @@ const SPEC_RULES = {
     /^\.github\/workflows\/deploy-preview\.yml$/,
     /^e2e\/(decap-pat|github-actions-poll|canary-content|cms-host)\.js$/,
   ],
+  // Preview-side delete-published-entry flow. Same opt-in shape as the
+  // prod delete spec but targets a per-PR preview env (head ref,
+  // cms-feature-branches ruleset, deploy-preview) — runs exclusively
+  // under the dedicated cms-delete-published-preview workflow. PR-time
+  // selection still fires so changes to admin/, the canary layout/
+  // collection, the editorial-workflow / deploy-preview infra, the
+  // shared run-cms-loop spine, or its imported helpers trigger a
+  // coverage refresh.
+  "e2e/cms-delete-published-preview.spec.js": [
+    /^admin\//,
+    /^_layouts\/canary\.html$/,
+    /^_e2e\//,
+    /^scripts\/patch-preview-config\.sh$/,
+    /^\.github\/workflows\/(cms-editorial-workflow|deploy-preview|cms-delete-published-preview)\.yml$/,
+    /^e2e\/(decap-pat|github-actions-poll|cms-host|run-cms-loop)\.js$/,
+  ],
+  // Unit test for the shared run-cms-loop spine. Pure-node; selects
+  // when the spine impl or the test itself changes (the latter via
+  // the direct-change rule, but listing the impl path keeps the
+  // mapping explicit and survives a future rename of the test).
+  "e2e/run-cms-loop.test.js": [/^e2e\/run-cms-loop\.js$/],
   // Prod-mutation playground (G4). Skips itself unless CMS_E2E_PAT is
   // set, so PR runs are safe — the spec just emits a skip and exits.
   // Selecting it on its own infra changes here keeps the PR matrix
