@@ -201,6 +201,55 @@ test.describe("select-specs", () => {
     expect(r.files).toContain("e2e/cms-publish-loop-preview.spec.js");
   });
 
+  // ── Preview delete-published spec (issue #1004) ────────────────────
+
+  test("cms-delete-published-preview is registered HEAVY (shard-budget neutral)", () => {
+    expect(HEAVY.has("e2e/cms-delete-published-preview.spec.js")).toBe(true);
+  });
+
+  test("admin/ change selects the preview delete spec (lane=real)", () => {
+    const r = selectSpecs(["admin/index.html"], { lane: "real" });
+    expect(r.scope).toBe("subset");
+    expect(r.files).toContain("e2e/cms-delete-published-preview.spec.js");
+  });
+
+  test("its dedicated workflow change selects the preview delete spec (lane=real)", () => {
+    const r = selectSpecs(
+      [".github/workflows/cms-delete-published-preview.yml"],
+      { lane: "real" },
+    );
+    expect(r.scope).toBe("subset");
+    expect(r.files).toContain("e2e/cms-delete-published-preview.spec.js");
+  });
+
+  test("run-cms-loop spine change → preview delete spec (real) + run-cms-loop unit test (local)", () => {
+    const real = selectSpecs(["e2e/run-cms-loop.js"], { lane: "real" });
+    expect(real.scope).toBe("subset");
+    expect(real.files).toContain("e2e/cms-delete-published-preview.spec.js");
+
+    const local = selectSpecs(["e2e/run-cms-loop.js"], { lane: "local" });
+    expect(local.scope).toBe("subset");
+    expect(local.files).toContain("e2e/run-cms-loop.test.js");
+  });
+
+  test("cms/* head ref drops the preview delete spec (self-skips at runtime anyway)", () => {
+    // admin/ change selects it; the @select-skip-when-head-ref-prefix:
+    // cms/ directive takes it back out on cms/* head refs. Pin
+    // lane=real so it's in play pre-directive (see the publish-loop
+    // directive tests for the rationale).
+    const r = selectSpecs(["admin/index.html"], {
+      headRef: "cms/foo",
+      lane: "real",
+    });
+    expect(r.scope).toBe("subset");
+    expect(r.files).not.toContain(
+      "e2e/cms-delete-published-preview.spec.js",
+    );
+    expect(r.skippedByDirective).toContain(
+      "e2e/cms-delete-published-preview.spec.js",
+    );
+  });
+
   // ── Spec-header directives (Layer 3.A) ──────────────────────────────
   // The directive parser reads ~500 bytes from the head of a spec file
   // and extracts `// @key: value` lines. The select-skip-when-head-ref-
