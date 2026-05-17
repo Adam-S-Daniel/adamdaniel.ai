@@ -132,7 +132,7 @@ const SPEC_RULES = {
     /^\.github\/workflows\/cms-editorial-workflow\.yml$/,
     /^\.github\/workflows\/deploy-production\.yml$/,
     /^\.github\/workflows\/deploy-preview\.yml$/,
-    /^e2e\/(decap-pat|github-actions-poll|canary-content|cms-fixture-pr)\.js$/,
+    /^e2e\/(decap-pat|github-actions-poll|canary-content|cms-fixture-pr|cms-host)\.js$/,
   ],
   // Delete-published-entry flow. Same shape as the publish-loop spec
   // — both opt into RUN_HOST_REPO_PUBLISH_LOOP and run exclusively
@@ -145,7 +145,7 @@ const SPEC_RULES = {
     /^_e2e\//,
     /^_layouts\/canary\.html$/,
     /^\.github\/workflows\/(cms-editorial-workflow|deploy-production|cms-publish-loop-host)\.yml$/,
-    /^e2e\/(decap-pat|github-actions-poll|canary-content|cms-fixture-pr)\.js$/,
+    /^e2e\/(decap-pat|github-actions-poll|canary-content|cms-fixture-pr|cms-host)\.js$/,
   ],
   "e2e/cms-publish-loop-preview.spec.js": [
     /^admin\//,
@@ -154,7 +154,7 @@ const SPEC_RULES = {
     /^scripts\/patch-preview-config\.sh$/,
     /^\.github\/workflows\/cms-editorial-workflow\.yml$/,
     /^\.github\/workflows\/deploy-preview\.yml$/,
-    /^e2e\/(decap-pat|github-actions-poll|canary-content)\.js$/,
+    /^e2e\/(decap-pat|github-actions-poll|canary-content|cms-host)\.js$/,
   ],
   // Prod-mutation playground (G4). Skips itself unless CMS_E2E_PAT is
   // set, so PR runs are safe — the spec just emits a skip and exits.
@@ -168,7 +168,7 @@ const SPEC_RULES = {
     /^\.github\/workflows\/cms-editorial-workflow\.yml$/,
     /^\.github\/workflows\/deploy-production\.yml$/,
     /^\.github\/workflows\/cms-publish-loop-prod\.yml$/,
-    /^e2e\/(decap-pat|github-actions-poll)\.js$/,
+    /^e2e\/(decap-pat|github-actions-poll|cms-host)\.js$/,
   ],
   "e2e/cms-publish-flow.spec.js": [
     /^admin\//,

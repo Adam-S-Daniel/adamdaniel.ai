@@ -61,11 +61,15 @@ const {
   waitForCmsPullRequest,
 } = require("./github-actions-poll");
 const { seedFixtureViaPr, closeStaleDecapPrOnBranch } = require("./cms-fixture-pr");
-const { waitForChangeReflected, PILL_PROD } = require("./deploy-pill");
+const { waitForChangeReflected } = require("./deploy-pill");
+const { prodTarget } = require("./cms-host");
 
 const CANARY = findCanary("post");
-const PROD_HOST = "https://adamdaniel.ai";
-const PROD_ADMIN = `${PROD_HOST}/admin/`;
+// Host triplet now resolves through the shared cms-host resolver so the
+// prod and preview test surfaces can't drift. This is the fixed-prod
+// loop; the values are byte-identical to the old literals.
+const { host: PROD_HOST, adminUrl: PROD_ADMIN, pillId: PILL_PROD } =
+  prodTarget();
 const PUBLIC_URL = `${PROD_HOST}${CANARY.publicPath}`;
 
 // E3 — `PROD_CANARY=1` gates a read-only daily canary probe (see

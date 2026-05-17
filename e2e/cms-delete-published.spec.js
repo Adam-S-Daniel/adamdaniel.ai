@@ -52,10 +52,13 @@ const { test, expect } = require("./base");
 const { seedDecapAuth, getPat, HOST_REPO } = require("./decap-pat");
 const { gh } = require("./github-actions-poll");
 const { removeFixtureViaPr } = require("./cms-fixture-pr");
-const { waitForChangeReflected, PILL_PROD } = require("./deploy-pill");
+const { waitForChangeReflected } = require("./deploy-pill");
+const { prodTarget } = require("./cms-host");
 
-const PROD_HOST = "https://adamdaniel.ai";
-const PROD_ADMIN = `${PROD_HOST}/admin/`;
+// Fixed-prod loop, resolved through the shared cms-host resolver
+// (byte-identical to the old literals) so prod/preview can't drift.
+const { host: PROD_HOST, adminUrl: PROD_ADMIN, pillId: PILL_PROD } =
+  prodTarget();
 
 // The delete spec runs two editorial-workflow auto-merge cycles end
 // to end:

@@ -65,7 +65,8 @@ const { test, expect } = require("./base");
 const { seedDecapAuth, getPat, HOST_REPO } = require("./decap-pat");
 const { closeStaleDecapPrOnBranch } = require("./cms-fixture-pr");
 const { addLabel, gh, waitForCmsPullRequest } = require("./github-actions-poll");
-const { waitForChangeReflected, PILL_PROD } = require("./deploy-pill");
+const { waitForChangeReflected } = require("./deploy-pill");
+const { resolveCmsTarget } = require("./cms-host");
 
 const REPO_ROOT = path.resolve(__dirname, "..");
 const FIXTURE_PATH = "_posts/2099-01-03-e2e-media-roundtrip.md";
@@ -79,8 +80,17 @@ const FILE_SLUG = "2099-01-03-e2e-media-roundtrip";
 const DECAP_BRANCH = `cms/posts/${FILE_SLUG}`;
 const PUBLIC_PATH = `/blog/${FIXTURE_SLUG}/`;
 
-const PROD_HOST = "https://adamdaniel.ai";
-const PROD_ADMIN = `${PROD_HOST}/admin/`;
+// Parameterized target: CMS_TARGET=preview (+ PR_NUMBER) drives the
+// PR's preview-pr<N> surface; anything else keeps the prod default, so
+// the existing prod workflow is behaviour-preserving with no new env.
+// The local names stay PROD_* to keep this large spec's body and diff
+// minimal — the *value* is whatever resolveCmsTarget() picks (prod or
+// preview), which is the point of the parameterization.
+const {
+  host: PROD_HOST,
+  adminUrl: PROD_ADMIN,
+  pillId: PILL_PROD,
+} = resolveCmsTarget();
 const PUBLIC_URL = `${PROD_HOST}${PUBLIC_PATH}`;
 
 // Source bytes for the upload. We re-upload these under a per-run
