@@ -170,6 +170,19 @@ const SPEC_RULES = {
     /^\.github\/workflows\/cms-publish-loop-prod\.yml$/,
     /^e2e\/(decap-pat|github-actions-poll|cms-host)\.js$/,
   ],
+  // Lightweight read-only preview-surface media gate. Selected when
+  // anything that could regress the flat media_folder path on the
+  // deployed build changes. @lane:real, single HTTP GET — NOT in the
+  // HEAVY set (no Decap/PAT/mutation). The dedicated preview-media.yml
+  // workflow is what makes it a required check.
+  "e2e/preview-media-resolves.spec.js": [
+    /^assets\/images\/uploads\//,
+    /^admin\/config(-local)?\.yml$/,
+    /^_config\.yml$/,
+    /^_layouts\/(post|canary)\.html$/,
+    /^scripts\/patch-preview-config\.sh$/,
+    /^e2e\/cms-host\.js$/,
+  ],
   "e2e/cms-publish-flow.spec.js": [
     /^admin\//,
     /^_posts\//,
