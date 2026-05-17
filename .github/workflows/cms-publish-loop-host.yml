@@ -13,11 +13,16 @@ name: CMS Publish Loop — Host Repo (canary collection)
 #     job-level recursion guard below). `paths:` only narrows the
 #     `pull_request` trigger; cron and dispatch ignore it.
 #   - pull_request fires only when one of the listed salient files
-#     changed. The job ALSO self-skips on cms/* PRs to avoid
-#     recursion: the spec opens a `cms/e2e/canary-post` PR, which
-#     would otherwise re-trigger this same workflow on its own PR.
-#     Gate: `head_ref` does not start with `cms/`. This job is NOT
-#     in the branch-protection required-status-checks list — see
+#     changed. e2e/** is deliberately NOT salient (see the long note
+#     in `on.pull_request.paths` below): firing the loop on a PR push
+#     mutates the canary on `main` mid-run and poisons the ALWAYS-RUN
+#     canary-content invariant on every concurrent PR via the
+#     pull/N/merge checkout ref. Spec changes are validated by the
+#     daily cron instead. The job ALSO self-skips on cms/* PRs to
+#     avoid recursion: the spec opens a `cms/e2e/canary-post` PR,
+#     which would otherwise re-trigger this same workflow on its own
+#     PR. Gate: `head_ref` does not start with `cms/`. This job is
+#     NOT in the branch-protection required-status-checks list — see
 #     `.github/rulesets/main.json` and the live ruleset API view —
 #     so workflow-level `paths:` filtering is safe (no missing-check
 #     merge block).
@@ -37,19 +42,25 @@ on:
   pull_request:
     branches: [main]
     paths:
+      # Deliberately NO e2e/** entries here. The spec/helper files this
+      # loop runs (cms-publish-loop, cms-delete-published, the
+      # decap-pat/github-actions-poll/canary-content/base helpers, …)
+      # are validated by the daily `schedule` run and on-demand
+      # `workflow_dispatch` — both ignore `paths:` and always fire.
+      # They are NOT salient here because firing the loop on a PR push
+      # mutates `_e2e/canary-*.md` on `main` mid-run, and every PR's
+      # e2e matrix checks out the `refs/pull/N/merge` ref (PR head
+      # merged with main), so the in-flight marker poisons the
+      # ALWAYS-RUN `canary-content.test.js` verbatim-body invariant on
+      # *every* concurrently-running PR — a non-deterministic flake
+      # that is not self-limited to the spec-editing PR. A spec change
+      # that breaks the loop is caught by the next daily cron, not
+      # synchronously on the PR. This job is not a required check (see
+      # the ruleset note above), so dropping these paths blocks no
+      # merge.
       - .github/workflows/cms-publish-loop-host.yml
       - .github/workflows/cms-editorial-workflow.yml
       - .github/workflows/deploy-production.yml
-      - e2e/cms-publish-loop.spec.js
-      - e2e/cms-delete-published.spec.js
-      - e2e/cms-unpublish-republish.spec.js
-      - e2e/cms-tags-lifecycle.spec.js
-      - e2e/cms-fixture-pr.js
-      - e2e/decap-pat.js
-      - e2e/github-actions-poll.js
-      - e2e/deploy-pill.js
-      - e2e/canary-content.js
-      - e2e/base.js
       - admin/**
       - _e2e/canary-post.md
       - _e2e/canary-page.md
