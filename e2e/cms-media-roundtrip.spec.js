@@ -257,6 +257,30 @@ test(
       return;
     }
 
+    // The whole round trip reads and writes the fixture's state on
+    // `main`. On the PR that INTRODUCES this fixture it isn't on main
+    // yet (chicken-and-egg) and fetchFixtureFromMain() 404s. That's
+    // expected, not a failure: skip cleanly here. Once this PR merges,
+    // the scheduled / workflow_dispatch cms-media-roundtrip run
+    // exercises the real round trip. Same philosophy as the
+    // disk/`published:`/date hard guards above.
+    let fixtureOnMain = true;
+    try {
+      await fetchFixtureFromMain();
+    } catch (e) {
+      if (e && e.status === 404) fixtureOnMain = false;
+      else throw e;
+    }
+    if (!fixtureOnMain) {
+      test.fixme(
+        true,
+        `${FIXTURE_PATH} is not on main yet — this is the PR that introduces it. ` +
+          `Merge to main; the scheduled / workflow_dispatch cms-media-roundtrip ` +
+          `run then exercises the real upload → publish → delete round trip.`,
+      );
+      return;
+    }
+
     const runId = Date.now();
     const imageName = `e2e-media-roundtrip-${runId}.png`;
     const imagePath = `${UPLOADS_DIR}/${imageName}`;
