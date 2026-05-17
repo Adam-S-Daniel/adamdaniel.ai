@@ -2,6 +2,7 @@
 const fs = require("node:fs");
 const path = require("node:path");
 const http = require("node:http");
+const { execFileSync } = require("node:child_process");
 const { test, expect } = require("./base");
 
 // Verifies the contributor capability "Build a multi-image project gallery":
@@ -214,6 +215,19 @@ test.describe(
       uploaded.length,
       "all 3 gallery PNG fixtures should land under assets/images/uploads/",
     ).toBe(3);
+
+    // The webServer is `bundle exec jekyll build` ONCE at startup then
+    // `npx serve _site` — it does NOT watch or rebuild. decap-server
+    // wrote the uploads into the SOURCE tree (assets/images/uploads/),
+    // so we must rebuild for `_site/` (what port 4000 serves) to
+    // actually contain them. Every other upload spec
+    // (cms-image-upload, cms-featured-image-lifecycle,
+    // manual-walkthrough-first-post) does this explicit rebuild; this
+    // spec historically masked its absence by tolerating a 404.
+    execFileSync("bundle", ["exec", "jekyll", "build", "--quiet"], {
+      cwd: REPO_ROOT,
+      stdio: "inherit",
+    });
 
     // ── Assertion 3: public image URLs resolve (strict 200) ──────────
     // Extract the raw URL from each YAML list line and HEAD-fetch it.
