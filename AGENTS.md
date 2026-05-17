@@ -167,6 +167,14 @@ The `cms-publish-loop-prod.yml`, `cms-publish-loop-host.yml`, `dependabot-commen
 
 Quick reference. When you change one of the listed paths, the workflow either runs or (for required-check workflows) does its real work; when you only change paths NOT listed, the workflow is skipped or self-skips with success.
 
+This table is **Layer 1** (workflow-level firing) only. Which *specs*
+actually run inside `e2e-tests.yml` (the diff-aware selector) and which
+selected specs still self-skip at runtime (the heavy `@lane:real` CMS
+specs) is documented in [`docs/TESTING.md` §2 "Trigger map: what runs
+when"](docs/TESTING.md#2-trigger-map-what-runs-when) — including the
+missing-check trap, the stub mirror, the `cms/*` head-ref directive, and
+the verified footguns. Keep both in sync when you change path filters.
+
 | Workflow | Trigger | Path-filtering mechanism | Salient paths |
 |---|---|---|---|
 | `canary-prod.yml` | `schedule`, `workflow_dispatch` | n/a (cron-only) | n/a |
