@@ -1,14 +1,14 @@
 ---
 reading_time: null
-excerpt: "Fixture for the media round-trip spec. Never serves at a public
-  URL until a test flips published: true, then resets it."
+excerpt: "Fixture for the media round-trip spec. Never serves at a public URL
+  until a test flips published: true, then resets it."
 robots: noindex,nofollow
 title: E2E Media Roundtrip
 slug: e2e-media-roundtrip
 date: 2099-01-03 00:00:00 +0000
 tags: []
-featured_image: ""
-published: false
+featured_image: /assets/images/uploads/e2e-media-roundtrip-1779043268692.png
+published: true
 sitemap: false
 publish_date: ""
 ---
