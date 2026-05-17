@@ -114,6 +114,17 @@ jobs:
       - name: Stub success
         run: echo "Stub success — paths-ignored PR; e2e-tests.yml's e2e (${{ matrix.shard }}) did not fire."
 
+  # e2e-admin is single-shard in e2e-tests.yml (no matrix), so its
+  # GitHub check context is exactly `e2e-admin`. It IS in
+  # rulesets/main.json's required list, so a paths-ignored PR needs
+  # this stub too — without it, docs/tooling-only PRs sit blocked on
+  # `e2e-admin` ("Expected — waiting for status") forever.
+  e2e-admin:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Stub success
+        run: echo "Stub success — paths-ignored PR; e2e-tests.yml's e2e-admin did not fire."
+
   finalize:
     runs-on: ubuntu-latest
     steps:

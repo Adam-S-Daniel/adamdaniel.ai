@@ -1,11 +1,23 @@
 # frozen_string_literal: true
 #
-# Workflow-shape lint: assert that the `paths:` allowlist in
-# `.github/workflows/required-check-stubs.yml` exactly mirrors the
-# `paths-ignore:` list in `.github/workflows/e2e-tests.yml`. If the
-# two drift, doc-only PRs hit the missing-check trap (e2e-tests skips,
-# stub doesn't fire) or — worse — emit ambiguous duplicated checks on
-# PRs the stub matches but e2e-tests would have run anyway.
+# Workflow-shape lint with two invariants:
+#
+#   1. The `paths:` allowlist in
+#      `.github/workflows/required-check-stubs.yml` exactly mirrors the
+#      `paths-ignore:` list in `.github/workflows/e2e-tests.yml`. If the
+#      two drift, doc-only PRs hit the missing-check trap (e2e-tests
+#      skips, stub doesn't fire) or — worse — emit ambiguous duplicated
+#      checks on PRs the stub matches but e2e-tests would have run.
+#
+#   2. Every merge-gating context in `.github/rulesets/main.json` that
+#      is produced by a path-filtered workflow has a matching stub job
+#      in required-check-stubs.yml. Paths parity alone is insufficient:
+#      `e2e-admin` was in the required list and the paths mirrored
+#      perfectly, yet no `e2e-admin` stub existed, so docs-only PRs sat
+#      blocked on `e2e-admin` forever. `validate-content` and `scan`
+#      are exempt — cms-editorial-workflow.yml / secrets-scan.yml carry
+#      no path filters by design, so they always report and the trap
+#      can't reach them.
 #
 # Run with:
 #
@@ -16,10 +28,18 @@
 # e2e — exactly when the lint is meaningful.
 
 require 'yaml'
+require 'json'
 
 WORKFLOWS_DIR = File.expand_path('../.github/workflows', __dir__)
 E2E_TESTS = File.join(WORKFLOWS_DIR, 'e2e-tests.yml')
 STUBS = File.join(WORKFLOWS_DIR, 'required-check-stubs.yml')
+RULESET = File.expand_path('../.github/rulesets/main.json', __dir__)
+
+# Required contexts produced by workflows with NO path filter — they
+# always report, so the missing-check trap can't reach them and they
+# need no stub. Keep this list tight and justified; anything not here
+# is assumed path-filtered and MUST have a stub.
+ALWAYS_FIRE_CONTEXTS = %w[validate-content scan].freeze
 
 # Ruby's standard YAML loader doesn't accept the `on:` short form
 # without `permitted_classes`, but we're only reading scalars/arrays
@@ -51,8 +71,40 @@ if paths_ignore != paths
   @failures << msg
 end
 
+# Invariant 2 — every path-filtered required context has a stub job.
+ruleset = JSON.parse(File.read(RULESET))
+rsc_rule = ruleset.fetch('rules').find { |r| r['type'] == 'required_status_checks' }
+raise 'main.json: no required_status_checks rule found' unless rsc_rule
+
+required_contexts = rsc_rule.fetch('parameters')
+                            .fetch('required_status_checks')
+                            .map { |c| c.fetch('context') }
+
+# Contexts that need a stub = required, minus the always-fire ones.
+# Map each to its stub job key: a matrix-derived context like
+# `e2e (1)` is emitted by a job keyed `e2e`, so strip a trailing
+# ` (<n>)` suffix; every other context's job key is identical.
+need_stub = required_contexts - ALWAYS_FIRE_CONTEXTS
+expected_job_keys = need_stub.map { |c| c.sub(/\s*\(\d+\)\z/, '') }.uniq
+stub_job_keys = stubs_yaml.fetch('jobs').keys
+
+missing_jobs = expected_job_keys - stub_job_keys
+unless missing_jobs.empty?
+  msg = +"required-check-stubs.yml is missing a stub job for required context(s).\n"
+  msg << "  Required (rulesets/main.json) but no stub job: #{missing_jobs.inspect}\n"
+  msg << "  required_status_checks: #{required_contexts.inspect}\n"
+  msg << "  stub jobs present: #{stub_job_keys.inspect}\n"
+  msg << "  Add a trivial stub job (key = context, sans any ` (n)` matrix\n"
+  msg << "  suffix) to required-check-stubs.yml, or, if the context now\n"
+  msg << "  comes from an always-firing workflow, add it to\n"
+  msg << "  ALWAYS_FIRE_CONTEXTS with a justification. Without the stub,\n"
+  msg << "  docs/tooling-only PRs block forever on that check."
+  @failures << msg
+end
+
 if @failures.empty?
   puts "[ok] required-check-stubs.yml paths mirror e2e-tests.yml paths-ignore"
+  puts "[ok] every path-filtered required context has a stub job"
 else
   warn @failures.join("\n\n")
   exit 1

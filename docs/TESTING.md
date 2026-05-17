@@ -112,10 +112,13 @@ two lists drift.
 
 ### Footguns (verified)
 
-- **`e2e-admin` is required but NOT stub-mirrored.** `main.json` requires
-  `e2e-admin`; `required-check-stubs.yml` only stubs
-  `select/unit/parity/e2e (1)/finalize`. A pure docs/tooling-only PR can
-  sit blocked on `e2e-admin` ("Expected — waiting"). Fix separately.
+- **`e2e-admin` stub gap — fixed.** `main.json` requires `e2e-admin`;
+  `required-check-stubs.yml` historically only stubbed
+  `select/unit/parity/e2e (1)/finalize`, so a docs/tooling-only PR sat
+  blocked on `e2e-admin` ("Expected — waiting"). An `e2e-admin` stub
+  job was added and `_plugins_test/required_check_stubs_paths_test.rb`
+  now asserts *every* path-filtered required context (not just paths
+  parity) has a stub job, so this class of gap can't recur silently.
 - **`_sass/**` has no PR coverage** — not a fanout pattern, no
   `SPEC_RULES` match, absent from `visual-regression.yml`'s `paths:`. A
   Sass-only PR runs the baseline only, no visual signal.
