@@ -57,11 +57,13 @@ function makeFakePage(log) {
   };
 }
 
-// expect() stub — only `.toBeVisible()` is exercised by the spine.
+// expect() stub — the spine calls `expect(locator).toBeVisible(...)`, so
+// this must be a CALLABLE returning a matcher object (mirrors Playwright's
+// `expect` shape), not the matcher object itself.
 function fakeExpect() {
-  return {
+  return () => ({
     toBeVisible: async () => {},
-  };
+  });
 }
 
 // step() stub that runs the body inline and records the phase label so
