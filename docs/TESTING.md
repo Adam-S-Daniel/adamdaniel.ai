@@ -41,21 +41,100 @@ theme broke."
 
 ## 2. Trigger map: what runs when
 
-The selector lives in [`e2e/select-specs.js`](../e2e/select-specs.js) and
-is unit-tested by `select-specs.test.js`. On every PR it runs against
-`git diff origin/main...HEAD` and returns one of three scopes:
+Three independent layers decide what actually executes on a commit/PR. A
+spec can be *selected* by the diff yet still no-op at runtime — keep the
+layers distinct when reasoning about coverage. (The per-workflow path
+lists live in AGENTS.md "Salient paths per workflow"; this section is the
+spec/selector/runtime view.)
 
-| Trigger | What runs |
-|---|---|
-| **Push to `main`** | Selector bypassed — full Playwright matrix (8 projects × every spec) |
-| Fanout file changes (any of `_layouts/`, `_includes/`, `_config.yml`, `assets/css/`, `_plugins/`, `package*.json`, `Gemfile*`, `e2e/base.js`, `playwright*.config.js`, `.github/workflows/e2e-tests.yml`) | Full matrix (anything visual could have shifted) |
-| Spec file's own change | That spec runs |
-| Path-matched (e.g. `_posts/<file>.md`) | Specs whose `SPEC_RULES` rule matches |
-| Docs-only (`README.md`, `AGENTS.md`, `docs/`, `.agents/skills/`) | Always-run baseline only — `cms-config.spec.js`, `compute-visual-diffs.test.js`, `visual-change-guard.spec.js` |
+**Layer 1 — workflow-level path filters.** Each `.github/workflows/*.yml`
+gates itself with `paths:`/`paths-ignore:`. The merge-gating required
+checks are `validate-content` (`cms-editorial-workflow.yml` — fires on
+*every* PR, no path filter), `scan` (`secrets-scan.yml` — every PR), and
+`select` / `unit` / `parity` / `e2e (1)` / `e2e-admin` / `finalize`
+(`e2e-tests.yml`, which carries a `paths-ignore:` list — so on a
+docs/tooling-only PR it doesn't fire at all → see "missing-check
+trap"), and `preview-media` (`preview-media.yml` — always-run +
+early-skip: fires on every PR with no path filter, runs a read-only
+probe that a committed `assets/images/uploads/` image resolves on the
+PR's `preview-pr<N>` surface only when media-salient paths changed;
+on a media-salient PR it HARD-FAILS if the preview env is absent —
+the trap-safe way to require `deploy-preview` success without making
+the path-filtered `deploy-preview.yml` itself a required context).
 
-The always-run baseline is cheap (no browser, runs in seconds) and
-effectively works as a smoke-check that the YAML hasn't been corrupted
-and that snapshot/diff infrastructure still builds.
+**Layer 2 — the diff-aware selector** (`e2e/select-specs.js`, unit-tested
+by `select-specs.test.js`). The `select` job runs it twice — once per
+lane (`TEST_LANE=local` drives `e2e`/`e2e-admin`, `TEST_LANE=real` drives
+`e2e-real`). It diffs `origin/main...HEAD` and returns `scope` =
+`all` | `subset` | `skip`:
+
+| Change | Local scope | Result |
+|---|---|---|
+| Push to `main` | — | selector bypassed; full matrix |
+| Fanout file (`_layouts/`, `_includes/`, `_config.yml`, `assets/css/`, `_plugins/`, `Gemfile*`, `package*.json`, `e2e/base.js`, `playwright*.config.js`, `.github/workflows/e2e-tests.yml`) | `all` | full 8-project matrix; on the **real** lane this is *not* `all` but a subset of every `@lane:real` spec |
+| A changed `e2e/*.spec.js`/`*.test.js` | `subset` | that spec adds itself (then lane-filtered) |
+| Path matches a `SPEC_RULES` entry (e.g. `_posts/**` → `cms-smoke`, `blog-post`, …) | `subset` | the matched specs |
+| Docs-only (`README.md`, `AGENTS.md`, `docs/`, `.agents/skills/`) | `skip` | baseline only |
+| No rule matched / only baseline survivors | `skip` | 1-shard baseline |
+
+The `scope=skip` baseline run executes only `compute-visual-diffs.test.js`,
+`cms-config.spec.js`, `visual-change-guard.spec.js` — **fewer** than
+`ALWAYS_RUN`: `canary-content.test.js` / `select-specs.test.js` run only
+when their own paths change, not on a skip.
+
+**Layer 3 — runtime self-skip.** The heavy `@lane: real` specs are
+selected by `admin/**`, their fixtures, or fanout, but then `test.skip()`
+at runtime unless their env opt-in is set — so they execute end-to-end
+only in their dedicated workflow:
+
+| Spec(s) | Env gate | Set by |
+|---|---|---|
+| `cms-publish-loop`, `cms-delete-published`, `cms-unpublish-republish`, `cms-tags-lifecycle` | `RUN_HOST_REPO_PUBLISH_LOOP=1` + `CMS_E2E_PAT` | `cms-publish-loop-host.yml` (nightly/dispatch) |
+| `cms-publish-loop-preview` | `PR_NUMBER` + `PR_HEAD_REF` + `CMS_E2E_PAT` | `cms-publish-loop-preview.yml` (dispatch) |
+| `cms-publish-loop-prod-mutate`, `cms-media-roundtrip` | `RUN_PROD_MUTATE_PLAYGROUND=1` + `CMS_E2E_PAT` + repo var `PROD_PLAYGROUND_MODE=true` | `cms-publish-loop-prod.yml` / `cms-media-roundtrip.yml` |
+| `cms-publish-loop` `@canary-readonly` | `PROD_CANARY=1`, no PAT | `canary-prod.yml` (nightly) |
+
+`admin-bundle-parity` is the only `@lane:real` spec with **no** env gate —
+it actually runs in `e2e-real` on any `admin/**` change. `e2e`/`e2e-admin`
+*do* export `CMS_E2E_PAT` (read-side fixture fetches) but never the
+`RUN_*` opt-ins, so "selected by `admin/**`" ≠ "executed".
+
+### The cms/* head-ref directive
+
+Specs whose header carries `@select-skip-when-head-ref-prefix: cms/`
+(every heavy CMS spec except `admin-bundle-parity`) are dropped from
+selection when the PR head ref starts with `cms/` (Decap-opened editorial
+PRs). Empty on cron/dispatch/push, so scheduled runs keep full coverage;
+a `cms/*` canary-only changeset collapses to `scope:skip`.
+
+### The missing-check trap and the stub mirror
+
+`e2e-tests.yml`'s `paths-ignore:` means a docs/tooling-only PR never
+fires `select`/`unit`/`parity`/`e2e (1)`/`finalize` — yet branch
+protection *requires* them, so the PR would block forever.
+`required-check-stubs.yml` fires on the byte-mirror of that
+`paths-ignore:` list and emits trivial green jobs of the same names.
+`_plugins_test/required_check_stubs_paths_test.rb` fails the build if the
+two lists drift.
+
+### Footguns (verified)
+
+- **`e2e-admin` stub gap — fixed.** `main.json` requires `e2e-admin`;
+  `required-check-stubs.yml` historically only stubbed
+  `select/unit/parity/e2e (1)/finalize`, so a docs/tooling-only PR sat
+  blocked on `e2e-admin` ("Expected — waiting"). An `e2e-admin` stub
+  job was added and `_plugins_test/required_check_stubs_paths_test.rb`
+  now asserts *every* path-filtered required context (not just paths
+  parity) has a stub job, so this class of gap can't recur silently.
+- **`_sass/**` has no PR coverage** — not a fanout pattern, no
+  `SPEC_RULES` match, absent from `visual-regression.yml`'s `paths:`. A
+  Sass-only PR runs the baseline only, no visual signal.
+- **Large tooling PRs** (`tests/**`, `scripts/bootstrap.sh`,
+  `.githooks/**`) fire e2e-tests for real but collapse to a 1-shard
+  baseline — green gate, near-zero behavioural coverage.
+- **`parity` is required but has no `needs:`** and runs against live
+  prod; if `adamdaniel.ai` is degraded, every PR's `parity` fails
+  independent of the diff.
 
 ## 3. Categories and which workflow runs them
 
@@ -63,7 +142,7 @@ and that snapshot/diff infrastructure still builds.
 |---|---|---|
 | `e2e-tests.yml` | PR, push to main | All `e2e/*.spec.js` and `e2e/*.test.js` (subset gated by selector on PRs) |
 | `visual-regression.yml` | PR | Uses its own `playwright.regression.config.js` and `e2e/regression-video.spec.js` only |
-| `cms-editorial-workflow.yml` | PR with content-folder changes | Front-matter validation in-line (no specs invoked) |
+| `cms-editorial-workflow.yml` | Every PR (no path/branch filter — `validate-content` must always report for the ruleset) | Front-matter validation in-line (no specs invoked) |
 | `publish-scheduled-posts.yml` | Hourly cron | Runs `scripts/publish_scheduled_posts.py`; no specs |
 
 Plugin and OAuth-proxy unit tests are run inside `e2e-tests.yml` as

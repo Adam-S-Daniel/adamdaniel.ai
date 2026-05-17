@@ -1,0 +1,202 @@
+name: Preview Media Gate
+
+# Required, lightweight, READ-ONLY merge gate. Asserts that a committed
+# image under the flat `media_folder` (assets/images/uploads/) actually
+# resolves on the PR's already-deployed preview-pr<N>.adamdaniel.ai
+# surface — the exact regression class PR #952 fixed (flattened
+# media_folder / broken images / Copy Path), verified on the real
+# S3+CloudFront preview build rather than only structurally
+# (cms-config.spec.js) or against a local Jekyll build.
+#
+# Why this exists separately from cms-media-roundtrip.yml: that one
+# drives the full Decap upload→publish→delete loop (~30-55 min, real
+# mutation) and is intentionally NON-required (dispatch/nightly). This
+# is the cheap counterpart that CAN gate every PR: one HTTP GET.
+#
+# Required-check shape — ALWAYS-RUN + EARLY-SKIP, NOT workflow `paths:`.
+# A required check that uses `paths`/`paths-ignore` hits the missing-
+# check trap (the workflow never fires on a non-salient PR, the context
+# never reports, the merge blocks forever). So this workflow fires on
+# every PR to main, detects media-salient changes in an early step, and
+# reports success immediately when nothing salient changed. The context
+# is therefore ALWAYS present — no stub needed (it joins the
+# always-fire set alongside validate-content / scan; the lint
+# `_plugins_test/required_check_stubs_paths_test.rb` knows this).
+#
+# Preview-unavailable behaviour — HARD-FAIL (enforces deploy-preview).
+# The PR's preview-pr<N> surface comes from deploy-preview.yml, which
+# is path-filtered + non-required. We deliberately do NOT make
+# deploy-preview.yml's own context a required check: it uses
+# `paths-ignore`, so requiring it directly would re-create the
+# missing-check trap the repo forbids (see rulesets/main.json's
+# _comment — deploy-preview is excluded for exactly this reason). The
+# trap-safe equivalent is here: on a media-salient PR, if the preview
+# surface is not reachable within the (generous) bound, this required
+# check FAILS and blocks the merge — which in practice requires
+# deploy-preview to have succeeded for that PR. A media-salient PR
+# whose only changes don't trigger deploy-preview must add a change
+# that does, or the maintainer overrides. Non-salient PRs early-skip
+# (green) and never depend on a preview at all, so docs/tooling PRs are
+# unaffected — this is the always-run + early-skip pattern, not a
+# workflow-level paths filter. The bound is generous (≈20 min) so
+# normal deploy-preview + CDN latency does not flake the gate.
+
+on:
+  pull_request:
+    branches:
+      - main
+
+permissions:
+  contents: read
+  # post-failure-comment composite needs this to post the
+  # failure summary on the PR (preview-unreachable or probe failure).
+  pull-requests: write
+
+concurrency:
+  group: preview-media-pr-${{ github.event.pull_request.number }}
+  cancel-in-progress: true
+
+defaults:
+  run:
+    shell: bash
+
+jobs:
+  # Job name == GitHub check context == `preview-media` (single job, no
+  # matrix). This is the exact string added to
+  # .github/rulesets/main.json's required_status_checks.
+  preview-media:
+    runs-on: ubuntu-latest
+    env:
+      HOME: /root
+    container:
+      # MUST match package-lock.json's @playwright/test version — the
+      # `select` job in e2e-tests.yml fails the build if any workflow's
+      # tag drifts from the lockfile.
+      image: mcr.microsoft.com/playwright:v1.59.1-noble
+    # Generous: a media-salient PR must wait for deploy-preview + CDN
+    # propagation (~10-15 min) before the probe; the wait step bounds
+    # at ~20 min, plus checkout/npm/probe headroom.
+    timeout-minutes: 30
+    steps:
+      - name: Checkout
+        uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd  # v6.0.2 (2026-01-09)
+        with:
+          # Need history so the salient-path diff against the base tip
+          # is accurate.
+          fetch-depth: 0
+
+      - name: Detect media-salient changes
+        id: salient
+        # Mirror of e2e/select-specs.js's
+        # "e2e/preview-media-resolves.spec.js" SPEC_RULES entry, plus
+        # this workflow + the spec themselves. If nothing here changed,
+        # the gate is not applicable and we report success immediately
+        # (early-skip) so the required context is always present without
+        # ever blocking a non-media PR.
+        run: |
+          set -o pipefail
+          git fetch origin "${{ github.base_ref }}" --depth=500 || true
+          changed=$(git diff --name-only "origin/${{ github.base_ref }}...HEAD" || true)
+          echo "Changed files:"
+          echo "$changed" | sed 's/^/  /'
+          # grep -E with an alternation of the salient path anchors.
+          if echo "$changed" | grep -Eq \
+            '^(assets/images/uploads/|admin/config(-local)?\.yml$|_config\.yml$|_layouts/(post|canary)\.html$|scripts/patch-preview-config\.sh$|e2e/cms-host\.js$|e2e/preview-media-resolves\.spec\.js$|\.github/workflows/preview-media\.yml$)'; then
+            echo "salient=true" >> "$GITHUB_OUTPUT"
+            echo "Media-salient change detected — running the preview probe."
+          else
+            echo "salient=false" >> "$GITHUB_OUTPUT"
+            echo "No media-salient change — preview-media gate not applicable; reporting success."
+          fi
+
+      - name: Setup Node
+        if: steps.salient.outputs.salient == 'true'
+        uses: actions/setup-node@48b55a011bda9f5d6aeb4c2d9c7362e8dae4041e  # v6.4.0 (2026-04-20)
+        with:
+          node-version: '20'
+          cache: 'npm'
+
+      - name: Install npm dependencies
+        if: steps.salient.outputs.salient == 'true'
+        run: npm ci
+
+      - name: Wait for the preview surface (bounded)
+        if: steps.salient.outputs.salient == 'true'
+        id: preview
+        # deploy-preview.yml is path-filtered + non-required, so the
+        # preview-pr<N> surface may not exist yet (or at all) for this
+        # PR. Poll the site root with a generous bound; record
+        # reachability. This step never fails — the explicit
+        # "Require preview" step below converts an unreachable preview
+        # into a hard failure (see header: this is the trap-safe way
+        # to require deploy-preview success for media-salient PRs).
+        env:
+          PR_NUMBER: ${{ github.event.pull_request.number }}
+        run: |
+          set -uo pipefail
+          host="https://preview-pr${PR_NUMBER}.adamdaniel.ai"
+          echo "Probing ${host}/ for readiness (bounded ~20 min)…"
+          reachable=false
+          # 40 × 30s ≈ 20 min — covers normal deploy-preview build +
+          # CDN propagation latency so the hard gate doesn't flake.
+          # `seq` is command substitution, not a filesystem glob.
+          for _ in $(seq 1 40); do
+            code=$(curl -s -o /dev/null -w '%{http_code}' "${host}/" || echo "000")
+            echo "  ${host}/ -> ${code}"
+            if [ "$code" = "200" ]; then
+              reachable=true
+              break
+            fi
+            sleep 30
+          done
+          echo "reachable=${reachable}" >> "$GITHUB_OUTPUT"
+          echo "host=${host}" >> "$GITHUB_OUTPUT"
+
+      - name: Require preview (hard-fail if unreachable on a salient PR)
+        if: ${{ steps.salient.outputs.salient == 'true' && steps.preview.outputs.reachable != 'true' }}
+        # This is the enforcement: a media-salient PR MUST have a live
+        # preview-pr<N> surface (i.e. deploy-preview must have
+        # succeeded) before it can merge. Writing the explanation to
+        # the failure log so the post-failure-comment composite
+        # surfaces an actionable message on the PR.
+        run: |
+          msg="preview-pr${{ github.event.pull_request.number }}.adamdaniel.ai was not reachable within ~20 min on a media-salient PR. The preview-media gate requires a live preview surface (deploy-preview must have succeeded) to verify the flat media_folder path on the deployed build. If deploy-preview was path-skipped or failed, make a change that triggers it (or re-run deploy-preview) and push again; a maintainer can override if a preview genuinely cannot be produced."
+          echo "::error title=preview-media::${msg}"
+          echo "$msg" | tee /tmp/preview-media.log
+          exit 1
+
+      - name: Run preview media-resolve probe
+        if: ${{ steps.salient.outputs.salient == 'true' && steps.preview.outputs.reachable == 'true' }}
+        env:
+          # TARGET=prod skips playwright.config.js's local Jekyll
+          # webServer — the spec hits the deployed preview directly.
+          TARGET: prod
+          PR_NUMBER: ${{ github.event.pull_request.number }}
+          PR_HEAD_REF: ${{ github.event.pull_request.head.ref }}
+        run: |
+          set -o pipefail
+          npx playwright test \
+            e2e/preview-media-resolves.spec.js \
+            --project=chromium-desktop \
+            --reporter=list \
+            --max-failures=1 \
+            2>&1 | tee /tmp/preview-media.log
+
+      - name: Post failure summary
+        if: ${{ failure() && steps.salient.outputs.salient == 'true' }}
+        uses: ./.github/actions/post-failure-comment
+        with:
+          mode: post
+          log-file: /tmp/preview-media.log
+          marker: preview-media-failure-summary
+          title: preview-media
+          pr-number: ${{ github.event.pull_request.number }}
+
+      - name: Resolve failure summary on success
+        if: ${{ success() && steps.salient.outputs.salient == 'true' && steps.preview.outputs.reachable == 'true' }}
+        uses: ./.github/actions/post-failure-comment
+        with:
+          mode: resolve
+          marker: preview-media-failure-summary
+          title: preview-media
+          pr-number: ${{ github.event.pull_request.number }}

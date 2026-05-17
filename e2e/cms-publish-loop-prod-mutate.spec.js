@@ -73,7 +73,8 @@ const {
   gh,
   waitForCmsPullRequest,
 } = require("./github-actions-poll");
-const { waitForChangeReflected, PILL_PROD } = require("./deploy-pill");
+const { waitForChangeReflected } = require("./deploy-pill");
+const { prodTarget } = require("./cms-host");
 
 const REPO_ROOT = path.resolve(__dirname, "..");
 const FIXTURE_PATH = "_posts/2099-01-01-e2e-mutation-canary.md";
@@ -83,8 +84,10 @@ const FIXTURE_TITLE = "E2E Mutation Canary";
 const FIXTURE_DATE = "2099-01-01";
 const PUBLIC_PATH = `/blog/${FIXTURE_SLUG}/`;
 
-const PROD_HOST = "https://adamdaniel.ai";
-const PROD_ADMIN = `${PROD_HOST}/admin/`;
+// Fixed-prod loop, resolved through the shared cms-host resolver
+// (byte-identical to the old literals) so prod/preview can't drift.
+const { host: PROD_HOST, adminUrl: PROD_ADMIN, pillId: PILL_PROD } =
+  prodTarget();
 const PUBLIC_URL = `${PROD_HOST}${PUBLIC_PATH}`;
 // Read-only daily probe gate — set in canary-prod.yml. The afterAll
 // harness consults this so the probe never tries to write to main.

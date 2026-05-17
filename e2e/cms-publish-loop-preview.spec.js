@@ -41,14 +41,22 @@ const {
   gh,
   waitForCmsPullRequest,
 } = require("./github-actions-poll");
-const { waitForChangeReflected, PILL_PREVIEW } = require("./deploy-pill");
+const { waitForChangeReflected } = require("./deploy-pill");
+const { previewTarget } = require("./cms-host");
 
 const CANARY = findCanary("page");
-const PR_NUMBER = process.env.PR_NUMBER || process.env.GITHUB_PR_NUMBER || "";
 const PR_HEAD_REF = process.env.PR_HEAD_REF || process.env.GITHUB_HEAD_REF || "";
 
-const PREVIEW_HOST = PR_NUMBER ? `https://preview-pr${PR_NUMBER}.adamdaniel.ai` : "";
-const PREVIEW_ADMIN = `${PREVIEW_HOST}/admin/`;
+// Host triplet now resolves through the shared cms-host resolver. The
+// `host` is "" when no PR number is resolvable — preserving the old
+// `PR_NUMBER ? … : ""` self-skip guard exactly (the spec test.skip's on
+// `!PR_NUMBER` before any PREVIEW_* value is used).
+const {
+  host: PREVIEW_HOST,
+  adminUrl: PREVIEW_ADMIN,
+  pillId: PILL_PREVIEW,
+  prNumber: PR_NUMBER,
+} = previewTarget();
 const PREVIEW_PUBLIC_URL = `${PREVIEW_HOST}${CANARY.publicPath}`;
 
 const TEST_TIMEOUT_MS = 12 * 60 * 1000;
