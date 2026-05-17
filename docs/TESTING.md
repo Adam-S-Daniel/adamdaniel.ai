@@ -90,7 +90,7 @@ only in their dedicated workflow:
 | Spec(s) | Env gate | Set by |
 |---|---|---|
 | `cms-publish-loop`, `cms-delete-published`, `cms-unpublish-republish`, `cms-tags-lifecycle` | `RUN_HOST_REPO_PUBLISH_LOOP=1` + `CMS_E2E_PAT` | `cms-publish-loop-host.yml` (nightly/dispatch) |
-| `cms-publish-loop-preview` | `PR_NUMBER` + `PR_HEAD_REF` + `CMS_E2E_PAT` | `cms-publish-loop-preview.yml` (dispatch) |
+| `cms-publish-loop-preview`, `cms-delete-published-preview` | `PR_NUMBER` + `PR_HEAD_REF` + `CMS_E2E_PAT` | `cms-publish-loop-preview.yml` / `cms-delete-published-preview.yml` (dispatch) |
 | `cms-publish-loop-prod-mutate-preview`, `cms-unpublish-republish-preview`, `cms-tags-lifecycle-preview` (issue #999 preview-parity) | `PR_NUMBER` + `PR_HEAD_REF` + `CMS_E2E_PAT` | `cms-preview-loops.yml` (dispatch) |
 | `cms-publish-loop-prod-mutate`, `cms-media-roundtrip` | `RUN_PROD_MUTATE_PLAYGROUND=1` + `CMS_E2E_PAT` + repo var `PROD_PLAYGROUND_MODE=true` | `cms-publish-loop-prod.yml` / `cms-media-roundtrip.yml` |
 | `cms-publish-loop` `@canary-readonly` | `PROD_CANARY=1`, no PAT | `canary-prod.yml` (nightly) |

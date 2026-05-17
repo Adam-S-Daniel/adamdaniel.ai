@@ -50,7 +50,7 @@ npx playwright test e2e/glow-banding.spec.js       # single test file
 | `AWS_ROLE_ARN` | bootstrap stack output | deploy-production.yml, deploy-preview.yml |
 | `PRODUCTION_CLOUDFRONT_ID` | bootstrap stack output | deploy-production.yml |
 | `PREVIEW_CLOUDFRONT_ID` | bootstrap stack output | deploy-preview.yml |
-| `CMS_E2E_PAT` | fine-grained PAT, host repo only | `e2e/cms-publish-loop*.spec.js`, `e2e/cms-delete-published.spec.js` (drive the full Decap → cms PR → auto-merge → deploy → public-URL loop). Token permissions: `Contents: r/w`, `Pull requests: r/w`, `Actions: r`, `Metadata: r`. `Actions: r` is needed by the test helpers that poll workflow run state while waiting for auto-merge + deploy-production to finish; no dispatch is needed (the earlier shim → `delete-via-pr.yml` recovery path was removed once we confirmed Decap's delete UI uses the git data API directly, not `DELETE /contents`). |
+| `CMS_E2E_PAT` | fine-grained PAT, host repo only | `e2e/cms-publish-loop*.spec.js`, `e2e/cms-delete-published.spec.js`, `e2e/cms-delete-published-preview.spec.js` (drive the full Decap → cms PR → auto-merge → deploy → public-URL loop). Token permissions: `Contents: r/w`, `Pull requests: r/w`, `Actions: r`, `Metadata: r`. `Actions: r` is needed by the test helpers that poll workflow run state while waiting for auto-merge + deploy-production to finish; no dispatch is needed (the earlier shim → `delete-via-pr.yml` recovery path was removed once we confirmed Decap's delete UI uses the git data API directly, not `DELETE /contents`). |
 
 ## AWS resources (us-east-1)
 
@@ -179,6 +179,7 @@ the verified footguns. Keep both in sync when you change path filters.
 |---|---|---|---|
 | `canary-prod.yml` | `schedule`, `workflow_dispatch` | n/a (cron-only) | n/a |
 | `claude.yml` | `issue_comment`, `pull_request_review_comment`, `pull_request_review`, `issues` | n/a (event-driven, gated on `@claude` mention) | n/a |
+| `cms-delete-published-preview.yml` | `workflow_dispatch` | n/a (dispatch-only — needs a live preview env to target) | n/a. `inputs.pr_number` selects the preview env; the spec self-skips unless `CMS_E2E_PAT` + `PR_NUMBER` + `PR_HEAD_REF` are set. NOT a required check (heavy loops stay off the merge path) |
 | `cms-editorial-workflow.yml` | `pull_request` | **none, intentionally** — required check on every feature-branch PR (see ruleset note); the validation is cheap (<2 min) so always-run is the right call | n/a |
 | `cms-publish-loop-host.yml` | `schedule`, `pull_request`, `workflow_dispatch` | `paths` (positive, PR only) | `_e2e/canary-{post,page,project}.md`, `_posts/2024-01-02-e2e-unpublish-canary.md`, `admin/**`, `playwright.config.js`, `package*.json`, `_config.yml`, `_layouts/{canary,default}.html`, the workflow itself + sibling `{cms-editorial-workflow,deploy-production}.yml`. **`e2e/**` is deliberately NOT salient**: firing the loop on a PR push mutates the canary on `main` mid-run, and every PR's e2e matrix checks out the `pull/N/merge` ref, so the in-flight marker poisons the ALWAYS-RUN `canary-content.test.js` verbatim-body invariant on *every* concurrent PR. Spec/helper changes are validated by the daily cron, not synchronously on the PR. Schedule and dispatch always fire (no path filter); job-level `if` blocks `cms/*` PRs to avoid recursion |
 | `cms-publish-loop-prod.yml` | `pull_request`, `workflow_dispatch` | `paths` (positive) | `e2e/cms-publish-loop-prod-mutate.spec.js`, `e2e/{decap-pat,github-actions-poll,base}.js`, `_posts/2099-01-01-e2e-mutation-canary.md`, `admin/**`, `playwright.config.js`, `package*.json`, `_config.yml`, `_layouts/post.html`, the workflow itself. The actual mutation is gated by `vars.PROD_PLAYGROUND_MODE == 'true'` (sunset switch) |
@@ -387,7 +388,15 @@ Each resolves its host via `previewTarget()` (PR head ref → `preview-pr<N>`), 
 
 **Inherent non-goal (from #999):** prod specs validate the path *into `main`* (main ruleset + `auto-merge-when-ready` + `deploy-production`); these validate the path *into the PR head branch* (`backend.branch=<head ref>` + `deploy-preview`). "Parity" means *which CMS operation is validated on each deployed surface* — not an identical pipeline.
 
-> Note: #999's proposal mentions a generalized `runCmsLoop` helper. That spine is PR #971's *other* tracked follow-up (#1004, `runCmsLoop` + `cms-delete-published-preview`) and is intentionally independent of #999. These three specs mirror `cms-publish-loop-preview.spec.js` structurally — the shape #1004 will later refactor onto the shared spine with no behaviour change.
+> Note: #999's proposal mentions a generalized `runCmsLoop` helper. That spine landed via PR #971's *other* follow-up (#1004 — `e2e/run-cms-loop.js` + `cms-delete-published-preview`), which is intentionally independent of #999. Consistent with #1004's own "spine is additive; load-bearing specs are NOT rewritten through it, only new specs opt in" stance, these three specs mirror `cms-publish-loop-preview.spec.js` structurally and are a candidate for an optional future refactor onto `run-cms-loop.js` with no behaviour change — not a blocker for #999.
+
+### `cms-delete-published-preview.yml` (preview-side delete loop)
+
+Preview sibling of `cms-delete-published.spec.js`. The prod delete spec proves "Delete published entry" lands on `main`; `e2e/cms-delete-published-preview.spec.js` proves it on a per-PR preview env (`preview-pr<N>.adamdaniel.ai/admin/`, `backend.branch = <head ref>`, governed by the `cms-feature-branches` ruleset and `deploy-preview.yml`) — closing the preview-side entry-deletion gap from #999's matrix (issue #1004).
+
+Both legs go through the shared **`e2e/run-cms-loop.js`** spine (the extracted, closure-driven orchestration skeleton: `seedDecapAuth` → open admin/entry → `mutate` → optional Save/"Changes saved" → optional `waitForCmsPullRequest` → ready strategy `ui-publish | label | none` → `waitForChangeReflected`). The spine is **greenfield/additive** — the load-bearing prod specs (`cms-publish-loop*`, `cms-delete-published`, `cms-publish-loop-prod-mutate`) are deliberately NOT rewritten through it and keep their bespoke cleanup/safety-net; only new specs opt in. The spine is dep-injected so the orchestration is unit-tested by `e2e/run-cms-loop.test.js` with a fake page and no browser/network.
+
+**Trigger:** `workflow_dispatch` only, with a `pr_number` input (it needs a live preview env to target). NOT in the branch-protection required-status-checks list — the only required preview check is the lightweight `preview-media` gate (PR #971). The spec UI-seeds + UI-deletes a throw-away `_e2e/canary-delete-preview-<runId>.md` and writes ONLY to the PR head branch (Contents-API afterAll is harness hygiene), so a stale fixture has zero prod blast radius — it dies with the PR. Gated by `CMS_E2E_PAT` + `PR_NUMBER` + `PR_HEAD_REF`; self-skips otherwise.
 
 ### `sweep-stale-cms-prs.yml`
 
@@ -843,6 +852,7 @@ The composite action at `.github/actions/post-failure-comment/action.yml`:
 | `host-loop-failure-summary` | `cms-publish-loop-host.yml` |
 | `prod-mutate-failure-summary` | `cms-publish-loop-prod.yml` |
 | `preview-loop-failure-summary` | `cms-publish-loop-preview.yml` |
+| `preview-delete-failure-summary` | `cms-delete-published-preview.yml` |
 | `preview-loops-failure-summary` | `cms-preview-loops.yml` (distinct from the singular `preview-loop-…`) |
 
 **Gitleaks pass-through is non-optional.** Every comment that lands on a PR via this action runs through `scripts/scrub-secrets.js` (which shells out to `gitleaks detect`) inside the action's `Extract and scrub failure summary` step. There is no caller-side switch to disable it; if you extend the action with a new mode, keep the scrubber call on every code path that emits log content into a comment body. A leaked PAT in failure output that bypasses gitleaks would be visible to anyone with read access to the PR — treat the scrubber the same as the secrets-scan pre-commit hook.
