@@ -53,6 +53,13 @@ const HEAVY = new Set([
   "e2e/cms-publish-loop-preview.spec.js",
   "e2e/cms-publish-loop-prod-mutate.spec.js",
   "e2e/cms-delete-published.spec.js",
+  // Issue #999 preview-parity loops — heavy, self-skip on PR runs
+  // (no PR_NUMBER), exercised by the dedicated cms-preview-loops
+  // workflow. In HEAVY so a SPEC_RULES match doesn't inflate the
+  // PR shard matrix for a spec that just no-ops.
+  "e2e/cms-publish-loop-prod-mutate-preview.spec.js",
+  "e2e/cms-unpublish-republish-preview.spec.js",
+  "e2e/cms-tags-lifecycle-preview.spec.js",
 ]);
 
 // Files that fan out to "every spec is potentially affected". Includes
@@ -169,6 +176,46 @@ const SPEC_RULES = {
     /^\.github\/workflows\/deploy-production\.yml$/,
     /^\.github\/workflows\/cms-publish-loop-prod\.yml$/,
     /^e2e\/(decap-pat|github-actions-poll|cms-host)\.js$/,
+  ],
+  // Issue #999 preview-parity loops. Each is the preview-env
+  // counterpart of a prod-only real-backend loop, driving the same
+  // Decap mutation through `preview-pr<N>.adamdaniel.ai` against the
+  // PR head branch (deploy-preview path) instead of main. Heavy +
+  // self-skipping on PR runs (gated on PR_NUMBER); selected here so a
+  // change to admin/, the fixtures, the editorial/deploy-preview
+  // infra, the shared helpers, or the dedicated workflow refreshes
+  // PR-time coverage of the gating/skip path. Run end-to-end only by
+  // .github/workflows/cms-preview-loops.yml.
+  "e2e/cms-publish-loop-prod-mutate-preview.spec.js": [
+    /^admin\//,
+    /^_layouts\/(post|default)\.html$/,
+    /^_posts\/2099-01-01-e2e-mutation-canary\.md$/,
+    /^scripts\/patch-preview-config\.sh$/,
+    /^\.github\/workflows\/cms-editorial-workflow\.yml$/,
+    /^\.github\/workflows\/deploy-preview\.yml$/,
+    /^\.github\/workflows\/cms-preview-loops\.yml$/,
+    /^e2e\/(decap-pat|github-actions-poll|cms-fixture-pr|cms-host)\.js$/,
+  ],
+  "e2e/cms-unpublish-republish-preview.spec.js": [
+    /^admin\//,
+    /^_layouts\/(post|default)\.html$/,
+    /^_posts\/2024-01-02-e2e-unpublish-canary\.md$/,
+    /^scripts\/patch-preview-config\.sh$/,
+    /^\.github\/workflows\/cms-editorial-workflow\.yml$/,
+    /^\.github\/workflows\/deploy-preview\.yml$/,
+    /^\.github\/workflows\/cms-preview-loops\.yml$/,
+    /^e2e\/(decap-pat|github-actions-poll|cms-fixture-pr|cms-host)\.js$/,
+  ],
+  "e2e/cms-tags-lifecycle-preview.spec.js": [
+    /^admin\//,
+    /^_tags\//,
+    /^_layouts\/tag\.html$/,
+    /^_plugins\/auto_tag_pages\.rb$/,
+    /^scripts\/patch-preview-config\.sh$/,
+    /^\.github\/workflows\/cms-editorial-workflow\.yml$/,
+    /^\.github\/workflows\/deploy-preview\.yml$/,
+    /^\.github\/workflows\/cms-preview-loops\.yml$/,
+    /^e2e\/(decap-pat|github-actions-poll|cms-fixture-pr|cms-host)\.js$/,
   ],
   // Lightweight read-only preview-surface media gate. Selected when
   // anything that could regress the flat media_folder path on the
