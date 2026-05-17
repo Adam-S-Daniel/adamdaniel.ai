@@ -35,11 +35,17 @@ E2E_TESTS = File.join(WORKFLOWS_DIR, 'e2e-tests.yml')
 STUBS = File.join(WORKFLOWS_DIR, 'required-check-stubs.yml')
 RULESET = File.expand_path('../.github/rulesets/main.json', __dir__)
 
-# Required contexts produced by workflows with NO path filter — they
-# always report, so the missing-check trap can't reach them and they
-# need no stub. Keep this list tight and justified; anything not here
-# is assumed path-filtered and MUST have a stub.
-ALWAYS_FIRE_CONTEXTS = %w[validate-content scan].freeze
+# Required contexts produced by workflows that ALWAYS report regardless
+# of the changed paths — so the missing-check trap can't reach them and
+# they need no stub. Two reasons a context qualifies:
+#   - validate-content / scan: their workflows carry no path filter.
+#   - preview-media: preview-media.yml is the always-run + early-skip
+#     pattern — fires on every PR with no `paths:`, detects media-
+#     salient changes in an early step, reports success immediately
+#     otherwise. The context is therefore always present.
+# Keep this list tight and justified; anything not here is assumed
+# path-filtered and MUST have a stub job.
+ALWAYS_FIRE_CONTEXTS = %w[validate-content scan preview-media].freeze
 
 # Ruby's standard YAML loader doesn't accept the `on:` short form
 # without `permitted_classes`, but we're only reading scalars/arrays

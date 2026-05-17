@@ -53,7 +53,12 @@ checks are `validate-content` (`cms-editorial-workflow.yml` — fires on
 *every* PR, no path filter), `scan` (`secrets-scan.yml` — every PR), and
 `select` / `unit` / `parity` / `e2e (1)` / `e2e-admin` / `finalize`
 (`e2e-tests.yml`, which carries a `paths-ignore:` list — so on a
-docs/tooling-only PR it doesn't fire at all → see "missing-check trap").
+docs/tooling-only PR it doesn't fire at all → see "missing-check
+trap"), and `preview-media` (`preview-media.yml` — always-run +
+early-skip: fires on every PR with no path filter, runs a read-only
+probe that a committed `assets/images/uploads/` image resolves on the
+PR's `preview-pr<N>` surface only when media-salient paths changed,
+and soft-passes with a loud warning if the preview env is absent).
 
 **Layer 2 — the diff-aware selector** (`e2e/select-specs.js`, unit-tested
 by `select-specs.test.js`). The `select` job runs it twice — once per
