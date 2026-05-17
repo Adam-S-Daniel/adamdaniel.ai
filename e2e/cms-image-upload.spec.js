@@ -8,11 +8,16 @@ const { test, expect } = require("./base");
 //
 //   1. Drive admin/index-local.html, create a post, attach a fixture PNG
 //      via the Featured Image widget.
-//   2. Assert the file lands under assets/images/uploads/{{year}}/{{month}}/
-//      (admin/config.yml: media_folder).
-//   3. Assert the post's front matter references the upload path.
-//   4. Rebuild Jekyll, fetch /blog/<slug>/, assert the rendered page's
-//      <img.featured-image> resolves (HEAD 200) to the uploaded file.
+//   2. Assert the file lands DIRECTLY in assets/images/uploads/ (the
+//      media_folder is flat + template-free — admin/config.yml).
+//   3. Assert the post's front matter references the upload at the
+//      byte-identical public URL (public_folder == "/" + media_folder).
+//   4. Rebuild Jekyll, fetch /blog/<slug>/, and assert the rendered
+//      <img.featured-image> src resolves to a real 200. Because the
+//      path is flat, decap-server and the production GitHub backend
+//      now write the IDENTICAL path, so this local run is a faithful
+//      end-to-end check — there is no template-expansion gap to
+//      tolerate.
 
 const REPO_ROOT = path.join(__dirname, "..");
 const POSTS_DIR = path.join(REPO_ROOT, "_posts");
@@ -52,11 +57,6 @@ function cleanup() {
   if (f) fs.unlinkSync(f);
   const up = findUploadedFixture();
   if (up) fs.unlinkSync(up);
-  // decap-server doesn't expand `{{year}}/{{month}}` in media_folder, so
-  // it lays down the literal path. Wipe any residue so re-runs start
-  // clean and the GitHub-backed bucket structure isn't confused with it.
-  const literalYear = path.join(UPLOADS_ROOT, "{{year}}");
-  if (fs.existsSync(literalYear)) fs.rmSync(literalYear, { recursive: true, force: true });
   // Also clear the rendered output from _site/ so the next run isn't
   // serving a stale copy.
   const site = path.join(REPO_ROOT, "_site", "blog", SMOKE_SLUG);
@@ -80,7 +80,7 @@ test.describe(
     );
   });
 
-  test("uploaded image lands in uploads/YYYY/MM/, post references it, page renders", async ({
+  test("uploaded image lands flat in uploads/, post references it, image resolves 200", async ({
     page,
   }) => {
     await page.goto("/admin/index-local.html");
@@ -139,33 +139,37 @@ test.describe(
       .toBe(true);
 
     const uploaded = findUploadedFixture();
-    // The file must land somewhere under uploads/. The decap-server
-    // local backend does NOT expand `{{year}}/{{month}}` in media_folder
-    // (it writes the literal template path). The production GitHub
-    // backend does expand it — `cms-config.spec.js` enforces that the
-    // template is configured. Together that's the editor-facing contract:
-    // committed image lands at /assets/images/uploads/YYYY/MM/<file>.
+    // The media_folder is flat + template-free, so the file must land
+    // DIRECTLY in assets/images/uploads/ — not in any subdirectory.
+    // Asserting the exact relative shape (no path separator) is what
+    // catches a regression back to a nested/templated media_folder.
     const rel = path.relative(UPLOADS_ROOT, uploaded);
-    expect(rel, "Uploaded file should land under assets/images/uploads/").toMatch(
-      /\.png$/i,
-    );
+    expect(
+      rel,
+      "Uploaded file must land directly in assets/images/uploads/ with no subdirectory",
+    ).toMatch(/^tiny-pixel.*\.png$/i);
 
-    // Post front matter must reference the public URL of the upload.
-    // public_folder=/assets/images/uploads, so the rendered URL always
-    // starts there.
+    // Front matter must reference the upload at the byte-identical
+    // public URL: public_folder ("/assets/images/uploads") + "/" + the
+    // exact on-disk basename. No `.*` wildcard in the middle — the path
+    // is fully determined now, so we pin it.
+    const uploadedBase = path.basename(uploaded);
+    const expectedPublicUrl = `/assets/images/uploads/${uploadedBase}`;
     const written = fs.readFileSync(findSmokePostFile(), "utf8");
     expect(written).toContain(`title: ${SMOKE_TITLE}`);
-    expect(written).toMatch(/featured_image:\s*['"]?\/assets\/images\/uploads/);
+    expect(written).toMatch(
+      new RegExp(
+        `featured_image:\\s*['"]?${expectedPublicUrl.replace(/[.]/g, "\\$&")}['"]?\\s*$`,
+        "m",
+      ),
+    );
 
     // ── Rendered post asserts ────────────────────────────────────────
-    // Rebuild Jekyll and verify the post renders with a featured-image
-    // <img> whose src points into uploads/. The decap-server backend
-    // doesn't expand `{{year}}/{{month}}` (so the local-only src may
-    // 404 against the on-disk path), but the editor-facing front-matter
-    // contract — "the post references the upload via the public_folder
-    // prefix" — is what we want covered here. End-to-end resolution of
-    // the URL on the GitHub backend is enforced by cms-config.spec.js's
-    // media_folder invariants plus the production deploy pipeline.
+    // Rebuild Jekyll and verify the rendered <img.featured-image> src
+    // resolves to a real 200. The path is flat, so decap-server writes
+    // the IDENTICAL path the production GitHub backend would — this
+    // local run is a faithful end-to-end check, with no
+    // template-expansion gap to tolerate. A 404 here is a real failure.
     execFileSync("bundle", ["exec", "jekyll", "build", "--quiet"], {
       cwd: REPO_ROOT,
       stdio: "inherit",
@@ -176,8 +180,22 @@ test.describe(
     const imgSrc = await page
       .locator(".post-header .featured-image")
       .getAttribute("src");
-    expect(imgSrc, "Rendered post must include the featured-image <img>").toMatch(
-      /\/assets\/images\/uploads\/.*tiny-pixel.*\.png$/i,
-    );
+    expect(
+      imgSrc,
+      "Rendered post must include the featured-image <img>",
+    ).toBe(expectedPublicUrl);
+    // Actually fetch the image URL — the bug this whole change fixes is
+    // "the post references an image URL that 404s." Assert it 200s with
+    // real image bytes, not just that the <img> tag is present.
+    const imgAbs = new URL(imgSrc, page.url()).toString();
+    const imgResp = await page.request.get(imgAbs);
+    expect(
+      imgResp.status(),
+      `Featured image ${imgAbs} must resolve 200 (this is the broken-image regression guard)`,
+    ).toBe(200);
+    expect(
+      (await imgResp.body()).length,
+      "Featured image response must have non-empty bytes",
+    ).toBeGreaterThan(0);
   });
 });

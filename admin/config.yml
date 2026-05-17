@@ -24,10 +24,19 @@ display_url: https://adamdaniel.ai
 logo_url: https://adamdaniel.ai/assets/images/logo.svg
 
 # Media library
-# Bucket uploads by year/month so the picker stays browsable as the archive
-# grows. `public_folder` stays at the root because Jekyll serves files from
-# the same path regardless of the YYYY/MM subdirectory they were uploaded into.
-media_folder: "assets/images/uploads/{{year}}/{{month}}"
+#
+# media_folder and public_folder MUST stay structurally identical
+# (public_folder == "/" + media_folder). Decap appends only the
+# uploaded file's basename to public_folder — it does NOT mirror any
+# media_folder subdirectory into the URL. A flat, template-free path
+# is the only configuration where the on-disk file and the URL written
+# into content resolve to the same place on every backend (GitHub,
+# decap-server, test-repo) and from every entrypoint (an entry's image
+# field AND the standalone Media library, which has no entry/date
+# context to expand `{{year}}`/`{{month}}` against). Date-bucketing
+# the path reintroduces the broken-image / literal-`{{year}}`
+# "Copy Path" bug. e2e/cms-config.spec.js enforces this invariant.
+media_folder: "assets/images/uploads"
 public_folder: /assets/images/uploads
 
 # ============================================================

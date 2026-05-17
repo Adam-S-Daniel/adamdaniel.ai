@@ -10,10 +10,10 @@ const { test, expect } = require("./base");
 // body and have it render on the live site":
 //
 //   1. Drive admin/index-local.html to create a post.
-//   2. Plant a fixture PNG under assets/images/uploads/{{year}}/{{month}}/
-//      (mirrors what the upload pipeline writes — decap-server's local
-//      backend uses the same `media_folder` template as the GitHub backend
-//      configured in admin/config.yml).
+//   2. Plant a fixture PNG directly in assets/images/uploads/ (the
+//      media_folder is flat + template-free in admin/config.yml, so
+//      this is byte-identical to where a real upload lands on every
+//      backend).
 //   3. Type the inline-image markdown reference into the body editor so the
 //      saved markdown contains `![alt](/assets/images/uploads/...)`.
 //   4. Save (local-backend forces simple mode regardless of `publish_mode`,
@@ -45,21 +45,16 @@ const FIXTURE_PNG = path.join(__dirname, "fixtures", "inline-image.png");
 const SMOKE_TITLE = "E2E Inline Image";
 const SMOKE_SLUG = "e2e-inline-image";
 
-// Mirror admin/config.yml's `media_folder: assets/images/uploads/{{year}}/{{month}}`
-// — Decap expands those tokens to the post's date when uploading via the
-// GitHub backend. We compute the same path here so the planted fixture
-// lands exactly where a real upload would.
+// admin/config.yml's media_folder is flat + template-free
+// ("assets/images/uploads"), and public_folder is its URL form
+// ("/assets/images/uploads"). The planted fixture's on-disk path and
+// the URL written into the markdown are therefore the SAME directory —
+// which is exactly the property a real upload now has on every backend.
 function uploadDir() {
-  const now = new Date();
-  const yyyy = String(now.getUTCFullYear());
-  const mm = String(now.getUTCMonth() + 1).padStart(2, "0");
-  return path.join(UPLOADS_ROOT, yyyy, mm);
+  return UPLOADS_ROOT;
 }
 function uploadPublicPath() {
-  const now = new Date();
-  const yyyy = String(now.getUTCFullYear());
-  const mm = String(now.getUTCMonth() + 1).padStart(2, "0");
-  return `/assets/images/uploads/${yyyy}/${mm}/inline-image.png`;
+  return `/assets/images/uploads/inline-image.png`;
 }
 
 function findSmokePostFile() {
@@ -75,17 +70,9 @@ function cleanup() {
   const f = findSmokePostFile();
   if (f) fs.unlinkSync(f);
 
-  // Remove the planted fixture upload (and any literal-template residue
-  // cms-image-upload.spec.js documents — decap-server doesn't expand
-  // {{year}}/{{month}}, so a real upload via the local backend would
-  // land in `assets/images/uploads/{{year}}/{{month}}/`. Wipe that too
-  // so re-runs start clean.)
+  // Remove the planted fixture upload.
   const planted = path.join(uploadDir(), "inline-image.png");
   if (fs.existsSync(planted)) fs.unlinkSync(planted);
-  const literalYear = path.join(UPLOADS_ROOT, "{{year}}");
-  if (fs.existsSync(literalYear)) {
-    fs.rmSync(literalYear, { recursive: true, force: true });
-  }
 
   // Clear the rendered output so a stale copy can't satisfy the live
   // URL assertion if a re-run skips the build.
@@ -115,8 +102,8 @@ test.describe(
   }) => {
     // ── Plant the upload fixture ─────────────────────────────────────
     // Mirrors a real upload via the markdown widget's image button: the
-    // file lands under media_folder's expanded YYYY/MM path with the
-    // public URL form Decap would emit.
+    // file lands directly in the flat media_folder with the
+    // byte-identical public URL Decap would emit.
     const uploadDirAbs = uploadDir();
     fs.mkdirSync(uploadDirAbs, { recursive: true });
     fs.copyFileSync(FIXTURE_PNG, path.join(uploadDirAbs, "inline-image.png"));
@@ -185,7 +172,7 @@ test.describe(
     // Inline-image markdown atom must be present on disk — that's what
     // kramdown reads to emit the <img> tag in the rendered HTML.
     expect(written).toMatch(
-      /!\[inline image\]\(\/assets\/images\/uploads\/.*inline-image\.png\)/,
+      /!\[inline image\]\(\/assets\/images\/uploads\/[^/]*inline-image\.png\)/,
     );
 
     // ── Rendered post asserts ────────────────────────────────────────
@@ -205,7 +192,7 @@ test.describe(
     const imgSrc = await inlineImg.getAttribute("src");
     const imgAlt = await inlineImg.getAttribute("alt");
     expect(imgSrc, "Inline <img> must reference uploads path").toMatch(
-      /\/assets\/images\/uploads\/.*inline-image\.png$/,
+      /\/assets\/images\/uploads\/[^/]*inline-image\.png$/,
     );
     expect(imgAlt, "Inline <img> alt must be non-empty").toBeTruthy();
 

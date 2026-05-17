@@ -11,7 +11,8 @@ that proves it works end-to-end against the local Decap backend.
 | Edit an existing Post | `e2e/cms-editorial-workflow.spec.js` (`editing an existing post and saving creates a workflow draft`) | yes |
 | Delete a Post | `e2e/cms-editorial-workflow.spec.js` asserts the "Delete published entry" toolbar button is enabled on an existing post; `cms-smoke` exercises the full delete code path on Tags (shared persistEntry path). | yes |
 | Schedule a Post for future publishing | `e2e/cms-scheduled-post.spec.js` — drives the editor for the future-dated draft AND runs `scripts/publish_scheduled_posts.py` against a fixture to prove the flip-on-arrival half | yes |
-| Upload a featured image | `e2e/cms-image-upload.spec.js` — uploads `e2e/fixtures/tiny-pixel.png`, asserts it lands under `assets/images/uploads/YYYY/MM/`, that the front matter references the public URL, and that `<img.featured-image>` resolves on the rendered post | yes |
+| Upload a featured image | `e2e/cms-image-upload.spec.js` — uploads `e2e/fixtures/tiny-pixel.png`, asserts it lands directly in `assets/images/uploads/` (flat, no subdirectory), that the front matter references the byte-identical public URL, and that the rendered `<img.featured-image>` src actually fetches **200** | yes |
+| Full media round trip on the real live site (upload via Media UI → add to post → publish → image loads on adamdaniel.ai → remove from post → publish → delete via Media UI → image URL 404s) | `e2e/cms-media-roundtrip.spec.js` — real Decap + real GitHub backend + real production deploy, no backdoors. Gated to the `cms-publish-loop-prod.yml` workflow (PROD_PLAYGROUND_MODE) | yes |
 | Create / edit / delete a Tag | `e2e/cms-smoke.spec.js` (create+save+delete) and `e2e/cms-editorial-workflow.spec.js` (create-through-workflow) | yes |
 | Create / edit / delete a Project | `e2e/cms-project-crud.spec.js` — drives title / technology / url_link / featured, asserts the on-disk file at create / edit / delete | yes |
 | Create / edit / delete a Page (with permalink) | `e2e/cms-page-crud.spec.js` — drives title / permalink / published / body, rebuilds Jekyll, fetches the permalink, asserts the body renders, then edits + deletes | yes |
@@ -31,10 +32,16 @@ that proves it works end-to-end against the local Decap backend.
   publish loop against `local_backend: true`, and the editorial-workflow
   branching is covered against Decap's in-browser `test-repo` backend in
   `e2e/cms-editorial-workflow.spec.js`.
-- **`{{year}}/{{month}}` media-folder template expansion**: decap-server
-  (the local backend) does not expand the template — it writes the
-  literal path. The production GitHub backend does expand it. The
-  template's presence in `admin/config.yml` is enforced by
-  `e2e/cms-config.spec.js`; the runtime expansion behaviour fires only
-  on the GitHub backend, where `cms-publish-flow.spec.js` and the
-  preview pipeline cover the live render.
+- **Media path is flat + template-free, by design.** `media_folder`
+  and `public_folder` are both `assets/images/uploads` (no
+  `{{year}}/{{month}}`). Decap appends only the file's basename to
+  `public_folder`, so a date-bucketed `media_folder` would desync the
+  on-disk path from the URL written into content (broken images) and
+  leave a literal `{{year}}` in the standalone Media library's Copy
+  Path. The structural invariant (`public_folder == "/" +
+  media_folder`, no template tokens) is enforced by
+  `e2e/cms-config.spec.js`. Because the path is flat, decap-server and
+  the production GitHub backend now write the IDENTICAL path, so the
+  local upload specs are faithful end-to-end checks; the full real-
+  backend round trip (including delete-via-Media-UI → live 404) is
+  covered by `e2e/cms-media-roundtrip.spec.js`.

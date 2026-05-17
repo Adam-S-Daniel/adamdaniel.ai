@@ -87,13 +87,6 @@ function cleanup() {
       }
     }
   }
-  // decap-server doesn't expand `{{year}}/{{month}}` in media_folder;
-  // it lays down the literal path. Wipe it so the GitHub-backed bucket
-  // structure isn't confused with the local-only template residue.
-  const literalYear = path.join(UPLOADS_ROOT, "{{year}}");
-  if (fs.existsSync(literalYear)) {
-    fs.rmSync(literalYear, { recursive: true, force: true });
-  }
   // Also clear the rendered output so the next run isn't serving a
   // stale copy via `npx serve _site`.
   const site = path.join(REPO_ROOT, "_site", "blog", SLUG);
@@ -236,10 +229,11 @@ test.describe(
       .toBe(true);
     const written = fs.readFileSync(POST_PATH, "utf8");
     expect(written).toContain(`title: ${TITLE}`);
-    // public_folder=/assets/images/uploads, so the rendered URL always
-    // starts there. Image A is `tiny-pixel.png`.
+    // media_folder is flat + template-free, so the URL is exactly
+    // public_folder + "/" + basename — no subdirectory. The `[^/]*`
+    // (not `.*`) is the regression guard against a nested media_folder.
     expect(written).toMatch(
-      /featured_image:\s*['"]?\/assets\/images\/uploads\/.*tiny-pixel\.png/,
+      /featured_image:\s*['"]?\/assets\/images\/uploads\/[^/]*tiny-pixel\.png/,
     );
 
     // ── Rendered post asserts ────────────────────────────────────────
@@ -251,8 +245,18 @@ test.describe(
     await expect(featured).toHaveCount(1);
     const imgSrc = await featured.getAttribute("src");
     expect(imgSrc, "Rendered post must show fixture A").toMatch(
-      /\/assets\/images\/uploads\/.*tiny-pixel\.png$/i,
+      /\/assets\/images\/uploads\/[^/]*tiny-pixel\.png$/i,
     );
+    // Don't just assert the <img> tag exists — fetch the src and prove
+    // it 200s. A flat media_folder means this local run writes the
+    // identical path production would, so a 404 here is a real
+    // broken-image regression, not a tolerated local-only gap.
+    const imgAbs = new URL(imgSrc, page.url()).toString();
+    const imgResp = await page.request.get(imgAbs);
+    expect(
+      imgResp.status(),
+      `Featured image ${imgAbs} must resolve 200`,
+    ).toBe(200);
   });
 
   test("replace with image B → save → front matter references B; A still on disk", async ({
@@ -271,7 +275,7 @@ test.describe(
       .poll(
         () =>
           fs.existsSync(POST_PATH) &&
-          /featured_image:\s*['"]?\/assets\/images\/uploads\/.*tiny-pixel-2\.png/.test(
+          /featured_image:\s*['"]?\/assets\/images\/uploads\/[^/]*tiny-pixel-2\.png/.test(
             fs.readFileSync(POST_PATH, "utf8"),
           ),
         { timeout: 60_000 },
@@ -279,13 +283,13 @@ test.describe(
       .toBe(true);
     const afterReplace = fs.readFileSync(POST_PATH, "utf8");
     expect(afterReplace).toMatch(
-      /featured_image:\s*['"]?\/assets\/images\/uploads\/.*tiny-pixel-2\.png/,
+      /featured_image:\s*['"]?\/assets\/images\/uploads\/[^/]*tiny-pixel-2\.png/,
     );
     // The replacement should NOT leave fixture A's path in the YAML.
     // Match against the boundary so `tiny-pixel-2.png` doesn't false-
     // positive against the `tiny-pixel.png` regex.
     expect(afterReplace).not.toMatch(
-      /featured_image:\s*['"]?\/assets\/images\/uploads\/.*tiny-pixel\.png["'\s]/,
+      /featured_image:\s*['"]?\/assets\/images\/uploads\/[^/]*tiny-pixel\.png["'\s]/,
     );
 
     // ── Decap-doesn't-GC contract ───────────────────────────────────
@@ -342,7 +346,7 @@ test.describe(
         { timeout: 60_000 },
       )
       .not.toMatch(
-        /featured_image:\s*['"]?\/assets\/images\/uploads\/.*tiny-pixel/,
+        /featured_image:\s*['"]?\/assets\/images\/uploads\/[^/]*tiny-pixel/,
       );
     const afterClear = fs.readFileSync(POST_PATH, "utf8");
     expect(

@@ -8,8 +8,10 @@ const { test, expect } = require("./base");
 // review: drafts go through PRs (not straight to main), the auto-overwritten
 // reading_time field doesn't waste editor time, the precedence between
 // `published` and `publish_date` is explicit, the real-layout preview URL is
-// discoverable from the editor, tags can be created inline, and uploaded
-// images are bucketed by date so the media library stays browsable.
+// discoverable from the editor, tags can be created inline, and the media
+// path is flat + template-free so an uploaded file's on-disk path is
+// byte-identical to the URL written into content (no broken images, no
+// literal `{{year}}` in the standalone Media library's Copy Path).
 
 const REPO_ROOT = path.join(__dirname, "..");
 const CONFIGS = [
@@ -65,12 +67,51 @@ test.describe("Decap CMS config invariants", () => {
   for (const configPath of CONFIGS) {
     const label = path.relative(REPO_ROOT, configPath);
 
-    test(`${label}: media_folder is bucketed by year/month`, () => {
+    test(`${label}: media_folder/public_folder are flat, template-free, and consistent`, () => {
+      // Decap appends ONLY the uploaded file's basename to
+      // public_folder; it does not mirror any media_folder
+      // subdirectory into the URL it writes into content. So the only
+      // configuration where the committed file and its served URL
+      // resolve to the same place — on every backend and from the
+      // standalone Media library (which has no entry/date context) —
+      // is a flat path with public_folder == "/" + media_folder.
+      //
+      // This replaces the old "media_folder contains {{year}}/{{month}}"
+      // assertion. That assertion encoded a string-substitution
+      // *assumption* (that the GitHub backend would expand the tokens
+      // and that Jekyll would serve the file from a different path than
+      // it was written to) that was never true end-to-end: it produced
+      // broken images in posts and a literal `{{year}}` "Copy Path" in
+      // the Media library. We verify the structural invariant that
+      // actually makes uploads resolve, not a templated string.
       const yml = readConfig(configPath);
-      const m = yml.match(/^media_folder:\s*(.+)$/m);
-      expect(m, "media_folder must be set").not.toBeNull();
-      expect(m[1]).toContain("{{year}}");
-      expect(m[1]).toContain("{{month}}");
+      const mediaM = yml.match(/^media_folder:\s*["']?([^"'\n]+?)["']?\s*$/m);
+      const publicM = yml.match(/^public_folder:\s*["']?([^"'\n]+?)["']?\s*$/m);
+      expect(mediaM, "media_folder must be set").not.toBeNull();
+      expect(publicM, "public_folder must be set").not.toBeNull();
+      const mediaFolder = mediaM[1];
+      const publicFolder = publicM[1];
+
+      // No template tokens anywhere — they cannot be resolved by the
+      // standalone Media library and desync the on-disk vs. URL path.
+      expect(
+        mediaFolder,
+        "media_folder must not contain Decap template tokens (e.g. {{year}})",
+      ).not.toMatch(/\{\{.*?\}\}/);
+      expect(
+        publicFolder,
+        "public_folder must not contain Decap template tokens",
+      ).not.toMatch(/\{\{.*?\}\}/);
+
+      // The exact path is pinned so a future edit can't quietly
+      // reintroduce nesting.
+      expect(mediaFolder).toBe("assets/images/uploads");
+
+      // public_folder is the URL form of the SAME directory: a single
+      // leading slash, then byte-identical to media_folder. This is
+      // the property that guarantees `<media_folder>/<file>` on disk
+      // is served at `<public_folder>/<file>`.
+      expect(publicFolder).toBe(`/${mediaFolder}`);
     });
 
     test(`${label}: posts collection has no editor-facing reading_time field`, () => {

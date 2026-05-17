@@ -55,9 +55,8 @@ guided tour:
   tags get an archive page automatically — no need to create them up
   front. (See *Tags collection* below if you want to give a tag a
   description.)
-- **Featured Image** — uploaded into a date-bucketed folder
-  (`assets/images/uploads/<year>/<month>/`). Used as the post hero and
-  the social-share thumbnail.
+- **Featured Image** — uploaded into `assets/images/uploads/`. Used as
+  the post hero and the social-share thumbnail.
 
 ### Publishing controls
 
@@ -235,15 +234,20 @@ edit. Same Save-to-PR flow as posts.
 
 ## 7. Media library
 
-All uploads land in `assets/images/uploads/<year>/<month>/` so the picker
-stays browsable as the archive grows. Browsing or re-using a previously
-uploaded image:
+All uploads land directly in `assets/images/uploads/` (one flat folder).
+Browsing or re-using a previously uploaded image:
 
-- Click any image field → **Choose Image** → search the library, or
-  navigate by year/month folder.
-- Public URLs always start at `/assets/images/uploads/...` regardless of
-  which subdirectory the file actually lives in — Jekyll serves them all
-  from the same root.
+- Click any image field → **Choose Image** → search the library by
+  filename, or use the standalone **Media** library to browse and
+  **Copy Path**.
+- Every image's public URL is `/assets/images/uploads/<filename>` —
+  byte-identical to where the file is committed. That's why **Copy
+  Path** gives a working URL and images never render broken. (The path
+  is deliberately flat and template-free: a date-bucketed
+  `media_folder` desyncs the on-disk path from the URL Decap writes
+  into content and breaks **Copy Path** in the standalone Media
+  library, which has no post date to expand a `{{year}}` template
+  against.)
 
 ## 8. Troubleshooting
 
