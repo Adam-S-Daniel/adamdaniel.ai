@@ -57,8 +57,10 @@ docs/tooling-only PR it doesn't fire at all → see "missing-check
 trap"), and `preview-media` (`preview-media.yml` — always-run +
 early-skip: fires on every PR with no path filter, runs a read-only
 probe that a committed `assets/images/uploads/` image resolves on the
-PR's `preview-pr<N>` surface only when media-salient paths changed,
-and soft-passes with a loud warning if the preview env is absent).
+PR's `preview-pr<N>` surface only when media-salient paths changed;
+on a media-salient PR it HARD-FAILS if the preview env is absent —
+the trap-safe way to require `deploy-preview` success without making
+the path-filtered `deploy-preview.yml` itself a required context).
 
 **Layer 2 — the diff-aware selector** (`e2e/select-specs.js`, unit-tested
 by `select-specs.test.js`). The `select` job runs it twice — once per

@@ -23,17 +23,23 @@ name: Preview Media Gate
 # always-fire set alongside validate-content / scan; the lint
 # `_plugins_test/required_check_stubs_paths_test.rb` knows this).
 #
-# Preview-unavailable behaviour — SOFT-PASS + LOUD WARNING. The PR's
-# preview-pr<N> surface comes from deploy-preview.yml, which is itself
-# path-filtered and non-required, so it can legitimately be absent
-# (e.g. a PR touching only e2e/** or .github/rulesets/**). Rather than
-# block the merge forever on absent preview infra (an F1-class trap),
-# when the preview surface is unreachable within the bound this job
-# posts a prominent PR warning + annotation and passes. A real 200/
-# content-type/empty-body failure on a reachable preview DOES fail the
-# job and block the merge — that is the actual bug-class enforcement.
-# Tightening to strict-block is a workflow-only change later; it does
-# not require touching branch protection again.
+# Preview-unavailable behaviour — HARD-FAIL (enforces deploy-preview).
+# The PR's preview-pr<N> surface comes from deploy-preview.yml, which
+# is path-filtered + non-required. We deliberately do NOT make
+# deploy-preview.yml's own context a required check: it uses
+# `paths-ignore`, so requiring it directly would re-create the
+# missing-check trap the repo forbids (see rulesets/main.json's
+# _comment — deploy-preview is excluded for exactly this reason). The
+# trap-safe equivalent is here: on a media-salient PR, if the preview
+# surface is not reachable within the (generous) bound, this required
+# check FAILS and blocks the merge — which in practice requires
+# deploy-preview to have succeeded for that PR. A media-salient PR
+# whose only changes don't trigger deploy-preview must add a change
+# that does, or the maintainer overrides. Non-salient PRs early-skip
+# (green) and never depend on a preview at all, so docs/tooling PRs are
+# unaffected — this is the always-run + early-skip pattern, not a
+# workflow-level paths filter. The bound is generous (≈20 min) so
+# normal deploy-preview + CDN latency does not flake the gate.
 
 on:
   pull_request:
@@ -42,8 +48,8 @@ on:
 
 permissions:
   contents: read
-  # post-failure-comment composite needs this to post the soft-pass
-  # warning / failure summary on the PR.
+  # post-failure-comment composite needs this to post the
+  # failure summary on the PR (preview-unreachable or probe failure).
   pull-requests: write
 
 concurrency:
@@ -67,7 +73,10 @@ jobs:
       # `select` job in e2e-tests.yml fails the build if any workflow's
       # tag drifts from the lockfile.
       image: mcr.microsoft.com/playwright:v1.59.1-noble
-    timeout-minutes: 15
+    # Generous: a media-salient PR must wait for deploy-preview + CDN
+    # propagation (~10-15 min) before the probe; the wait step bounds
+    # at ~20 min, plus checkout/npm/probe headroom.
+    timeout-minutes: 30
     steps:
       - name: Checkout
         uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd  # v6.0.2 (2026-01-09)
@@ -115,30 +124,46 @@ jobs:
         if: steps.salient.outputs.salient == 'true'
         id: preview
         # deploy-preview.yml is path-filtered + non-required, so the
-        # preview-pr<N> surface may not exist for this PR. Poll the
-        # site root with a bound; record reachability for the next
-        # steps. Never fail here — absent preview is a soft-pass, not a
-        # merge block (see header).
+        # preview-pr<N> surface may not exist yet (or at all) for this
+        # PR. Poll the site root with a generous bound; record
+        # reachability. This step never fails — the explicit
+        # "Require preview" step below converts an unreachable preview
+        # into a hard failure (see header: this is the trap-safe way
+        # to require deploy-preview success for media-salient PRs).
         env:
           PR_NUMBER: ${{ github.event.pull_request.number }}
         run: |
           set -uo pipefail
           host="https://preview-pr${PR_NUMBER}.adamdaniel.ai"
-          echo "Probing ${host}/ for readiness (bounded ~6 min)…"
+          echo "Probing ${host}/ for readiness (bounded ~20 min)…"
           reachable=false
-          # 18 × 20s ≈ 6 min — deploy-preview normally completes well
-          # inside this. `seq` is command substitution, not a glob.
-          for _ in $(seq 1 18); do
+          # 40 × 30s ≈ 20 min — covers normal deploy-preview build +
+          # CDN propagation latency so the hard gate doesn't flake.
+          # `seq` is command substitution, not a filesystem glob.
+          for _ in $(seq 1 40); do
             code=$(curl -s -o /dev/null -w '%{http_code}' "${host}/" || echo "000")
             echo "  ${host}/ -> ${code}"
             if [ "$code" = "200" ]; then
               reachable=true
               break
             fi
-            sleep 20
+            sleep 30
           done
           echo "reachable=${reachable}" >> "$GITHUB_OUTPUT"
           echo "host=${host}" >> "$GITHUB_OUTPUT"
+
+      - name: Require preview (hard-fail if unreachable on a salient PR)
+        if: ${{ steps.salient.outputs.salient == 'true' && steps.preview.outputs.reachable != 'true' }}
+        # This is the enforcement: a media-salient PR MUST have a live
+        # preview-pr<N> surface (i.e. deploy-preview must have
+        # succeeded) before it can merge. Writing the explanation to
+        # the failure log so the post-failure-comment composite
+        # surfaces an actionable message on the PR.
+        run: |
+          msg="preview-pr${{ github.event.pull_request.number }}.adamdaniel.ai was not reachable within ~20 min on a media-salient PR. The preview-media gate requires a live preview surface (deploy-preview must have succeeded) to verify the flat media_folder path on the deployed build. If deploy-preview was path-skipped or failed, make a change that triggers it (or re-run deploy-preview) and push again; a maintainer can override if a preview genuinely cannot be produced."
+          echo "::error title=preview-media::${msg}"
+          echo "$msg" | tee /tmp/preview-media.log
+          exit 1
 
       - name: Run preview media-resolve probe
         if: ${{ steps.salient.outputs.salient == 'true' && steps.preview.outputs.reachable == 'true' }}
@@ -156,48 +181,6 @@ jobs:
             --reporter=list \
             --max-failures=1 \
             2>&1 | tee /tmp/preview-media.log
-
-      # Soft-pass path: salient change but the preview never came up.
-      # Loudly flag it (annotation + PR comment) and pass — never block
-      # the merge on absent preview infra.
-      - name: Soft-pass — preview unavailable
-        if: ${{ steps.salient.outputs.salient == 'true' && steps.preview.outputs.reachable != 'true' }}
-        run: |
-          echo "::warning title=preview-media soft-pass::A media-salient change was detected but preview-pr${{ github.event.pull_request.number }}.adamdaniel.ai never became reachable within the bound. The flat media_folder path could NOT be verified on the deployed surface for this PR. Re-run after deploy-preview succeeds, or verify manually."
-          {
-            echo "## ⚠️ preview-media gate: soft-pass (preview unavailable)"
-            echo ""
-            echo "A media-salient change was detected, but the preview surface"
-            echo "\`preview-pr${{ github.event.pull_request.number }}.adamdaniel.ai\` did not become"
-            echo "reachable within the bound, so the flat \`media_folder\` path"
-            echo "could **not** be verified on the deployed build for this PR."
-            echo ""
-            echo "This check **passed** to avoid blocking the merge on absent"
-            echo "preview infrastructure — but the media path was NOT validated"
-            echo "on the deployed surface. If \`deploy-preview\` was skipped or"
-            echo "failed, re-run it (or push again) and this gate will verify"
-            echo "for real. Otherwise verify the upload path manually before"
-            echo "merging."
-          } > /tmp/preview-media-softpass.md
-
-      - name: Post soft-pass warning comment
-        if: ${{ steps.salient.outputs.salient == 'true' && steps.preview.outputs.reachable != 'true' }}
-        uses: ./.github/actions/post-failure-comment
-        with:
-          mode: post
-          log-file: /tmp/preview-media-softpass.md
-          marker: preview-media-softpass
-          title: preview-media (soft-pass — preview unavailable)
-          pr-number: ${{ github.event.pull_request.number }}
-
-      - name: Resolve soft-pass comment when preview was reachable
-        if: ${{ steps.salient.outputs.salient == 'true' && steps.preview.outputs.reachable == 'true' }}
-        uses: ./.github/actions/post-failure-comment
-        with:
-          mode: resolve
-          marker: preview-media-softpass
-          title: preview-media (soft-pass — preview unavailable)
-          pr-number: ${{ github.event.pull_request.number }}
 
       - name: Post failure summary
         if: ${{ failure() && steps.salient.outputs.salient == 'true' }}
