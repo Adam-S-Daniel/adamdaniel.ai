@@ -78,7 +78,7 @@ downstream depends on. Listed in `select-specs.js`'s `ALWAYS_RUN`.
 
 | Spec | Tests | Catches |
 |---|---|---|
-| [`e2e/cms-config.spec.js`](../e2e/cms-config.spec.js) | 11 | Posts collection has expected fields, every folder collection has explicit `create: true` + `delete: true`, editorial workflow is on, `media_folder` buckets by year/month, hint text mentions `/preview/?collection=posts`, projects has multi-image gallery, tags has name+description, pages has permalink+published. |
+| [`e2e/cms-config.spec.js`](../e2e/cms-config.spec.js) | 11 | Posts collection has expected fields, every folder collection has explicit `create: true` + `delete: true`, editorial workflow is on, `media_folder`/`public_folder` are flat + template-free + consistent (`public_folder == "/" + media_folder`), hint text mentions `/preview/?collection=posts`, projects has multi-image gallery, tags has name+description, pages has permalink+published. |
 | [`e2e/compute-visual-diffs.test.js`](../e2e/compute-visual-diffs.test.js) | 7 | Pixel-diff math (`pixelDiffRatio`, `classifyDiff`) for the visual-regression dashboard — pure pngjs, deterministic. |
 | [`e2e/visual-change-guard.spec.js`](../e2e/visual-change-guard.spec.js) | 1 | Visual regression snapshot updates are within bounds (no monster diffs slipped in unreviewed). |
 | [`e2e/select-specs.test.js`](../e2e/select-specs.test.js) | 14 | The selector itself — empty changeset → skip, fanout → all, docs → baseline, etc. |
@@ -179,7 +179,15 @@ side-by-side review video.
 What this suite does *not* yet cover:
 
 - **Editorial workflow PR creation.** The local backend forces simple mode, so we can't drive the full `cms/<branch>` → PR → preview path from a spec. Covered structurally by `cms-config.spec.js` (asserting the flag is on) and operationally only by humans testing on `preview-pr<N>` deployments.
-- **Media uploads (Featured Image widget).** No spec drives the Decap image picker, uploads a file, and verifies it lands in `assets/images/uploads/<year>/<month>/`. The widget renders (visual regression catches that), but the upload code path is untested.
+- **Media uploads — now covered.** `e2e/cms-image-upload.spec.js`,
+  `e2e/cms-featured-image-lifecycle.spec.js`,
+  `e2e/cms-inline-image.spec.js`, and `e2e/cms-project-gallery.spec.js`
+  drive the Decap picker, upload a file, assert it lands directly in
+  `assets/images/uploads/`, and fetch the rendered image URL for a
+  real **200**. The full real-backend round trip (upload via Media UI
+  → publish → image live on adamdaniel.ai → remove → delete via Media
+  UI → live 404) is `e2e/cms-media-roundtrip.spec.js`, gated to
+  `cms-publish-loop-prod.yml`.
 - **Production OAuth handshake against the real Lambda.** `admin-reviews-auth.spec.js` simulates the popup messages directly; the real popup → Lambda → GitHub round-trip isn't reachable from a hermetic test. Covered by the unit tests in `oauth-proxy/test_lambda.py` and operationally by users.
 - **Accessibility.** No axe / WCAG asserts. Add if the site grows beyond a personal portfolio.
 - **Pages collection's public route.** The Pages collection is enabled in the CMS but the public site routing for `pages/<slug>` is currently disabled/hidden. When that route ships, follow the **FUTURE CONTENT TYPES** pattern documented at the top of `cms-publish-flow.spec.js`: drive Decap → create entry → assert file lands → rebuild → GET the public URL → assert layout-expected DOM → cleanup. Apply the same recipe for any *new* collection added to `admin/config*.yml`.

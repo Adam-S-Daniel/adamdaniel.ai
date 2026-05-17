@@ -249,7 +249,7 @@ Folders grouped by purpose. Anything not listed is incidental.
 | `_tags/` | Curated tag descriptions. Optional — `auto_tag_pages.rb` synthesises archive pages for any tag a post uses. |
 | `_projects/` | Project case studies. |
 | `pages/` | Standalone pages with their own permalink (e.g. `/about/`). Currently disabled on the public route. |
-| `assets/images/uploads/` | Editor-uploaded images, bucketed by `YYYY/MM/`. The CMS's `media_folder` config points here. |
+| `assets/images/uploads/` | Editor-uploaded images (one flat folder). The CMS's `media_folder` / `public_folder` both point here so the on-disk path is byte-identical to the served URL. |
 
 ### Appearance (how it looks)
 

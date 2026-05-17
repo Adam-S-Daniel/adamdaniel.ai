@@ -141,8 +141,8 @@ async function probePreview(page, section) {
   });
 }
 
-// "Media library" — the guide claims uploads land under
-// `assets/images/uploads/<year>/<month>/`, that any image field opens
+// "Media library" — the guide claims uploads land directly in
+// `assets/images/uploads/`, that any image field opens
 // the picker, and that you can browse / re-use prior uploads. Probe:
 // load the local admin, sign in (no real OAuth, decap-server is
 // permissive), open a Posts entry, click the Featured Image field's
@@ -206,7 +206,7 @@ async function probeMediaLibrary(page, section) {
     step: "C2.2",
     title: "Open the media library from a Posts edit form",
     body:
-      "Click any image field's **Choose Image** button to open the media library. The dialog hosts a grid of every prior upload (browsable by year/month folder, since `media_folder: assets/images/uploads/{{year}}/{{month}}` is the configured layout) plus an Upload control wired to a hidden `<input type=\"file\">`. Public URLs always start at `/assets/images/uploads/...` regardless of which subdirectory the file actually lives in.",
+      "Click any image field's **Choose Image** button to open the media library. The dialog hosts a grid of every prior upload (a single flat folder, since `media_folder: assets/images/uploads` is the configured layout) plus an Upload control wired to a hidden `<input type=\"file\">`. Every upload's public URL is `/assets/images/uploads/<filename>` — byte-identical to where the file is committed, so Copy Path and the rendered image always resolve.",
   });
 
   // Back out of the dialog cleanly so we don't leak state into a

@@ -1,0 +1,183 @@
+name: CMS Media Roundtrip — Prod (real upload + delete)
+
+# Runs the full Decap Media-UI lifecycle end-to-end against prod:
+# upload a unique image via the Media UI → attach to a real _posts/
+# entry → publish → assert it loads on adamdaniel.ai → remove from the
+# post → publish → delete via the Media UI → assert the image URL
+# 404s. See e2e/cms-media-roundtrip.spec.js for the rationale.
+#
+# Structure mirrors cms-publish-loop-prod.yml exactly (same
+# PROD_PLAYGROUND_MODE sunset gate, same prebuilt Playwright container,
+# same failure-comment + stuck-PR diagnostic). It is a SEPARATE
+# workflow (not folded into cms-publish-loop-prod.yml) so doubling that
+# job's wall-clock with a second 40-min real-prod loop can't make the
+# existing prod-mutate workflow flaky.
+#
+# Trigger model: workflow-level `paths:` filter on PRs into `main`
+# (only fires when a salient file changed; this job is NOT a required
+# status check), plus manual `workflow_dispatch` and a daily schedule
+# slotted clear of the other prod-mutating loops' deploy-production
+# concurrency windows (host 12:00, prod-mutate 13:00, scheduled-posts
+# 14:00 → this at 15:00 UTC).
+#
+# Sunset path: the actual mutation is gated on the repo variable
+# `PROD_PLAYGROUND_MODE`. While prod is a "full mutation playground",
+# set it to `true`. When prod stops being a playground, set it to
+# `false` (or unset it) — the workflow keeps reporting success on PRs
+# (no real mutation) and the fixture file
+# `_posts/2099-01-03-e2e-media-roundtrip.md` stays in-tree as docs.
+
+on:
+  schedule:
+    - cron: '0 15 * * *'
+  pull_request:
+    branches: [main]
+    paths:
+      - .github/workflows/cms-media-roundtrip.yml
+      - e2e/cms-media-roundtrip.spec.js
+      - e2e/decap-pat.js
+      - e2e/github-actions-poll.js
+      - e2e/deploy-pill.js
+      - e2e/cms-fixture-pr.js
+      - e2e/base.js
+      - admin/**
+      - _posts/2099-01-03-e2e-media-roundtrip.md
+      - playwright.config.js
+      - package.json
+      - package-lock.json
+      - _config.yml
+      - _layouts/post.html
+  workflow_dispatch:
+
+permissions:
+  # The spec drives admin via a fine-grained PAT (CMS_E2E_PAT) — the
+  # workflow itself only needs to read the repo. `pull-requests: write`
+  # is for the post-failure-comment composite action's GITHUB_TOKEN.
+  contents: read
+  pull-requests: write
+
+defaults:
+  run:
+    shell: bash
+
+concurrency:
+  # Per-PR concurrency; constant key for cron/dispatch so they queue
+  # rather than race the fixture's Contents-API SHA.
+  group: cms-media-roundtrip-${{ github.event.pull_request.number || github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  media-roundtrip:
+    runs-on: ubuntu-latest
+    # Skip on cms/* PRs to prevent recursion: the spec opens cms/* PRs
+    # that would otherwise re-trigger this workflow via the salient
+    # path filter. head_ref is empty on cron/dispatch.
+    if: ${{ !startsWith(github.head_ref || '', 'cms/') }}
+    env:
+      # Firefox refuses to launch when $HOME is owned by another user
+      # inside GHA container jobs; job-level env wins. Uniform for
+      # simplicity (chromium/webkit unaffected).
+      HOME: /root
+    container:
+      image: mcr.microsoft.com/playwright:v1.59.1-noble
+    # One full real-prod loop with THREE deploy waits. Per-spec
+    # TEST_TIMEOUT_MS is 55 min; this cap is the outer backstop.
+    timeout-minutes: 75
+    steps:
+      - name: Checkout
+        uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd  # v6.0.2 (2026-01-09)
+
+      - name: Skip — playground mode disabled
+        if: vars.PROD_PLAYGROUND_MODE != 'true'
+        run: echo "::notice::PROD_PLAYGROUND_MODE is not 'true'; skipping media round-trip."
+
+      - name: Setup Node
+        if: vars.PROD_PLAYGROUND_MODE == 'true'
+        uses: actions/setup-node@48b55a011bda9f5d6aeb4c2d9c7362e8dae4041e  # v6.4.0 (2026-04-20)
+        with:
+          node-version: '20'
+          cache: 'npm'
+
+      - name: Install npm dependencies
+        if: vars.PROD_PLAYGROUND_MODE == 'true'
+        run: npm ci
+
+      - name: Run media round-trip spec
+        if: vars.PROD_PLAYGROUND_MODE == 'true'
+        env:
+          # Same fine-grained PAT the other publish-loop specs use
+          # (contents r/w + pull_requests r/w + metadata r).
+          CMS_E2E_PAT: ${{ secrets.CMS_E2E_PAT }}
+          # Tells playwright.config.js NOT to spin up local Jekyll +
+          # decap-server — the spec hits adamdaniel.ai directly.
+          TARGET: prod
+          # Reuses the prod-mutate opt-in gate so the spec self-skips
+          # inside e2e-tests.yml shard 1 and on its own cms/* PR.
+          RUN_PROD_MUTATE_PLAYGROUND: "1"
+        run: |
+          set -o pipefail
+          npx playwright test \
+            e2e/cms-media-roundtrip.spec.js \
+            --project=chromium-desktop-3k \
+            --reporter=list \
+            --max-failures=1 \
+            --workers=1 \
+            2>&1 | tee /tmp/media-roundtrip.log
+
+      - name: Upload test results on failure
+        if: ${{ (failure() || cancelled()) && vars.PROD_PLAYGROUND_MODE == 'true' }}
+        uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a  # v7.0.1 (2026-04-10)
+        with:
+          name: media-roundtrip-results
+          path: |
+            test-results/
+            /tmp/media-roundtrip.log
+          retention-days: 14
+
+      - name: Post failure summary
+        if: ${{ failure() && vars.PROD_PLAYGROUND_MODE == 'true' }}
+        uses: ./.github/actions/post-failure-comment
+        with:
+          mode: post
+          log-file: /tmp/media-roundtrip.log
+          marker: media-roundtrip-failure-summary
+          title: media-roundtrip
+
+      - name: Resolve failure summary on success
+        if: ${{ success() && vars.PROD_PLAYGROUND_MODE == 'true' }}
+        uses: ./.github/actions/post-failure-comment
+        with:
+          mode: resolve
+          marker: media-roundtrip-failure-summary
+          title: media-roundtrip
+
+      - name: Diagnose stuck PRs
+        if: ${{ failure() && vars.PROD_PLAYGROUND_MODE == 'true' && hashFiles('/tmp/media-roundtrip.log') != '' }}
+        env:
+          GH_TOKEN: ${{ secrets.CMS_E2E_PAT || secrets.GITHUB_TOKEN }}
+          GH_REPO: ${{ github.repository }}
+          WAITING_FOR: 'media-roundtrip spec (see Playwright log for the specific wait)'
+        run: |
+          set -uo pipefail
+          if grep -q 'Timed out waiting' /tmp/media-roundtrip.log 2>/dev/null; then
+            node scripts/diagnose-stuck-pr.js > /tmp/media-roundtrip-stuck-pr-diagnostic.md || true
+          else
+            echo "_no 'Timed out waiting' lines in log; stuck-PR diagnostic skipped_" > /tmp/media-roundtrip-stuck-pr-diagnostic.md
+          fi
+
+      - name: Post stuck-PR diagnostic
+        if: ${{ failure() && vars.PROD_PLAYGROUND_MODE == 'true' && hashFiles('/tmp/media-roundtrip-stuck-pr-diagnostic.md') != '' }}
+        uses: ./.github/actions/post-failure-comment
+        with:
+          mode: post
+          log-file: /tmp/media-roundtrip-stuck-pr-diagnostic.md
+          marker: media-roundtrip-stuck-pr-diagnostic
+          title: media-roundtrip stuck-PR diagnostic
+
+      - name: Resolve stuck-PR diagnostic on success
+        if: ${{ success() && vars.PROD_PLAYGROUND_MODE == 'true' }}
+        uses: ./.github/actions/post-failure-comment
+        with:
+          mode: resolve
+          marker: media-roundtrip-stuck-pr-diagnostic
+          title: media-roundtrip stuck-PR diagnostic

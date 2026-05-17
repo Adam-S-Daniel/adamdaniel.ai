@@ -124,13 +124,6 @@ function cleanup() {
   if (f) fs.unlinkSync(f);
   const up = findUploadedFixture();
   if (up) fs.unlinkSync(up);
-  // decap-server doesn't expand `{{year}}/{{month}}` in media_folder
-  // (it writes the literal template path). Wipe the residue so the
-  // next run starts clean.
-  const literalYear = path.join(UPLOADS_ROOT, "{{year}}");
-  if (fs.existsSync(literalYear)) {
-    fs.rmSync(literalYear, { recursive: true, force: true });
-  }
   // Clear the rendered output from `_site/` so the next run isn't
   // serving a stale copy from a previous build.
   const site = path.join(REPO_ROOT, "_site", "blog", SMOKE_SLUG);
@@ -345,8 +338,8 @@ test.describe(
       expect(written).toContain("published: true");
       expect(
         written,
-        "front matter must reference the uploaded image via public_folder",
-      ).toMatch(/featured_image:\s*['"]?\/assets\/images\/uploads/);
+        "front matter must reference the uploaded image directly in /assets/images/uploads/ (no subdirectory)",
+      ).toMatch(/featured_image:\s*['"]?\/assets\/images\/uploads\/[^/\s'"]+\.\w+/);
     });
 
     // ── Step 7: Trigger Jekyll rebuild explicitly ───────────────────
@@ -392,8 +385,17 @@ test.describe(
       const imgSrc = await img.getAttribute("src");
       expect(
         imgSrc,
-        "featured-image src must point under /assets/images/uploads/",
-      ).toMatch(/\/assets\/images\/uploads\/.*tiny-pixel.*\.png$/i);
+        "featured-image src must point directly under /assets/images/uploads/ (no subdirectory)",
+      ).toMatch(/\/assets\/images\/uploads\/[^/]*tiny-pixel[^/]*\.png$/i);
+      // Prove the src actually resolves — the flat media_folder means
+      // this local run writes the identical path production would, so
+      // a 404 here is a real broken-image regression.
+      const imgAbs = new URL(imgSrc, page.url()).toString();
+      const imgResp = await page.request.get(imgAbs);
+      expect(
+        imgResp.status(),
+        `Featured image ${imgAbs} must resolve 200`,
+      ).toBe(200);
       await expect(page.locator(".post-header h1")).toHaveText(SMOKE_TITLE);
       await expect(page.locator(".post-content")).toContainText(SMOKE_BODY);
       await captureStep(page, {

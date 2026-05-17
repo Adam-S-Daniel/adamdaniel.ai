@@ -17,7 +17,9 @@ display_url: http://localhost:4000
 # Cobalt-thermal theme is linked from admin/index-local.html (Decap has no
 # `custom_css` config option).
 
-media_folder: "assets/images/uploads/{{year}}/{{month}}"
+# Flat, template-free path — must mirror admin/config.yml exactly
+# (public_folder == "/" + media_folder). See that file for why.
+media_folder: "assets/images/uploads"
 public_folder: /assets/images/uploads
 
 collections:

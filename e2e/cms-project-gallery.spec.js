@@ -12,9 +12,10 @@ const { test, expect } = require("./base");
 //
 //   1. File-on-disk: _projects/<slug>.md exists with an `images:` YAML
 //      list of three entries, each pointing into /assets/images/uploads/.
-//   2. On-disk uploads: each fixture lands somewhere under
-//      assets/images/uploads/ (decap-server doesn't expand
-//      `{{year}}/{{month}}` — same caveat as cms-image-upload.spec.js).
+//   2. On-disk uploads: each fixture lands DIRECTLY in
+//      assets/images/uploads/ (the media_folder is flat +
+//      template-free, so the on-disk path is byte-identical to the
+//      public URL on every backend).
 //   3. Public image URLs: each gallery URL recorded in front matter
 //      HEAD-fetches to 200 against the running webServer. Project
 //      *pages* (`/projects/<slug>/`) are not built (`_config.yml` has
@@ -58,13 +59,6 @@ function cleanup() {
   if (fs.existsSync(SMOKE_FILE)) fs.unlinkSync(SMOKE_FILE);
   for (const up of findUploadedFixtures()) {
     fs.unlinkSync(up);
-  }
-  // decap-server writes the literal `{{year}}/{{month}}` path because it
-  // doesn't expand the template — same caveat as cms-image-upload.spec.js.
-  // Wipe any residue so re-runs start clean.
-  const literalYear = path.join(UPLOADS_ROOT, "{{year}}");
-  if (fs.existsSync(literalYear)) {
-    fs.rmSync(literalYear, { recursive: true, force: true });
   }
 }
 
@@ -204,9 +198,10 @@ test.describe(
     const saved = fs.readFileSync(SMOKE_FILE, "utf8");
     expect(saved).toContain(`title: ${SMOKE_TITLE}`);
     expect(saved).toMatch(/^images:/m);
-    // Each list entry is one line `  - /assets/images/uploads/...png`.
-    // Match all three URLs in front-matter order.
-    const imageLines = saved.match(/-\s+\/assets\/images\/uploads\/[^\s]+\.png/g);
+    // Each list entry is one line `  - /assets/images/uploads/<file>.png`.
+    // `[^/\s]+` (no path separator) is the regression guard against a
+    // nested/templated media_folder reappearing.
+    const imageLines = saved.match(/-\s+\/assets\/images\/uploads\/[^/\s]+\.png/g);
     expect(
       imageLines,
       "front matter should contain 3 image-URL list entries",
@@ -220,36 +215,28 @@ test.describe(
       "all 3 gallery PNG fixtures should land under assets/images/uploads/",
     ).toBe(3);
 
-    // ── Assertion 3: public image URLs resolve ───────────────────────
+    // ── Assertion 3: public image URLs resolve (strict 200) ──────────
     // Extract the raw URL from each YAML list line and HEAD-fetch it.
     // The serve webServer streams assets/ directly out of _site/ (Jekyll
-    // rebuilds copy uploads as-is), and decap-server also writes inside
-    // the on-disk source tree — so the file is reachable even though
-    // /projects/<slug>/ pages are disabled.
+    // rebuilds copy uploads as-is), and decap-server writes inside the
+    // on-disk source tree.
     //
-    // Caveat (matches cms-image-upload.spec.js): decap-server doesn't
-    // expand `{{year}}/{{month}}` in media_folder, so the file lands
-    // at `assets/images/uploads/{{year}}/{{month}}/...` literally —
-    // but the public_folder URL written into front matter is just
-    // `/assets/images/uploads/<file>.png`. So the URL we HEAD won't
-    // match the on-disk path 1:1 in this local-only run; we settle
-    // for "URL is well-formed" when the literal path doesn't resolve,
-    // and treat 200 as the strict pass.
+    // Because media_folder is flat + template-free, the URL written
+    // into front matter is byte-identical to the file's on-disk path —
+    // exactly what production does too. There is no template-expansion
+    // gap to tolerate: every URL MUST 200. A 404 is the broken-image
+    // regression this whole change exists to prevent.
     const urls = imageLines.map((line) =>
       line.replace(/^-\s+/, "").trim(),
     );
     expect(urls.length).toBe(3);
     for (const u of urls) {
-      expect(u).toMatch(/^\/assets\/images\/uploads\/.*\.png$/);
+      expect(u).toMatch(/^\/assets\/images\/uploads\/[^/]+\.png$/);
       const status = await headStatus(u).catch(() => 0);
-      // Strict 200 is the goal. Local-only decap-server skips the
-      // year/month expansion, so a 404 here mirrors a known limitation
-      // (cms-image-upload.spec.js documents the same one). The URL
-      // shape and on-disk fixtures are still asserted above.
       expect(
-        [200, 404].includes(status),
-        `HEAD ${u} returned ${status}; expected 200 (or 404 for the documented decap-server template-expansion gap)`,
-      ).toBe(true);
+        status,
+        `HEAD ${u} must return 200 (gallery image must resolve end-to-end)`,
+      ).toBe(200);
     }
 
     // ── Assertion 4 (homepage card): currently disabled section ──────
