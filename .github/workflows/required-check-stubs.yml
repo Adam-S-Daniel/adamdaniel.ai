@@ -43,10 +43,12 @@ on:
     branches:
       - main
     paths:
-      # Mirror of e2e-tests.yml's paths-ignore. If you add or remove
-      # an entry there, update the same entry here too. The lint test
-      # in _plugins_test/required_check_stubs_paths_test.rb fails the
-      # build on drift.
+      # Byte-for-byte mirror of e2e-tests.yml's paths-ignore (parsed-
+      # array equality + order is enforced by the workflow-shape lint
+      # _plugins_test/required_check_stubs_paths_test.rb). If you add or
+      # remove an entry in e2e-tests.yml's paths-ignore, mirror it here
+      # in the same position. Extended for the issue #856 skip-rules
+      # audit (infra/proxy dirs, dev/CI scripts, maintenance workflows).
       - 'README.md'
       - 'AGENTS.md'
       - 'CLAUDE.md'
@@ -61,10 +63,34 @@ on:
       - '.gitleaks.toml'
       - '.editorconfig'
       - '.bundle/**'
+      - 'infrastructure/**'
+      - 'oauth-proxy/**'
+      - 'scripts/auto-resolve-newline-conflict.js'
+      - 'scripts/auto-resolve-newline-conflict.test.js'
+      - 'scripts/bootstrap.ps1'
+      - 'scripts/bootstrap.sh'
+      - 'scripts/build-contributor-manual.js'
+      - 'scripts/build-contributor-manual.test.js'
+      - 'scripts/diagnose-stuck-pr.js'
+      - 'scripts/diagnose-stuck-pr.test.js'
+      - 'scripts/live-admin-smoke.js'
+      - 'scripts/secrets-scan.sh'
+      - 'scripts/sync-action-pin-comments.sh'
+      - 'scripts/sync-action-pin-comments.test.sh'
+      - 'scripts/verify-skills-mirror.ps1'
+      - 'scripts/verify-skills-mirror.sh'
       - '.github/dependabot.yml'
       - '.github/workflows/secrets-scan.yml'
       - '.github/workflows/publish-scheduled-posts.yml'
       - '.github/workflows/cms-publish-loop-prod.yml'
+      - '.github/workflows/auto-resolve-newline-conflict.yml'
+      - '.github/workflows/cleanup-stale-fixture-branches.yml'
+      - '.github/workflows/dependabot-auto-merge.yml'
+      - '.github/workflows/dependabot-comment-sync.yml'
+      - '.github/workflows/regenerate-manual.yml'
+      - '.github/workflows/required-check-stubs.yml'
+      - '.github/workflows/skills-mirror.yml'
+      - '.github/workflows/sweep-stale-cms-prs.yml'
 
 permissions:
   contents: read
