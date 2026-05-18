@@ -42,6 +42,26 @@ on:
       - 'scripts/write-commit-json.sh'
       - 'scripts/publish_scheduled_posts.py'
       - 'scripts/patch-preview-config.sh'
+      # Dev/CI tooling scripts added after PR #67 — none participate
+      # in `bundle exec jekyll build`, so they cannot change what's
+      # served from S3. Folded in per the issue #856 skip-rules audit;
+      # its 2026-05-18 refresh confirmed these gaps caused real false
+      # production deploys (e.g. scripts/diagnose-stuck-pr.js,
+      # scripts/auto-resolve-newline-conflict.js).
+      - 'scripts/auto-resolve-newline-conflict.js'
+      - 'scripts/auto-resolve-newline-conflict.test.js'
+      - 'scripts/bootstrap.ps1'
+      - 'scripts/bootstrap.sh'
+      - 'scripts/build-contributor-manual.js'
+      - 'scripts/build-contributor-manual.test.js'
+      - 'scripts/diagnose-stuck-pr.js'
+      - 'scripts/diagnose-stuck-pr.test.js'
+      - 'scripts/live-admin-smoke.js'
+      - 'scripts/secrets-scan.sh'
+      - 'scripts/sync-action-pin-comments.sh'
+      - 'scripts/sync-action-pin-comments.test.sh'
+      - 'scripts/verify-skills-mirror.ps1'
+      - 'scripts/verify-skills-mirror.sh'
       - '.github/dependabot.yml'
       - '.github/workflows/cms-editorial-workflow.yml'
       - '.github/workflows/dependabot-auto-merge.yml'
@@ -51,6 +71,23 @@ on:
       - '.github/workflows/e2e-tests.yml'
       - '.github/workflows/deploy-preview.yml'
       - '.github/workflows/canary-prod.yml'
+      # Maintenance / CMS-automation workflows added after PR #67 —
+      # none can alter the Jekyll output synced to S3, so a push
+      # touching only one of these must not trigger a production
+      # deploy. Per the issue #856 audit + its 2026-05-18 refresh
+      # (which traced 4 confirmed false deploys to these gaps).
+      # `deploy-production.yml` itself stays OUT of this list so
+      # workflow-self changes still validate via a real run.
+      - '.github/workflows/auto-resolve-newline-conflict.yml'
+      - '.github/workflows/cleanup-stale-fixture-branches.yml'
+      - '.github/workflows/cms-publish-loop-host.yml'
+      - '.github/workflows/cms-publish-loop-preview.yml'
+      - '.github/workflows/cms-publish-loop-prod.yml'
+      - '.github/workflows/dependabot-comment-sync.yml'
+      - '.github/workflows/regenerate-manual.yml'
+      - '.github/workflows/required-check-stubs.yml'
+      - '.github/workflows/skills-mirror.yml'
+      - '.github/workflows/sweep-stale-cms-prs.yml'
   # Allow manual trigger from the Actions UI. workflow_dispatch ignores
   # paths-ignore, so a force-deploy from the UI always runs.
   workflow_dispatch:

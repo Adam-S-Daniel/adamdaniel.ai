@@ -348,17 +348,17 @@ test(
 
     // ── 3. Open the post entry ────────────────────────────────────
     await test.step("Open the media round-trip post", async () => {
-      await page.goto(`${PROD_ADMIN}#/collections/posts`, {
+      // Direct entry URL is deterministic. admin/posts-list-enhance.js
+      // hides automated-test fixtures from the Posts list by DEFAULT
+      // (#1042), so navigate to the canary directly (same pattern as
+      // the steps below and cms-unpublish-republish.spec.js).
+      await page.goto(`${PROD_ADMIN}#/collections/posts/entries/${FILE_SLUG}`, {
         waitUntil: "domcontentloaded",
       });
-      const entry = page
-        .getByRole("link", { name: new RegExp(FIXTURE_TITLE, "i") })
-        .first();
-      await expect(entry).toBeVisible({ timeout: 30_000 });
-      await entry.click();
-      await expect(
-        page.getByRole("textbox", { name: /^Title$/i }),
-      ).toBeVisible({ timeout: 30_000 });
+      const titleBox = page.getByRole("textbox", { name: /^Title$/i });
+      await expect(titleBox).toBeVisible({ timeout: 30_000 });
+      // Confirm we deep-linked to the right canary.
+      await expect(titleBox).toHaveValue(new RegExp(FIXTURE_TITLE, "i"));
     });
 
     // ── 4. Upload via the Media UI + attach to the post ───────────

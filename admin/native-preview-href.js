@@ -46,10 +46,14 @@
  *     substring from a labelled component).
  *   - Inside that, the native PreviewLink is an `<a>` with
  *     `target="_blank"` and `rel*="noopener"`.
- *   - Exclude this site's own toolbar surfaces (live-preview-link,
- *     cms-commit-pill, cms-prod-status-pill, cms-preview-build-pill)
- *     — those are also `target="_blank"` anchors in the same document
- *     and would otherwise match.
+ *   - Exclude this site's own surfaces (cms-live-url-banner-link,
+ *     live-preview-link, cms-commit-pill, cms-prod-status-pill,
+ *     cms-preview-build-pill) — those are also `target="_blank"`
+ *     anchors in the same document and would otherwise match. The
+ *     live-URL banner anchor (admin/live-url-banner.js) renders in
+ *     the form pane, not the toolbar, so it normally wouldn't match
+ *     anyway; it's excluded defensively and to honour the original
+ *     pre-#184 contract now that the banner is restored.
  */
 (function () {
   "use strict";
@@ -58,6 +62,12 @@
   // not Decap's native toolbar. Hiding them would clobber what those
   // affordances are pointing at.
   var EXCLUDE_IDS = [
+    // The in-editor "View page on site:" banner anchor
+    // (admin/live-url-banner.js). It lives in the form pane, not the
+    // toolbar, so it normally wouldn't match the selector — excluded
+    // defensively, and to honour the original pre-#184 contract now
+    // that the banner has been restored.
+    "cms-live-url-banner-link",
     "live-preview-link",
     "cms-commit-pill",
     // The deploy-status pills inject INTO the toolbar with their own

@@ -149,7 +149,11 @@
 
   <!-- "View page on site:" banner above the entry form. Reads form
        state from the DOM and renders a link (or placeholder when
-       Published is OFF / no slug yet). -->
+       Published is OFF / no slug yet). Restored in #1042 — a past
+       change removed it, leaving the editor with no link to the post.
+       MUST load AFTER live-url-derive.js (it calls
+       window.LiveURL.compute) and BEFORE native-preview-href.js. -->
+  <script src="live-url-banner.js" defer></script>
 
   <!-- CSS-hides Decap's native "View Live" toolbar anchor — redundant
        with the floating "Live Preview" button (#live-preview-link) and
@@ -162,6 +166,14 @@
        `live-url-derive.js`-based href rewrite contract moot, but
        live-url-derive.js is still loaded for the in-editor banner. -->
   <script src="native-preview-href.js" defer></script>
+
+  <!-- Posts collection list dashboard (#1042). Augments Decap's bare
+       Posts list in place — status / published-link / last-edited /
+       preview-PR columns (one batched GitHub query, refreshed on
+       return-to-list + a ↻ button), hides the E2E-canary fixtures by
+       default, and drops the "E2E Canary" Quick-add item. Self-
+       contained; degrades to local-only columns without a token. -->
+  <script src="posts-list-enhance.js" defer></script>
 
   <!--
     Production deploy status pill — shows "Publishing…" with a spinner

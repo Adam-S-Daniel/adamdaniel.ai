@@ -32,10 +32,43 @@ on:
       - '.gitleaks.toml'
       - '.editorconfig'
       - '.bundle/**'
+      # Infra-as-code / OAuth proxy — neither affects the local
+      # Jekyll + Playwright test run (issue #856 audit).
+      - 'infrastructure/**'
+      - 'oauth-proxy/**'
+      # Dev/CI tooling scripts — none can influence Playwright test
+      # outcomes (issue #856 audit + 2026-05-18 refresh).
+      - 'scripts/auto-resolve-newline-conflict.js'
+      - 'scripts/auto-resolve-newline-conflict.test.js'
+      - 'scripts/bootstrap.ps1'
+      - 'scripts/bootstrap.sh'
+      - 'scripts/build-contributor-manual.js'
+      - 'scripts/build-contributor-manual.test.js'
+      - 'scripts/diagnose-stuck-pr.js'
+      - 'scripts/diagnose-stuck-pr.test.js'
+      - 'scripts/live-admin-smoke.js'
+      - 'scripts/secrets-scan.sh'
+      - 'scripts/sync-action-pin-comments.sh'
+      - 'scripts/sync-action-pin-comments.test.sh'
+      - 'scripts/verify-skills-mirror.ps1'
+      - 'scripts/verify-skills-mirror.sh'
       - '.github/dependabot.yml'
       - '.github/workflows/secrets-scan.yml'
       - '.github/workflows/publish-scheduled-posts.yml'
       - '.github/workflows/cms-publish-loop-prod.yml'
+      # Maintenance / dependabot / mirror workflows that have no
+      # bearing on e2e correctness (issue #856 audit + refresh).
+      # e2e-tests.yml itself and cms-editorial-workflow.yml stay OUT
+      # (workflow-self validation; editorial-workflow changes affect
+      # the CMS pipeline the suite exercises).
+      - '.github/workflows/auto-resolve-newline-conflict.yml'
+      - '.github/workflows/cleanup-stale-fixture-branches.yml'
+      - '.github/workflows/dependabot-auto-merge.yml'
+      - '.github/workflows/dependabot-comment-sync.yml'
+      - '.github/workflows/regenerate-manual.yml'
+      - '.github/workflows/required-check-stubs.yml'
+      - '.github/workflows/skills-mirror.yml'
+      - '.github/workflows/sweep-stale-cms-prs.yml'
 
 permissions:
   contents: read

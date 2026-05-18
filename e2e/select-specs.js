@@ -129,6 +129,15 @@ const SPEC_RULES = {
     /^_config\.yml$/,
     /^_layouts\/canary\.html$/,
   ],
+  // Issue #1042 admin posts-UI invariants — fast, pure-fs, no browser.
+  // Locks the restored live-URL banner wiring + posts-list-enhance.js
+  // augment/hide contract + the INVALID-DATE / Automated-tests /
+  // test_fixture config and canary-marker invariants. Runs on any
+  // admin/ change and on canary _posts marker edits.
+  "e2e/cms-posts-list-enhance.spec.js": [
+    /^admin\//,
+    /^_posts\//,
+  ],
   // Real-network publish-loop specs. Heavy and slow; run only when
   // something contributor-relevant changed.
   "e2e/cms-publish-loop.spec.js": [
