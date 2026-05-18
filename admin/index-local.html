@@ -90,10 +90,15 @@
   <!-- Single source of truth for the live URL — see admin/index.html. -->
   <script src="live-url-derive.js" defer></script>
 
-  <!-- "View page on site:" banner — see admin/index.html for rationale. -->
+  <!-- "View page on site:" banner — see admin/index.html for rationale.
+       Loads after live-url-derive.js, before native-preview-href.js. -->
+  <script src="live-url-banner.js" defer></script>
 
   <!-- Native "View Live" toolbar override — see admin/index.html. -->
   <script src="native-preview-href.js" defer></script>
+
+  <!-- Posts list dashboard — see admin/index.html (#1042). -->
+  <script src="posts-list-enhance.js" defer></script>
 
   <!-- Commit indicator — see admin/index.html for the full rationale.
        Locally, run scripts/write-commit-json.sh to populate commit.json

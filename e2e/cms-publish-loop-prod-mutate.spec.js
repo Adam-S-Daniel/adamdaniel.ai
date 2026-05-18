@@ -322,14 +322,20 @@ test(
 
   // ── 3. Open the post, toggle Published, save ────────────────────
   await test.step("Navigate to the mutation canary post", async () => {
-    await page.goto(`${PROD_ADMIN}#/collections/posts`, { waitUntil: "domcontentloaded" });
-    // The post listing renders one entry per post. Decap's summary
-    // template shows `{{title}} (Date) — DRAFT` while published is
-    // false, so matching by the title finds it regardless.
-    const entry = page.getByRole("link", { name: new RegExp(FIXTURE_TITLE, "i") }).first();
-    await expect(entry).toBeVisible({ timeout: 30_000 });
-    await entry.click();
-    await expect(page.getByRole("textbox", { name: /^Title$/i })).toBeVisible({ timeout: 30_000 });
+    // Direct entry URL is deterministic and bypasses collection-list
+    // ordering/visibility. admin/posts-list-enhance.js hides the
+    // automated-test fixtures from the Posts list by DEFAULT (#1042),
+    // so the canary is intentionally not clickable from the list —
+    // navigate straight to it (same pattern as the cleanup step below
+    // and cms-unpublish-republish.spec.js).
+    const fileSlug = FIXTURE_PATH.replace(/^_posts\//, "").replace(/\.md$/, "");
+    await page.goto(`${PROD_ADMIN}#/collections/posts/entries/${fileSlug}`, {
+      waitUntil: "domcontentloaded",
+    });
+    const titleBox = page.getByRole("textbox", { name: /^Title$/i });
+    await expect(titleBox).toBeVisible({ timeout: 30_000 });
+    // Confirm we deep-linked to the right canary.
+    await expect(titleBox).toHaveValue(new RegExp(FIXTURE_TITLE, "i"));
   });
 
   await test.step("Append run marker to body", async () => {

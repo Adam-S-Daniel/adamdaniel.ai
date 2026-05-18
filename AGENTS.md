@@ -71,7 +71,7 @@ npx playwright test e2e/glow-banding.spec.js       # single test file
 
 | Collection | Folder | Type | Key fields |
 |---|---|---|---|
-| Posts | `_posts/` | folder | title, date, tags, excerpt, featured_image, published, publish_date |
+| Posts | `_posts/` | folder | title, date, tags, excerpt, featured_image, published, publish_date, test_fixture (hidden) |
 | Tags | `_tags/` | folder | name, description |
 | Projects | `_projects/` | folder | title, technology, url_link, featured, images (gallery) |
 | Pages | `pages/` | folder | title, body, permalink, published (was `files:` until PR #33) |
@@ -82,6 +82,10 @@ Every folder collection in `admin/config*.yml` ships with **explicit** `create: 
 The earlier Sveltia CMS bundle silently ignored `publish_mode: editorial_workflow` (the upstream feature is unimplemented as of 0.158), so every Save tried to commit straight to `main` and got rejected by GitHub's branch ruleset with "Repository rule violations found / Changes must be made through a pull request." Switching back to Decap fixed both Save and Delete because Decap implements the editorial workflow: each Save lands on a `cms/...` branch and opens a PR. See PR history for the swap commit.
 
 `reading_time` is computed at build time (word count ÷ 200 + 1) — there is no editor-facing field.
+
+**Automated-test fixtures (`test_fixture`).** The posts collection carries a hidden `test_fixture` boolean (`widget: hidden`, `default: false`) in all three `admin/config*.yml`. The three E2E canary `_posts` (`*-e2e-unpublish-canary.md`, `*-e2e-mutation-canary.md`, `*-e2e-media-roundtrip.md`) set `test_fixture: true`; real posts never do. It drives the `Automated tests` `view_filters` entry (Decap "Filter by"). Decap 3.12.2 has no declarative default-on/off for `view_filters`, so `admin/posts-list-enhance.js` hides fixture rows from the Posts list **by default** (issue #1042: "default to not checked, pre-existing options checked") and exposes a "Show automated-test posts" toggle. The hide is **non-destructive** — fixture `<li>`s are reordered to the end of the list, not removed — so specs that click `a[href*="…/entries/"]`.first() (`cms-smoke`, `manual-walkthrough-contributor`) still land on a visible real post. Specs that drive a canary navigate to it **by direct URL** (`#/collections/posts/entries/<fileSlug>`), the deterministic pattern `cms-unpublish-republish.spec.js` already documents; `cms-publish-loop-prod-mutate{,-preview}` and `cms-media-roundtrip` were migrated off the list-click for this reason. The field is permissive to `validate-content` (it only greps `^title:`/`^date:`) and inert to Jekyll.
+
+**Posts-list summary / "INVALID DATE".** The posts `summary:` renders the date as `{{year}}-{{month}}-{{day}}` (parsed-date tokens), **not** `{{date | date('MMM D, YYYY')}}`. Decap's `date(...)` summary filter runs bundled dayjs on the raw stored string (`YYYY-MM-DD HH:mm:ss ZZ`); that space+offset form isn't ISO-8601, so dayjs falls back to native `new Date()` — Invalid on WebKit/Safari/iOS, so every post rendered "INVALID DATE" there (issue #1042). The parsed-date tokens use the same machinery as the `slug:` template (proven cross-engine; locked by `cms-permalink-contract.spec.js`). The summary line is byte-identical across all three configs — `cms-post-list-summary.spec.js` asserts it verbatim, so any edit must update `EXPECTED_SUMMARY` there too.
 
 ### Atom feeds
 
@@ -104,6 +108,13 @@ Editors get a WYSIWYG preview of the page they're editing without publishing. Th
 **Markdown:** rendered client-side via [marked](https://marked.js.org/) v13. The preview layout loads marked from unpkg with a synchronous `document.write` fallback to `assets/js/marked.min.js` when the CDN is unreachable — so the markup is identical in dev and prod. Minor fidelity gap vs. kramdown (footnotes, attribute lists); acceptable for an editor preview.
 
 **Per-keystroke updates:** the bridge uses Decap's `postSave` event, which fires on every save (including auto-saves), not on every keystroke. Decap also exposes `CMS.registerPreviewTemplate` for inline previews — we don't use it because the `/preview/` real-layout approach renders with the actual Jekyll layouts, which an inline preview can't match without duplicating the layout HTML.
+
+### Post link + posts-list dashboard
+
+Two admin affordances live alongside the preview, both loaded (deferred) from all three `admin/index*.html` shells in the order **`live-url-derive.js` → `live-url-banner.js` → `native-preview-href.js` → `posts-list-enhance.js`** (`live-url-derive.js` exposes `window.LiveURL.compute()` and MUST precede its consumer; this order is locked by `cms-posts-list-enhance.spec.js` and `cms-permalink-contract.spec.js`):
+
+- **`admin/live-url-banner.js`** — the "View page on site:" banner above the entry form. A past change (#184) deleted it, leaving the editor with no link to the post; issue #1042 restored it byte-for-byte. It renders one anchor (`data-testid="cms-live-url-banner-link"`) at the live URL `window.LiveURL.compute()` derives, or a placeholder when unpublished / no slug. `cms-live-url-banner-link` is in `native-preview-href.js`'s `EXCLUDE_IDS` so the native-anchor hide can't swallow it (the banner is in the form pane, not the toolbar, so it wouldn't match anyway — the exclusion is the original pre-#184 contract, kept defensively).
+- **`admin/posts-list-enhance.js`** — turns Decap's bare Posts list into a dashboard (issue #1042). It **augments in place** — it never replaces Decap's `<a href="#/collections/posts/entries/…">` cards, so every existing e2e selector keeps resolving — adding per-row status / published-link / last-edited / preview-PR columns. Remote data (last-edited via one batched GitHub GraphQL query, the production deployment, and open editorial PRs) is fetched in **three calls total regardless of post count**, cached in sessionStorage, and refreshed both on a ↻ button and whenever the user returns to the list from an entry. Auth reuses the operator's Decap token at `localStorage["decap-cms-user"].token` (same pattern as `deploy-status-pill.js`); with no token / on any API error it degrades to the local-only columns. It also CSS-hides only the "E2E Canary" Quick-add menu item (the `_e2e` collection is `create: true` and test-locked, so it can't be dropped from config; the `#/collections/e2e/new` route is untouched and `canary-content.test.js` stays green). See the **Automated-test fixtures** note under *Content model* for the default-hide behaviour.
 
 ### Embedding HTML / Widgets
 

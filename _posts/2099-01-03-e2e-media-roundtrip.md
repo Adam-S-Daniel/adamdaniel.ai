@@ -9,6 +9,7 @@ date: 2099-01-03 00:00:00 +0000
 tags: []
 featured_image: /assets/images/uploads/e2e-media-roundtrip-1779043268692.png
 published: true
+test_fixture: true
 sitemap: false
 publish_date: ""
 ---

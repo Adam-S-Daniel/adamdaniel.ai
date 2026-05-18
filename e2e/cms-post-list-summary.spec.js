@@ -36,8 +36,17 @@ const CONFIGS = [
   path.join(REPO_ROOT, "admin/config-test.yml"),
 ];
 
+// The date is rendered with Decap's parsed-date tokens
+// {{year}}-{{month}}-{{day}} rather than `{{date | date('MMM D, YYYY')}}`.
+// The `date(...)` summary filter runs bundled dayjs on the RAW stored
+// string ("YYYY-MM-DD HH:mm:ss ZZ"); that space+offset form isn't
+// ISO-8601, so dayjs falls back to native `new Date()` — Invalid on
+// strict engines (WebKit/Safari/iOS), so every post rendered
+// "INVALID DATE" there (issue #1042). {{year}}/{{month}}/{{day}} use the
+// same parsed-date machinery as the `slug:` template (proven correct
+// cross-engine; locked by cms-permalink-contract.spec.js).
 const EXPECTED_SUMMARY =
-  "    summary: \"{{title}} ({{date | date('MMM D, YYYY')}})" +
+  '    summary: "{{title}} ({{year}}-{{month}}-{{day}})' +
   "{{published | ternary('', ' — DRAFT')}}" +
   "{{publish_date | ternary(' — Scheduled', '')}}\"";
 

@@ -337,17 +337,18 @@ test(
 
     // ── 3. Open the post, append marker, toggle Published, Save ─────
     await test.step("Navigate to the mutation canary post", async () => {
-      await page.goto(`${PREVIEW_ADMIN}#/collections/posts`, {
+      // Direct entry URL is deterministic. admin/posts-list-enhance.js
+      // hides automated-test fixtures from the Posts list by DEFAULT
+      // (#1042); navigate to the canary directly (same pattern as the
+      // steps below and cms-unpublish-republish.spec.js).
+      const fileSlug = FIXTURE_PATH.replace(/^_posts\//, "").replace(/\.md$/, "");
+      await page.goto(`${PREVIEW_ADMIN}#/collections/posts/entries/${fileSlug}`, {
         waitUntil: "domcontentloaded",
       });
-      const entry = page
-        .getByRole("link", { name: new RegExp(FIXTURE_TITLE, "i") })
-        .first();
-      await expect(entry).toBeVisible({ timeout: 30_000 });
-      await entry.click();
-      await expect(
-        page.getByRole("textbox", { name: /^Title$/i }),
-      ).toBeVisible({ timeout: 30_000 });
+      const titleBox = page.getByRole("textbox", { name: /^Title$/i });
+      await expect(titleBox).toBeVisible({ timeout: 30_000 });
+      // Confirm we deep-linked to the right canary.
+      await expect(titleBox).toHaveValue(new RegExp(FIXTURE_TITLE, "i"));
     });
 
     await test.step("Append run marker to body", async () => {
