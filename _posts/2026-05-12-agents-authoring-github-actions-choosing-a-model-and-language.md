@@ -4,7 +4,7 @@ slug: introducing-gha-bench
 date: 2026-05-13 08:51:00 -0400
 excerpt: GHA-bench is a benchmark and a set of evals for how well different
   coding agents author and test GitHub Actions using different languages.
-featured_image: /assets/images/uploads/img_9581.png
+featured_image: ""
 published: true
 ---
 [GHA-bench](https://github.com/Adam-S-Daniel/GHA-bench) is a benchmark and a set of evals for how well different coding agents author and test GitHub Actions.
