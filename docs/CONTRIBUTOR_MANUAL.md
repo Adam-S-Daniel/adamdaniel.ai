@@ -4,7 +4,7 @@ This manual is **assembled by the test suite**: every screenshot and step descri
 
 If a step looks wrong, the test that captured it is wrong too. The fix is in the test file shown under each screenshot — open it, update the `captureStep(...)` call, push, and the manual regenerates on the next run of `.github/workflows/regenerate-manual.yml`.
 
-_Last regenerated: 2026-05-18T22:00:31.860Z_
+_Last regenerated: 2026-05-18T22:05:16.785Z_
 
 ---
 
@@ -31,7 +31,7 @@ Visit `/admin/` to open the editor. Decap shows a single login button — click 
 
 <sub>URL: [http://localhost:4000/admin/index-local#/](http://localhost:4000/admin/index-local#/)</sub>
 
-<sub>Captured by `e2e/cms-smoke.spec.js` → _admin loads, logs in, creates a tag, saves it, deletes it_ on `chromium-desktop-3k` at 2026-05-18T22:00:26.253Z.</sub>
+<sub>Captured by `e2e/cms-smoke.spec.js` → _admin loads, logs in, creates a tag, saves it, deletes it_ on `chromium-desktop-3k` at 2026-05-18T22:05:07.493Z.</sub>
 
 ---
 
@@ -45,7 +45,7 @@ After login, the sidebar lists every collection defined in `admin/config.yml` �
 
 <sub>URL: [http://localhost:4000/admin/index-local#/collections/posts](http://localhost:4000/admin/index-local#/collections/posts)</sub>
 
-<sub>Captured by `e2e/cms-smoke.spec.js` → _admin loads, logs in, creates a tag, saves it, deletes it_ on `chromium-desktop-3k` at 2026-05-18T22:00:26.848Z.</sub>
+<sub>Captured by `e2e/cms-smoke.spec.js` → _admin loads, logs in, creates a tag, saves it, deletes it_ on `chromium-desktop-3k` at 2026-05-18T22:05:08.291Z.</sub>
 
 ### 2.1. Open a collection
 
@@ -55,7 +55,7 @@ Each collection lands on its own index page — a list of every entry on disk pl
 
 <sub>URL: [http://localhost:4000/admin/index-local#/collections/tags](http://localhost:4000/admin/index-local#/collections/tags)</sub>
 
-<sub>Captured by `e2e/cms-smoke.spec.js` → _admin loads, logs in, creates a tag, saves it, deletes it_ on `chromium-desktop-3k` at 2026-05-18T22:00:27.217Z.</sub>
+<sub>Captured by `e2e/cms-smoke.spec.js` → _admin loads, logs in, creates a tag, saves it, deletes it_ on `chromium-desktop-3k` at 2026-05-18T22:05:08.766Z.</sub>
 
 ---
 
@@ -67,9 +67,9 @@ The Posts edit form renders every field declared in `admin/config.yml`: Title, U
 
 ![The Posts edit form](manual-screenshots/editing-a-post/3-1-the-posts-edit-form.png)
 
-<sub>URL: [http://localhost:4000/admin/index-local#/collections/posts/entries/2024-01-02-e2e-unpublish-canary](http://localhost:4000/admin/index-local#/collections/posts/entries/2024-01-02-e2e-unpublish-canary)</sub>
+<sub>URL: [http://localhost:4000/admin/index-local#/collections/posts/entries/2026-05-12-agents-authoring-github-actions-choosing-a-model-and-language](http://localhost:4000/admin/index-local#/collections/posts/entries/2026-05-12-agents-authoring-github-actions-choosing-a-model-and-language)</sub>
 
-<sub>Captured by `e2e/cms-smoke.spec.js` → _Posts edit form: every declared field renders with visible content_ on `chromium-desktop-3k` at 2026-05-18T22:00:31.449Z.</sub>
+<sub>Captured by `e2e/cms-smoke.spec.js` → _Posts edit form: every declared field renders with visible content_ on `chromium-desktop-3k` at 2026-05-18T22:05:15.848Z.</sub>
 
 ### 3.2. Open an existing post in the editorial workflow
 
@@ -79,7 +79,7 @@ Editorial workflow mode loads the existing entry into a fully editable form. Eve
 
 <sub>URL: [http://localhost:4000/admin/index-test#/collections/posts/entries/2026-04-25-replacement-test-post-1](http://localhost:4000/admin/index-test#/collections/posts/entries/2026-04-25-replacement-test-post-1)</sub>
 
-<sub>Captured by `e2e/cms-editorial-workflow.spec.js` → _opening an existing post renders all fields editable + Delete button enabled_ on `chromium-desktop-3k` at 2026-05-18T22:00:15.656Z.</sub>
+<sub>Captured by `e2e/cms-editorial-workflow.spec.js` → _opening an existing post renders all fields editable + Delete button enabled_ on `chromium-desktop-3k` at 2026-05-18T22:04:54.289Z.</sub>
 
 ---
 
@@ -93,7 +93,7 @@ With `publish_mode: editorial_workflow`, the toolbar's primary action is **Save*
 
 <sub>URL: [http://localhost:4000/admin/index-test#/collections/posts/entries/2026-04-25-replacement-test-post-1](http://localhost:4000/admin/index-test#/collections/posts/entries/2026-04-25-replacement-test-post-1)</sub>
 
-<sub>Captured by `e2e/cms-editorial-workflow.spec.js` → _editing an existing post and saving creates a workflow draft_ on `chromium-desktop-3k` at 2026-05-18T22:00:19.989Z.</sub>
+<sub>Captured by `e2e/cms-editorial-workflow.spec.js` → _editing an existing post and saving creates a workflow draft_ on `chromium-desktop-3k` at 2026-05-18T22:05:00.159Z.</sub>
 
 ### 6.1. Filled-out post ready to publish
 
@@ -103,7 +103,7 @@ Title, slug, body, tags, and the Published toggle are all set. In editorial work
 
 <sub>URL: [http://localhost:4000/admin/index-local#/collections/posts/new](http://localhost:4000/admin/index-local#/collections/posts/new)</sub>
 
-<sub>Captured by `e2e/cms-publish-flow.spec.js` → _create a post in Decap, rebuild, and assert /blog/<slug>/ renders it_ on `chromium-desktop-3k` at 2026-05-18T22:00:16.160Z.</sub>
+<sub>Captured by `e2e/cms-publish-flow.spec.js` → _create a post in Decap, rebuild, and assert /blog/<slug>/ renders it_ on `chromium-desktop-3k` at 2026-05-18T22:04:55.571Z.</sub>
 
 ### 6.2. Publish menu open
 
@@ -113,7 +113,7 @@ Decap's primary button is a split control. Clicking the Publish trigger opens a 
 
 <sub>URL: [http://localhost:4000/admin/index-local#/collections/posts/new](http://localhost:4000/admin/index-local#/collections/posts/new)</sub>
 
-<sub>Captured by `e2e/cms-publish-flow.spec.js` → _create a post in Decap, rebuild, and assert /blog/<slug>/ renders it_ on `chromium-desktop-3k` at 2026-05-18T22:00:16.508Z.</sub>
+<sub>Captured by `e2e/cms-publish-flow.spec.js` → _create a post in Decap, rebuild, and assert /blog/<slug>/ renders it_ on `chromium-desktop-3k` at 2026-05-18T22:04:55.953Z.</sub>
 
 ### 6.3. Published post live
 
@@ -123,7 +123,7 @@ After the publish settles, the post is reachable at its public URL — here `/bl
 
 <sub>URL: [http://localhost:4000/blog/e2e-publish-flow-smoke/](http://localhost:4000/blog/e2e-publish-flow-smoke/)</sub>
 
-<sub>Captured by `e2e/cms-publish-flow.spec.js` → _create a post in Decap, rebuild, and assert /blog/<slug>/ renders it_ on `chromium-desktop-3k` at 2026-05-18T22:00:19.987Z.</sub>
+<sub>Captured by `e2e/cms-publish-flow.spec.js` → _create a post in Decap, rebuild, and assert /blog/<slug>/ renders it_ on `chromium-desktop-3k` at 2026-05-18T22:05:01.238Z.</sub>
 
 ---
 
@@ -137,7 +137,7 @@ On the local backend the file is written straight into the working tree (here, `
 
 <sub>URL: [http://localhost:4000/admin/index-local#/collections/tags/entries/decap-smoke-test](http://localhost:4000/admin/index-local#/collections/tags/entries/decap-smoke-test)</sub>
 
-<sub>Captured by `e2e/cms-smoke.spec.js` → _admin loads, logs in, creates a tag, saves it, deletes it_ on `chromium-desktop-3k` at 2026-05-18T22:00:28.060Z.</sub>
+<sub>Captured by `e2e/cms-smoke.spec.js` → _admin loads, logs in, creates a tag, saves it, deletes it_ on `chromium-desktop-3k` at 2026-05-18T22:05:09.979Z.</sub>
 
 ---
 
@@ -151,7 +151,7 @@ The toolbar's Delete button is only available once the entry exists on disk — 
 
 <sub>URL: [http://localhost:4000/admin/index-local#/collections/tags/entries/decap-smoke-test](http://localhost:4000/admin/index-local#/collections/tags/entries/decap-smoke-test)</sub>
 
-<sub>Captured by `e2e/cms-smoke.spec.js` → _admin loads, logs in, creates a tag, saves it, deletes it_ on `chromium-desktop-3k` at 2026-05-18T22:00:28.227Z.</sub>
+<sub>Captured by `e2e/cms-smoke.spec.js` → _admin loads, logs in, creates a tag, saves it, deletes it_ on `chromium-desktop-3k` at 2026-05-18T22:05:10.290Z.</sub>
 
 ### 8.2. Entry removed
 
@@ -161,6 +161,6 @@ Once the deletion lands, Decap routes back to the collection index and the entry
 
 <sub>URL: [http://localhost:4000/admin/index-local#/collections/tags](http://localhost:4000/admin/index-local#/collections/tags)</sub>
 
-<sub>Captured by `e2e/cms-smoke.spec.js` → _admin loads, logs in, creates a tag, saves it, deletes it_ on `chromium-desktop-3k` at 2026-05-18T22:00:28.658Z.</sub>
+<sub>Captured by `e2e/cms-smoke.spec.js` → _admin loads, logs in, creates a tag, saves it, deletes it_ on `chromium-desktop-3k` at 2026-05-18T22:05:10.723Z.</sub>
 
 ---
