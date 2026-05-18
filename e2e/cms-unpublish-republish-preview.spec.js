@@ -349,6 +349,35 @@ test(
     });
 
     // ── 4. Unpublish leg: toggle OFF → Save → cms PR → URL 4xx ──────
+    // Reset Decap's editorial state before the SECOND Save. The
+    // re-publish leg's cms/posts/<slug> PR merged into PR_HEAD_REF and
+    // its (fixed, per-entry) branch is consumed; the in-memory
+    // editorial store still believes that now-merged branch is its
+    // working ref, and a bare in-SPA toggle+Save would not open a
+    // fresh cms PR (the failure mode run #26006678919 surfaced in the
+    // model spec). Close any stale branch/PR server-side, then force a
+    // full document reload so Decap re-reads editorial status from
+    // GitHub and the unpublish Save opens a new PR.
+    await test.step("Reset Decap editorial state for the unpublish leg", async () => {
+      await closeStaleDecapPrOnBranch({
+        branch: `cms/posts/${FIXTURE_FILE_SLUG}`,
+      });
+      await page.goto(
+        `${PREVIEW_ADMIN}#/collections/posts/entries/${FIXTURE_FILE_SLUG}`,
+        { waitUntil: "domcontentloaded" },
+      );
+      await page.reload({ waitUntil: "domcontentloaded" });
+      await expect(
+        page.getByRole("textbox", { name: /^Title$/i }),
+      ).toBeVisible({ timeout: 60_000 });
+      // After the re-publish chain landed, the editor should now read
+      // the toggle as ON; assert it so the OFF flip below is a real
+      // state transition (not a no-op on a stale view).
+      await expect(
+        page.getByRole("switch", { name: /^Published$/i }).first(),
+      ).toHaveAttribute("aria-checked", "true", { timeout: 30_000 });
+    });
+
     await test.step("Toggle Published → OFF via UI", async () => {
       const toggle = page
         .getByRole("switch", { name: /^Published$/i })

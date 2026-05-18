@@ -245,14 +245,25 @@ test(
     });
 
     // ── 4. CYCLE 2: delete the Tags entry via Decap UI ──────────────
-    await test.step("Navigate back to the Tags entry editor", async () => {
+    // Reset Decap's editorial state before the delete. The create
+    // leg's cms/tags/<slug> PR merged into PR_HEAD_REF and its (fixed,
+    // per-entry) branch is consumed; the in-memory editorial store
+    // still believes that now-merged branch is its working ref, and a
+    // bare in-SPA hash nav never reloads — so the delete could act on
+    // a stale view (the failure-mode class run #26006678919 surfaced
+    // in the model spec). Close any stale branch/PR server-side, then
+    // force a full document reload so Decap re-reads the entry's
+    // (now-published) editorial status from GitHub before the delete.
+    await test.step("Reset Decap editorial state, then re-open the Tags entry", async () => {
+      await closeStaleDecapPrOnBranch({ branch: `cms/tags/${TAG_SLUG}` });
       await page.goto(
         `${PREVIEW_ADMIN}#/collections/tags/entries/${TAG_SLUG}`,
         { waitUntil: "domcontentloaded" },
       );
+      await page.reload({ waitUntil: "domcontentloaded" });
       await expect(
         page.getByRole("textbox", { name: /^Name$/i }),
-      ).toBeVisible({ timeout: 30_000 });
+      ).toBeVisible({ timeout: 60_000 });
     });
 
     await test.step("Click Delete published entry — confirms via dialog handler", async () => {

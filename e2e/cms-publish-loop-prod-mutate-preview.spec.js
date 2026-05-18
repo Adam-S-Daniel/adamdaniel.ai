@@ -426,10 +426,23 @@ test(
     // → cms/ready → deploy-preview re-renders → preview URL 4xxs.
     // Per AGENTS.md "no back doors in cleanup either".
     await test.step("Cleanup via UI: toggle Published → OFF, restore body, Save, label cms/ready", async () => {
+      // Reset Decap's editorial state before the second Save. The
+      // forward cms/posts/<slug> PR merged into PR_HEAD_REF and its
+      // (fixed, per-entry) branch is consumed; the in-memory editorial
+      // store from the forward leg still believes that now-merged
+      // branch is its working ref, and a bare hash `page.goto(...)` is
+      // a same-document change that never reloads the SPA — so the
+      // cleanup Save would not open a fresh cms PR (the failure mode
+      // run #26006678919 surfaced in the model spec). Close any stale
+      // branch/PR server-side, then force a full document reload so
+      // Decap re-reads the entry's editorial status from GitHub.
+      const fileSlug = FIXTURE_PATH.replace(/^_posts\//, "").replace(/\.md$/, "");
+      await closeStaleDecapPrOnBranch({ branch: `cms/posts/${fileSlug}` });
       await page.goto(
-        `${PREVIEW_ADMIN}#/collections/posts/entries/${FIXTURE_PATH.replace(/^_posts\//, "").replace(/\.md$/, "")}`,
+        `${PREVIEW_ADMIN}#/collections/posts/entries/${fileSlug}`,
         { waitUntil: "domcontentloaded" },
       );
+      await page.reload({ waitUntil: "domcontentloaded" });
       await expect(
         page.getByRole("textbox", { name: /^Title$/i }),
       ).toBeVisible({ timeout: 30_000 });
@@ -457,10 +470,16 @@ test(
         page.getByText(/Changes saved/i).first(),
       ).toBeVisible({ timeout: 60_000 });
 
+      // Match on the forward run's unique marker, not BASELINE_SENTINEL.
+      // The cleanup commit REMOVES the marker the forward leg appended,
+      // so it is guaranteed to appear as a `-` line in this PR's
+      // FIXTURE_PATH patch. (BASELINE_SENTINEL only lands as a context
+      // line if it happens to fall inside the unified-diff window — the
+      // same fragility that broke the model spec's cleanup.)
       const cleanupPr = await waitForCmsPullRequest({
         base: PR_HEAD_REF,
         filePath: FIXTURE_PATH,
-        canaryMarker: BASELINE_SENTINEL,
+        canaryMarker: marker,
         timeoutMs: 5 * 60 * 1000,
       });
       await addLabel({ prNumber: cleanupPr.number, label: "cms/ready" });
