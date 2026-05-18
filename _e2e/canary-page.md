@@ -9,7 +9,6 @@ slug: canary-page
 sitemap: false
 robots: noindex,nofollow
 ---
-
 Adam Daniel — E2E canary page (do not edit by hand).
 
 This URL exists so the automated end-to-end publish-loop tests have a stable

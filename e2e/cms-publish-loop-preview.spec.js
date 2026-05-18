@@ -35,6 +35,7 @@
 const { test, expect } = require("./base");
 const { seedDecapAuth, getPat, HOST_REPO } = require("./decap-pat");
 const { findCanary, makeMarker } = require("./canary-content");
+const { closeStaleDecapPrOnBranch } = require("./cms-fixture-pr");
 const {
   addLabel,
   fetchPublicUrl,
@@ -246,10 +247,28 @@ test(
   // re-renders → URL serves baseline. Per AGENTS.md "no back doors
   // in setup or cleanup either".
   await test.step("Cleanup via UI: replace body with baseline, Save, label cms/ready", async () => {
+    // Reset Decap's editorial state before the second Save. The
+    // forward leg's cms/<col>/<slug> PR has merged into PR_HEAD_REF
+    // and its branch is consumed; Decap reuses a FIXED branch per
+    // entry, and the in-memory editorial store from the forward leg
+    // still believes that (now-merged) branch is its working ref. A
+    // bare `page.goto(...#/...entries/...)` is a same-document hash
+    // change — the SPA never reloads, so the stale store persists and
+    // the cleanup Save does NOT open a fresh cms PR (run
+    // #26006678919 hit exactly this: only the forward PR #1021 ever
+    // existed; the cleanup `waitForCmsPullRequest` then timed out
+    // with nothing to find). Close any stale branch/PR server-side,
+    // then force a full document reload so Decap re-reads the entry's
+    // editorial status from GitHub — seeing no open PR, the next Save
+    // starts a fresh draft and opens a new PR.
+    await closeStaleDecapPrOnBranch({
+      branch: `cms/${CANARY.cmsCollection}/${CANARY.slug}`,
+    });
     await page.goto(
       `${PREVIEW_ADMIN}#/collections/${CANARY.cmsCollection}/entries/${CANARY.slug}`,
       { waitUntil: "domcontentloaded" },
     );
+    await page.reload({ waitUntil: "domcontentloaded" });
     await expect(page.getByRole("textbox", { name: /^Title$/i })).toBeVisible({
       timeout: 30_000,
     });
@@ -275,10 +294,17 @@ test(
     // Find the cms PR Decap just opened for this Save and label it
     // cms/ready so editorial-workflow auto-merges it. (Mirrors the
     // forward leg's labelling step.)
+    // Match on the forward run's unique marker, NOT the baseline body
+    // sentence. The cleanup commit REMOVES the marker, so it appears
+    // as a `-` line in this PR's `_e2e/canary-page.md` patch —
+    // guaranteed present. The old `canaryMarker: baselineBody` (the
+    // title sentence) sat at the TOP of the body, far from the
+    // end-of-body marker deletion, so it fell outside the unified-diff
+    // context window and never matched even when Decap DID open the PR.
     const cleanupPr = await waitForCmsPullRequest({
       base: PR_HEAD_REF,
       filePath: CANARY.path,
-      canaryMarker: baselineBody,
+      canaryMarker: marker,
       timeoutMs: 5 * 60 * 1000,
     });
     await addLabel({ prNumber: cleanupPr.number, label: "cms/ready" });
@@ -324,7 +350,12 @@ test.afterAll(async () => {
   const fmEnd = decoded.indexOf("\n---\n", 4);
   const fileBody = fmEnd < 0 ? decoded : decoded.slice(fmEnd + 5).replace(/^\n+/, "").replace(/\n+$/, "");
   const expectedBody = CANARY.baselineBody;
-  const hasMarker = /e2e-publish-loop:[a-z]+:\d+/.test(decoded);
+  // `[a-z-]+` (not `[a-z]+`): this spec's marker is
+  // `e2e-publish-loop:preview-<id>:<runId>` — the hyphen in
+  // `preview-page` made the old `[a-z]+:` class fail to match, so the
+  // safety net could falsely report "at baseline" and skip restoring
+  // a still-mutated head branch.
+  const hasMarker = /e2e-publish-loop:[a-z-]+:\d+/.test(decoded);
   const bodyDrift = fileBody !== expectedBody;
   if (!hasMarker && !bodyDrift) {
     console.log(
