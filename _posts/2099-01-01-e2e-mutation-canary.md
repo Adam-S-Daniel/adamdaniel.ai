@@ -9,6 +9,7 @@ date: 2099-01-01 00:00:00 +0000
 tags: []
 featured_image: ""
 published: true
+test_fixture: true
 sitemap: false
 publish_date: ""
 ---
