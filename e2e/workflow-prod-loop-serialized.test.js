@@ -1,0 +1,244 @@
+// @lane: local — pure-fs lint of workflow YAML; no browser, no network
+/*
+ * Regression guard for #1101 + the changed-files recursion gate. The
+ * three real-prod-mutating loop workflows must (a) share ONE
+ * concurrency lane so they can never run concurrently (a parallel pair
+ * races deploy-production and blows each other's URL-reflect budgets —
+ * observed on merge 3dbade7), (b) gate on the await-prod-deploy
+ * composite so a post-merge push never drives a stale (not-yet-deployed)
+ * prod site, and (c) gate on the cms-recursion-gate composite via a
+ * cheap `recursion-gate` job so the loop never re-fires on its own
+ * Decap auto-merge (run 26108485428 — the old `publish: ` head-commit
+ * guard could not see Decap's `Update Post "…"` squash template). Same
+ * ethos as #1053's ALWAYS_RUN guard: make the invariant fail loud at CI
+ * time instead of silently regressing in a workflow edit months later.
+ */
+const fs = require("node:fs");
+const path = require("node:path");
+const yaml = require("js-yaml");
+const { test, expect } = require("./base");
+const { readWorkflow, topBlock } = require("./workflow-yaml-utils");
+
+const REPO_ROOT = path.resolve(__dirname, "..");
+
+// workflow → its heavy loop job name + the recursion-gate `loop:` input.
+const LOOPS = {
+  "cms-publish-loop-prod.yml": { job: "prod-mutate", loop: "prod" },
+  "cms-media-roundtrip.yml": { job: "media-roundtrip", loop: "media" },
+  "cms-publish-loop-host.yml": { job: "host-loop", loop: "host" },
+};
+const LOOP_WORKFLOWS = Object.keys(LOOPS);
+const SHARED_GROUP = "prod-mutating-loop";
+const AWAIT_ACTION = "./.github/actions/await-prod-deploy";
+const GATE_ACTION = "./.github/actions/cms-recursion-gate";
+const GATE_JOB = "recursion-gate";
+const GATE_IF = "${{ needs." + GATE_JOB + ".outputs.run == 'true' }}";
+
+const asArray = (v) => (Array.isArray(v) ? v : v == null ? [] : [v]);
+
+test.describe("real-prod loop workflows are serialized + deploy-gated (#1101)", () => {
+  test("all three share ONE concurrency group, cancel-in-progress:false", () => {
+    for (const wf of LOOP_WORKFLOWS) {
+      const doc = yaml.load(readWorkflow(wf));
+      expect(doc.concurrency, `${wf} must declare concurrency`).toBeTruthy();
+      expect(
+        doc.concurrency.group,
+        `${wf} concurrency.group must be the shared lane so the three real-prod loops are mutually exclusive (#1101)`,
+      ).toBe(SHARED_GROUP);
+      expect(
+        doc.concurrency["cancel-in-progress"],
+        `${wf} must NOT cancel-in-progress — a real-prod loop killed mid-flow can leave the canary dirty; queue instead (#1101)`,
+      ).toBe(false);
+    }
+  });
+
+  test("the concurrency block is byte-identical across the three (drift guard)", () => {
+    const blocks = LOOP_WORKFLOWS.map((wf) =>
+      topBlock(readWorkflow(wf), "concurrency").trim(),
+    );
+    expect(
+      blocks[1],
+      "cms-media-roundtrip.yml concurrency block drifted from cms-publish-loop-prod.yml — keep them byte-identical (#1101)",
+    ).toBe(blocks[0]);
+    expect(
+      blocks[2],
+      "cms-publish-loop-host.yml concurrency block drifted from cms-publish-loop-prod.yml — keep them byte-identical (#1101)",
+    ).toBe(blocks[0]);
+  });
+
+  test("each workflow has exactly the recursion-gate + loop jobs", () => {
+    for (const wf of LOOP_WORKFLOWS) {
+      const doc = yaml.load(readWorkflow(wf));
+      const names = Object.keys(doc.jobs);
+      expect(
+        names.sort(),
+        `${wf} must have exactly two jobs: ${GATE_JOB} + ${LOOPS[wf].job}`,
+      ).toEqual([GATE_JOB, LOOPS[wf].job].sort());
+    }
+  });
+
+  test("each loop job awaits the prod deploy on push, gated to push events", () => {
+    for (const wf of LOOP_WORKFLOWS) {
+      const doc = yaml.load(readWorkflow(wf));
+      // `actions: read` is required for the gate's REST query of the
+      // Deploy to Production run.
+      expect(
+        doc.permissions && doc.permissions.actions,
+        `${wf} must grant 'actions: read' for the await-prod-deploy gate`,
+      ).toBe("read");
+      // Select the heavy loop job by name (NOT jobs[0] — the
+      // recursion-gate job is also present now).
+      const loopJob = doc.jobs[LOOPS[wf].job];
+      expect(loopJob, `${wf} must define job ${LOOPS[wf].job}`).toBeTruthy();
+      const steps = loopJob.steps || [];
+      const gate = steps.find((s) => s && s.uses === AWAIT_ACTION);
+      expect(
+        gate,
+        `${wf}'s loop job must invoke ${AWAIT_ACTION} so it never tests a not-yet-deployed prod (#1101)`,
+      ).toBeTruthy();
+      expect(
+        String(gate.if || ""),
+        `${wf}'s await-prod-deploy step must be gated to push events (workflow_dispatch/schedule have no associated merge)`,
+      ).toContain("github.event_name == 'push'");
+      // Must run before the spec actually drives prod: assert the gate
+      // precedes the step that invokes the playwright loop spec.
+      const gateIdx = steps.indexOf(gate);
+      const specIdx = steps.findIndex((s) =>
+        JSON.stringify(s || {}).match(
+          /playwright test|RUN_PROD_MUTATE|RUN_HOST_REPO/i,
+        ),
+      );
+      if (specIdx !== -1) {
+        expect(
+          gateIdx,
+          `${wf}: await-prod-deploy must run BEFORE the loop spec step`,
+        ).toBeLessThan(specIdx);
+      }
+    }
+  });
+
+  test("the await-prod-deploy composite action exists and is composite", () => {
+    const actionPath = path.join(
+      REPO_ROOT,
+      ".github",
+      "actions",
+      "await-prod-deploy",
+      "action.yml",
+    );
+    expect(
+      fs.existsSync(actionPath),
+      `${actionPath} must exist (referenced by the loop workflows)`,
+    ).toBe(true);
+    const action = yaml.load(fs.readFileSync(actionPath, "utf8"));
+    expect(action.runs && action.runs.using).toBe("composite");
+  });
+});
+
+test.describe("changed-files recursion gate wiring (run 26108485428)", () => {
+  test("each workflow has a recursion-gate job using the composite + fetch-depth:2", () => {
+    for (const wf of LOOP_WORKFLOWS) {
+      const doc = yaml.load(readWorkflow(wf));
+      const gateJob = doc.jobs[GATE_JOB];
+      expect(gateJob, `${wf} must define the ${GATE_JOB} job`).toBeTruthy();
+
+      // It must expose `run` as a job output so the loop job's `if:`
+      // can read it.
+      expect(
+        String((gateJob.outputs && gateJob.outputs.run) || ""),
+        `${wf}: ${GATE_JOB}.outputs.run must map to the composite step output`,
+      ).toContain("steps.");
+
+      const steps = gateJob.steps || [];
+      const gateStep = steps.find((s) => s && s.uses === GATE_ACTION);
+      expect(
+        gateStep,
+        `${wf}: ${GATE_JOB} must invoke ${GATE_ACTION}`,
+      ).toBeTruthy();
+      expect(
+        gateStep.id,
+        `${wf}: the ${GATE_ACTION} step must have an id so outputs.run can reference it`,
+      ).toBeTruthy();
+      expect(
+        gateStep.with && gateStep.with.loop,
+        `${wf}: ${GATE_ACTION} must be called with the correct loop key`,
+      ).toBe(LOOPS[wf].loop);
+
+      // fetch-depth: 2 is load-bearing — without it `git diff
+      // <before> <sha>` can't resolve and the gate always fails OPEN,
+      // silently defeating the skip.
+      const checkout = steps.find(
+        (s) => s && typeof s.uses === "string" && s.uses.startsWith("actions/checkout@"),
+      );
+      expect(
+        checkout,
+        `${wf}: ${GATE_JOB} must check the repo out (for git diff)`,
+      ).toBeTruthy();
+      expect(
+        checkout.with && Number(checkout.with["fetch-depth"]),
+        `${wf}: ${GATE_JOB} checkout must set fetch-depth: 2 (git diff <before> <sha> needs the parent commit)`,
+      ).toBe(2);
+    }
+  });
+
+  test("each loop job needs the gate and is gated on its output", () => {
+    for (const wf of LOOP_WORKFLOWS) {
+      const doc = yaml.load(readWorkflow(wf));
+      const loopJob = doc.jobs[LOOPS[wf].job];
+      expect(
+        asArray(loopJob.needs),
+        `${wf}: ${LOOPS[wf].job} must \`needs: ${GATE_JOB}\``,
+      ).toContain(GATE_JOB);
+      expect(
+        String(loopJob.if || "").trim(),
+        `${wf}: ${LOOPS[wf].job}.if must be exactly "${GATE_IF}" (the old head_ref/publish: guard must be gone)`,
+      ).toBe(GATE_IF);
+      // The retired message guard must not linger anywhere in the job.
+      expect(
+        JSON.stringify(loopJob),
+        `${wf}: ${LOOPS[wf].job} still references the retired publish:/head_ref recursion guard`,
+      ).not.toMatch(/head_commit\.message|github\.head_ref/);
+    }
+  });
+
+  test("the cms-recursion-gate composite exists, is composite, no transitive uses", () => {
+    const actionPath = path.join(
+      REPO_ROOT,
+      ".github",
+      "actions",
+      "cms-recursion-gate",
+      "action.yml",
+    );
+    expect(
+      fs.existsSync(actionPath),
+      `${actionPath} must exist (referenced by the loop workflows)`,
+    ).toBe(true);
+    const raw = fs.readFileSync(actionPath, "utf8");
+    const action = yaml.load(raw);
+    expect(action.runs && action.runs.using).toBe("composite");
+    // Bash + node only — no nested `uses:` to keep it clean for the
+    // repo's SHA-pin convention (mirrors await-prod-deploy).
+    for (const step of action.runs.steps || []) {
+      expect(
+        step.uses,
+        `cms-recursion-gate must not nest external actions (found uses: ${step.uses})`,
+      ).toBeUndefined();
+    }
+  });
+
+  test("the recursion-churn module covers every loop key the workflows use", () => {
+    // Import the single source and assert it knows every loop the
+    // workflows reference — a workflow asking for an unknown loop key
+    // would fail OPEN forever (gate never skips).
+    const { SELF_CHURN } = require("./cms-recursion-churn");
+    for (const wf of LOOP_WORKFLOWS) {
+      expect(
+        Object.prototype.hasOwnProperty.call(SELF_CHURN, LOOPS[wf].loop),
+        `cms-recursion-churn.SELF_CHURN is missing the '${LOOPS[wf].loop}' key used by ${wf}`,
+      ).toBe(true);
+      expect(
+        SELF_CHURN[LOOPS[wf].loop].length,
+        `cms-recursion-churn.SELF_CHURN.${LOOPS[wf].loop} must be non-empty`,
+      ).toBeGreaterThan(0);
+    }
+  });
+});
