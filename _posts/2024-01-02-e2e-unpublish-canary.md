@@ -8,10 +8,10 @@ slug: e2e-unpublish-canary
 date: 2024-01-02 00:00:00 +0000
 tags: []
 featured_image: ""
-published: false
-test_fixture: true
+published: true
 sitemap: false
 publish_date: ""
+test_fixture: true
 ---
 
 This post is the fixture for `e2e/cms-unpublish-republish.spec.js`.
