@@ -35,16 +35,17 @@ name: CMS Publish Loop — Host Repo (canary collection)
 
 on:
   schedule:
-    # 12:00 UTC daily — first slot in the daily prod-mutating-loop
-    # ladder, spaced one hour apart so they don't trip over each
-    # other on deploy-production's queued-run concurrency:
-    #   12:00  cms-publish-loop-host.yml      (this — _e2e canary)
-    #   13:00  cms-publish-loop-prod.yml      (prod-mutation playground)
-    #   14:00  publish-scheduled-posts.yml    (scheduled posts)
-    #   15:00  cms-media-roundtrip.yml        (media round-trip)
-    # Keep this ladder in sync if a slot moves. (Until #1053 the
-    # 13:00 cms-publish-loop-prod.yml entry was aspirational — that
-    # workflow had no `schedule:` at all; #1053 added it.)
+    # 12:00 UTC daily. This is the only real-prod loop with a cron at
+    # all: cms-publish-loop-prod.yml and cms-media-roundtrip.yml are
+    # `push`-to-main (post-merge) + workflow_dispatch only (2493c2e —
+    # they moved off cron/per-PR). All three now serialize through the
+    # shared `prod-mutating-loop` concurrency group (see the
+    # `concurrency:` block below and #1101), so the old "stagger them
+    # an hour apart on a 12/13/14/15 cron ladder" rationale no longer
+    # applies — mutual exclusion is structural, not time-based. The
+    # only other cron-driven prod mutator is publish-scheduled-posts.yml
+    # (14:00); two hours clear of this one is incidental headroom now,
+    # not load-bearing.
     - cron: '0 12 * * *'
   push:
     branches: [main]
@@ -88,8 +89,12 @@ permissions:
   # composite action so the default GITHUB_TOKEN can post the
   # failure-summary comment via the issues comments API. Without
   # this the github-script call 403s silently and no comment lands.
+  #
+  # `actions: read` lets the await-prod-deploy gate query this commit's
+  # `Deploy to Production` run via the REST API (#1101).
   contents: read
   pull-requests: write
+  actions: read
 
 defaults:
   run:
@@ -99,18 +104,22 @@ defaults:
     shell: bash
 
 concurrency:
-  # Repo-global serialisation. Two host-loop runs cannot share the
-  # repo: both edit the same `_e2e/canary-post.md` file via a
-  # `cms/e2e/canary-post` Decap branch (the branch name is keyed on
-  # the entry, not per-test-run), so a parallel pair force-push each
-  # other and the cms-editorial-workflow.yml validate-content runs
-  # cancel themselves out of existence. Group key is a constant so
-  # cron + push + workflow_dispatch all converge on the same lane;
-  # cancel-in-progress=false queues incoming runs instead of killing
-  # the in-flight one. A stuck run blocks the queue for at most
-  # `timeout-minutes` (90), which is well under the daily cron's
-  # cadence.
-  group: cms-publish-loop-host
+  # SHARED repo-wide lane for ALL real-prod-mutating loop workflows
+  # (cms-publish-loop-prod / cms-media-roundtrip / cms-publish-loop-host).
+  # GHA concurrency groups are keyed by string ACROSS workflows, so a
+  # single constant group makes the three mutually exclusive: only one
+  # real-prod loop can run at a time, whatever the trigger (push /
+  # workflow_dispatch / host's daily cron all converge here). They each
+  # mutate prod through Decap → cms-PR → auto-merge → deploy-production
+  # and a parallel pair races deploy-production's `group: production`,
+  # blowing each other's URL-reflect budgets (#1101 — observed: 3 loops
+  # 13:42→13:59 on merge 3dbade7, 2 failed). cancel-in-progress:false
+  # queues rather than killing an in-flight loop (cancelling mid-flow
+  # can leave the canary dirty); a stuck run holds the lane up to its
+  # timeout-minutes, which is bounded and far cheaper than the collision.
+  # This block MUST stay byte-identical in all three workflows —
+  # enforced by e2e/workflow-prod-loop-serialized.test.js.
+  group: prod-mutating-loop
   cancel-in-progress: false
 
 jobs:
@@ -143,7 +152,10 @@ jobs:
     # legit stuck-run; the 60 min cap is the final backstop —
     # GHA-level kill only fires when something has gone catastrophically
     # wrong (infinite loop in a step outside Playwright control).
-    timeout-minutes: 90
+    # 90 → 105: the await-prod-deploy gate can spend up to ~15 min
+    # waiting for this commit's deploy + CDN reflect before the specs
+    # start (#1101).
+    timeout-minutes: 105
     # Push-safe recursion guard. The spec opens a `cms/e2e/<slug>` PR;
     # cms-editorial-workflow.yml squash-merges it as the CMS_E2E_PAT
     # user with the commit headline `publish: <PR title>`. That merge
@@ -160,6 +172,16 @@ jobs:
     steps:
       - name: Checkout
         uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd  # v6.0.2 (2026-01-09)
+
+      # Post-merge only: do NOT drive prod until THIS commit is live on
+      # adamdaniel.ai (deploy-production succeeded + CDN serves the
+      # SHA). Without this the loop validates a stale pre-merge site
+      # (#1101). Skipped on workflow_dispatch/schedule (no associated
+      # merge — those intentionally run against the current prod site).
+      # Fails loud if the deploy failed.
+      - name: Await prod deploy of this merge
+        if: ${{ github.event_name == 'push' }}
+        uses: ./.github/actions/await-prod-deploy
 
       - name: Setup Node
         uses: actions/setup-node@48b55a011bda9f5d6aeb4c2d9c7362e8dae4041e  # v6.4.0 (2026-04-20)

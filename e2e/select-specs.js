@@ -333,6 +333,18 @@ const SPEC_RULES = {
     /^projects\/index\.html$/,
     /^tags\/index\.html$/,
   ],
+  // #1101 regression guard. Pure-fs lint (no browser/network), but it
+  // MUST run whenever a real-prod loop workflow or the await-prod-deploy
+  // gate is edited — that is exactly when the shared-concurrency /
+  // deploy-await invariants could silently regress. Without this rule a
+  // loop-workflow tweak selects no workflow-*.test.js (they otherwise
+  // only run on fanout or their own change).
+  "e2e/workflow-prod-loop-serialized.test.js": [
+    /^\.github\/workflows\/cms-publish-loop-prod\.yml$/,
+    /^\.github\/workflows\/cms-media-roundtrip\.yml$/,
+    /^\.github\/workflows\/cms-publish-loop-host\.yml$/,
+    /^\.github\/actions\/await-prod-deploy\//,
+  ],
 };
 
 function getChangedFiles(baseRef) {
