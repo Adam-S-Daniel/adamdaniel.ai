@@ -88,21 +88,45 @@ concurrency:
   cancel-in-progress: false
 
 jobs:
-  prod-mutate:
+  # Changed-files recursion gate. Replaces the old `publish: `
+  # head-commit guard, which Decap's own `Update/Delete <Collection>
+  # "<slug>"` squash template structurally evaded — the loop's
+  # cms/<col>/<slug> auto-merge lands with no `publish: ` prefix on the
+  # unpublish-canary/delete paths, so the loop kept re-firing on its own
+  # merge (run 26108485428). Logic + the per-loop self-churn set live in
+  # the shared .github/actions/cms-recursion-gate composite and
+  # e2e/cms-recursion-churn.js (single source). Cheap: checkout(depth 2)
+  # + a `git diff` membership test. A push whose only changed files are
+  # this loop's own canary churn skips the heavy job; schedule/dispatch
+  # always run; any ambiguity fails OPEN (never silently skip a real
+  # change). Runs inside the shared `prod-mutating-loop` lane (the
+  # concurrency block is workflow-level + byte-identical across the
+  # three — #1101): ~15-25 s lane occupancy on a skip vs. a full
+  # real-prod loop. Job-level concurrency so the gate runs OUTSIDE the
+  # lane is a deliberate follow-up (it touches the #1101 invariant).
+  recursion-gate:
     runs-on: ubuntu-latest
-    # Push-safe recursion guard. The spec drives Decap, which opens a
-    # `cms/posts/2099-01-01-e2e-mutation-canary` PR; cms-editorial-
-    # workflow.yml squash-merges it as the CMS_E2E_PAT user with the
-    # commit headline `publish: <PR title>` (see that workflow's
-    # enablePullRequestAutoMerge `commitHeadline`). That merge is a
-    # push to `main` touching `_posts/2099-01-01-e2e-mutation-canary.md`
-    # — a salient path — which would re-fire this loop indefinitely.
-    # The old `head_ref` guard only worked on `pull_request` events
-    # (empty on push). Skip when the push's head commit is a CMS
-    # auto-merge; `workflow_dispatch` (event != push) always runs.
-    if: >-
-      ${{ github.event_name != 'push'
-          || !startsWith(github.event.head_commit.message, 'publish: ') }}
+    outputs:
+      run: ${{ steps.gate.outputs.run }}
+    steps:
+      - name: Checkout
+        uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd  # v6.0.2 (2026-01-09)
+        with:
+          fetch-depth: 2
+      - name: Recursion gate
+        id: gate
+        uses: ./.github/actions/cms-recursion-gate
+        with:
+          loop: prod
+
+  prod-mutate:
+    needs: recursion-gate
+    runs-on: ubuntu-latest
+    # Recursion guard delegated to the `recursion-gate` job above
+    # (changed-files decision; schedule/dispatch always run; ambiguity
+    # fails OPEN). The old `publish: ` message guard could not see
+    # Decap's `Update Post "…"` self-merge template (run 26108485428).
+    if: ${{ needs.recursion-gate.outputs.run == 'true' }}
     # Prebuilt Playwright image — browsers + their apt deps baked in,
     # avoiding the apt-mirror tail latency the prior `playwright
     # install-deps` step paid on every run. Tag is enforced to match
