@@ -7,11 +7,11 @@ title: E2E Media Roundtrip
 slug: e2e-media-roundtrip
 date: 2099-01-03 00:00:00 +0000
 tags: []
-featured_image: /assets/images/uploads/e2e-media-roundtrip-1779154651162.png
-published: true
+featured_image: ""
+published: false
+test_fixture: true
 sitemap: false
 publish_date: ""
-test_fixture: true
 ---
 Adam Daniel — E2E media round-trip fixture (do not edit by hand).
 
