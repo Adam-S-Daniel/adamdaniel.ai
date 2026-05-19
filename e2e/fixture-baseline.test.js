@@ -6,6 +6,8 @@ const {
   readPublishedFlag,
   forcePublishedFalse,
   sanitizeToBaseline,
+  ownDecapBranchFor,
+  baselineAssertionApplies,
   isScheduledMustRun,
   loudBail,
 } = require("./fixture-baseline");
@@ -125,11 +127,36 @@ test.describe("fixture-baseline shared helpers (#1053)", () => {
   });
 
   test("checked-in prod-loop fixtures are at baseline (published: false)", () => {
+    const headRef = process.env.GITHUB_HEAD_REF || "";
     for (const rel of PROD_FIXTURES) {
       const abs = path.join(REPO_ROOT, rel);
       const text = fs.readFileSync(abs, "utf8");
+      const flag = readPublishedFlag(text);
+
+      // ALWAYS enforced, every branch: `published:` must parse as a
+      // boolean. `null` is genuine front-matter corruption — a real
+      // defect wherever it occurs, including the loop's own branch.
       expect(
-        readPublishedFlag(text),
+        flag,
+        `${rel} 'published:' must be a parseable boolean (got null) — ` +
+          `fix the fixture's front matter`,
+      ).not.toBeNull();
+
+      // On the loop's OWN Decap branch for THIS fixture, a transient
+      // `published: true` is the expected in-flight state: the
+      // prod-mutate / media-roundtrip round trip publishes here and
+      // REQUIRES this PR to merge+deploy before it reverts (spec
+      // step 9 + afterAll + step-0b force baseline). Failing this
+      // required check there deadlocks the very PR the spec waits on
+      // — the #1053 force-baseline change (3dbade7) regressed exactly
+      // this (scheduled media run 26114167560). #1053's real hazard
+      // is `published: true` PERSISTING on main, still guarded by the
+      // push/main run of this same test + the spec's initialPublished
+      // loudBail + the force-baseline. Relax ONLY here, per fixture.
+      if (!baselineAssertionApplies(rel, headRef)) continue;
+
+      expect(
+        flag,
         `${rel} MUST be checked in 'published: false' — a 'published: true' here ` +
           `recreates the #1053 stuck fixed point (loop skips into a green check forever)`,
       ).toBe(false);
@@ -137,6 +164,65 @@ test.describe("fixture-baseline shared helpers (#1053)", () => {
       // the on-disk baseline already agrees with what the loop writes).
       expect(forcePublishedFalse(text, rel)).toBe(text);
     }
+  });
+
+  test("baseline assertion relaxes ONLY on a fixture's own Decap branch (#1053 deadlock fix)", () => {
+    const MEDIA = "_posts/2099-01-03-e2e-media-roundtrip.md";
+    const MUTATE = "_posts/2099-01-01-e2e-mutation-canary.md";
+
+    // Branch construction matches the specs' DECAP_BRANCH constant.
+    expect(ownDecapBranchFor(MEDIA)).toBe(
+      "cms/posts/2099-01-03-e2e-media-roundtrip",
+    );
+    expect(ownDecapBranchFor(MUTATE)).toBe(
+      "cms/posts/2099-01-01-e2e-mutation-canary",
+    );
+
+    // push / main / local dev (no PR head ref): strict assertion
+    // APPLIES — this IS the #1053 main-protection, unchanged.
+    for (const ref of ["", undefined]) {
+      expect(baselineAssertionApplies(MEDIA, ref)).toBe(true);
+      expect(baselineAssertionApplies(MUTATE, ref)).toBe(true);
+    }
+
+    // An unrelated feature / agent branch carrying published:true on a
+    // prod fixture is STILL a defect — assertion APPLIES.
+    for (const ref of ["claude/some-feature", "fix/whatever", "main"]) {
+      expect(baselineAssertionApplies(MEDIA, ref)).toBe(true);
+      expect(baselineAssertionApplies(MUTATE, ref)).toBe(true);
+    }
+
+    // The fixture's OWN Decap branch: assertion RELAXED so the loop's
+    // transient publish PR can merge (the deadlock this fix removes).
+    expect(
+      baselineAssertionApplies(
+        MEDIA,
+        "cms/posts/2099-01-03-e2e-media-roundtrip",
+      ),
+    ).toBe(false);
+    expect(
+      baselineAssertionApplies(
+        MUTATE,
+        "cms/posts/2099-01-01-e2e-mutation-canary",
+      ),
+    ).toBe(false);
+
+    // Per-fixture PRECISION: one fixture's branch must NOT relax the
+    // other fixture's assertion — a cross-fixture published:true is
+    // still caught (a media-branch PR can't sneak the mutation canary
+    // to published:true, and vice-versa).
+    expect(
+      baselineAssertionApplies(
+        MUTATE,
+        "cms/posts/2099-01-03-e2e-media-roundtrip",
+      ),
+    ).toBe(true);
+    expect(
+      baselineAssertionApplies(
+        MEDIA,
+        "cms/posts/2099-01-01-e2e-mutation-canary",
+      ),
+    ).toBe(true);
   });
 
   test("isScheduledMustRun / loudBail: loud on schedule, fixme otherwise", () => {
