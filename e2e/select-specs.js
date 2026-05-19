@@ -39,6 +39,12 @@ const ALWAYS_RUN = [
   "e2e/cms-config.spec.js",
   "e2e/visual-change-guard.spec.js",
   "e2e/canary-content.test.js",
+  // Pure ms-level fixture/helper invariant (#1053). Always-run so a
+  // PR that flips a prod-loop canary back to `published: true`, or
+  // breaks the shared force-baseline helper, fails visibly here — the
+  // whole point of #1053 is that this regression was silent for ~10
+  // days. @lane: local, no browser; mirrors canary-content.test.js.
+  "e2e/fixture-baseline.test.js",
 ];
 
 // Publish-loop browser specs that self-skip on PR runs because they're

@@ -67,6 +67,11 @@ const { closeStaleDecapPrOnBranch } = require("./cms-fixture-pr");
 const { addLabel, gh, waitForCmsPullRequest } = require("./github-actions-poll");
 const { waitForChangeReflected } = require("./deploy-pill");
 const { resolveCmsTarget } = require("./cms-host");
+const {
+  readPublishedFlag,
+  forcePublishedFalse,
+  loudBail,
+} = require("./fixture-baseline");
 
 const REPO_ROOT = path.resolve(__dirname, "..");
 const FIXTURE_PATH = "_posts/2099-01-03-e2e-media-roundtrip.md";
@@ -181,13 +186,8 @@ async function deleteFileFromMainIfPresent(filePath, message) {
   return true;
 }
 
-function readPublishedFlag(text) {
-  const m = text.match(
-    /^published:\s*(true|false|"true"|"false"|'true'|'false')\s*$/m,
-  );
-  if (!m) return null;
-  return m[1].replace(/['"]/g, "") === "true";
-}
+// `readPublishedFlag` is shared from ./fixture-baseline (#1053 DRY'd
+// the five per-spec copies into one implementation).
 
 // The trimmed, unquoted `featured_image:` value, or "" if the line is
 // absent / empty. Baseline is the empty string.
@@ -197,12 +197,19 @@ function readFeaturedImage(text) {
   return m[1].trim().replace(/^['"]|['"]$/g, "");
 }
 
-// The canonical baseline file text. Read from disk so doc-body edits
-// to the committed fixture flow into the cleanup commit without a
-// code change here. The committed file is published:false +
-// featured_image:"" so this is always a clean baseline.
+// The canonical baseline file text. Read from disk so a doc-body edit
+// to the committed fixture flows into the cleanup commit without a
+// code change here — but NEVER trust its `published:` value. The
+// committed file ships `published: false` + `featured_image: ""`;
+// forcing `published: false` here is what makes the loop self-heal
+// instead of re-writing `published: true` and skipping into a green
+// check forever (#1053). Idempotent once the fixture is checked in
+// false.
 function buildBaselineFileText() {
-  return fs.readFileSync(FIXTURE_ABS, "utf8");
+  return forcePublishedFalse(
+    fs.readFileSync(FIXTURE_ABS, "utf8"),
+    FIXTURE_PATH,
+  );
 }
 
 function todayUtcIso() {
@@ -221,10 +228,11 @@ test(
   "CMS media round trip — upload via Media UI → live on adamdaniel.ai → delete via Media UI → 404",
   { tag: ["@admin-write"] },
   async ({ page }) => {
-    test.skip(!getPat(), "CMS_E2E_PAT not set — media round-trip disabled.");
     // Reuse the prod-mutate gate so this spec only runs in its
     // dedicated workflow and self-skips inside the per-PR e2e matrix
-    // and on its own cms/* PR (recursion guard).
+    // and on its own cms/* PR (recursion guard). Legitimate "not my
+    // workflow" green skip — keep it plain and FIRST so a shard-1 PR
+    // run exits here before reaching the loud guards below.
     test.skip(
       process.env.RUN_PROD_MUTATE_PLAYGROUND !== "1",
       "RUN_PROD_MUTATE_PLAYGROUND not set — only cms-media-roundtrip.yml runs this spec.",
@@ -236,9 +244,17 @@ test(
     page.on("dialog", (d) => d.accept());
 
     // ── Hard guards ───────────────────────────────────────────────
+    // Past the gate above the spec is SUPPOSED to run. `loudBail`
+    // makes an unmet precondition a red failure on a schedule/
+    // workflow_dispatch run (green test.fixme on local/PR, as before)
+    // — #1053: a non-running scheduled loop must never report green.
+    if (!getPat()) {
+      loudBail(test, "CMS_E2E_PAT not set — media round-trip cannot run.");
+      return;
+    }
     if (!fs.existsSync(FIXTURE_ABS)) {
-      test.fixme(
-        true,
+      loudBail(
+        test,
         `Fixture ${FIXTURE_PATH} is missing — restore it from git history.`,
       );
       return;
@@ -246,22 +262,26 @@ test(
     const initialText = fs.readFileSync(FIXTURE_ABS, "utf8");
     const initialPublished = readPublishedFlag(initialText);
     if (initialPublished === null) {
-      test.fixme(
-        true,
+      loudBail(
+        test,
         `Fixture ${FIXTURE_PATH} has no parseable 'published:' line — fix before retrying.`,
       );
       return;
     }
     if (initialPublished === true) {
-      test.fixme(
-        true,
-        `Fixture ${FIXTURE_PATH} is UNSAFE: 'published: true' on disk. A previous run probably crashed. Flip it back to 'published: false' on main, then re-run.`,
+      // Loop self-heals main (buildBaselineFileText forces
+      // `published: false`), but a checked-in `published: true` is a
+      // source-of-truth misconfiguration and the exact #1053 stuck
+      // state. Fail loudly on a scheduled run so a human fixes it.
+      loudBail(
+        test,
+        `Fixture ${FIXTURE_PATH} is checked in 'published: true'. The loop force-resets main, but the committed fixture MUST be 'published: false' (see #1053). Flip it back on main.`,
       );
       return;
     }
     if (todayUtcIso() >= FIXTURE_DATE) {
-      test.fixme(
-        true,
+      loudBail(
+        test,
         `Be kind in 2099: ${FIXTURE_PATH} (${FIXTURE_DATE}) is past its expiry. Move the date forward or retire this spec.`,
       );
       return;

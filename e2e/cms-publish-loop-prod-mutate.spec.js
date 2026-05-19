@@ -75,6 +75,11 @@ const {
 } = require("./github-actions-poll");
 const { waitForChangeReflected } = require("./deploy-pill");
 const { prodTarget } = require("./cms-host");
+const {
+  readPublishedFlag,
+  forcePublishedFalse,
+  loudBail,
+} = require("./fixture-baseline");
 
 const REPO_ROOT = path.resolve(__dirname, "..");
 const FIXTURE_PATH = "_posts/2099-01-01-e2e-mutation-canary.md";
@@ -174,25 +179,25 @@ async function writeFixtureOnMain({ fileText, message }) {
   throw lastErr;
 }
 
-// Read the front matter `published` value from a file's text. Matches
-// `published: true` or `published: false` on its own line. Tolerates
-// surrounding whitespace and quoting.
-function readPublishedFlag(text) {
-  const m = text.match(/^published:\s*(true|false|"true"|"false"|'true'|'false')\s*$/m);
-  if (!m) return null;
-  return m[1].replace(/['"]/g, "") === "true";
-}
+// `readPublishedFlag` is shared from ./fixture-baseline (#1053 DRY'd
+// the five per-spec copies into one implementation).
 
 // Build the canonical "baseline" file text — the file with
 // `published: false`, ready to be re-committed by the cleanup step.
-// This stays in lockstep with the checked-in fixture so the next run
-// finds a clean state.
+//
+// We re-read the fixture from disk so a documentation-body edit to the
+// checked-in file still flows into the cleanup commit without a code
+// change here — but we NEVER trust its `published:` value. The fixture
+// ships `published: true` (so a human opening the file previews the
+// rendered post); forcing it false here is exactly what makes the loop
+// self-heal instead of being a fixed point that re-writes
+// `published: true`, skips on the next run's guard, and reports green
+// forever (#1053). Idempotent once the fixture is checked in false.
 function buildBaselineFileText() {
-  // We re-read the fixture from disk on each call so changes to the
-  // checked-in file (e.g. someone updates the documentation body)
-  // automatically flow into the cleanup commit without needing a code
-  // change here.
-  return fs.readFileSync(FIXTURE_ABS, "utf8");
+  return forcePublishedFalse(
+    fs.readFileSync(FIXTURE_ABS, "utf8"),
+    FIXTURE_PATH,
+  );
 }
 
 // Today's date as YYYY-MM-DD in UTC. Compared lexicographically
@@ -206,15 +211,13 @@ test(
   "CMS publish loop — prod mutation playground (real _posts/ entry)",
   { tag: ["@admin-write"] },
   async ({ page }, testInfo) => {
-  test.skip(
-    !getPat(),
-    "CMS_E2E_PAT not set — prod-mutation playground disabled.",
-  );
   // Only the dedicated cms-publish-loop-prod.yml workflow opts in via
   // RUN_PROD_MUTATE_PLAYGROUND=1. Without this gate the spec also
   // runs inside the e2e-tests.yml shard 1, force-pushing concurrent
   // commits to the same cms/posts/2099-… branch and cancelling each
-  // other's validate-content runs.
+  // other's validate-content runs. This is a legitimate "not my
+  // workflow" skip — keep it a plain green test.skip, and FIRST so a
+  // shard-1 PR run exits here before reaching the loud guards below.
   test.skip(
     process.env.RUN_PROD_MUTATE_PLAYGROUND !== "1",
     "RUN_PROD_MUTATE_PLAYGROUND not set — only the cms-publish-loop-prod workflow runs this spec.",
@@ -222,9 +225,20 @@ test(
 
   // ── Hard guards (run inside the test so failures show up in the
   // test report, not as silent worker bring-up errors) ───────────
+  // Past this point the spec is SUPPOSED to run. `loudBail` makes an
+  // unmet precondition a red failure on a schedule/workflow_dispatch
+  // run (and a green test.fixme on local/PR runs, as before) — #1053:
+  // a non-running scheduled loop must never masquerade as green.
+  if (!getPat()) {
+    loudBail(
+      test,
+      "CMS_E2E_PAT not set — prod-mutation playground cannot run.",
+    );
+    return;
+  }
   if (!fs.existsSync(FIXTURE_ABS)) {
-    test.fixme(
-      true,
+    loudBail(
+      test,
       `Fixture ${FIXTURE_PATH} is missing — the prod-mutation playground spec needs the file to drive a publish loop. Restore it from git history or re-add per plan G4.`,
     );
     return;
@@ -233,22 +247,28 @@ test(
   const initialFileText = fs.readFileSync(FIXTURE_ABS, "utf8");
   const initialPublished = readPublishedFlag(initialFileText);
   if (initialPublished === null) {
-    test.fixme(
-      true,
+    loudBail(
+      test,
       `Fixture ${FIXTURE_PATH} has no parseable 'published:' front-matter line — fix before retrying.`,
     );
     return;
   }
   if (initialPublished === true) {
-    test.fixme(
-      true,
-      `Fixture ${FIXTURE_PATH} is in an UNSAFE state: 'published: true' on disk. A previous run probably crashed mid-flow. Manually flip it back to 'published: false' on main, then re-run the workflow.`,
+    // The loop self-heals main (buildBaselineFileText forces
+    // `published: false`), but a checked-in `published: true` is a
+    // source-of-truth misconfiguration: the file would serve publicly
+    // until a deploy drops it, and it is exactly the state that used
+    // to skip-and-report-green for ~10 days (#1053). Fail loudly on a
+    // scheduled run so a human fixes the committed fixture.
+    loudBail(
+      test,
+      `Fixture ${FIXTURE_PATH} is checked in 'published: true'. The loop force-resets main, but the committed fixture MUST be 'published: false' (see #1053). Flip it back on main.`,
     );
     return;
   }
   if (todayUtcIso() >= FIXTURE_DATE) {
-    test.fixme(
-      true,
+    loudBail(
+      test,
       `Be kind in 2099: the date-based fixture ${FIXTURE_PATH} (${FIXTURE_DATE}) is past its expiry. Either move the date forward or retire this spec.`,
     );
     return;

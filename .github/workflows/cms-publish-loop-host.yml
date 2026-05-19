@@ -35,11 +35,16 @@ name: CMS Publish Loop — Host Repo (canary collection)
 
 on:
   schedule:
-    # 12:00 UTC daily. Slotted an hour before
-    # cms-publish-loop-prod.yml (13:00) and two before
-    # publish-scheduled-posts (14:00) so the three daily mutations
-    # don't trip over each other on deploy-production's queued-run
-    # concurrency.
+    # 12:00 UTC daily — first slot in the daily prod-mutating-loop
+    # ladder, spaced one hour apart so they don't trip over each
+    # other on deploy-production's queued-run concurrency:
+    #   12:00  cms-publish-loop-host.yml      (this — _e2e canary)
+    #   13:00  cms-publish-loop-prod.yml      (prod-mutation playground)
+    #   14:00  publish-scheduled-posts.yml    (scheduled posts)
+    #   15:00  cms-media-roundtrip.yml        (media round-trip)
+    # Keep this ladder in sync if a slot moves. (Until #1053 the
+    # 13:00 cms-publish-loop-prod.yml entry was aspirational — that
+    # workflow had no `schedule:` at all; #1053 added it.)
     - cron: '0 12 * * *'
   push:
     branches: [main]
