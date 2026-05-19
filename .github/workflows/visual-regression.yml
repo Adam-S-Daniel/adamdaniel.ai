@@ -308,3 +308,4 @@ jobs:
           else
             echo "Visual regression approved by reviewer (${{ needs.generate.outputs.visually-different }} page(s) visually different)."
           fi
+# Intentionally inert line (no functional effect).

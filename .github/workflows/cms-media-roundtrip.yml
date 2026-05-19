@@ -13,24 +13,28 @@ name: CMS Media Roundtrip — Prod (real upload + delete)
 # job's wall-clock with a second 40-min real-prod loop can't make the
 # existing prod-mutate workflow flaky.
 #
-# Trigger model: workflow-level `paths:` filter on PRs into `main`
-# (only fires when a salient file changed; this job is NOT a required
-# status check), plus manual `workflow_dispatch` and a daily schedule
-# slotted clear of the other prod-mutating loops' deploy-production
-# concurrency windows (host 12:00, prod-mutate 13:00, scheduled-posts
-# 14:00 → this at 15:00 UTC).
+# Trigger model: workflow-level `paths:` filter on pushes to `main`
+# (post-merge, not per-PR — the spec drives a REAL prod mutation, so
+# firing it on every concurrent PR raced the shared fixture + the
+# deploy-production queue and flaked; PR #1067). Only fires when a
+# push to `main` touches a salient file; this job is NOT a required
+# status check, so not running on PRs blocks no merge. Plus manual
+# `workflow_dispatch` and a daily schedule slotted clear of the other
+# prod-mutating loops' deploy-production concurrency windows (host
+# 12:00, prod-mutate 13:00, scheduled-posts 14:00 → this at 15:00
+# UTC).
 #
 # Sunset path: the actual mutation is gated on the repo variable
 # `PROD_PLAYGROUND_MODE`. While prod is a "full mutation playground",
 # set it to `true`. When prod stops being a playground, set it to
-# `false` (or unset it) — the workflow keeps reporting success on PRs
-# (no real mutation) and the fixture file
+# `false` (or unset it) — the workflow keeps reporting success on
+# runs (no real mutation) and the fixture file
 # `_posts/2099-01-03-e2e-media-roundtrip.md` stays in-tree as docs.
 
 on:
   schedule:
     - cron: '0 15 * * *'
-  pull_request:
+  push:
     branches: [main]
     paths:
       - .github/workflows/cms-media-roundtrip.yml
@@ -61,18 +65,28 @@ defaults:
     shell: bash
 
 concurrency:
-  # Per-PR concurrency; constant key for cron/dispatch so they queue
-  # rather than race the fixture's Contents-API SHA.
+  # Per-ref concurrency; the `pull_request.number` half is dead on a
+  # push trigger and resolves to `github.ref`, so push/cron/dispatch
+  # queue rather than race the fixture's Contents-API SHA.
   group: cms-media-roundtrip-${{ github.event.pull_request.number || github.ref }}
   cancel-in-progress: true
 
 jobs:
   media-roundtrip:
     runs-on: ubuntu-latest
-    # Skip on cms/* PRs to prevent recursion: the spec opens cms/* PRs
-    # that would otherwise re-trigger this workflow via the salient
-    # path filter. head_ref is empty on cron/dispatch.
-    if: ${{ !startsWith(github.head_ref || '', 'cms/') }}
+    # Push-safe recursion guard. The spec drives Decap, which opens a
+    # `cms/posts/2099-01-03-e2e-media-roundtrip` PR; cms-editorial-
+    # workflow.yml squash-merges it as the CMS_E2E_PAT user with the
+    # commit headline `publish: <PR title>`. That merge is a push to
+    # `main` touching `_posts/2099-01-03-e2e-media-roundtrip.md` — a
+    # salient path — which would re-fire this loop indefinitely. The
+    # `head_ref` clause only bites on `pull_request`/dispatch-from-a-
+    # cms-branch (empty on push); the `publish: ` clause is the push-
+    # event guard. schedule/workflow_dispatch (event != push) run.
+    if: >-
+      ${{ !startsWith(github.head_ref || '', 'cms/')
+          && (github.event_name != 'push'
+              || !startsWith(github.event.head_commit.message, 'publish: ')) }}
     env:
       # Firefox refuses to launch when $HOME is owned by another user
       # inside GHA container jobs; job-level env wins. Uniform for
@@ -181,3 +195,4 @@ jobs:
           mode: resolve
           marker: media-roundtrip-stuck-pr-diagnostic
           title: media-roundtrip stuck-PR diagnostic
+# Intentionally inert line (no functional effect).

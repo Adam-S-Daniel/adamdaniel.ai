@@ -156,3 +156,4 @@ jobs:
     steps:
       - name: Stub success
         run: echo "Stub success — paths-ignored PR; e2e-tests.yml's finalize did not fire."
+# Intentionally inert line (no functional effect).

@@ -1246,3 +1246,4 @@ jobs:
         run: |
           echo "One or more matrix shards failed (e2e=${{ needs.e2e.result }}, e2e-admin=${{ needs.e2e-admin.result }})."
           exit 1
+# Intentionally inert line (no functional effect).
