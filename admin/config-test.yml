@@ -20,6 +20,10 @@
 
 backend:
   name: test-repo
+  # Mirrors admin/config.yml — inert for the in-browser test-repo
+  # backend (its getDeployPreview is a stub), kept so the three configs
+  # stay in lockstep and one static spec asserts the contract everywhere.
+  preview_context: deploy/preview
 
 site_url: http://localhost:4000
 display_url: http://localhost:4000

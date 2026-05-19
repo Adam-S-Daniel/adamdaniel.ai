@@ -174,3 +174,111 @@ test.describe("Issue #1042 — admin posts UI", () => {
     }
   });
 });
+
+// ── Preview/PR link relabel + view-published-changes + the
+//    "Check for Preview" root-cause fix ────────────────────────────
+//
+// Locks the follow-up admin changes so a future edit can't silently
+// regress them (pure-fs, same lane as the suite above):
+//
+//   - posts-list-enhance.js renames the bare "preview-pr<N>" /
+//     "PR #<N>" links to "preview draft" / "view draft changes",
+//     points the change links at the GitHub Files-changed diff, and
+//     adds "view published changes" (the merged PR's diff) gated on a
+//     post actually being live on main and ordered before the draft
+//     links;
+//   - live-url-banner.js swaps the host to the per-PR preview env for
+//     an unmerged editorial-workflow draft (the reported prod-404);
+//   - deploy-preview.yml publishes a `deploy/preview` commit status
+//     and admin/config*.yml pin `backend.preview_context` to it —
+//     together the actual fix for the editor's perpetual
+//     "Check for Preview" (decap-cms 3.12.2's github backend reads a
+//     commit status, never the GitHub Deployment we already register).
+test.describe("Admin preview/PR links + Check-for-Preview fix", () => {
+  const PLE = path.join(ADMIN, "posts-list-enhance.js");
+  const BANNER = path.join(ADMIN, "live-url-banner.js");
+  const WF = path.join(REPO_ROOT, ".github", "workflows", "deploy-preview.yml");
+
+  test("posts-list-enhance.js: relabelled links, diff URLs, view-published-changes", () => {
+    const src = read(PLE);
+    // New human labels.
+    expect(src).toContain("preview draft");
+    expect(src).toContain("view draft changes");
+    expect(src).toContain("view published changes");
+    // Old bare labels gone (distinctive source fragments) so a
+    // regression can't silently restore them.
+    expect(src, 'the bare "preview-pr<N>" link label was renamed').not.toContain(">preview-pr");
+    expect(src, 'the bare "PR #<N>" link label was renamed').not.toContain(">PR #");
+    // Both change links resolve to the GitHub Files-changed diff.
+    expect(src, "draft-changes link must be the PR /files diff").toMatch(
+      /esc\(pr\.url\)[\s\S]{0,40}\/files/,
+    );
+    expect(src, "published-changes link must be the PR /files diff").toMatch(
+      /esc\(publishedPr\.url\)[\s\S]{0,40}\/files/,
+    );
+    // preview-draft link still targets the per-PR preview host.
+    expect(src).toContain("https://preview-pr");
+    // Published PR derived from the last main commit's PR — one
+    // batched GraphQL query, not a per-row call.
+    expect(src).toContain("associatedPullRequests");
+    expect(src).toMatch(/var publishedPr = le && le\.pr/);
+    // Order: "view published changes" renders BEFORE "preview draft"
+    // (bits are pushed in source order).
+    expect(
+      src.indexOf("view published changes"),
+      '"view published changes" must be pushed before "preview draft"',
+    ).toBeLessThan(src.indexOf("preview draft"));
+    // Gated on a merged PR existing — an unpublished draft (no main
+    // history → no le.pr) must not show "view published changes".
+    const block = src.slice(
+      src.indexOf("var publishedPr"),
+      src.indexOf("var pr ="),
+    );
+    expect(block).toMatch(/if \(publishedPr\)/);
+  });
+
+  test("live-url-banner.js: preview-aware origin for unmerged drafts", () => {
+    const src = read(BANNER);
+    // Locked banner contract still holds.
+    expect(src).toContain('id="cms-live-url-banner-link"');
+    expect(src).toContain('data-testid="cms-live-url-banner-link"');
+    expect(src).toMatch(/window\.LiveURL/);
+    // Swaps host to the per-PR preview env when the open entry has an
+    // editorial-workflow PR.
+    expect(src).toMatch(/preview-pr["']\s*\+\s*n\s*\+\s*["']\.adamdaniel\.ai/);
+    expect(src).toContain("/pulls?state=open");
+    // Same operator-token auth as the rest of the admin (no new
+    // surface); reuses posts-list-enhance's cache when warm.
+    expect(src).toContain('localStorage.getItem("decap-cms-user")');
+    expect(src).toContain("cms-ple-remote-cache-v1");
+    // Degrade-safe: the published===false placeholder is untouched, so
+    // cms-link-crawler's known-bug allowlist still holds.
+    expect(src).toContain("Not yet published.");
+  });
+
+  test("deploy-preview.yml: publishes the deploy/preview commit status", () => {
+    const wf = read(WF);
+    expect(
+      wf,
+      "createCommitStatus is the github-backend deploy-preview signal Decap reads",
+    ).toContain("createCommitStatus");
+    expect(wf).toMatch(/context:\s*['"]deploy\/preview['"]/);
+    expect(wf).toMatch(/state:\s*['"]success['"]/);
+    // Needs the statuses:write scope to post it.
+    expect(wf, "statuses:write scope is required to set a commit status").toMatch(
+      /^\s*statuses:\s*write\s*$/m,
+    );
+    // Set on the PR head SHA (the ref Decap's getStatuses queries).
+    expect(wf).toMatch(/PR_HEAD_SHA:\s*\$\{\{\s*github\.event\.pull_request\.head\.sha/);
+  });
+
+  for (const cfg of CONFIGS) {
+    const rel = path.relative(REPO_ROOT, cfg);
+    test(`${rel}: backend.preview_context pins deploy/preview`, () => {
+      expect(
+        read(cfg),
+        `${rel} must pin backend.preview_context so Decap matches the deploy-preview.yml commit status`,
+      ).toMatch(/^\s*preview_context:\s*deploy\/preview\s*$/m);
+    });
+  }
+});
