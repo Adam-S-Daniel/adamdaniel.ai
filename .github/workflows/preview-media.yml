@@ -108,7 +108,20 @@ jobs:
         # ever blocking a non-media PR.
         run: |
           set -o pipefail
-          git fetch origin "${{ github.base_ref }}" --depth=500 || true
+          base="${{ github.base_ref }}"
+          git fetch origin "$base" --depth=500 || true
+          # Diagnostic: make the log self-explanatory about WHICH refs the
+          # salient diff compared and why it concluded true/false. On a
+          # pull_request, checkout's HEAD is the pull/N/merge ref; this
+          # prints the resolved SHAs + merge-base so a workflow-only PR's
+          # early-skip-vs-probe path is unambiguous from the log alone.
+          echo "::group::salient diff refs"
+          echo "github.base_ref = $base"
+          echo "HEAD            = $(git rev-parse HEAD 2>&1)"
+          echo "origin/$base    = $(git rev-parse "origin/$base" 2>&1)"
+          echo "merge-base      = $(git merge-base "origin/$base" HEAD 2>&1)"
+          echo "diff cmd        = git diff --name-only origin/$base...HEAD"
+          echo "::endgroup::"
           # Fail CLOSED. A non-zero `git diff` (e.g. the container-UID
           # "dubious ownership" rejection) must NOT be swallowed by
           # `|| true`: an empty `changed` set matches no salient path, so
