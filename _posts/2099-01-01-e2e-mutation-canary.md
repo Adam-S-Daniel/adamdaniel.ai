@@ -8,10 +8,10 @@ slug: e2e-mutation-canary
 date: 2099-01-01 00:00:00 +0000
 tags: []
 featured_image: ""
-published: false
-test_fixture: true
+published: true
 sitemap: false
 publish_date: ""
+test_fixture: true
 ---
 Adam Daniel — E2E mutation canary post (do not edit by hand).
 
@@ -32,9 +32,11 @@ e2e-prod-mutate:e2e-mutation-canary:1778180267725
 
 
 
+e2e-prod-mutate:e2e-mutation-canary:1779198196853
+
+
+
 e2e-prod-mutate:e2e-mutation-canary:1778249046751
-
-
 
 and `robots: noindex,nofollow` are belt-and-suspenders so a stuck
 "published: true" state never leaks into search.
