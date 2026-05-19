@@ -91,6 +91,34 @@ function sanitizeToBaseline(fileText, fixturePath, baselineBody) {
   return `${frontMatterPublishedFalse(frontMatter)}\n---\n${baselineBody}`;
 }
 
+// The Decap editorial-workflow branch for a `_posts/<slug>.md`
+// fixture. Decap opens exactly ONE PR per entry on this fixed branch;
+// the prod-mutate / media-roundtrip specs build their `DECAP_BRANCH`
+// constant the same way (`cms/posts/${FILE_SLUG}`).
+function ownDecapBranchFor(fixtureRelPath) {
+  const slug = fixtureRelPath.replace(/^_posts\//, "").replace(/\.md$/, "");
+  return `cms/posts/${slug}`;
+}
+
+// Whether the strict `published: false` baseline assertion applies to
+// `fixtureRelPath` given a PR head branch `headRef`
+// (process.env.GITHUB_HEAD_REF; "" on push/main and local dev).
+//
+// FALSE *only* on that fixture's own Decap branch: there the loop's
+// own publish PR legitimately carries a transient `published: true`
+// and the round-trip spec REQUIRES that PR to merge+deploy before it
+// reverts (spec step 9 + afterAll + step-0b force baseline). The
+// #1053 force-baseline change (3dbade7) regressed exactly this — it
+// red-failed that PR's required e2e check, deadlocking the round trip
+// (scheduled media run 26114167560). TRUE on push/main and on every
+// OTHER branch, so #1053's real hazard — `published: true` PERSISTING
+// on main, or a stray flip on a feature branch — is still guarded
+// unchanged. Per-fixture precise: fixture A's branch does NOT relax
+// the assertion for fixture B.
+function baselineAssertionApplies(fixtureRelPath, headRef) {
+  return (headRef || "") !== ownDecapBranchFor(fixtureRelPath);
+}
+
 // True when this process is a scheduled / manually-dispatched CI run
 // that is SUPPOSED to execute the loop for real. In that context a
 // precondition bail must be a LOUD red failure, never a green
@@ -125,6 +153,8 @@ module.exports = {
   splitFrontMatter,
   forcePublishedFalse,
   sanitizeToBaseline,
+  ownDecapBranchFor,
+  baselineAssertionApplies,
   isScheduledMustRun,
   loudBail,
 };
