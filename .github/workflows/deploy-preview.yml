@@ -121,7 +121,7 @@ jobs:
           fi
 
       - name: Setup Ruby
-        uses: ruby/setup-ruby@6aaa311d81eba98ae12eaffbcb63296ace0efcde  # v1.306.0 (2026-04-26)
+        uses: ruby/setup-ruby@6aaa311d81eba98ae12eaffbcb63296ace0efcde  # v1.307.0 (2026-05-11)
         with:
           ruby-version: '3.2'
           bundler-cache: true
