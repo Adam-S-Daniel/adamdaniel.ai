@@ -85,6 +85,19 @@ jobs:
           # is accurate.
           fetch-depth: 0
 
+      - name: Mark workspace safe for git
+        # This job runs inside the Playwright container. actions/checkout
+        # writes the tree as the runner user, so raw `git` in later steps
+        # (the salient detector below) hits "detected dubious ownership"
+        # and exits non-zero against /__w/<repo>/<repo>. Register the
+        # workspace as a safe.directory in the same HOME (/root) the
+        # `run:` steps use so `git diff` works. The literal path is also
+        # added because actions/checkout's own safe.directory entry does
+        # not reliably survive the job's `HOME` override.
+        run: |
+          git config --global --add safe.directory "$GITHUB_WORKSPACE"
+          git config --global --add safe.directory /__w/adamdaniel.ai/adamdaniel.ai
+
       - name: Detect media-salient changes
         id: salient
         # Mirror of e2e/select-specs.js's
@@ -96,7 +109,19 @@ jobs:
         run: |
           set -o pipefail
           git fetch origin "${{ github.base_ref }}" --depth=500 || true
-          changed=$(git diff --name-only "origin/${{ github.base_ref }}...HEAD" || true)
+          # Fail CLOSED. A non-zero `git diff` (e.g. the container-UID
+          # "dubious ownership" rejection) must NOT be swallowed by
+          # `|| true`: an empty `changed` set matches no salient path, so
+          # the gate would silently report `salient=false` and let a
+          # media-salient PR merge without the preview probe ever running
+          # — the exact fail-open this required check exists to prevent.
+          # If the changed-file set can't be computed, hard-fail instead.
+          if ! changed=$(git diff --name-only "origin/${{ github.base_ref }}...HEAD"); then
+            msg="preview-media could not compute the changed-file set against origin/${{ github.base_ref }} (git diff exited non-zero). Failing the required gate CLOSED so a media-salient PR cannot merge without the preview probe. This indicates a CI/environment problem (e.g. git safe.directory), not a content issue — re-run the job; if it persists, investigate the workflow."
+            echo "::error title=preview-media::${msg}"
+            echo "$msg" | tee /tmp/preview-media.log
+            exit 1
+          fi
           echo "Changed files:"
           echo "$changed" | sed 's/^/  /'
           # grep -E with an alternation of the salient path anchors.
@@ -183,7 +208,10 @@ jobs:
             2>&1 | tee /tmp/preview-media.log
 
       - name: Post failure summary
-        if: ${{ failure() && steps.salient.outputs.salient == 'true' }}
+        # Also fires when the salient detector itself hard-failed (fail
+        # closed): it exits before setting `salient`, so cover its
+        # `outcome` too — it tees the reason into /tmp/preview-media.log.
+        if: ${{ failure() && (steps.salient.outputs.salient == 'true' || steps.salient.outcome == 'failure') }}
         uses: ./.github/actions/post-failure-comment
         with:
           mode: post
