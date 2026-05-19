@@ -17,6 +17,9 @@ target to assert against on both preview-pr<N>.adamdaniel.ai and
 adamdaniel.ai. The body is replaced during a test run and reset to this
 baseline in cleanup, so the public URL always renders innocuous content
 
+
+e2e-publish-loop:post:1779200686089
+
 e2e-publish-loop:post:1779200460681
 
 between runs.
