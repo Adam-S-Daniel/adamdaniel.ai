@@ -76,6 +76,10 @@ const {
 } = require("./github-actions-poll");
 const { waitForChangeReflected } = require("./deploy-pill");
 const { previewTarget } = require("./cms-host");
+const {
+  readPublishedFlag,
+  forcePublishedFalse,
+} = require("./fixture-baseline");
 
 const FIXTURE_PATH = "_posts/2024-01-02-e2e-unpublish-canary.md";
 const FIXTURE_SLUG = "e2e-unpublish-canary";
@@ -112,33 +116,12 @@ async function fetchFixtureFromBranch(branch) {
   );
 }
 
-// Match `published: true|false` on its own line, tolerating quotes.
-function readPublishedFlag(text) {
-  const m = text.match(
-    /^published:\s*(true|false|"true"|"false"|'true'|'false')\s*$/m,
-  );
-  if (!m) return null;
-  return m[1].replace(/['"]/g, "") === "true";
-}
-
-// Force `published: false` in the file's front matter, leaving the
-// body and the rest of the front matter untouched. Toggle-only spec —
-// the body is never the thing under test, so we preserve it verbatim
-// (robust to a documentation-body edit landing on the fixture).
-function forcePublishedFalse(fileText) {
-  const fmEnd = fileText.indexOf("\n---\n", 4);
-  if (fmEnd < 0) {
-    throw new Error(
-      `Fixture ${FIXTURE_PATH} is missing its closing front-matter delimiter.`,
-    );
-  }
-  const frontMatter = fileText.slice(0, fmEnd);
-  const body = fileText.slice(fmEnd); // includes leading "\n---\n"
-  const fixedFm = /^published:\s*.*$/m.test(frontMatter)
-    ? frontMatter.replace(/^published:\s*.*$/m, "published: false")
-    : `${frontMatter}\npublished: false`;
-  return `${fixedFm}${body}`;
-}
+// `readPublishedFlag` and `forcePublishedFalse` are shared from
+// ./fixture-baseline (#1053 DRY'd the per-spec copies into one
+// implementation). `forcePublishedFalse(text, FIXTURE_PATH)` is
+// byte-identical to the old local copy: front matter + body verbatim,
+// only `published:` forced false (toggle-only spec — the body is
+// never the thing under test, so it is preserved).
 
 // Contents-API PUT to the PR head branch with optimistic-concurrency
 // retry (same rationale as the prod spec's writeFixtureOnMain — the
@@ -224,7 +207,7 @@ test(
       const remoteBody = Buffer.from(current.content, "base64").toString(
         "utf8",
       );
-      baselineFileText = forcePublishedFalse(remoteBody);
+      baselineFileText = forcePublishedFalse(remoteBody, FIXTURE_PATH);
       if (remoteBody !== baselineFileText) {
         await writeFixtureOnBranch({
           branch: PR_HEAD_REF,
@@ -448,7 +431,7 @@ test.afterAll(async () => {
   );
   await writeFixtureOnBranch({
     branch: PR_HEAD_REF,
-    fileText: forcePublishedFalse(decoded),
+    fileText: forcePublishedFalse(decoded, FIXTURE_PATH),
     message:
       "test(preview-unpublish): harness safety-net reset to published: false (UI cleanup left mutation)",
   });

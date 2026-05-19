@@ -62,6 +62,7 @@ const { test, expect } = require("./base");
 const { seedDecapAuth, getPat, HOST_REPO } = require("./decap-pat");
 const { fetchPublicUrl, gh } = require("./github-actions-poll");
 const { waitForChangeReflected, PILL_PROD } = require("./deploy-pill");
+const { readPublishedFlag } = require("./fixture-baseline");
 
 const PROD_HOST = "https://adamdaniel.ai";
 const PROD_ADMIN = `${PROD_HOST}/admin/`;
@@ -79,14 +80,11 @@ async function fetchFixtureFromMain() {
   return gh(`/repos/${HOST_REPO}/contents/${FIXTURE_PATH}?ref=main`);
 }
 
-// Read the front matter `published` value from a file's text. Matches
-// `published: true` or `published: false` on its own line. Returns null
-// if the key is missing entirely (Jekyll treats it as published, but
-// for this spec the fixture always carries an explicit value).
-function readPublishedFlag(text) {
-  const m = text.match(/^published:\s*(true|false)\s*$/m);
-  return m ? m[1] === "true" : null;
-}
+// `readPublishedFlag` is shared from ./fixture-baseline (#1053 DRY'd
+// the five per-spec copies). The shared regex also tolerates quoted
+// values — a strict superset of this spec's old `(true|false)`-only
+// copy; the fixture and the afterAll harness only ever write unquoted
+// values, so behaviour for this spec's inputs is unchanged.
 
 // Used by the afterAll harness to restore baseline (`published: false`)
 // when the UI cleanup leg failed and left the fixture mutated on main.

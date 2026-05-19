@@ -87,6 +87,10 @@ const {
 } = require("./github-actions-poll");
 const { waitForChangeReflected } = require("./deploy-pill");
 const { previewTarget } = require("./cms-host");
+const {
+  readPublishedFlag,
+  sanitizeToBaseline,
+} = require("./fixture-baseline");
 
 const FIXTURE_PATH = "_posts/2099-01-01-e2e-mutation-canary.md";
 const FIXTURE_SLUG = "e2e-mutation-canary";
@@ -158,40 +162,13 @@ async function fetchFixtureFromBranch(branch) {
   );
 }
 
-// Read the front-matter `published` value from a file's text. Matches
-// `published: true|false` on its own line, tolerating quotes.
-function readPublishedFlag(text) {
-  const m = text.match(
-    /^published:\s*(true|false|"true"|"false"|'true'|'false')\s*$/m,
-  );
-  if (!m) return null;
-  return m[1].replace(/['"]/g, "") === "true";
-}
-
-// Build a clean baseline file from whatever currently sits on the
-// branch: keep the file's front matter verbatim (robust to a
-// front-matter shape change landing on the fixture) but force
-// `published: false` and swap the body for the canonical marker-free
-// BASELINE_BODY. Deterministic regardless of how a prior crashed run
-// (or main's dirty state propagated onto the branch) left the file.
-function sanitizeToBaseline(fileText) {
-  const fmEnd = fileText.indexOf("\n---\n", 4);
-  if (fmEnd < 0) {
-    throw new Error(
-      `Fixture ${FIXTURE_PATH} is missing its closing front-matter delimiter.`,
-    );
-  }
-  let frontMatter = fileText.slice(0, fmEnd); // up to (not incl) "\n---\n"
-  if (/^published:\s*.*$/m.test(frontMatter)) {
-    frontMatter = frontMatter.replace(
-      /^published:\s*.*$/m,
-      "published: false",
-    );
-  } else {
-    frontMatter += "\npublished: false";
-  }
-  return `${frontMatter}\n---\n${BASELINE_BODY}`;
-}
+// `readPublishedFlag` and `sanitizeToBaseline` are shared from
+// ./fixture-baseline (#1053 DRY'd the per-spec copies into one
+// implementation so the trust-the-file bug can't be reintroduced by
+// copy-paste drift). `sanitizeToBaseline(text, FIXTURE_PATH,
+// BASELINE_BODY)` keeps this spec's behaviour byte-identical: front
+// matter verbatim but `published: false`, body swapped for the
+// canonical marker-free BASELINE_BODY.
 
 // Write a complete fixture body to the PR head branch. Optimistic-
 // concurrency retry mirrors the prod spec's writeFixtureOnMain: the
@@ -279,7 +256,11 @@ test(
 
     const runId = Date.now();
     const marker = makePreviewMarker(runId);
-    const baselineFileText = sanitizeToBaseline(initialFileText);
+    const baselineFileText = sanitizeToBaseline(
+      initialFileText,
+      FIXTURE_PATH,
+      BASELINE_BODY,
+    );
 
     // ── 0a. Close any stale Decap editorial-workflow PR on the
     // post's fixed branch ───────────────────────────────────────────
@@ -535,7 +516,7 @@ test.afterAll(async () => {
   );
   await writeFixtureOnBranch({
     branch: PR_HEAD_REF,
-    fileText: sanitizeToBaseline(decoded),
+    fileText: sanitizeToBaseline(decoded, FIXTURE_PATH, BASELINE_BODY),
     message:
       "test(preview-prod-mutate): harness safety-net reset of fixture (UI cleanup left mutation)",
   });

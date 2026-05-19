@@ -7,8 +7,8 @@ title: E2E Media Roundtrip
 slug: e2e-media-roundtrip
 date: 2099-01-03 00:00:00 +0000
 tags: []
-featured_image: /assets/images/uploads/e2e-media-roundtrip-1779043268692.png
-published: true
+featured_image: ""
+published: false
 test_fixture: true
 sitemap: false
 publish_date: ""
