@@ -73,7 +73,7 @@ jobs:
           token: ${{ secrets.CMS_E2E_PAT }}
 
       - name: Setup Ruby
-        uses: ruby/setup-ruby@c4e5b1316158f92e3d49443a9d58b31d25ac0f8f  # v1.306.0 (2026-04-26)
+        uses: ruby/setup-ruby@6aaa311d81eba98ae12eaffbcb63296ace0efcde  # v1.307.0 (2026-05-11)
         with:
           ruby-version: '3.2'
           bundler-cache: true
@@ -188,3 +188,4 @@ jobs:
           # run set it on the same long-lived branch), this is a no-op
           # — but gh exits 0 in that case, so no special handling needed.
           gh pr merge "$PR_NUMBER" --auto --squash
+# Intentionally inert line (no functional effect).

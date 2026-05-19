@@ -5,50 +5,29 @@ name: CMS Publish Loop — Prod Mutation Playground
 # e2e/cms-publish-loop-prod-mutate.spec.js for the rationale and
 # fixture details.
 #
-# Trigger model:
-#   - schedule (13:00 UTC daily) + workflow_dispatch always run the
-#     real loop (subject to the job-level cms/* recursion guard and
-#     the PROD_PLAYGROUND_MODE sunset gate). Until #1053 this workflow
-#     had NO `schedule:` — it only fired on salient-path PRs, so the
-#     "prod mutation playground" was never actually exercised daily
-#     and silently skipped-and-reported-green for ~10 days. The 13:00
-#     slot is the one cms-publish-loop-host.yml's header comment has
-#     always referenced (host 12:00 → prod-mutate 13:00 →
-#     scheduled-posts 14:00 → media-roundtrip 15:00), spaced so the
-#     daily prod-mutating loops don't collide on deploy-production's
-#     queued-run concurrency.
-#   - pull_request fires only when a salient file (workflow-level
-#     `paths:` below) changed; on other PRs it doesn't appear in the
-#     checks list at all (this job is NOT in the branch-protection
-#     required-status-checks list — see `.github/rulesets/main.json`
-#     and the live `gh api repos/.../rules/branches/main` view), so
-#     paths-filtering blocks no merge.
-#   - The job self-skips on cms/* PRs (the recursion guard mirrored
-#     from cms-publish-loop-host.yml / cms-media-roundtrip.yml): the
-#     spec opens a `cms/posts/2099-…` PR that changes the salient
-#     fixture file and would otherwise re-trigger this same workflow
-#     on its own PR. `github.head_ref` is empty on schedule/dispatch
-#     so cron and manual runs are unaffected.
+# Trigger model: workflow-level `paths:` filter on pushes to `main`.
+# It runs post-merge (not speculatively per-PR) because the spec
+# drives a REAL mutation against production: firing it on every
+# concurrent PR raced the shared prod canary + the deploy-production
+# queue and flaked non-deterministically. On a push that doesn't
+# touch a salient file it doesn't run at all. This job is NOT in the
+# branch-protection required-status-checks list (see
+# `.github/rulesets/main.json` and the live
+# `gh api repos/.../rules/branches/main` view), so not running on PRs
+# blocks no merge. Manual `workflow_dispatch` always forces a real
+# run regardless of paths.
 #
 # Sunset path: the actual mutation is gated on the repo variable
 # `PROD_PLAYGROUND_MODE`. While prod is a "full mutation playground",
 # set it to `true` (Repo Settings → Variables and secrets → Actions →
 # Variables). When prod stops being a playground, set it to `false`
-# (or unset it) — the workflow keeps reporting success on PRs (no
+# (or unset it) — the workflow keeps reporting success on pushes (no
 # real mutation), and the fixture file
 # `_posts/2099-01-01-e2e-mutation-canary.md` stays in-tree as
 # documentation.
 
 on:
-  schedule:
-    # 13:00 UTC daily. Slotted between cms-publish-loop-host.yml
-    # (12:00) and publish-scheduled-posts (14:00) so the daily
-    # prod-mutating loops don't trip over each other on
-    # deploy-production's queued-run concurrency. This is the slot
-    # cms-publish-loop-host.yml's header comment has always
-    # referenced; before #1053 the schedule was missing entirely.
-    - cron: '0 13 * * *'
-  pull_request:
+  push:
     branches: [main]
     paths:
       - .github/workflows/cms-publish-loop-prod.yml
@@ -86,26 +65,32 @@ defaults:
     shell: bash
 
 concurrency:
-  # Per-PR concurrency. A second push to the same PR cancels the
-  # in-flight run; concurrent runs across different PRs would clash
-  # on the canary file's SHA in the Contents API and confuse the
-  # assertion that the URL shows *this* run's marker, so don't allow
-  # them.
+  # One run per ref. A newer push to main cancels an in-flight run;
+  # overlapping runs would clash on the canary file's SHA in the
+  # Contents API and confuse the assertion that the URL shows *this*
+  # run's marker, so don't allow them. The `pull_request.number`
+  # fallback is dead on a push trigger (always empty → github.ref);
+  # kept so a manual `workflow_dispatch` from a branch still scopes
+  # to that ref.
   group: cms-publish-loop-prod-${{ github.event.pull_request.number || github.ref }}
   cancel-in-progress: true
 
 jobs:
   prod-mutate:
     runs-on: ubuntu-latest
-    # Skip on cms/* PRs to prevent recursion: the spec opens a
-    # cms/posts/2099-… PR that changes the salient fixture file and
-    # would otherwise re-trigger this workflow on its own PR. Empty
-    # head_ref on schedule/workflow_dispatch, so cron + manual runs
-    # are unaffected. Mirrors cms-publish-loop-host.yml /
-    # cms-media-roundtrip.yml; #1053 added it here alongside the
-    # daily schedule (without it a daily run spawns a daily cms/* PR
-    # that loops back into this workflow).
-    if: ${{ !startsWith(github.head_ref || '', 'cms/') }}
+    # Push-safe recursion guard. The spec drives Decap, which opens a
+    # `cms/posts/2099-01-01-e2e-mutation-canary` PR; cms-editorial-
+    # workflow.yml squash-merges it as the CMS_E2E_PAT user with the
+    # commit headline `publish: <PR title>` (see that workflow's
+    # enablePullRequestAutoMerge `commitHeadline`). That merge is a
+    # push to `main` touching `_posts/2099-01-01-e2e-mutation-canary.md`
+    # — a salient path — which would re-fire this loop indefinitely.
+    # The old `head_ref` guard only worked on `pull_request` events
+    # (empty on push). Skip when the push's head commit is a CMS
+    # auto-merge; `workflow_dispatch` (event != push) always runs.
+    if: >-
+      ${{ github.event_name != 'push'
+          || !startsWith(github.event.head_commit.message, 'publish: ') }}
     # Prebuilt Playwright image — browsers + their apt deps baked in,
     # avoiding the apt-mirror tail latency the prior `playwright
     # install-deps` step paid on every run. Tag is enforced to match
@@ -255,3 +240,4 @@ jobs:
           mode: resolve
           marker: prod-mutate-stuck-pr-diagnostic
           title: prod-mutate stuck-PR diagnostic
+# Intentionally inert line (no functional effect).

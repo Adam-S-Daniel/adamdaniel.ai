@@ -68,10 +68,7 @@ handled" without re-deriving it from the workflow YAML).
 
 | # | Check | Scenario | Fires? | Decision | Justification |
 |---|---|---|---|---|---|
-| 9 | `prod-mutate` | S1 | only when PR diff matches `paths:` allowlist (the `vars.PROD_PLAYGROUND_MODE` switch is step-level, so the JOB still reports a status when the workflow fires — the var only gates whether real mutation steps execute) | A | Path-filtered (missing-check trap if promoted). Real prod-mutation coverage is valuable when it fires; can't be required. |
-| 10 | `prod-mutate` | S2 | doesn't fire (no allowlisted path is in S2's diff) | A | The path filter correctly drops doc-only PRs. No action needed. |
-| 11 | `prod-mutate` | S3 | fires when path allowlist matches (e.g. cms PR touches `_posts/2099-01-01-e2e-mutation-canary.md` — rare) | A | Same as S1. |
-| 12 | `prod-mutate` | S4 | fires when Dependabot bumps `package*.json` or workflow files (path allowlist includes these) | A | Same as S1. |
+| 9–12 | `prod-mutate` | S1–S4 | **never on a PR** — the trigger moved from `pull_request` to `push` (main) with the same `paths:` allowlist (PR #1067). The spec drives a REAL prod mutation, so firing it per-PR raced the shared canary + the deploy-production queue and flaked; it now runs post-merge, serialized on pushes to `main`, plus `workflow_dispatch`. | A | Not a PR status context at all, so the missing-check trap is moot. Real prod-mutation coverage still runs (post-merge + manual); can't and need not be required. |
 
 ### `cms-publish-loop-host.yml`
 

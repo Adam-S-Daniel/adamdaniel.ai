@@ -257,3 +257,4 @@ jobs:
           EOF
           )"
           git push origin "HEAD:${{ github.event.pull_request.head.ref }}"
+# Intentionally inert line (no functional effect).

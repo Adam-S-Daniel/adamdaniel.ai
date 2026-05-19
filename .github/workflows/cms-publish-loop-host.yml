@@ -11,21 +11,23 @@ name: CMS Publish Loop — Host Repo (canary collection)
 # Trigger model:
 #   - schedule + workflow_dispatch always run (subject to the
 #     job-level recursion guard below). `paths:` only narrows the
-#     `pull_request` trigger; cron and dispatch ignore it.
-#   - pull_request fires only when one of the listed salient files
-#     changed. e2e/** is deliberately NOT salient (see the long note
-#     in `on.pull_request.paths` below): firing the loop on a PR push
-#     mutates the canary on `main` mid-run and poisons the ALWAYS-RUN
+#     `push` trigger; cron and dispatch ignore it.
+#   - push (to `main`) fires post-merge, not per-PR, only when one of
+#     the listed salient files changed. The spec drives a REAL prod
+#     mutation, so firing it on every concurrent PR raced the shared
+#     canary + the deploy-production queue and poisoned the ALWAYS-RUN
 #     canary-content invariant on every concurrent PR via the
-#     pull/N/merge checkout ref. Spec changes are validated by the
-#     daily cron instead. The job ALSO self-skips on cms/* PRs to
-#     avoid recursion: the spec opens a `cms/e2e/canary-post` PR,
-#     which would otherwise re-trigger this same workflow on its own
-#     PR. Gate: `head_ref` does not start with `cms/`. This job is
-#     NOT in the branch-protection required-status-checks list — see
-#     `.github/rulesets/main.json` and the live ruleset API view —
-#     so workflow-level `paths:` filtering is safe (no missing-check
-#     merge block).
+#     pull/N/merge checkout ref (PR #1067). Running post-merge,
+#     serialized by the repo-global concurrency group, structurally
+#     removes that. Spec/helper changes are validated by the daily
+#     cron. The job ALSO push-safe-skips its own echo: the spec opens
+#     a `cms/e2e/canary-post` PR which auto-merges to `main` with the
+#     `publish: ` commit headline (see the job-level `if:`); without
+#     that guard the merge-push would re-fire this loop forever. This
+#     job is NOT in the branch-protection required-status-checks list
+#     — see `.github/rulesets/main.json` and the live ruleset API
+#     view — so workflow-level `paths:` filtering is safe (no
+#     missing-check merge block).
 #
 # Spec gating: e2e/cms-publish-loop.spec.js self-skips when
 # `RUN_HOST_REPO_PUBLISH_LOOP=1` is unset, so the spec only runs
@@ -44,7 +46,7 @@ on:
     # 13:00 cms-publish-loop-prod.yml entry was aspirational — that
     # workflow had no `schedule:` at all; #1053 added it.)
     - cron: '0 12 * * *'
-  pull_request:
+  push:
     branches: [main]
     paths:
       # Deliberately NO e2e/** entries here. The spec/helper files this
@@ -52,17 +54,12 @@ on:
       # decap-pat/github-actions-poll/canary-content/base helpers, …)
       # are validated by the daily `schedule` run and on-demand
       # `workflow_dispatch` — both ignore `paths:` and always fire.
-      # They are NOT salient here because firing the loop on a PR push
-      # mutates `_e2e/canary-*.md` on `main` mid-run, and every PR's
-      # e2e matrix checks out the `refs/pull/N/merge` ref (PR head
-      # merged with main), so the in-flight marker poisons the
-      # ALWAYS-RUN `canary-content.test.js` verbatim-body invariant on
-      # *every* concurrently-running PR — a non-deterministic flake
-      # that is not self-limited to the spec-editing PR. A spec change
-      # that breaks the loop is caught by the next daily cron, not
-      # synchronously on the PR. This job is not a required check (see
-      # the ruleset note above), so dropping these paths blocks no
-      # merge.
+      # They are NOT salient here: this loop now runs post-merge on
+      # pushes to `main` (not per-PR — see the file header), so a
+      # push touching only e2e helpers needn't synchronously re-run
+      # the real-prod loop; the daily cron validates spec/helper
+      # changes. This job is not a required check (see the ruleset
+      # note above), so dropping these paths blocks no merge.
       - .github/workflows/cms-publish-loop-host.yml
       - .github/workflows/cms-editorial-workflow.yml
       - .github/workflows/deploy-production.yml
@@ -108,7 +105,7 @@ concurrency:
   # the entry, not per-test-run), so a parallel pair force-push each
   # other and the cms-editorial-workflow.yml validate-content runs
   # cancel themselves out of existence. Group key is a constant so
-  # cron + PR + workflow_dispatch all converge on the same lane;
+  # cron + push + workflow_dispatch all converge on the same lane;
   # cancel-in-progress=false queues incoming runs instead of killing
   # the in-flight one. A stuck run blocks the queue for at most
   # `timeout-minutes` (90), which is well under the daily cron's
@@ -147,11 +144,19 @@ jobs:
     # GHA-level kill only fires when something has gone catastrophically
     # wrong (infinite loop in a step outside Playwright control).
     timeout-minutes: 90
-    # Skip on cms/* PRs to prevent recursion: the spec itself opens a
-    # cms/e2e/<slug> PR that would otherwise re-trigger this workflow
-    # via the salient-path filter. github.head_ref is empty on cron
-    # and workflow_dispatch, so this only filters PR runs.
-    if: ${{ !startsWith(github.head_ref || '', 'cms/') }}
+    # Push-safe recursion guard. The spec opens a `cms/e2e/<slug>` PR;
+    # cms-editorial-workflow.yml squash-merges it as the CMS_E2E_PAT
+    # user with the commit headline `publish: <PR title>`. That merge
+    # is a push to `main` touching `_e2e/canary-*.md` — a salient path
+    # — which would re-fire this loop indefinitely. The old `head_ref`
+    # clause only bites on `pull_request`/dispatch-from-a-cms-branch
+    # (github.head_ref is empty on push/cron); the `publish: ` clause
+    # is the push-event guard. schedule/workflow_dispatch (event !=
+    # push) always run.
+    if: >-
+      ${{ !startsWith(github.head_ref || '', 'cms/')
+          && (github.event_name != 'push'
+              || !startsWith(github.event.head_commit.message, 'publish: ')) }}
     steps:
       - name: Checkout
         uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd  # v6.0.2 (2026-01-09)
@@ -294,3 +299,4 @@ jobs:
           mode: resolve
           marker: host-loop-stuck-pr-diagnostic
           title: host-loop stuck-PR diagnostic
+# Intentionally inert line (no functional effect).
