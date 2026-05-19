@@ -885,6 +885,24 @@ The three real-prod loop workflows (`cms-publish-loop-host` / `cms-publish-loop-
 1. **Action dependency policy.** Prefer trusted built-ins (`git`, `node`) over a bundled marketplace action when they do the job. `tj-actions/changed-files` was rejected here on supply-chain grounds (CVE-2025-30066, Mar 2025: a stolen `@tj-actions-bot` PAT retroactively repointed *every* version tag; ~9k lines of unverifiable bundled JS into a workflow that holds `CMS_E2E_PAT`). The composite is bash + `node` only, **no transitive `uses:`** — same shape as `await-prod-deploy` / `post-failure-comment`, and clean for the SHA-pin convention. If a marketplace action is genuinely warranted, it MUST be SHA-pinned with a dated version comment after the 7-day cooling-off — see the `github-actions-sha-pinning` / `pin-actions-to-sha` skills.
 2. **Single source over byte-identical duplication.** When N workflows need the same logic, factor it into one composite + one data module and lint the *structural wiring*, rather than duplicating the logic into each workflow and lint-asserting byte-identical text. (The `#1101` byte-identical `concurrency:` block predates this and is kept as-is; the recursion gate is the pattern to follow for new shared logic.)
 
+## Loop-aware required checks and byte-preserving harness baselines
+
+When a real-prod loop spec mutates a `_posts/` fixture, two pieces of CI machinery must agree on the canonical state of that fixture: (a) a **required check** protecting `main` (e.g. `fixture-baseline.test.js` asserting `published: false`), and (b) the spec's **`afterAll` safety net** that writes the baseline back if the UI cleanup leg left a mutation. If either treats the canonical state as a hard-coded literal — or fires on the loop's *own transient* publish PR with the same strictness as on a feature PR — the loop deadlocks (a) or silently corrupts `main` (b).
+
+**Two instances, same root pattern (3dbade7 / #1053 follow-ons):**
+
+1. **Required-check own-branch exemption (#1188, run 26114167560).** `fixture-baseline.test.js`'s `"checked-in prod-loop fixtures are at baseline"` ran on the heavy spec's own `cms/posts/2099-01-0X-*` publish PR, where a transient `published: true` is the in-flight state the round trip *requires* to merge+deploy. Required check failed → PR `BLOCKED` → auto-merge never fired → spec timed out at `waitForChangeReflected`. Fix: `baselineAssertionApplies(rel, headRef)` in `e2e/fixture-baseline.js` — relaxed *only* on that fixture's own Decap branch; strict on push/main and every other branch. Per-fixture precise. The weaker "parseable boolean" check still runs everywhere, so genuine corruption is still caught.
+
+2. **Harness byte-preserving baseline (#1189, run 26114231574).** `cms-unpublish-republish.spec.js`'s `afterAll` hard-coded its baseline as a literal array of front-matter + body. When PR #1043 added `test_fixture: true` to the canary, that literal was never updated, so the next harness firing (5fcd9be) committed a "baseline" to `main` that **silently dropped the flag** — red-failing the required `cms-posts-list-enhance.spec.js:162` check on every subsequent PR (and that, together with the #1188 deadlock, caused the 82-minute 16:42→18:04 UTC main-merge freeze on 2026-05-19). Fix: derive the baseline from the on-disk file via `forcePublishedFalse(fs.readFileSync(...), FIXTURE_PATH)` — the exact pattern `cms-media-roundtrip.spec.js` already uses.
+
+**The convention (apply beyond these features):**
+
+- **Loop-aware guards.** Any required check asserting a `main`-state invariant must distinguish the loop's *own transient PR* (`cms/posts/<that-slug>`) from every other context, and relax there — mirroring the spec's existing `@select-skip-when-head-ref-prefix: cms/` + `RUN_*` runtime skip contract. Keep the weakest defensible check (file present, value parseable) on the relaxed branch so genuine corruption still fires.
+
+- **Byte-preserving baselines.** Any safety net that writes a "baseline" back to `main` MUST derive it from the canonical source file with byte-preserving normalization (force only the dangerous field; leave every other byte alone). Hard-coded literals duplicate canonical state and silently drift; the single-source approach (same as the recursion gate above) makes added fixture fields flow through automatically.
+
+The unifying principle: **canonical state lives in exactly one place; everything else derives** — required checks read it, harness writes go through a byte-preserving transform of it.
+
 ## Preview environment flow
 
 1. PR opened → Jekyll builds at root (no baseurl) → sync to `s3://adamdaniel-ai-previews/pr-{N}/`
