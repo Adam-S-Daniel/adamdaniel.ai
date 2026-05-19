@@ -1,14 +1,16 @@
 ---
-title: "E2E Unpublish Canary"
+excerpt: "Fixture used by the cms-unpublish-republish spec. Never serves at a
+  public URL until a test flips published: true; resets back to false in
+  cleanup."
+robots: noindex,nofollow
+title: E2E Unpublish Canary
 slug: e2e-unpublish-canary
 date: 2024-01-02 00:00:00 +0000
-excerpt: "Fixture used by the cms-unpublish-republish spec. Never serves at a public URL until a test flips published: true; resets back to false in cleanup."
 tags: []
-featured_image: ''
-published: false
-publish_date: ''
+featured_image: ""
+published: true
 sitemap: false
-robots: noindex,nofollow
+publish_date: ""
 ---
 
 This post is the fixture for `e2e/cms-unpublish-republish.spec.js`.
