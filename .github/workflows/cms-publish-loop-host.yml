@@ -289,3 +289,4 @@ jobs:
           mode: resolve
           marker: host-loop-stuck-pr-diagnostic
           title: host-loop stuck-PR diagnostic
+# Intentionally inert line (no functional effect).

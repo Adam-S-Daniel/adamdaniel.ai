@@ -188,3 +188,4 @@ jobs:
           # run set it on the same long-lived branch), this is a no-op
           # — but gh exits 0 in that case, so no special handling needed.
           gh pr merge "$PR_NUMBER" --auto --squash
+# Intentionally inert line (no functional effect).

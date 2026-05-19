@@ -275,3 +275,4 @@ jobs:
                 : `deploy-production.yml ${job}`,
             });
             core.notice(`Production deployment ${id} → ${state}`);
+# Intentionally inert line (no functional effect).

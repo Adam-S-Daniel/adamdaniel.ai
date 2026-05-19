@@ -90,3 +90,4 @@ updates:
         update-types:
           - "minor"
           - "patch"
+# Intentionally inert line (no functional effect).
