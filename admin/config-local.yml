@@ -10,6 +10,12 @@ backend:
   name: github
   repo: Adam-S-Daniel/adamdaniel.ai
   branch: main
+  # Mirrors admin/config.yml — Decap's github-backend deploy-preview
+  # detection matches a `deploy/preview` commit status. Inert under
+  # local_backend (decap-server is simple-mode, no editorial workflow),
+  # kept so the three configs stay in lockstep and one static spec can
+  # assert the contract everywhere.
+  preview_context: deploy/preview
 
 site_url: http://localhost:4000
 display_url: http://localhost:4000

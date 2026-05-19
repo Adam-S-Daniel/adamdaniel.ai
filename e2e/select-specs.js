@@ -138,11 +138,15 @@ const SPEC_RULES = {
   // Issue #1042 admin posts-UI invariants — fast, pure-fs, no browser.
   // Locks the restored live-URL banner wiring + posts-list-enhance.js
   // augment/hide contract + the INVALID-DATE / Automated-tests /
-  // test_fixture config and canary-marker invariants. Runs on any
-  // admin/ change and on canary _posts marker edits.
+  // test_fixture config and canary-marker invariants, PLUS the
+  // preview/PR link relabel + "Check for Preview" commit-status fix
+  // (deploy-preview.yml ↔ admin/config*.yml preview_context contract).
+  // Runs on any admin/ change, canary _posts marker edits, and the
+  // deploy-preview workflow whose commit status it locks.
   "e2e/cms-posts-list-enhance.spec.js": [
     /^admin\//,
     /^_posts\//,
+    /^\.github\/workflows\/deploy-preview\.yml$/,
   ],
   // Real-network publish-loop specs. Heavy and slow; run only when
   // something contributor-relevant changed.
