@@ -62,7 +62,7 @@ const { test, expect } = require("./base");
 const { seedDecapAuth, getPat, HOST_REPO } = require("./decap-pat");
 const { fetchPublicUrl, gh } = require("./github-actions-poll");
 const { waitForChangeReflected, PILL_PROD } = require("./deploy-pill");
-const { readPublishedFlag } = require("./fixture-baseline");
+const { readPublishedFlag, forcePublishedFalse } = require("./fixture-baseline");
 
 const PROD_HOST = "https://adamdaniel.ai";
 const PROD_ADMIN = `${PROD_HOST}/admin/`;
@@ -340,35 +340,25 @@ test.afterAll(async () => {
   console.warn(
     "[cleanup-harness] unpublish-canary on main is still published: true after the UI cleanup; restoring baseline via Contents API",
   );
-  // Rebuild the fixture body at baseline. Mirrors the file shipped at
-  // `_posts/2024-01-02-e2e-unpublish-canary.md` — keep these in sync if
-  // the fixture's frontmatter changes.
-  const baselineFileText = [
-    "---",
-    `title: "${FIXTURE_TITLE}"`,
-    `slug: ${FIXTURE_SLUG}`,
-    "date: 2024-01-02 00:00:00 +0000",
-    'excerpt: "Fixture used by the cms-unpublish-republish spec. Never serves at a public URL until a test flips published: true; resets back to false in cleanup."',
-    "tags: []",
-    "featured_image: ''",
-    "published: false",
-    "publish_date: ''",
-    "sitemap: false",
-    "robots: noindex,nofollow",
-    "---",
-    "",
-    "This post is the fixture for `e2e/cms-unpublish-republish.spec.js`.",
-    "The spec toggles `published` on/off via the Decap UI and asserts",
-    "the public URL goes 200 → 404 → 200 in sync.",
-    "",
-    "Baseline state is `published: false` so the post is never on the",
-    "public site between test runs. The spec restores this state in",
-    "cleanup. If you see the post at /blog/e2e-unpublish-canary/ when",
-    "no test is running, the cleanup leg failed — flip",
-    "`published: false` and merge the next test won't touch this file",
-    "until the next dispatch.",
-    "",
-  ].join("\n");
+  // Derive the baseline from the checked-in fixture itself, forcing
+  // ONLY `published: false` and leaving every other byte alone
+  // (forcePublishedFalse from ./fixture-baseline). Mirrors media-
+  // roundtrip's buildBaselineFileText.
+  //
+  // The previous implementation hard-coded the entire front matter +
+  // body as a literal array — a drift trap: any field added to the
+  // committed fixture but not to the literal silently disappeared on
+  // every safety-net commit. Exactly what happened to `test_fixture:
+  // true` (added in PR #1043 / 7243e08, never mirrored here, dropped
+  // by this hook in 5fcd9be) — main lost the flag, the
+  // `cms-posts-list-enhance.spec.js:162` required check then red-
+  // failed every PR until restored (PR #1177 → run 26114231574). The
+  // forcePublishedFalse approach makes future fixture-frontmatter
+  // edits flow through automatically.
+  const baselineFileText = forcePublishedFalse(
+    fs.readFileSync(path.join(__dirname, "..", FIXTURE_PATH), "utf8"),
+    FIXTURE_PATH,
+  );
   await writeFixtureOnMain({
     fileText: baselineFileText,
     message: "test(unpublish): harness safety-net reset to published: false (UI cleanup left mutation)",
