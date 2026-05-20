@@ -59,13 +59,23 @@ permissions:
   contents: read
   pull-requests: write  # to post the preview URL comment
   id-token: write
-  # GitHub Deployments registration so Decap CMS's "Deploy Preview Links"
-  # spinner (https://decapcms.org/docs/deploy-preview-links/) can find
-  # the preview URL for each PR. Without this, the editor toolbar shows
-  # a perpetual "looking for preview" spinner — Decap polls
-  # /repos/.../deployments?ref=<pr-head>, never finds a deployment with
-  # state=success + a target_url, gives up.
+  # GitHub Deployments registration. admin/deploy-status-pill.js polls
+  # /repos/.../deployments?environment=preview-pr-<N> to flip its
+  # in-flight spinner; the per-PR GH Environment row also gives the
+  # Environments UI something to show. (NB: this is NOT what Decap's
+  # own "Deploy Preview Links" feature reads — see `statuses: write`.)
   deployments: write
+  # Commit Statuses. Decap CMS's github backend implements
+  # `getDeployPreview` as GET /repos/.../commits/<pr-head-sha>/status
+  # and surfaces the first status whose `context` matches
+  # `backend.preview_context` (admin/config*.yml pins this to
+  # `deploy/preview`). With no such status the editor's
+  # deploy-preview-links button is stuck on "Check for Preview"
+  # forever even though the preview is live (decap-cms 3.12.2; the
+  # docs' "polls /deployments?ref=" describes the *Netlify* backend,
+  # not github). The "Set Decap deploy-preview commit status" step
+  # publishes that status; this scope lets it.
+  statuses: write
 
 jobs:
   # ────────────────────────────────────────────────────────────
@@ -300,6 +310,54 @@ jobs:
             });
 
             core.notice(`Registered deployment ${deployment.id} → ${url}`);
+
+      - name: Set Decap deploy-preview commit status
+        # THIS is the status Decap CMS's editor actually reads. Its
+        # github backend implements getDeployPreview as
+        #   GET /repos/.../commits/<pr-head-sha>/status
+        # then picks the first status whose `context` matches
+        # `backend.preview_context` (admin/config*.yml → `deploy/preview`;
+        # decap-cms 3.12.2 falls back to "context includes 'deploy'"
+        # when unset). Without a matching commit status the editor's
+        # deploy-preview button is pinned to "Check for Preview"
+        # forever even though the preview is already serving — the
+        # GitHub Deployment registered above is invisible to this code
+        # path (that polling-/deployments?ref= behaviour is the Netlify
+        # backend, not github). Decap then runs the status `target_url`
+        # through its preview_path builder, so the site root here
+        # becomes https://preview-pr<N>.adamdaniel.ai/blog/<slug>/ in
+        # the editor's "View Preview" link.
+        uses: actions/github-script@3a2844b7e9c422d3c10d287c895573f7108da1b3  # v9.0.0 (2026-04-09)
+        env:
+          PR_NUMBER: ${{ github.event.pull_request.number }}
+          PR_HEAD_SHA: ${{ github.event.pull_request.head.sha }}
+        with:
+          script: |
+            const pr = process.env.PR_NUMBER;
+            const sha = process.env.PR_HEAD_SHA;
+            const apex = process.env.APEX_DOMAIN;
+            const cfId = process.env.CLOUDFRONT_DISTRIBUTION_ID;
+            const bucket = process.env.PREVIEW_BUCKET;
+            const region = process.env.AWS_REGION;
+
+            // Site root (no /blog/<slug>/): Decap appends the entry's
+            // preview_path itself. Mirrors the deployment registration
+            // URL above so both surfaces agree.
+            const url = cfId
+              ? `https://preview-pr${pr}.${apex}/`
+              : `http://${bucket}.s3-website-${region}.amazonaws.com/pr-${pr}/`;
+
+            await github.rest.repos.createCommitStatus({
+              owner: context.repo.owner,
+              repo: context.repo.repo,
+              sha,
+              state: 'success',
+              context: 'deploy/preview',
+              target_url: url,
+              description: `Preview live at ${url}`,
+            });
+
+            core.notice(`Set deploy/preview commit status on ${sha} → ${url}`);
 
       - name: Register GitHub Deployment for the per-CMS-slug preview
         if: steps.cms_slug.outputs.slug != ''

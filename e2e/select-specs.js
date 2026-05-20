@@ -39,6 +39,12 @@ const ALWAYS_RUN = [
   "e2e/cms-config.spec.js",
   "e2e/visual-change-guard.spec.js",
   "e2e/canary-content.test.js",
+  // Pure ms-level fixture/helper invariant (#1053). Always-run so a
+  // PR that flips a prod-loop canary back to `published: true`, or
+  // breaks the shared force-baseline helper, fails visibly here — the
+  // whole point of #1053 is that this regression was silent for ~10
+  // days. @lane: local, no browser; mirrors canary-content.test.js.
+  "e2e/fixture-baseline.test.js",
 ];
 
 // Publish-loop browser specs that self-skip on PR runs because they're
@@ -132,11 +138,15 @@ const SPEC_RULES = {
   // Issue #1042 admin posts-UI invariants — fast, pure-fs, no browser.
   // Locks the restored live-URL banner wiring + posts-list-enhance.js
   // augment/hide contract + the INVALID-DATE / Automated-tests /
-  // test_fixture config and canary-marker invariants. Runs on any
-  // admin/ change and on canary _posts marker edits.
+  // test_fixture config and canary-marker invariants, PLUS the
+  // preview/PR link relabel + "Check for Preview" commit-status fix
+  // (deploy-preview.yml ↔ admin/config*.yml preview_context contract).
+  // Runs on any admin/ change, canary _posts marker edits, and the
+  // deploy-preview workflow whose commit status it locks.
   "e2e/cms-posts-list-enhance.spec.js": [
     /^admin\//,
     /^_posts\//,
+    /^\.github\/workflows\/deploy-preview\.yml$/,
   ],
   // Real-network publish-loop specs. Heavy and slow; run only when
   // something contributor-relevant changed.
@@ -326,6 +336,18 @@ const SPEC_RULES = {
     /^blog\/index\.html$/,
     /^projects\/index\.html$/,
     /^tags\/index\.html$/,
+  ],
+  // #1101 regression guard. Pure-fs lint (no browser/network), but it
+  // MUST run whenever a real-prod loop workflow or the await-prod-deploy
+  // gate is edited — that is exactly when the shared-concurrency /
+  // deploy-await invariants could silently regress. Without this rule a
+  // loop-workflow tweak selects no workflow-*.test.js (they otherwise
+  // only run on fanout or their own change).
+  "e2e/workflow-prod-loop-serialized.test.js": [
+    /^\.github\/workflows\/cms-publish-loop-prod\.yml$/,
+    /^\.github\/workflows\/cms-media-roundtrip\.yml$/,
+    /^\.github\/workflows\/cms-publish-loop-host\.yml$/,
+    /^\.github\/actions\/await-prod-deploy\//,
   ],
 };
 

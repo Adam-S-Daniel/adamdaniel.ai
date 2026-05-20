@@ -9,8 +9,8 @@ name: CMS Publish Loop — Host Repo (canary collection)
 # beyond the canary URL itself.
 #
 # Trigger model:
-#   - schedule + workflow_dispatch always run (subject to the
-#     job-level recursion guard below). `paths:` only narrows the
+#   - schedule + workflow_dispatch always run (the recursion-gate job
+#     short-circuits to run=true off-push). `paths:` only narrows the
 #     `push` trigger; cron and dispatch ignore it.
 #   - push (to `main`) fires post-merge, not per-PR, only when one of
 #     the listed salient files changed. The spec drives a REAL prod
@@ -20,10 +20,13 @@ name: CMS Publish Loop — Host Repo (canary collection)
 #     pull/N/merge checkout ref (PR #1067). Running post-merge,
 #     serialized by the repo-global concurrency group, structurally
 #     removes that. Spec/helper changes are validated by the daily
-#     cron. The job ALSO push-safe-skips its own echo: the spec opens
-#     a `cms/e2e/canary-post` PR which auto-merges to `main` with the
-#     `publish: ` commit headline (see the job-level `if:`); without
-#     that guard the merge-push would re-fire this loop forever. This
+#     cron. The `recursion-gate` job ALSO skips the loop's own echo:
+#     the spec's Decap edits auto-merge to `main` (e.g. the
+#     unpublish-canary lands as `Update Post "…"`, no `publish: `
+#     prefix), and a push whose only changed files are this loop's
+#     canary churn is the loop feeding itself — skipped via a
+#     changed-files decision, not a commit-message prefix the old
+#     guard couldn't see (run 26108485428). This
 #     job is NOT in the branch-protection required-status-checks list
 #     — see `.github/rulesets/main.json` and the live ruleset API
 #     view — so workflow-level `paths:` filtering is safe (no
@@ -35,11 +38,17 @@ name: CMS Publish Loop — Host Repo (canary collection)
 
 on:
   schedule:
-    # 12:00 UTC daily. Slotted an hour before
-    # cms-publish-loop-prod.yml (13:00) and two before
-    # publish-scheduled-posts (14:00) so the three daily mutations
-    # don't trip over each other on deploy-production's queued-run
-    # concurrency.
+    # 12:00 UTC daily. This is the only real-prod loop with a cron at
+    # all: cms-publish-loop-prod.yml and cms-media-roundtrip.yml are
+    # `push`-to-main (post-merge) + workflow_dispatch only (2493c2e —
+    # they moved off cron/per-PR). All three now serialize through the
+    # shared `prod-mutating-loop` concurrency group (see the
+    # `concurrency:` block below and #1101), so the old "stagger them
+    # an hour apart on a 12/13/14/15 cron ladder" rationale no longer
+    # applies — mutual exclusion is structural, not time-based. The
+    # only other cron-driven prod mutator is publish-scheduled-posts.yml
+    # (14:00); two hours clear of this one is incidental headroom now,
+    # not load-bearing.
     - cron: '0 12 * * *'
   push:
     branches: [main]
@@ -83,8 +92,12 @@ permissions:
   # composite action so the default GITHUB_TOKEN can post the
   # failure-summary comment via the issues comments API. Without
   # this the github-script call 403s silently and no comment lands.
+  #
+  # `actions: read` lets the await-prod-deploy gate query this commit's
+  # `Deploy to Production` run via the REST API (#1101).
   contents: read
   pull-requests: write
+  actions: read
 
 defaults:
   run:
@@ -94,22 +107,58 @@ defaults:
     shell: bash
 
 concurrency:
-  # Repo-global serialisation. Two host-loop runs cannot share the
-  # repo: both edit the same `_e2e/canary-post.md` file via a
-  # `cms/e2e/canary-post` Decap branch (the branch name is keyed on
-  # the entry, not per-test-run), so a parallel pair force-push each
-  # other and the cms-editorial-workflow.yml validate-content runs
-  # cancel themselves out of existence. Group key is a constant so
-  # cron + push + workflow_dispatch all converge on the same lane;
-  # cancel-in-progress=false queues incoming runs instead of killing
-  # the in-flight one. A stuck run blocks the queue for at most
-  # `timeout-minutes` (90), which is well under the daily cron's
-  # cadence.
-  group: cms-publish-loop-host
+  # SHARED repo-wide lane for ALL real-prod-mutating loop workflows
+  # (cms-publish-loop-prod / cms-media-roundtrip / cms-publish-loop-host).
+  # GHA concurrency groups are keyed by string ACROSS workflows, so a
+  # single constant group makes the three mutually exclusive: only one
+  # real-prod loop can run at a time, whatever the trigger (push /
+  # workflow_dispatch / host's daily cron all converge here). They each
+  # mutate prod through Decap → cms-PR → auto-merge → deploy-production
+  # and a parallel pair races deploy-production's `group: production`,
+  # blowing each other's URL-reflect budgets (#1101 — observed: 3 loops
+  # 13:42→13:59 on merge 3dbade7, 2 failed). cancel-in-progress:false
+  # queues rather than killing an in-flight loop (cancelling mid-flow
+  # can leave the canary dirty); a stuck run holds the lane up to its
+  # timeout-minutes, which is bounded and far cheaper than the collision.
+  # This block MUST stay byte-identical in all three workflows —
+  # enforced by e2e/workflow-prod-loop-serialized.test.js.
+  group: prod-mutating-loop
   cancel-in-progress: false
 
 jobs:
+  # Changed-files recursion gate. Replaces the old `publish: `
+  # head-commit guard, which Decap's own `Update/Delete <Collection>
+  # "<slug>"` squash template structurally evaded — the loop's
+  # cms/<col>/<slug> auto-merge lands with no `publish: ` prefix on the
+  # unpublish-canary/delete paths, so the loop kept re-firing on its own
+  # merge (run 26108485428). Logic + the per-loop self-churn set live in
+  # the shared .github/actions/cms-recursion-gate composite and
+  # e2e/cms-recursion-churn.js (single source). Cheap: checkout(depth 2)
+  # + a `git diff` membership test. A push whose only changed files are
+  # this loop's own canary churn skips the heavy job; schedule/dispatch
+  # always run; any ambiguity fails OPEN (never silently skip a real
+  # change). Runs inside the shared `prod-mutating-loop` lane (the
+  # concurrency block is workflow-level + byte-identical across the
+  # three — #1101): ~15-25 s lane occupancy on a skip vs. a full
+  # real-prod loop. Job-level concurrency so the gate runs OUTSIDE the
+  # lane is a deliberate follow-up (it touches the #1101 invariant).
+  recursion-gate:
+    runs-on: ubuntu-latest
+    outputs:
+      run: ${{ steps.gate.outputs.run }}
+    steps:
+      - name: Checkout
+        uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd  # v6.0.2 (2026-01-09)
+        with:
+          fetch-depth: 2
+      - name: Recursion gate
+        id: gate
+        uses: ./.github/actions/cms-recursion-gate
+        with:
+          loop: host
+
   host-loop:
+    needs: recursion-gate
     runs-on: ubuntu-latest
     # Prebuilt Playwright image — browsers + their apt deps baked in,
     # avoiding the apt-mirror tail latency the prior `playwright
@@ -138,23 +187,29 @@ jobs:
     # legit stuck-run; the 60 min cap is the final backstop —
     # GHA-level kill only fires when something has gone catastrophically
     # wrong (infinite loop in a step outside Playwright control).
-    timeout-minutes: 90
-    # Push-safe recursion guard. The spec opens a `cms/e2e/<slug>` PR;
-    # cms-editorial-workflow.yml squash-merges it as the CMS_E2E_PAT
-    # user with the commit headline `publish: <PR title>`. That merge
-    # is a push to `main` touching `_e2e/canary-*.md` — a salient path
-    # — which would re-fire this loop indefinitely. The old `head_ref`
-    # clause only bites on `pull_request`/dispatch-from-a-cms-branch
-    # (github.head_ref is empty on push/cron); the `publish: ` clause
-    # is the push-event guard. schedule/workflow_dispatch (event !=
-    # push) always run.
-    if: >-
-      ${{ !startsWith(github.head_ref || '', 'cms/')
-          && (github.event_name != 'push'
-              || !startsWith(github.event.head_commit.message, 'publish: ')) }}
+    # 90 → 105: the await-prod-deploy gate can spend up to ~15 min
+    # waiting for this commit's deploy + CDN reflect before the specs
+    # start (#1101).
+    timeout-minutes: 105
+    # Recursion guard delegated to the `recursion-gate` job above
+    # (changed-files decision; schedule/dispatch always run; ambiguity
+    # fails OPEN). The old `head_ref`/`publish: ` message guard could
+    # not see Decap's `Update Post "…"` self-merge template, so the
+    # loop re-fired itself (run 26108485428).
+    if: ${{ needs.recursion-gate.outputs.run == 'true' }}
     steps:
       - name: Checkout
         uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd  # v6.0.2 (2026-01-09)
+
+      # Post-merge only: do NOT drive prod until THIS commit is live on
+      # adamdaniel.ai (deploy-production succeeded + CDN serves the
+      # SHA). Without this the loop validates a stale pre-merge site
+      # (#1101). Skipped on workflow_dispatch/schedule (no associated
+      # merge — those intentionally run against the current prod site).
+      # Fails loud if the deploy failed.
+      - name: Await prod deploy of this merge
+        if: ${{ github.event_name == 'push' }}
+        uses: ./.github/actions/await-prod-deploy
 
       - name: Setup Node
         uses: actions/setup-node@48b55a011bda9f5d6aeb4c2d9c7362e8dae4041e  # v6.4.0 (2026-04-20)

@@ -57,36 +57,75 @@ permissions:
   # The spec drives admin via a fine-grained PAT (CMS_E2E_PAT) — the
   # workflow itself only needs to read the repo. `pull-requests: write`
   # is for the post-failure-comment composite action's GITHUB_TOKEN.
+  # `actions: read` lets the await-prod-deploy gate query this commit's
+  # `Deploy to Production` run via the REST API (#1101).
   contents: read
   pull-requests: write
+  actions: read
 
 defaults:
   run:
     shell: bash
 
 concurrency:
-  # Per-ref concurrency; the `pull_request.number` half is dead on a
-  # push trigger and resolves to `github.ref`, so push/cron/dispatch
-  # queue rather than race the fixture's Contents-API SHA.
-  group: cms-media-roundtrip-${{ github.event.pull_request.number || github.ref }}
-  cancel-in-progress: true
+  # SHARED repo-wide lane for ALL real-prod-mutating loop workflows
+  # (cms-publish-loop-prod / cms-media-roundtrip / cms-publish-loop-host).
+  # GHA concurrency groups are keyed by string ACROSS workflows, so a
+  # single constant group makes the three mutually exclusive: only one
+  # real-prod loop can run at a time, whatever the trigger (push /
+  # workflow_dispatch / host's daily cron all converge here). They each
+  # mutate prod through Decap → cms-PR → auto-merge → deploy-production
+  # and a parallel pair races deploy-production's `group: production`,
+  # blowing each other's URL-reflect budgets (#1101 — observed: 3 loops
+  # 13:42→13:59 on merge 3dbade7, 2 failed). cancel-in-progress:false
+  # queues rather than killing an in-flight loop (cancelling mid-flow
+  # can leave the canary dirty); a stuck run holds the lane up to its
+  # timeout-minutes, which is bounded and far cheaper than the collision.
+  # This block MUST stay byte-identical in all three workflows —
+  # enforced by e2e/workflow-prod-loop-serialized.test.js.
+  group: prod-mutating-loop
+  cancel-in-progress: false
 
 jobs:
-  media-roundtrip:
+  # Changed-files recursion gate. Replaces the old `publish: `
+  # head-commit guard, which Decap's own `Update/Delete <Collection>
+  # "<slug>"` squash template structurally evaded — the loop's
+  # cms/<col>/<slug> auto-merge lands with no `publish: ` prefix on the
+  # unpublish-canary/delete paths, so the loop kept re-firing on its own
+  # merge (run 26108485428). Logic + the per-loop self-churn set live in
+  # the shared .github/actions/cms-recursion-gate composite and
+  # e2e/cms-recursion-churn.js (single source). Cheap: checkout(depth 2)
+  # + a `git diff` membership test. A push whose only changed files are
+  # this loop's own canary churn skips the heavy job; schedule/dispatch
+  # always run; any ambiguity fails OPEN (never silently skip a real
+  # change). Runs inside the shared `prod-mutating-loop` lane (the
+  # concurrency block is workflow-level + byte-identical across the
+  # three — #1101): ~15-25 s lane occupancy on a skip vs. a full
+  # real-prod loop. Job-level concurrency so the gate runs OUTSIDE the
+  # lane is a deliberate follow-up (it touches the #1101 invariant).
+  recursion-gate:
     runs-on: ubuntu-latest
-    # Push-safe recursion guard. The spec drives Decap, which opens a
-    # `cms/posts/2099-01-03-e2e-media-roundtrip` PR; cms-editorial-
-    # workflow.yml squash-merges it as the CMS_E2E_PAT user with the
-    # commit headline `publish: <PR title>`. That merge is a push to
-    # `main` touching `_posts/2099-01-03-e2e-media-roundtrip.md` — a
-    # salient path — which would re-fire this loop indefinitely. The
-    # `head_ref` clause only bites on `pull_request`/dispatch-from-a-
-    # cms-branch (empty on push); the `publish: ` clause is the push-
-    # event guard. schedule/workflow_dispatch (event != push) run.
-    if: >-
-      ${{ !startsWith(github.head_ref || '', 'cms/')
-          && (github.event_name != 'push'
-              || !startsWith(github.event.head_commit.message, 'publish: ')) }}
+    outputs:
+      run: ${{ steps.gate.outputs.run }}
+    steps:
+      - name: Checkout
+        uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd  # v6.0.2 (2026-01-09)
+        with:
+          fetch-depth: 2
+      - name: Recursion gate
+        id: gate
+        uses: ./.github/actions/cms-recursion-gate
+        with:
+          loop: media
+
+  media-roundtrip:
+    needs: recursion-gate
+    runs-on: ubuntu-latest
+    # Recursion guard delegated to the `recursion-gate` job above
+    # (changed-files decision; schedule/dispatch always run; ambiguity
+    # fails OPEN). The old `head_ref`/`publish: ` guard could not see
+    # Decap's `Update/Delete <Collection> "…"` self-merge template.
+    if: ${{ needs.recursion-gate.outputs.run == 'true' }}
     env:
       # Firefox refuses to launch when $HOME is owned by another user
       # inside GHA container jobs; job-level env wins. Uniform for
@@ -96,10 +135,22 @@ jobs:
       image: mcr.microsoft.com/playwright:v1.59.1-noble
     # One full real-prod loop with THREE deploy waits. Per-spec
     # TEST_TIMEOUT_MS is 55 min; this cap is the outer backstop.
-    timeout-minutes: 75
+    # 75 → 95: the await-prod-deploy gate can spend up to ~15 min
+    # before the spec starts (#1101).
+    timeout-minutes: 95
     steps:
       - name: Checkout
         uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd  # v6.0.2 (2026-01-09)
+
+      # Post-merge only: do NOT drive prod until THIS commit is live on
+      # adamdaniel.ai (deploy-production succeeded + CDN serves the
+      # SHA). Without this the loop validates a stale pre-merge site
+      # (#1101). Skipped on workflow_dispatch/schedule (no associated
+      # merge) and when playground mode is off (the spec self-skips, so
+      # there is nothing to gate). Fails loud if the deploy failed.
+      - name: Await prod deploy of this merge
+        if: ${{ github.event_name == 'push' && vars.PROD_PLAYGROUND_MODE == 'true' }}
+        uses: ./.github/actions/await-prod-deploy
 
       - name: Skip — playground mode disabled
         if: vars.PROD_PLAYGROUND_MODE != 'true'

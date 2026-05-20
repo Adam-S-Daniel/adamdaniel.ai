@@ -9,6 +9,18 @@ backend:
   # OAuth proxy endpoint
   base_url: https://sq8d4876v8.execute-api.us-east-1.amazonaws.com
   auth_endpoint: prod/auth
+  # Decap's deploy-preview-links: the github backend reads
+  # GET /commits/<pr-head-sha>/status and surfaces the first status
+  # whose `context` equals this. .github/workflows/deploy-preview.yml's
+  # "Set Decap deploy-preview commit status" step publishes exactly
+  # `deploy/preview` once the per-PR preview is live. Without this the
+  # editor's button is stuck on "Check for Preview" forever (decap-cms
+  # 3.12.2: unset → loose "context includes 'deploy'" match; pinning it
+  # is the explicit, auditable half of the contract — see the static
+  # lock in e2e/cms-posts-list-enhance.spec.js). patch-preview-config.sh
+  # only rewrites site_url/display_url/branch, so this survives the
+  # per-PR preview rebuild unchanged.
+  preview_context: deploy/preview
 
 # Editorial workflow: every Save opens a PR on its own branch instead of
 # committing straight to main. The PR drives the draft → review → ready →

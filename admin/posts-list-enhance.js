@@ -17,10 +17,18 @@
  *   - a one-click "published ↗" link to the live post URL (computed
  *     from the slug, mirroring admin/live-url-derive.js's math);
  *   - "edited <ago>" — the last commit that touched the post's file
- *     on `main` (GitHub GraphQL, one batched query for every visible
- *     post);
- *   - "preview-pr<N> ↗" — the open editorial-workflow PR for the post,
- *     if any (GitHub REST, one `pulls` call);
+ *     on `main`, plus the PR that commit was merged in (one batched
+ *     GitHub GraphQL query, `history` + `associatedPullRequests`, for
+ *     every visible post);
+ *   - "view published changes" — the GitHub diff (Files-changed tab)
+ *     of that merged PR. Shown only when the post is actually live on
+ *     `main` (an unpublished draft has no merged PR, so it is omitted
+ *     there); rendered BEFORE "preview draft" when both are present;
+ *   - "preview draft ↗" — the per-PR preview environment for the
+ *     post's open editorial-workflow PR, if any (GitHub REST, one
+ *     `pulls` call) — `https://preview-pr<N>.adamdaniel.ai/blog/<slug>/`;
+ *   - "view draft changes" — the GitHub diff (Files-changed tab) of
+ *     that same open editorial-workflow PR;
  *   - a control bar showing when the site itself last deployed
  *     (GitHub REST, one `deployments` call) plus a manual ↻ Refresh.
  *
@@ -255,7 +263,8 @@
         idx +
         ': history(first: 1, path: ' +
         JSON.stringify(fp) +
-        ") { nodes { committedDate url } }"
+        ") { nodes { committedDate url" +
+        " associatedPullRequests(first: 1) { nodes { number url } } } }"
       );
     });
     var query =
@@ -286,7 +295,21 @@
         files.forEach(function (fp, idx) {
           var node = commit["f" + idx] && commit["f" + idx].nodes &&
             commit["f" + idx].nodes[0];
-          if (node) out[fp] = { date: node.committedDate, url: node.url };
+          if (!node) return;
+          // associatedPullRequests(first:1) on the last main commit =
+          // the PR whose merge published the current live version of
+          // this file. GraphQL `PullRequest.url` is the html URL
+          // (https://github.com/<repo>/pull/<n>); appending `/files`
+          // in decorate() yields its Files-changed diff.
+          var prNode =
+            node.associatedPullRequests &&
+            node.associatedPullRequests.nodes &&
+            node.associatedPullRequests.nodes[0];
+          out[fp] = {
+            date: node.committedDate,
+            url: node.url,
+            pr: prNode ? { number: prNode.number, url: prNode.url } : null,
+          };
         });
       }
     } catch (e) {
@@ -519,6 +542,32 @@
           "</span>"
       );
     }
+    // "view published changes" — the GitHub diff (Files-changed tab)
+    // of the PR whose merge put the current live version of this post
+    // on the production site (`le.pr`, the PR associated with the last
+    // commit to the file on `main`; see fetchLastEdited). Visibility:
+    //   - unpublished draft (never merged → no `main` history → no
+    //     `le.pr`): omitted — nothing has been published yet;
+    //   - published, no open draft: shown;
+    //   - published + open draft changes: shown, and — because this
+    //     block precedes the open-PR block below — it renders BEFORE
+    //     "preview draft".
+    // The merged-PR-on-`main` signal is deliberately used instead of
+    // the frontmatter `published` flag the summary encodes: a post can
+    // carry `published: true` while still sitting in an unmerged
+    // editorial PR (not on production at all — the same mismatch the
+    // live-url-banner preview fix addresses), so "does a merged PR for
+    // this file exist on main" is the accurate "is it live" test.
+    var publishedPr = le && le.pr;
+    if (publishedPr) {
+      bits.push(
+        '<a href="' + esc(publishedPr.url) +
+          '/files" target="_blank" rel="noopener" title="GitHub diff ' +
+          '(Files changed) of the merged PR #' + esc(publishedPr.number) +
+          ' that published the live version">view published changes</a>'
+      );
+    }
+
     var pr =
       remote && remote.prBySlug &&
       (remote.prBySlug[card.slug] ||
@@ -528,13 +577,14 @@
         '<a href="https://preview-pr' + esc(pr.number) +
           '.adamdaniel.ai/blog/' + esc(urlSlug(card.slug)) +
           '/" target="_blank" rel="noopener" title="Per-PR preview ' +
-          'environment for open PR #' + esc(pr.number) +
-          '">preview-pr' + esc(pr.number) + " ↗</a>"
+          'environment for the unmerged draft (open PR #' +
+          esc(pr.number) + ')">preview draft ↗</a>'
       );
       bits.push(
-        '<a href="' + esc(pr.url) + '" target="_blank" rel="noopener" ' +
-          'title="The open editorial-workflow PR">PR #' +
-          esc(pr.number) + "</a>"
+        '<a href="' + esc(pr.url) +
+          '/files" target="_blank" rel="noopener" title="GitHub diff ' +
+          '(Files changed) of the open editorial-workflow PR #' +
+          esc(pr.number) + '">view draft changes</a>'
       );
     }
     var next = bits.join("");
