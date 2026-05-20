@@ -90,18 +90,26 @@ jobs:
       - name: Checkout
         uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd  # v6.0.2 (2026-01-09)
 
-      - name: Compute lockhash tag
+      - name: Compute lockhash tag and lowercase image path
         id: tag
         # SHA-256 of the Dockerfile + Gemfile + package-lock.json → short
         # (16-char) tag. Gemfile.lock is .gitignored so it's NOT in the
         # checkout — use Gemfile instead. Same inputs → same tag; reused
-        # on cache hit. Exposed as a job output so other workflows (and
-        # the consumers documented in the header) can derive the SAME tag
-        # from the SAME files.
+        # on cache hit.
+        #
+        # Also emit `repo_lc` — `github.repository` lowercased. OCI
+        # registries (GHCR included) reject uppercase in image paths, and
+        # this repo's owner ("Adam-S-Daniel") has mixed case. Done in
+        # bash because the `${{ }}` template engine has no lowercase
+        # filter; downstream steps interpolate `steps.tag.outputs.repo_lc`
+        # everywhere they'd otherwise use `github.repository`.
         run: |
           h=$(cat .github/ci-runner/Dockerfile Gemfile package-lock.json | sha256sum | cut -c1-16)
+          repo_lc=$(echo "${{ github.repository }}" | tr '[:upper:]' '[:lower:]')
           echo "tag=${h}" >> "$GITHUB_OUTPUT"
+          echo "repo_lc=${repo_lc}" >> "$GITHUB_OUTPUT"
           echo "lockhash tag: ${h}"
+          echo "lowercase repo:  ${repo_lc}"
 
       - name: Set up Docker Buildx
         uses: docker/setup-buildx-action@e468171a9de216ec08956ac3ada2f0791b6bd435  # v3.11.1 (2025-06-26)
@@ -120,7 +128,7 @@ jobs:
         # `main` so the floating tag stays current even when the
         # lockfiles haven't changed.
         env:
-          IMAGE: ${{ steps.tag.outputs.image }}
+          IMAGE: ghcr.io/${{ steps.tag.outputs.repo_lc }}/ci-runner:${{ steps.tag.outputs.tag }}
         run: |
           set -uo pipefail
           if docker manifest inspect "$IMAGE" >/dev/null 2>&1; then
@@ -141,13 +149,18 @@ jobs:
           # Always tag the lockhash. `:latest` only moves on main pushes
           # — PR builds populate the lockhash so the same PR's consumer
           # jobs can pull it, without claiming the canonical floating
-          # tag.
+          # tag. Uses the lowercased repo path because OCI registries
+          # reject uppercase in image names (this repo's owner has
+          # mixed case).
           tags: |
-            ghcr.io/${{ github.repository }}/ci-runner:${{ steps.tag.outputs.tag }}
-            ${{ (github.event_name == 'push' && github.ref == 'refs/heads/main') && format('ghcr.io/{0}/ci-runner:latest', github.repository) || '' }}
+            ghcr.io/${{ steps.tag.outputs.repo_lc }}/ci-runner:${{ steps.tag.outputs.tag }}
+            ${{ (github.event_name == 'push' && github.ref == 'refs/heads/main') && format('ghcr.io/{0}/ci-runner:latest', steps.tag.outputs.repo_lc) || '' }}
           # OCI labels — redundant with the Dockerfile LABELs but emit
           # them on the manifest too. `image.source` is what links the
-          # package to the repo for GHCR visibility-inheritance.
+          # package to the repo for GHCR visibility-inheritance — uses
+          # the ORIGINAL case here because https://github.com/<owner>/
+          # <repo> URLs are case-sensitive and the link must match the
+          # canonical repo URL.
           labels: |
             org.opencontainers.image.source=https://github.com/${{ github.repository }}
             org.opencontainers.image.revision=${{ github.sha }}
@@ -157,6 +170,6 @@ jobs:
           # layers (apt, ruby-full, bundle install, npm ci, gitleaks)
           # so a Dockerfile-only edit or a single-lockfile bump rebuilds
           # only the affected layers.
-          cache-from: type=registry,ref=ghcr.io/${{ github.repository }}/ci-runner:buildcache
-          cache-to: type=registry,ref=ghcr.io/${{ github.repository }}/ci-runner:buildcache,mode=max
+          cache-from: type=registry,ref=ghcr.io/${{ steps.tag.outputs.repo_lc }}/ci-runner:buildcache
+          cache-to: type=registry,ref=ghcr.io/${{ steps.tag.outputs.repo_lc }}/ci-runner:buildcache,mode=max
           provenance: false
