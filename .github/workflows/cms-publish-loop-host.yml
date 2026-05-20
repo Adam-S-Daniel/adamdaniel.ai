@@ -157,13 +157,27 @@ jobs:
         with:
           loop: host
 
+  # Build (or cache-hit) the prebaked ci-runner image used as
+  # `container.image:` by the host-loop job below. See e2e-tests.yml
+  # for the full rationale. NOT gated on `recursion-gate` — a recursion
+  # skip means the heavy loop doesn't run, but build-image is so cheap
+  # on a hit (~5-10 s) that the extra job slot is irrelevant. Keeping
+  # them independent lets a Dockerfile/lockfile-only push still rebuild
+  # the image even when the recursion gate would skip the loop.
+  build-image:
+    uses: ./.github/workflows/ci-runner-image.yml
+    secrets: inherit
+    permissions:
+      contents: read
+      packages: write
+
   host-loop:
-    needs: recursion-gate
+    needs: [recursion-gate, build-image]
     runs-on: ubuntu-latest
-    # Prebuilt Playwright image — browsers + their apt deps baked in,
-    # avoiding the apt-mirror tail latency the prior `playwright
-    # install-deps` step paid on every run. Tag is enforced to match
-    # `package-lock.json` by e2e-tests.yml's `select` job drift-guard.
+    # Prebaked ci-runner image — apt deps + Ruby + Gemfile.lock gems +
+    # warm npm cache + gitleaks baked in, replacing the previous
+    # Setup Node + `npm ci` steps inline. Browsers + their apt deps
+    # come from the upstream Playwright base layer.
     env:
       # Firefox refuses to launch when $HOME is owned by a different
       # user. Inside GHA's container jobs the runner injects
@@ -178,7 +192,7 @@ jobs:
       # unaffected; setting it uniformly keeps configuration simple.
       HOME: /root
     container:
-      image: mcr.microsoft.com/playwright:v1.59.1-noble
+      image: ${{ needs.build-image.outputs.image }}
     # Two specs run serially: cms-publish-loop (~7 min happy path,
     # 20 min cap) and cms-delete-published (~12 min happy path,
     # 30 min cap — bumped from 20 min on 2026-05-07 after fixture
@@ -210,15 +224,6 @@ jobs:
       - name: Await prod deploy of this merge
         if: ${{ github.event_name == 'push' }}
         uses: ./.github/actions/await-prod-deploy
-
-      - name: Setup Node
-        uses: actions/setup-node@48b55a011bda9f5d6aeb4c2d9c7362e8dae4041e  # v6.4.0 (2026-04-20)
-        with:
-          node-version: '20'
-          cache: 'npm'
-
-      - name: Install npm dependencies
-        run: npm ci
 
       - name: Run host-repo publish loop + delete-published specs
         env:

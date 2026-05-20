@@ -33,6 +33,13 @@ const AWAIT_ACTION = "./.github/actions/await-prod-deploy";
 const GATE_ACTION = "./.github/actions/cms-recursion-gate";
 const GATE_JOB = "recursion-gate";
 const GATE_IF = "${{ needs." + GATE_JOB + ".outputs.run == 'true' }}";
+// build-image is the reusable-workflow caller that produces the
+// prebaked ci-runner image consumed by each loop's `container.image:`.
+// Independent of recursion-gate so a Dockerfile/lockfile-only push
+// still rebuilds the image even when the recursion gate skips the
+// heavy loop. See .github/workflows/ci-runner-image.yml.
+const BUILD_IMAGE_JOB = "build-image";
+const BUILD_IMAGE_USES = "./.github/workflows/ci-runner-image.yml";
 
 const asArray = (v) => (Array.isArray(v) ? v : v == null ? [] : [v]);
 
@@ -66,14 +73,29 @@ test.describe("real-prod loop workflows are serialized + deploy-gated (#1101)", 
     ).toBe(blocks[0]);
   });
 
-  test("each workflow has exactly the recursion-gate + loop jobs", () => {
+  test("each workflow has exactly the recursion-gate + build-image + loop jobs", () => {
     for (const wf of LOOP_WORKFLOWS) {
       const doc = yaml.load(readWorkflow(wf));
       const names = Object.keys(doc.jobs);
       expect(
         names.sort(),
-        `${wf} must have exactly two jobs: ${GATE_JOB} + ${LOOPS[wf].job}`,
-      ).toEqual([GATE_JOB, LOOPS[wf].job].sort());
+        `${wf} must have exactly three jobs: ${GATE_JOB} + ${BUILD_IMAGE_JOB} + ${LOOPS[wf].job}`,
+      ).toEqual([GATE_JOB, BUILD_IMAGE_JOB, LOOPS[wf].job].sort());
+    }
+  });
+
+  test("each workflow's build-image job is the reusable ci-runner-image workflow", () => {
+    for (const wf of LOOP_WORKFLOWS) {
+      const doc = yaml.load(readWorkflow(wf));
+      const buildJob = doc.jobs[BUILD_IMAGE_JOB];
+      expect(
+        buildJob,
+        `${wf} must define a ${BUILD_IMAGE_JOB} job calling the reusable image-build workflow`,
+      ).toBeTruthy();
+      expect(
+        buildJob.uses,
+        `${wf}: ${BUILD_IMAGE_JOB}.uses must point at ${BUILD_IMAGE_USES}`,
+      ).toBe(BUILD_IMAGE_USES);
     }
   });
 

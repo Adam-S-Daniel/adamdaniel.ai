@@ -57,6 +57,18 @@ defaults:
     shell: bash
 
 jobs:
+  # Build (or cache-hit) the prebaked ci-runner image used as
+  # `container.image:` by the parity job below. See the equivalent
+  # block in e2e-tests.yml for the full rationale. NOT gated on any
+  # `select`-style early-skip: build-image always runs so the image
+  # tag is available regardless of the parity selector's verdict.
+  build-image:
+    uses: ./.github/workflows/ci-runner-image.yml
+    secrets: inherit
+    permissions:
+      contents: read
+      packages: write
+
   # Job name == GitHub check context. Kept as `parity` to match the
   # existing required_status_checks entry in .github/rulesets/main.json
   # — the workflow's BEHAVIOUR changed (was prod smoke in e2e-tests.yml,
@@ -64,6 +76,7 @@ jobs:
   # unchanged. If/when the ruleset is updated to a new context name,
   # rename this job to match.
   parity:
+    needs: build-image
     runs-on: ubuntu-latest
     env:
       # Firefox refuses to launch when $HOME is owned by a different
@@ -72,13 +85,14 @@ jobs:
       # chromium / webkit only.
       HOME: /root
     container:
-      # MUST match package-lock.json's @playwright/test version — the
-      # `select` job in e2e-tests.yml fails the build if any workflow's
-      # tag drifts from the lockfile.
-      image: mcr.microsoft.com/playwright:v1.59.1-noble
-    # Worst case: 20 min preview wait + Ruby/Node setup + Jekyll build
-    # + spec runs. Generous bound so the gate doesn't flake on a slow
-    # deploy-preview.
+      # Prebaked ci-runner — apt deps + Ruby + Gemfile.lock gems +
+      # warm npm cache + gitleaks baked in. See the e2e-tests.yml
+      # equivalent for migration context.
+      image: ${{ needs.build-image.outputs.image }}
+    # Worst case: 20 min preview wait + spec runs. Generous bound so
+    # the gate doesn't flake on a slow deploy-preview. The previous
+    # per-job Ruby/Node setup + Jekyll build is now baked into the
+    # ci-runner image — only `bundle exec jekyll build` runs inline.
     timeout-minutes: 30
     steps:
       - name: Checkout
@@ -122,15 +136,14 @@ jobs:
             echo "$specs" | tr ' ' '\n' | sed 's/^/  /'
           fi
 
-      - name: Setup Playwright + Jekyll
+      - name: Build Jekyll site
         if: steps.select.outputs.count != '0'
-        # Apt deps + Ruby + Gemfile.lock gems + Jekyll build + Node +
-        # npm ci. Shared with preview-media.yml and e2e-tests.yml's
-        # e2e/e2e-admin jobs so a single edit (e.g. bumping the
-        # ruby/setup-ruby pin) flows to every consumer. The parity-
-        # preview specs include sitemap/console-clean/draft-isolation/
-        # image-alt-text which read `_site/`, so Jekyll IS needed.
-        uses: ./.github/actions/playwright-jekyll-setup
+        # Apt + Ruby + gems + Node + npm cache are all baked into the
+        # ci-runner image (`container.image:` above); only the working-
+        # tree-dependent Jekyll build runs here. The parity-preview
+        # specs include sitemap/console-clean/draft-isolation/
+        # image-alt-text, which read `_site/`, so the build IS needed.
+        run: bundle exec jekyll build --quiet
 
       - name: Wait for the preview surface (bounded)
         if: steps.select.outputs.count != '0'

@@ -119,18 +119,30 @@ jobs:
         with:
           loop: prod
 
+  # Build (or cache-hit) the prebaked ci-runner image used as
+  # `container.image:` by the prod-mutate job below. See e2e-tests.yml
+  # for the full rationale. Independent of `recursion-gate` so a
+  # Dockerfile/lockfile-only push still rebuilds the image even when
+  # the recursion gate would skip the loop.
+  build-image:
+    uses: ./.github/workflows/ci-runner-image.yml
+    secrets: inherit
+    permissions:
+      contents: read
+      packages: write
+
   prod-mutate:
-    needs: recursion-gate
+    needs: [recursion-gate, build-image]
     runs-on: ubuntu-latest
     # Recursion guard delegated to the `recursion-gate` job above
     # (changed-files decision; schedule/dispatch always run; ambiguity
     # fails OPEN). The old `publish: ` message guard could not see
     # Decap's `Update Post "…"` self-merge template (run 26108485428).
     if: ${{ needs.recursion-gate.outputs.run == 'true' }}
-    # Prebuilt Playwright image — browsers + their apt deps baked in,
-    # avoiding the apt-mirror tail latency the prior `playwright
-    # install-deps` step paid on every run. Tag is enforced to match
-    # `package-lock.json` by e2e-tests.yml's `select` job drift-guard.
+    # Prebaked ci-runner image — apt deps + Ruby + Gemfile.lock gems +
+    # warm npm cache + gitleaks baked in, replacing the previous
+    # Setup Node + `npm ci` steps inline. Browsers + their apt deps
+    # come from the upstream Playwright base layer.
     env:
       # Firefox refuses to launch when $HOME is owned by a different
       # user. Inside GHA's container jobs the runner injects
@@ -145,7 +157,7 @@ jobs:
       # unaffected; setting it uniformly keeps configuration simple.
       HOME: /root
     container:
-      image: mcr.microsoft.com/playwright:v1.59.1-noble
+      image: ${{ needs.build-image.outputs.image }}
     # 30 → 50: the await-prod-deploy gate below can spend up to
     # ~15 min waiting for this commit's deploy + CDN reflect before
     # the spec even starts (#1101). Headroom so a legit slow-deploy
@@ -168,17 +180,6 @@ jobs:
       - name: Skip — playground mode disabled
         if: vars.PROD_PLAYGROUND_MODE != 'true'
         run: echo "::notice::PROD_PLAYGROUND_MODE is not 'true'; skipping prod mutation."
-
-      - name: Setup Node
-        if: vars.PROD_PLAYGROUND_MODE == 'true'
-        uses: actions/setup-node@48b55a011bda9f5d6aeb4c2d9c7362e8dae4041e  # v6.4.0 (2026-04-20)
-        with:
-          node-version: '20'
-          cache: 'npm'
-
-      - name: Install npm dependencies
-        if: vars.PROD_PLAYGROUND_MODE == 'true'
-        run: npm ci
 
       - name: Run prod mutation playground spec
         if: vars.PROD_PLAYGROUND_MODE == 'true'

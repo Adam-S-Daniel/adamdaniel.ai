@@ -42,6 +42,24 @@ name: CI Runner Image
 # independently.
 
 on:
+  # Consumed by every Playwright-running workflow via `uses:
+  # ./.github/workflows/ci-runner-image.yml`. `workflow_call` does NOT
+  # honour the `paths:` filter on the parallel `pull_request:` /
+  # `push:` triggers — every consumer invocation runs this workflow,
+  # but the in-job "Check if image already exists" step makes a
+  # cache hit a fast no-op manifest probe (~5-10 s) so we still pay
+  # the full apt/ruby/npm rebuild only on a real lockhash miss.
+  workflow_call:
+    outputs:
+      tag:
+        description: "Lockhash tag for the built image (sha256(Dockerfile + Gemfile.lock + package-lock.json) truncated to 16 chars)."
+        value: ${{ jobs.build.outputs.tag }}
+      repo_lc:
+        description: "Lowercase GHCR repo path (github.repository tr '[:upper:]' '[:lower:]')."
+        value: ${{ jobs.build.outputs.repo_lc }}
+      image:
+        description: "Fully-qualified ghcr.io image reference: ghcr.io/<repo_lc>/ci-runner:<tag>. Consumer workflows use this directly as their `container.image:`."
+        value: ${{ jobs.build.outputs.image }}
   pull_request:
     branches: [main]
     # Both lockfiles are tracked, so the trigger inputs and the image
@@ -85,8 +103,14 @@ defaults:
 jobs:
   build:
     runs-on: ubuntu-latest
+    # Job-level outputs surface the step outputs for callers via
+    # `needs.build.outputs.<name>`. Consumer workflows that `uses:`
+    # this file as a reusable workflow read `outputs.image` and feed
+    # it straight into `container: image:` on their Playwright jobs.
     outputs:
       tag: ${{ steps.tag.outputs.tag }}
+      repo_lc: ${{ steps.tag.outputs.repo_lc }}
+      image: ${{ steps.tag.outputs.image }}
     steps:
       - name: Checkout
         uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd  # v6.0.2 (2026-01-09)
@@ -103,13 +127,20 @@ jobs:
         # bash because the `${{ }}` template engine has no lowercase
         # filter; downstream steps interpolate `steps.tag.outputs.repo_lc`
         # everywhere they'd otherwise use `github.repository`.
+        #
+        # `image` is the fully-qualified ghcr.io ref consumer workflows
+        # paste into `container: image:`. Emitting it here (rather than
+        # making every caller re-assemble it from tag + repo_lc) keeps
+        # the wire contract narrow — one output, not three.
         run: |
           h=$(cat .github/ci-runner/Dockerfile Gemfile.lock package-lock.json | sha256sum | cut -c1-16)
           repo_lc=$(echo "${{ github.repository }}" | tr '[:upper:]' '[:lower:]')
           echo "tag=${h}" >> "$GITHUB_OUTPUT"
           echo "repo_lc=${repo_lc}" >> "$GITHUB_OUTPUT"
+          echo "image=ghcr.io/${repo_lc}/ci-runner:${h}" >> "$GITHUB_OUTPUT"
           echo "lockhash tag: ${h}"
           echo "lowercase repo:  ${repo_lc}"
+          echo "image:           ghcr.io/${repo_lc}/ci-runner:${h}"
 
       - name: Set up Docker Buildx
         uses: docker/setup-buildx-action@e468171a9de216ec08956ac3ada2f0791b6bd435  # v3.11.1 (2025-06-26)

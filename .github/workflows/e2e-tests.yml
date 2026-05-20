@@ -146,6 +146,35 @@ jobs:
           marker: unit-failure-summary
           title: unit
 
+  # Build (or cache-hit) the prebaked `ghcr.io/<repo-lc>/ci-runner:
+  # <lockhash>` image used as `container.image:` by every Playwright
+  # job below. The reusable workflow at .github/workflows/ci-runner-
+  # image.yml computes the lockhash tag (sha256 of Dockerfile +
+  # Gemfile.lock + package-lock.json), checks GHCR for that tag, and
+  # builds + pushes only on a miss. On a hit the whole job collapses
+  # to a manifest probe (~5-10 s). Image bakes apt deps + Ruby +
+  # bundler-cache gems + a warm npm cache + gitleaks, replacing the
+  # per-job "Install Ruby toolchain prerequisites" / Setup Ruby /
+  # Setup Node / Install npm dependencies steps the matrix used to
+  # carry inline. Job-level outputs surface `image` for downstream
+  # `needs:` consumers — see ci-runner-image.yml's workflow_call
+  # block for the wire contract.
+  #
+  # NOT `needs: select` — even on a salient-PR early-skip (where the
+  # `e2e` / `e2e-admin` / `e2e-real` jobs would otherwise no-op via
+  # scope=skip), this image is still needed by the `finalize` job's
+  # `merge-reports` step. Keeping build-image upstream of select also
+  # means a Dockerfile/lockfile-only PR can validate the image build
+  # without needing a salient test diff.
+  build-image:
+    uses: ./.github/workflows/ci-runner-image.yml
+    # Inherit secrets so the called workflow's `docker/login-action`
+    # gets the same GITHUB_TOKEN it'd see if it ran top-level.
+    secrets: inherit
+    permissions:
+      contents: read
+      packages: write
+
   # Decide what e2e work is actually needed for this commit, and how
   # many shards to spin up. Hoisted out of the e2e matrix so the
   # selector runs once (not 4×) and so a baseline-only run can scale
@@ -361,16 +390,16 @@ jobs:
           title: select
 
   e2e:
-    needs: select
+    needs: [select, build-image]
     runs-on: ubuntu-latest
-    # Prebuilt Playwright image — browsers + their apt deps (libnss3,
-    # libnspr4, fonts, …) are baked in. Replaces the `actions/cache` +
-    # `playwright install` + `playwright install-deps` triple step that
-    # previously paid 5–15 minutes of apt-mirror tail latency per shard
-    # whenever the deb mirror was flaky. The tag MUST match
-    # `package-lock.json`'s `@playwright/test` version; the
-    # `select` job's "Verify Playwright image version matches lockfile"
-    # step fails the build if any workflow drifts.
+    # Prebaked ci-runner image (built or cache-hit by the build-image
+    # job above). Bakes apt deps + Ruby + Gemfile.lock gems + a warm
+    # npm cache + gitleaks on top of the upstream Playwright noble
+    # base, replacing the previous per-shard "Install Ruby toolchain
+    # prerequisites" / Setup Ruby / Setup Node / Install npm
+    # dependencies steps. A cache hit collapses build-image to a
+    # ~5-10 s manifest probe; a miss (Dockerfile/Gemfile.lock/
+    # package-lock.json change) rebuilds before the matrix starts.
     env:
       # Firefox refuses to launch when $HOME is owned by a different
       # user. Inside GHA's container jobs the runner injects
@@ -408,7 +437,7 @@ jobs:
         --project=chromium-light
         --project=chromium-forced-colors
     container:
-      image: mcr.microsoft.com/playwright:v1.59.1-noble
+      image: ${{ needs.build-image.outputs.image }}
     strategy:
       fail-fast: false
       matrix:
@@ -416,41 +445,6 @@ jobs:
     steps:
       - name: Checkout
         uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd  # v6.0.2 (2026-01-09)
-
-      - name: Install Ruby toolchain prerequisites
-        # The Playwright noble image ships with `libgmp` (a browser
-        # dep) but not `libyaml-0-2`, which `ruby/setup-ruby`'s
-        # prebuilt Ruby 3.2 tarball needs at link time, and not
-        # `build-essential`, which `bundler-cache` needs to build the
-        # native extensions in our Gemfile (`http_parser.rb`,
-        # `eventmachine`). Skip either and `bundle install` fails with
-        # "make: not found" or a libyaml linker error.
-        run: |
-          apt-get update -qq
-          apt-get install -y -qq --no-install-recommends libyaml-0-2 build-essential
-
-      - name: Setup Ruby
-        # Required because `playwright.config.js`'s `webServer` block
-        # runs `bundle exec jekyll build && npx serve _site` for
-        # `TARGET=local` (the default). Without Ruby + bundler in the
-        # container, the webServer would fail at `bundle: not found`
-        # before any spec runs. Several specs also read `_site/` files
-        # directly (sitemap, image-alt-text, draft-isolation, the cms
-        # lifecycle suite) — the webServer's build is what produces
-        # those for the spec to read.
-        uses: ruby/setup-ruby@6aaa311d81eba98ae12eaffbcb63296ace0efcde  # v1.307.0 (2026-05-11)
-        with:
-          ruby-version: '3.2'
-          bundler-cache: true
-
-      - name: Setup Node
-        uses: actions/setup-node@48b55a011bda9f5d6aeb4c2d9c7362e8dae4041e  # v6.4.0 (2026-04-20)
-        with:
-          node-version: '20'
-          cache: 'npm'
-
-      - name: Install npm dependencies
-        run: npm ci
 
       - name: Prepare shard output dir
         run: mkdir -p shard-output
@@ -577,7 +571,7 @@ jobs:
   # exist; gating the JOB on scope would create the missing-check
   # merge-block trap.
   e2e-admin:
-    needs: select
+    needs: [select, build-image]
     runs-on: ubuntu-latest
     env:
       # See the e2e job above for HOME=/root rationale.
@@ -590,35 +584,10 @@ jobs:
         --project=chromium-desktop-3k
         --project=webkit-iphone16
     container:
-      image: mcr.microsoft.com/playwright:v1.59.1-noble
+      image: ${{ needs.build-image.outputs.image }}
     steps:
       - name: Checkout
         uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd  # v6.0.2 (2026-01-09)
-
-      - name: Install Ruby toolchain prerequisites
-        # Same reason as the e2e job — libyaml-0-2 + build-essential
-        # aren't in the Playwright noble image but ruby/setup-ruby +
-        # bundler need them. Several admin specs (cms-page-crud,
-        # cms-link-crawler, etc.) reach into _site/ for parity probes
-        # and need Jekyll built locally.
-        run: |
-          apt-get update -qq
-          apt-get install -y -qq --no-install-recommends libyaml-0-2 build-essential
-
-      - name: Setup Ruby
-        uses: ruby/setup-ruby@6aaa311d81eba98ae12eaffbcb63296ace0efcde  # v1.307.0 (2026-05-11)
-        with:
-          ruby-version: '3.2'
-          bundler-cache: true
-
-      - name: Setup Node
-        uses: actions/setup-node@48b55a011bda9f5d6aeb4c2d9c7362e8dae4041e  # v6.4.0 (2026-04-20)
-        with:
-          node-version: '20'
-          cache: 'npm'
-
-      - name: Install npm dependencies
-        run: npm ci
 
       - name: Prepare shard output dir
         run: mkdir -p shard-output
@@ -745,7 +714,7 @@ jobs:
   # the real-lane spec set has settled. Branch protection can promote
   # it later in a separate PR.
   e2e-real:
-    needs: select
+    needs: [select, build-image]
     if: needs.select.outputs.real_scope != 'skip'
     runs-on: ubuntu-latest
     env:
@@ -755,38 +724,10 @@ jobs:
       # Pin the lane to `real` so spec headers + the test runner agree.
       TEST_LANE: real
     container:
-      image: mcr.microsoft.com/playwright:v1.59.1-noble
+      image: ${{ needs.build-image.outputs.image }}
     steps:
       - name: Checkout
         uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd  # v6.0.2 (2026-01-09)
-
-      - name: Install Ruby toolchain prerequisites
-        # The Playwright noble image ships with `libgmp` (a browser
-        # dep) but not `libyaml-0-2`, which `ruby/setup-ruby`'s
-        # prebuilt Ruby 3.2 tarball needs at link time, and not
-        # `build-essential`, which `bundler-cache` needs to build the
-        # native extensions in our Gemfile.
-        run: |
-          apt-get update -qq
-          apt-get install -y -qq --no-install-recommends libyaml-0-2 build-essential
-
-      - name: Setup Ruby
-        # Several @lane:real specs still reach into `_site/` for
-        # local-vs-real parity comparisons; the webServer skips its
-        # build when TARGET isn't local, so build explicitly here.
-        uses: ruby/setup-ruby@6aaa311d81eba98ae12eaffbcb63296ace0efcde  # v1.307.0 (2026-05-11)
-        with:
-          ruby-version: '3.2'
-          bundler-cache: true
-
-      - name: Setup Node
-        uses: actions/setup-node@48b55a011bda9f5d6aeb4c2d9c7362e8dae4041e  # v6.4.0 (2026-04-20)
-        with:
-          node-version: '20'
-          cache: 'npm'
-
-      - name: Install npm dependencies
-        run: npm ci
 
       - name: Prepare shard output dir
         run: mkdir -p shard-output
@@ -908,14 +849,15 @@ jobs:
   #     without the dependency)
   finalize:
     if: ${{ !cancelled() }}
-    needs: [e2e, e2e-admin]
+    needs: [e2e, e2e-admin, build-image]
     runs-on: ubuntu-latest
-    # Use the same Playwright container as the `e2e` matrix — the
-    # `merge-reports` step needs the same `@playwright/test` version
-    # the shards used to write their blobs, and the image guarantees it.
-    # The downstream "Install gitleaks" + "Post failure summary" steps
-    # also work fine inside the container (curl + tar + node are baked
-    # in, sudo isn't but the image runs as root anyway).
+    # Use the same prebaked ci-runner container as the `e2e` matrix —
+    # the `merge-reports` step needs the same `@playwright/test`
+    # version the shards used to write their blobs, and the image
+    # guarantees it. The downstream "Install gitleaks" + "Post failure
+    # summary" steps also work fine inside the container (curl + tar +
+    # node + gitleaks are baked in, sudo isn't but the image runs as
+    # root anyway).
     env:
       # Firefox refuses to launch when $HOME is owned by a different
       # user. Inside GHA's container jobs the runner injects
@@ -930,19 +872,10 @@ jobs:
       # unaffected; setting it uniformly keeps configuration simple.
       HOME: /root
     container:
-      image: mcr.microsoft.com/playwright:v1.59.1-noble
+      image: ${{ needs.build-image.outputs.image }}
     steps:
       - name: Checkout
         uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd  # v6.0.2 (2026-01-09)
-
-      - name: Setup Node
-        uses: actions/setup-node@48b55a011bda9f5d6aeb4c2d9c7362e8dae4041e  # v6.4.0 (2026-04-20)
-        with:
-          node-version: '20'
-          cache: 'npm'
-
-      - name: Install npm dependencies
-        run: npm ci
 
       - name: Download blob reports
         uses: actions/download-artifact@3e5f45b2cfb9172054b4087a40e8e0b5a5461e7c  # v8.0.1 (2026-03-11)
