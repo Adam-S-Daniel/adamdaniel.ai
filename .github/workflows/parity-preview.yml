@@ -176,6 +176,10 @@ jobs:
           TARGET: preview
           PR_NUMBER: ${{ github.event.pull_request.number }}
           PR_HEAD_REF: ${{ github.event.pull_request.head.ref }}
+          # Live-failures reporter (e2e/live-failures-reporter.js)
+          # streams per-test failures to PR comments. PR_NUMBER is
+          # already set above; this just exposes the API token.
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
         run: |
           set -o pipefail
           # The @parity specs span the public lane (chromium-desktop-1080:

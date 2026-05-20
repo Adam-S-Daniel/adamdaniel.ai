@@ -117,7 +117,18 @@ module.exports = defineConfig({
     },
   },
   reporter: process.env.CI
-    ? [["html", { open: "never" }], ["list"]]
+    ? [
+        ["html", { open: "never" }],
+        ["list"],
+        // Live failure stream — posts a marker-tagged comment per
+        // terminal failure (final retry only) so agents watching the
+        // PR see signal before the whole job ends. No-ops outside CI
+        // and when GITHUB_TOKEN / PR_NUMBER aren't exposed; opt in by
+        // adding `GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}` and
+        // `PR_NUMBER: ${{ github.event.pull_request.number }}` to a
+        // job's env. See e2e/live-failures-reporter.js.
+        ["./e2e/live-failures-reporter.js"],
+      ]
     : [["list"]],
   projects: [
     // ── Public-page lane (7 projects) ─────────────────────────────
