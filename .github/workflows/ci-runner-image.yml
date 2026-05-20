@@ -44,15 +44,15 @@ name: CI Runner Image
 on:
   pull_request:
     branches: [main]
-    # Gemfile.lock is .gitignored in this repo, so the trigger inputs
-    # are Gemfile (not Gemfile.lock) + package-lock.json (tracked). A
-    # Gemfile bump rebuilds; routine RubyGems version drift on the same
-    # Gemfile does NOT — that drift is absorbed into the next intentional
-    # bump's rebuild, which is acceptable for a CI runner image.
+    # Both lockfiles are tracked, so the trigger inputs and the image
+    # tag pin against the resolved-gem set (Gemfile.lock) and the
+    # resolved-npm set (package-lock.json). A lockfile bump rebuilds;
+    # working-tree edits that don't change the lockfiles never rebuild.
     paths:
       - '.github/ci-runner/Dockerfile'
       - '.github/workflows/ci-runner-image.yml'
       - 'Gemfile'
+      - 'Gemfile.lock'
       - 'package.json'
       - 'package-lock.json'
   push:
@@ -61,6 +61,7 @@ on:
       - '.github/ci-runner/Dockerfile'
       - '.github/workflows/ci-runner-image.yml'
       - 'Gemfile'
+      - 'Gemfile.lock'
       - 'package.json'
       - 'package-lock.json'
   workflow_dispatch:
@@ -92,10 +93,9 @@ jobs:
 
       - name: Compute lockhash tag and lowercase image path
         id: tag
-        # SHA-256 of the Dockerfile + Gemfile + package-lock.json → short
-        # (16-char) tag. Gemfile.lock is .gitignored so it's NOT in the
-        # checkout — use Gemfile instead. Same inputs → same tag; reused
-        # on cache hit.
+        # SHA-256 of the Dockerfile + Gemfile.lock + package-lock.json
+        # → short (16-char) tag. Same inputs → same tag; reused on
+        # cache hit. Both lockfiles are tracked.
         #
         # Also emit `repo_lc` — `github.repository` lowercased. OCI
         # registries (GHCR included) reject uppercase in image paths, and
@@ -104,7 +104,7 @@ jobs:
         # filter; downstream steps interpolate `steps.tag.outputs.repo_lc`
         # everywhere they'd otherwise use `github.repository`.
         run: |
-          h=$(cat .github/ci-runner/Dockerfile Gemfile package-lock.json | sha256sum | cut -c1-16)
+          h=$(cat .github/ci-runner/Dockerfile Gemfile.lock package-lock.json | sha256sum | cut -c1-16)
           repo_lc=$(echo "${{ github.repository }}" | tr '[:upper:]' '[:lower:]')
           echo "tag=${h}" >> "$GITHUB_OUTPUT"
           echo "repo_lc=${repo_lc}" >> "$GITHUB_OUTPUT"
