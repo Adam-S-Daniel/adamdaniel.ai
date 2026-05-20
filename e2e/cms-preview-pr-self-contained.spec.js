@@ -12,7 +12,7 @@
 // "real lane" = exercises live GitHub, real Decap, real preview infra,
 // not a local mock. Currently inert in the standard PR matrix; gated to
 // CMS_E2E_PAT + RUN_HOST_REPO_PUBLISH_LOOP and runs once on
-// chromium-desktop. The `@lane: real` tag exists so a future workflow
+// chromium-desktop-1080. The `@lane: real` tag exists so a future workflow
 // (or `--grep @lane:real`) can opt the spike's harness in/out as a unit.
 
 /*
@@ -65,7 +65,7 @@
  * Gating (matches cms-publish-loop.spec.js):
  *   - CMS_E2E_PAT must be set (host-repo only — fork PRs / Dependabot skip).
  *   - RUN_HOST_REPO_PUBLISH_LOOP=1 opt-in to avoid PR-time recursion.
- *   - Runs once on chromium-desktop. Other projects skip — this is a
+ *   - Runs once on chromium-desktop-1080. Other projects skip — this is a
  *     real-network real-GitHub spec, not a per-browser invariant.
  *   - PROD_CANARY=1 (read-only daily probe) skips this — no mutation.
  */

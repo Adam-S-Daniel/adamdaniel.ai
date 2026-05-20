@@ -55,7 +55,7 @@
  *
  * Gating:
  *   - `CMS_E2E_PAT` must be set.
- *   - `chromium-desktop` only.
+ *   - `chromium-desktop-3k` only.
  *   - Workflow gated on `vars.PROD_PLAYGROUND_MODE == 'true'` so the
  *     spec doesn't run by accident outside the scheduled cron.
  *

@@ -75,7 +75,7 @@
  *   - CMS_E2E_PAT must be set.
  *   - PR_NUMBER + PR_HEAD_REF must be set (the workflow exposes them
  *     from the resolved parent PR).
- *   - chromium-desktop only.
+ *   - chromium-desktop-3k only.
  */
 const { test, expect } = require("./base");
 const { seedDecapAuth, getPat, HOST_REPO } = require("./decap-pat");

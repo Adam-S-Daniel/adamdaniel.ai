@@ -215,7 +215,7 @@ jobs:
           set -o pipefail
           npx playwright test \
             e2e/preview-media-resolves.spec.js \
-            --project=chromium-desktop \
+            --project=chromium-desktop-1080 \
             --reporter=list \
             --max-failures=1 \
             2>&1 | tee /tmp/preview-media.log

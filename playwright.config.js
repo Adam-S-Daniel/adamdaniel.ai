@@ -127,7 +127,11 @@ module.exports = defineConfig({
     // via grepInvert so admin specs only run on the dedicated admin
     // projects below.
     {
-      name: "chromium-desktop",
+      // Public-lane Chromium project (viewport DESKTOP = 1920×1080). The
+      // "-1080" suffix mirrors "chromium-desktop-3k" (admin-lane, 3K) so
+      // the project name encodes the viewport — historical "chromium-
+      // desktop" left the resolution implicit.
+      name: "chromium-desktop-1080",
       use: { browserName: "chromium", viewport: DESKTOP },
       grepInvert: ADMIN_TAGS_ALL,
     },

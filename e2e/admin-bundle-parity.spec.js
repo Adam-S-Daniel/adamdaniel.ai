@@ -24,7 +24,7 @@ const crypto = require("crypto");
 //
 // Tagged @parity (G3): the spec is read-only — no writes, no admin
 // session, no decap-server. Safe to run on every PR against live
-// surfaces. `chromium-desktop` only — one HTTP-only walk is enough.
+// surfaces. `chromium-desktop-3k` only — one HTTP-only walk is enough.
 //
 // Excluded paths:
 //   - admin/commit.json — auto-generated per deploy, will always
@@ -134,7 +134,7 @@ async function findLatestOpenPrNumber(request) {
 test.describe(
   "@parity admin bundle byte-parity",
   // Tagged @admin-read: drives /admin/* but is read-only (DOM contract,
-  // mocked APIs, byte parity, etc.). Runs on chromium-desktop-3k +
+  // mocked APIs, byte parity, etc.). Runs on chromium-desktop-3k-3k +
   // webkit-iphone16. See playwright.config.js.
   { tag: ["@admin-read"] },
   () => {

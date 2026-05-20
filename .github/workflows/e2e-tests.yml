@@ -399,7 +399,7 @@ jobs:
       # different tag scopes, different secret needs, different
       # failure modes) and keeps shard timing predictable per lane.
       PUBLIC_PROJECT_FLAGS: >-
-        --project=chromium-desktop
+        --project=chromium-desktop-1080
         --project=chromium-laptop
         --project=chromium-mobile
         --project=firefox-desktop
@@ -843,123 +843,23 @@ jobs:
           marker: e2e-real-failure-summary
           title: e2e-real
 
-  # G3 — `@parity` subset against prod, on every PR.
+  # The old `parity` job (TARGET=prod, every PR) was retired:
+  #   - .github/workflows/parity-preview.yml now runs the @parity subset
+  #     against the PR's own preview-pr<N>.adamdaniel.ai surface with
+  #     per-spec path-applicability and a bounded preview-reachability
+  #     poll. That's the PR-validating version of what this job was
+  #     trying to be — and it covers the @admin-read / @admin-screenshots
+  #     @parity specs the old `--project=chromium-desktop-1080` filter
+  #     was silently dropping.
+  #   - "Live prod smoke on every PR" was the only thing the old job
+  #     actually did (only the chromium-desktop-1080 sitemap tests ran),
+  #     and
+  #     we no longer want that signal here. Outage/CDN-drift checks
+  #     belong in a dedicated nightly, not the merge gate.
   #
-  # The `TARGET=prod` env switch (e2e/base.js) overrides Playwright's
-  # `baseURL` fixture so every `page.goto("/foo")` and
-  # `page.request.get("/foo")` routes against https://adamdaniel.ai. The
-  # `@parity` static lint (e2e/parity-tag-lint.test.js) guarantees every
-  # spec we run here is read-only, so this job cannot mutate prod even
-  # if a regression sneaks past local. Single project (chromium-desktop)
-  # keeps the network footprint tight; the matrix multiplier adds
-  # nothing for read-only HTTP/DOM probes.
-  #
-  # Non-blocking: this job is purely informational while @parity coverage
-  # grows. It does NOT carry `needs:` from `select` or `e2e`, so a stuck
-  # selector can't block parity, and a parity failure can't block the
-  # merge gate. Branch protection can promote it to required later.
-  parity:
-    runs-on: ubuntu-latest
-    # Same prebuilt Playwright image as the `e2e` matrix above —
-    # version tag is enforced to match `package-lock.json` by the
-    # `select` job's drift-guard step.
-    env:
-      # Firefox refuses to launch when $HOME is owned by a different
-      # user. Inside GHA's container jobs the runner injects
-      # `-e HOME=/github/home` at `docker create` time (owned by the
-      # image's `pwuser`); attempting to override that via
-      # `container.env` is a no-op because GHA's injection wins. The
-      # runner DOES honour job-level `env:` — it `export`s those into
-      # every step's shell after `docker exec`, so HOME=/root takes
-      # effect by the time `npx playwright test` runs. Firefox bails
-      # with "Running Nightly as root in a regular user's session is
-      # not supported" without this. Chromium and WebKit are
-      # unaffected; setting it uniformly keeps configuration simple.
-      HOME: /root
-    container:
-      image: mcr.microsoft.com/playwright:v1.59.1-noble
-    # Run against the latest commit of every PR. Forks don't block on
-    # this — the parity probe is read-only and uses no secrets.
-    steps:
-      - name: Checkout
-        uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd  # v6.0.2 (2026-01-09)
-
-      - name: Install Ruby toolchain prerequisites
-        # See the same step in the `e2e` job for rationale —
-        # libyaml-0-2 + build-essential aren't in the Playwright
-        # noble image, but `ruby/setup-ruby` + bundler need them.
-        run: |
-          apt-get update -qq
-          apt-get install -y -qq --no-install-recommends libyaml-0-2 build-essential
-
-      - name: Setup Ruby
-        # A handful of @parity-tagged specs (sitemap, image-alt-text,
-        # the manual walkthroughs) read `_site/` for their local-vs-
-        # prod parity comparison. With TARGET=prod, Playwright's
-        # webServer doesn't run `bundle exec jekyll build`, so we
-        # have to do it explicitly here. Without this, those specs
-        # bail in `beforeAll` with "_site/sitemap.xml not found".
-        uses: ruby/setup-ruby@6aaa311d81eba98ae12eaffbcb63296ace0efcde  # v1.307.0 (2026-05-11)
-        with:
-          ruby-version: '3.2'
-          bundler-cache: true
-
-      - name: Build Jekyll site (for parity specs that read _site/)
-        run: bundle exec jekyll build --quiet
-
-      - name: Setup Node
-        uses: actions/setup-node@48b55a011bda9f5d6aeb4c2d9c7362e8dae4041e  # v6.4.0 (2026-04-20)
-        with:
-          node-version: '20'
-          cache: 'npm'
-
-      - name: Install npm dependencies
-        run: npm ci
-
-      - name: Run @parity subset against prod
-        env:
-          TARGET: prod
-        # `--grep @parity` selects every test/describe with the tag in its
-        # title. The static lint (e2e/parity-tag-lint.test.js) ships in the
-        # same matrix so a violating tag-grab fails *here* before doing any
-        # remote IO.
-        run: |
-          set -o pipefail
-          npx playwright test \
-            --grep @parity \
-            --project=chromium-desktop \
-            --reporter=list \
-            2>&1 | tee /tmp/parity-output.log
-
-      - name: Upload parity test results
-        if: ${{ !cancelled() }}
-        uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a  # v7.0.1 (2026-04-10)
-        with:
-          name: test-results-parity-prod
-          path: |
-            test-results/
-            /tmp/parity-output.log
-          retention-days: 7
-
-      # Failure-comment fan-out — see AGENTS.md "Failure-comment
-      # composite action". Two call sites (post / resolve), gitleaks-
-      # scrubbed via the composite action.
-      - name: Post failure summary
-        if: ${{ failure() && github.event_name == 'pull_request' }}
-        uses: ./.github/actions/post-failure-comment
-        with:
-          mode: post
-          log-file: /tmp/parity-output.log
-          marker: parity-failure-summary
-          title: parity
-
-      - name: Resolve failure summary on success
-        if: ${{ success() && github.event_name == 'pull_request' }}
-        uses: ./.github/actions/post-failure-comment
-        with:
-          mode: resolve
-          marker: parity-failure-summary
-          title: parity
+  # If you came here looking for the @parity job's history,
+  # `git log --diff-filter=D -- .github/workflows/e2e-tests.yml` and
+  # the parity-preview workflow header explain the replacement.
 
   # ─── DO NOT WEAKEN WITHOUT READING THE FOLLOWING ────────────────────
   #

@@ -17,11 +17,11 @@ new one.
         │  blog, tags, preview…      │
         ├──────────────────────────┤
         ├─ admin specs (Decap CMS) ─┤ path-matched
-        │  smoke, publish-flow,      │ chromium-desktop only
+        │  smoke, publish-flow,      │ chromium-desktop-3k only
         │  reviews dashboard         │
         ├──────────────────────────┤
         └─ visual regression ───────┘ pixel baselines, 8 viewports for
-                                      public, chromium-desktop for admin
+                                      public, chromium-desktop-3k for admin
 ```
 
 ## 1. Strategy in one paragraph
@@ -197,11 +197,11 @@ by `admin/preview-bridge.js`. Two angles cover its contract.
 | [`e2e/preview-bridge.spec.js`](../e2e/preview-bridge.spec.js) | 3 | The bridge registers a `postSave` listener with `window.CMS`, broadcasts entry data via BroadcastChannel, exposes the preview-URL helper. Stubbed `window.CMS` — no Decap boot. |
 | [`e2e/preview-config-patch.spec.js`](../e2e/preview-config-patch.spec.js) | 4 | `scripts/patch-preview-config.sh` rewrites `site_url`, `display_url`, `backend.branch` correctly and leaves `preview_path` alone. |
 
-### E. CMS admin specs (browser, chromium-desktop only)
+### E. CMS admin specs (browser, chromium-desktop-3k only)
 
 Decap's editor DOM is identical across viewports — running these on the
 8-project matrix would burn cycles for no extra coverage. Each spec is
-gated to `chromium-desktop` in its `beforeEach`.
+gated to `chromium-desktop-3k` in its `beforeEach`.
 
 | Spec | Tests | Catches |
 |---|---|---|
@@ -215,7 +215,7 @@ gated to `chromium-desktop` in its `beforeEach`.
 `e2e/visual-regression.spec.js` keeps pinned PNGs under
 `e2e/visual-regression.spec.js-snapshots/`. Public pages run on all 8
 projects (cross-browser × cross-viewport sanity); admin screens are
-gated to chromium-desktop.
+gated to chromium-desktop-3k.
 
 | Snapshot | Catches |
 |---|---|
@@ -294,12 +294,12 @@ PUBLIC SITE (browser, 8 projects):
   glow-banding.spec.js            gradient pixel sanity              1 test
   cms-preview-url.spec.js         preview_path round-trip            N+1 tests
 
-PREVIEW SURFACE (browser, mostly chromium-desktop):
+PREVIEW SURFACE (browser, mostly chromium-desktop-3k):
   preview-shell.spec.js           /preview/ shell contract          13 tests
   preview-bridge.spec.js          bridge unit (stubbed CMS)          3 tests
   preview-config-patch.spec.js    sed script unit                    4 tests
 
-CMS ADMIN (browser, chromium-desktop):
+CMS ADMIN (browser, chromium-desktop-3k):
   cms-smoke.spec.js               admin save/delete + form render    2 tests
   cms-publish-flow.spec.js        create→build→browse + auto-tag     1 test
   admin-reviews-auth.spec.js      OAuth handshake                    1 test
@@ -334,7 +334,7 @@ Does it involve the Decap admin UI specifically?
   → cms-smoke.spec.js (data plane / form contract)
   → cms-publish-flow.spec.js (full create-and-browse loop)
   → admin-reviews-*.spec.js (reviews dashboard)
-  Gate to chromium-desktop. Decap DOM is the same across viewports.
+  Gate to chromium-desktop-3k. Decap DOM is the same across viewports.
 
 Is it a CloudFront Function or other piece of inline-in-template code?
   → cloudfront-*.spec.js (pull source from template, exec in Node)

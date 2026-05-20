@@ -44,7 +44,7 @@
  *
  * Gating:
  *   - CMS_E2E_PAT must be set (host-repo only — fork PRs / Dependabot skip).
- *   - Runs once on chromium-desktop. Other projects skip — exercising 8
+ *   - Runs once on chromium-desktop-3k. Other projects skip — exercising 8
  *     browser variants serially of a 7-minute pipeline is wasted minutes.
  *   - CI workflow only schedules this spec when CMS-affecting paths change
  *     (admin/**, _config.yml, _layouts/{post,page,project,canary}.html,
@@ -532,7 +532,7 @@ test.afterAll(async ({}, testInfo) => {
   // main → one cleanup PR → one deploy → queue stays shallow.
   //
   // host-loop's own workflow only spawns one worker
-  // (--project=chromium-desktop) so the gate is a no-op there;
+  // (--project=chromium-desktop-3k) so the gate is a no-op there;
   // the e2e-tests matrix is the path that fans out.
   if (testInfo.workerIndex !== 0) return;
   // Bump the hook timeout from Playwright's 30s default. The

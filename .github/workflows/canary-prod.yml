@@ -102,7 +102,7 @@ jobs:
           set -o pipefail
           npx playwright test \
             e2e/cms-publish-loop.spec.js \
-            --project=chromium-desktop \
+            --project=chromium-desktop-1080 \
             --grep '@canary-readonly' \
             --reporter=list \
             2>&1 | tee /tmp/canary-output.log

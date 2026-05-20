@@ -24,7 +24,7 @@ const { test, expect } = require("./base");
 // ships, this spec runs against `localhost:4000` only — exactly the same
 // surface the rest of the suite exercises today.
 //
-// Project gating: chromium-desktop only. The audit is a static-content
+// Project gating: chromium-desktop-1080 only. The audit is a static-content
 // contract — running it across the full browser/viewport matrix would
 // multiply runtime by ~8× without finding additional bugs (the same DOM
 // is served regardless of viewport).
@@ -94,7 +94,7 @@ function shouldSkip(urlPath) {
 test.describe(
   "@parity image alt-text audit",
   // Tagged @admin-read: drives /admin/* but is read-only (DOM contract,
-  // mocked APIs, byte parity, etc.). Runs on chromium-desktop-3k +
+  // mocked APIs, byte parity, etc.). Runs on chromium-desktop-1080-3k +
   // webkit-iphone16. See playwright.config.js.
   { tag: ["@admin-read"] },
   () => {

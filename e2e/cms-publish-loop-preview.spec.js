@@ -25,7 +25,7 @@
  *   - PR_HEAD_REF must be set (the workflow exposes it from
  *     `github.event.pull_request.head.ref`).
  *   - CMS_E2E_PAT must be set.
- *   - Runs once on chromium-desktop only.
+ *   - Runs once on chromium-desktop-3k only.
  *
  * Cleanup: writes the canary baseline back to the PR head branch via the
  * Contents API. Because the head branch belongs to a feature PR, a stale

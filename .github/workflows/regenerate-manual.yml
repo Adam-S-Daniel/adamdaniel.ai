@@ -98,7 +98,7 @@ jobs:
           # specs (cms-smoke, cms-publish-flow, cms-editorial-workflow).
           CMS_E2E_PAT: ${{ secrets.CMS_E2E_PAT }}
         run: |
-          # Limit to chromium-desktop — capture is a single-project responsibility.
+          # Limit to chromium-desktop-3k — capture is a single-project responsibility.
           npx playwright test \
             --project=chromium-desktop-3k \
             e2e/cms-smoke.spec.js \

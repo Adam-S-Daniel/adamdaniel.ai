@@ -23,7 +23,7 @@ const sample = [
     url: "https://preview-pr123.adamdaniel.ai/admin/#/collections/posts",
     spec: "e2e/cms-publish-loop.spec.js",
     test: "publish loop",
-    project: "chromium-desktop",
+    project: "chromium-desktop-3k",
     capturedAt: "2026-04-29T00:00:00Z",
   },
   {
@@ -35,7 +35,7 @@ const sample = [
     url: "https://preview-pr123.adamdaniel.ai/admin/",
     spec: "e2e/cms-publish-loop.spec.js",
     test: "publish loop",
-    project: "chromium-desktop",
+    project: "chromium-desktop-3k",
     capturedAt: "2026-04-29T00:00:00Z",
   },
   {
@@ -47,7 +47,7 @@ const sample = [
     url: "https://preview-pr123.adamdaniel.ai/admin/#/collections/posts",
     spec: "e2e/cms-publish-loop.spec.js",
     test: "publish loop",
-    project: "chromium-desktop",
+    project: "chromium-desktop-3k",
     capturedAt: "2026-04-29T00:00:00Z",
   },
 ];

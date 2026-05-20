@@ -1,0 +1,247 @@
+name: Parity (preview)
+
+# Per-PR @parity gate against preview-pr<N>.adamdaniel.ai.
+#
+# Replaces the previous `parity` job in e2e-tests.yml, which ran with
+# TARGET=prod against https://adamdaniel.ai on every PR — a "live prod
+# smoke" we no longer want, because (a) it tested the deployed prod
+# baseline rather than the PR's actual deployment, and (b) with
+# `--project=chromium-desktop-1080` it silently dropped every @parity
+# spec tagged @admin-read/@admin-screenshots, leaving only sitemap
+# tests.
+#
+# This workflow runs the subset of @parity specs that are preview-
+# compatible (no Decap local_backend dependency) against the PR's
+# already-deployed preview-pr<N> surface, with three changes:
+#
+#   1. Each spec is path-conditioned — selectParityPreviewSpecs() in
+#      e2e/select-specs.js maps each spec to the paths whose changes
+#      can affect what it covers. If no applicable file changed, the
+#      job reports success without running anything.
+#
+#   2. TARGET=preview + PR_NUMBER set, so e2e/base.js routes every
+#      `page.goto("/foo")` / `page.request.get("/foo")` at
+#      `https://preview-pr${PR_NUMBER}.adamdaniel.ai/foo` — the PR's
+#      own deploy-preview output, not prod.
+#
+#   3. needs:deploy-preview semantics via the bounded-poll pattern from
+#      preview-media.yml (GHA has no cross-workflow needs:). The wait
+#      step blocks until preview-pr<N> serves 200, max ~20 min.
+#
+# Why ALWAYS-RUN + EARLY-SKIP, NOT workflow `paths:` (mirrors the
+# preview-media.yml rationale): the @parity selector lives inside the
+# job so the check context is always present and decisions stay close
+# to SPEC_RULES. Non-salient PRs early-skip green in ~10 s with no
+# wait-for-preview.
+#
+# Non-blocking by default. Promote to required (.github/rulesets/main.json)
+# once it's been green for a few PRs.
+
+on:
+  pull_request:
+    branches:
+      - main
+
+permissions:
+  contents: read
+  # post-failure-comment composite needs this to post the failure
+  # summary on the PR (preview-unreachable or spec failure).
+  pull-requests: write
+
+concurrency:
+  group: parity-preview-pr-${{ github.event.pull_request.number }}
+  cancel-in-progress: true
+
+defaults:
+  run:
+    shell: bash
+
+jobs:
+  # Job name == GitHub check context. Kept as `parity` to match the
+  # existing required_status_checks entry in .github/rulesets/main.json
+  # — the workflow's BEHAVIOUR changed (was prod smoke in e2e-tests.yml,
+  # now preview probe here) but the check name a PR merge gates on is
+  # unchanged. If/when the ruleset is updated to a new context name,
+  # rename this job to match.
+  parity:
+    runs-on: ubuntu-latest
+    env:
+      # Firefox refuses to launch when $HOME is owned by a different
+      # user. Match preview-media.yml — kept for parity with that
+      # workflow's container env even though parity specs here use
+      # chromium / webkit only.
+      HOME: /root
+    container:
+      # MUST match package-lock.json's @playwright/test version — the
+      # `select` job in e2e-tests.yml fails the build if any workflow's
+      # tag drifts from the lockfile.
+      image: mcr.microsoft.com/playwright:v1.59.1-noble
+    # Worst case: 20 min preview wait + Ruby/Node setup + Jekyll build
+    # + spec runs. Generous bound so the gate doesn't flake on a slow
+    # deploy-preview.
+    timeout-minutes: 30
+    steps:
+      - name: Checkout
+        uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd  # v6.0.2 (2026-01-09)
+        with:
+          # Need history so the salient-path diff against the base tip
+          # is accurate.
+          fetch-depth: 0
+
+      - name: Mark workspace safe for git
+        # Mirror preview-media.yml — the salient detector runs `git
+        # diff` and would otherwise hit "detected dubious ownership"
+        # under the container's HOME=/root override.
+        run: |
+          git config --global --add safe.directory "$GITHUB_WORKSPACE"
+          git config --global --add safe.directory /__w/adamdaniel.ai/adamdaniel.ai
+
+      - name: Setup Node
+        uses: actions/setup-node@48b55a011bda9f5d6aeb4c2d9c7362e8dae4041e  # v6.4.0 (2026-04-20)
+        with:
+          node-version: '20'
+          cache: 'npm'
+
+      - name: Select applicable @parity specs
+        id: select
+        # Reuse e2e/select-specs.js's SPEC_RULES — same single source
+        # of truth the regular `e2e` matrix uses. Emits the subset list
+        # as a stringified JSON array on `specs`, plus `count` for the
+        # downstream early-skip gate.
+        env:
+          GITHUB_BASE_REF: ${{ github.base_ref }}
+        run: |
+          set -o pipefail
+          git fetch origin "$GITHUB_BASE_REF" --depth=500 || true
+          node e2e/select-specs.js --parity-preview --base "origin/$GITHUB_BASE_REF" \
+            | tee /tmp/parity-select.json
+          # Flatten to a single space-separated list — easier to pass
+          # straight into `npx playwright test <spec1> <spec2>` than a
+          # JSON array.
+          specs=$(node -e "
+            const j = JSON.parse(require('fs').readFileSync('/tmp/parity-select.json','utf8'));
+            process.stdout.write((j.files || []).join(' '));
+          ")
+          echo "specs=${specs}" >> "$GITHUB_OUTPUT"
+          if [ -z "$specs" ]; then
+            echo "count=0" >> "$GITHUB_OUTPUT"
+            echo "No applicable parity-preview spec for this diff — reporting success."
+          else
+            echo "count=$(echo "$specs" | wc -w | tr -d ' ')" >> "$GITHUB_OUTPUT"
+            echo "Applicable specs:"
+            echo "$specs" | tr ' ' '\n' | sed 's/^/  /'
+          fi
+
+      - name: Install npm dependencies
+        if: steps.select.outputs.count != '0'
+        run: npm ci
+
+      - name: Install Ruby toolchain prerequisites
+        if: steps.select.outputs.count != '0'
+        # The Playwright noble container ships without libyaml-0-2 /
+        # build-essential, both required by ruby/setup-ruby + bundler.
+        # Same step as e2e-tests.yml's `e2e` and `parity` jobs.
+        run: |
+          apt-get update -qq
+          apt-get install -y -qq --no-install-recommends libyaml-0-2 build-essential
+
+      - name: Setup Ruby
+        if: steps.select.outputs.count != '0'
+        # The parity-preview specs that read `_site/` locally
+        # (sitemap, console-clean, draft-isolation, image-alt-text)
+        # need a Jekyll build. admin-bundle-parity doesn't, but the
+        # extra ~30 s for Ruby/Jekyll is cheaper than branching on a
+        # per-spec flag in the workflow.
+        uses: ruby/setup-ruby@6aaa311d81eba98ae12eaffbcb63296ace0efcde  # v1.307.0 (2026-05-11)
+        with:
+          ruby-version: '3.2'
+          bundler-cache: true
+
+      - name: Build Jekyll site
+        if: steps.select.outputs.count != '0'
+        run: bundle exec jekyll build --quiet
+
+      - name: Wait for the preview surface (bounded)
+        if: steps.select.outputs.count != '0'
+        id: preview
+        # Same shape as preview-media.yml — deploy-preview.yml is in a
+        # different workflow so we can't `needs:` it. Poll the preview
+        # host with a generous bound (~20 min), then hard-fail in the
+        # next step if it never came up.
+        env:
+          PR_NUMBER: ${{ github.event.pull_request.number }}
+        run: |
+          set -uo pipefail
+          host="https://preview-pr${PR_NUMBER}.adamdaniel.ai"
+          echo "Probing ${host}/ for readiness (bounded ~20 min)…"
+          reachable=false
+          for _ in $(seq 1 40); do
+            code=$(curl -s -o /dev/null -w '%{http_code}' "${host}/" || echo "000")
+            echo "  ${host}/ -> ${code}"
+            if [ "$code" = "200" ]; then
+              reachable=true
+              break
+            fi
+            sleep 30
+          done
+          echo "reachable=${reachable}" >> "$GITHUB_OUTPUT"
+          echo "host=${host}" >> "$GITHUB_OUTPUT"
+
+      - name: Require preview (hard-fail if unreachable on a salient PR)
+        if: ${{ steps.select.outputs.count != '0' && steps.preview.outputs.reachable != 'true' }}
+        run: |
+          msg="preview-pr${{ github.event.pull_request.number }}.adamdaniel.ai was not reachable within ~20 min on a parity-salient PR. parity-preview asserts the deployed preview matches this PR's intent; without a live preview the gate cannot run. If deploy-preview was path-skipped or failed, make a change that triggers it (or re-run deploy-preview) and push again."
+          echo "::error title=parity-preview::${msg}"
+          echo "$msg" | tee /tmp/parity-preview.log
+          exit 1
+
+      - name: Run @parity-preview specs
+        if: ${{ steps.select.outputs.count != '0' && steps.preview.outputs.reachable == 'true' }}
+        env:
+          # Routes Playwright baseURL + page.request at
+          # https://preview-pr${PR_NUMBER}.adamdaniel.ai (see
+          # e2e/base.js's resolvePreviewBaseURL — PR_NUMBER short-
+          # circuits the `gh` lookup).
+          TARGET: preview
+          PR_NUMBER: ${{ github.event.pull_request.number }}
+          PR_HEAD_REF: ${{ github.event.pull_request.head.ref }}
+        run: |
+          set -o pipefail
+          # The @parity specs span the public lane (chromium-desktop-1080:
+          # sitemap, console-clean, draft-isolation, image-alt-text) and
+          # the admin lane (chromium-desktop-3k: admin-bundle-parity).
+          # Run both; Playwright handles per-spec project gating.
+          npx playwright test ${{ steps.select.outputs.specs }} \
+            --project=chromium-desktop-1080 --project=chromium-desktop-3k \
+            --reporter=list \
+            2>&1 | tee /tmp/parity-preview.log
+
+      - name: Upload artifacts
+        if: ${{ !cancelled() && steps.select.outputs.count != '0' }}
+        uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a  # v7.0.1 (2026-04-10)
+        with:
+          name: test-results-parity-preview
+          path: |
+            test-results/
+            /tmp/parity-preview.log
+            /tmp/parity-select.json
+          retention-days: 7
+
+      - name: Post failure summary
+        if: ${{ failure() && steps.select.outputs.count != '0' }}
+        uses: ./.github/actions/post-failure-comment
+        with:
+          mode: post
+          log-file: /tmp/parity-preview.log
+          marker: parity-preview-failure-summary
+          title: parity-preview
+          pr-number: ${{ github.event.pull_request.number }}
+
+      - name: Resolve failure summary on success
+        if: ${{ success() && steps.select.outputs.count != '0' }}
+        uses: ./.github/actions/post-failure-comment
+        with:
+          mode: resolve
+          marker: parity-preview-failure-summary
+          title: parity-preview
+          pr-number: ${{ github.event.pull_request.number }}
