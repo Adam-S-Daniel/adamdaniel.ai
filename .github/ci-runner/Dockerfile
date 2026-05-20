@@ -13,7 +13,8 @@
 # pinned version. We layer Ruby + bundle + npm cache + gitleaks on top.
 #
 # Tag scheme: the build workflow tags the image by the SHA-256 of
-# (Dockerfile + Gemfile.lock + package-lock.json). The same workflow
+# (Dockerfile + Gemfile + package-lock.json). Gemfile.lock is
+# .gitignored, so Gemfile is the bundle-side input. The same workflow
 # also pushes `:latest` on main, so PR consumers can fall back to
 # `:latest` when their lockfile-hash tag is missing (e.g. before the
 # main-side build has caught up after a dependency bump).
@@ -61,8 +62,11 @@ RUN apt-get update -qq \
 # Bundle install — gems live under /usr/local/bundle so subsequent
 # `bundle exec` calls (in any job working tree) find them without a
 # repeat install. `bundle config --global` writes to /root/.bundle.
+# Gemfile.lock is .gitignored in this repo, so the prebuild resolves
+# fresh against rubygems.org each build. Acceptable for a CI runner —
+# the routine drift is absorbed at the next intentional Gemfile bump.
 WORKDIR /tmp/bundle-prebuild
-COPY Gemfile Gemfile.lock ./
+COPY Gemfile ./
 RUN gem install bundler --no-document \
     && bundle config --global path /usr/local/bundle \
     && bundle config --global without 'development:test' \

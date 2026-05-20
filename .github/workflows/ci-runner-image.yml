@@ -44,11 +44,15 @@ name: CI Runner Image
 on:
   pull_request:
     branches: [main]
+    # Gemfile.lock is .gitignored in this repo, so the trigger inputs
+    # are Gemfile (not Gemfile.lock) + package-lock.json (tracked). A
+    # Gemfile bump rebuilds; routine RubyGems version drift on the same
+    # Gemfile does NOT — that drift is absorbed into the next intentional
+    # bump's rebuild, which is acceptable for a CI runner image.
     paths:
       - '.github/ci-runner/Dockerfile'
       - '.github/workflows/ci-runner-image.yml'
       - 'Gemfile'
-      - 'Gemfile.lock'
       - 'package.json'
       - 'package-lock.json'
   push:
@@ -57,7 +61,6 @@ on:
       - '.github/ci-runner/Dockerfile'
       - '.github/workflows/ci-runner-image.yml'
       - 'Gemfile'
-      - 'Gemfile.lock'
       - 'package.json'
       - 'package-lock.json'
   workflow_dispatch:
@@ -89,16 +92,15 @@ jobs:
 
       - name: Compute lockhash tag
         id: tag
-        # SHA-256 of the Dockerfile + both lockfiles → short (16-char)
-        # tag. Same inputs → same tag; reused on cache hit. Exposed as a
-        # job output so other workflows (and the consumers documented in
-        # the header) can derive the SAME tag from the SAME files.
+        # SHA-256 of the Dockerfile + Gemfile + package-lock.json → short
+        # (16-char) tag. Gemfile.lock is .gitignored so it's NOT in the
+        # checkout — use Gemfile instead. Same inputs → same tag; reused
+        # on cache hit. Exposed as a job output so other workflows (and
+        # the consumers documented in the header) can derive the SAME tag
+        # from the SAME files.
         run: |
-          set -o pipefail
-          h=$(cat .github/ci-runner/Dockerfile Gemfile.lock package-lock.json \
-                | sha256sum | cut -c1-16)
+          h=$(cat .github/ci-runner/Dockerfile Gemfile package-lock.json | sha256sum | cut -c1-16)
           echo "tag=${h}" >> "$GITHUB_OUTPUT"
-          echo "image=ghcr.io/${{ github.repository }}/ci-runner:${h}" >> "$GITHUB_OUTPUT"
           echo "lockhash tag: ${h}"
 
       - name: Set up Docker Buildx
