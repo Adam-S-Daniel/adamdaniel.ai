@@ -90,11 +90,25 @@ permissions:
   packages: write
 
 concurrency:
-  # One build per (event, ref, lockhash) — same content collapses to a
-  # single in-flight job. Different PR pushes with different lockfiles
-  # run independently.
-  group: ci-runner-image-${{ github.event_name }}-${{ github.ref }}
-  cancel-in-progress: false
+  # Scope per (event, ref, CALLING workflow) so parallel `workflow_call`
+  # invocations from different parents on the same PR push don't fight
+  # for one slot. Before this scoping: `e2e-tests`, `preview-media`,
+  # and the other Playwright parents all called this reusable workflow
+  # simultaneously and hit a single concurrency group; with only one
+  # running + one queued slot, the third and later arrivals cancelled
+  # the queued predecessor → 2-3 red `build-image / build` checks per
+  # PR push from queue-supersession races (see PR #1209's check list).
+  # Including `github.workflow` (= the CALLER's workflow name when
+  # invoked via `workflow_call`) gives each parent its own group, so
+  # cross-parent runs no longer collide. Same-parent re-pushes use
+  # `cancel-in-progress: true` to drop the older in-flight run cleanly
+  # — its replacement on the new HEAD SHA takes the displayed check
+  # slot, so no stale red badge lingers. Image build itself is
+  # content-addressed (lockhash tag, GHCR manifest dedup), so even on a
+  # cache miss the parallel "first push wins; rest hit the existence
+  # check and exit in ~5-10s" pattern is correct.
+  group: ci-runner-image-${{ github.event_name }}-${{ github.ref }}-${{ github.workflow }}
+  cancel-in-progress: true
 
 defaults:
   run:
