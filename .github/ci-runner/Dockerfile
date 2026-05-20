@@ -71,16 +71,31 @@ RUN gem install bundler --no-document \
     && bundle install --jobs 4 --retry 3 \
     && rm -rf /tmp/bundle-prebuild
 
-# npm ci — pre-warms node_modules under /opt/npm-cache so the consumer
-# job can copy or symlink. We don't bake the working tree's
-# node_modules directly because the consumer's $GITHUB_WORKSPACE path
-# isn't fixed at image build time; `npm ci` against the same lockfile
-# inside the job is fast (~5 s) when the cache is populated.
-WORKDIR /tmp/npm-prebuild
+# npm ci — pre-installs node_modules at a STABLE path the consumer can
+# resolve into without ever running `npm ci` themselves. Earlier
+# revisions of this file installed into /tmp and rm'd the tree afterward
+# (intent: "consumers do npm ci to re-materialise"), but that left
+# `npx playwright test` invocations to discover the `playwright` binary
+# missing — npx then downloaded a fresh `playwright@latest` from npm,
+# which couldn't see our project's `@playwright/test` and broke
+# every consumer with `Cannot find module '@playwright/test'`. PR 1209
+# preview-media failure log on commit 08255a7 captured it.
+#
+# Fix: keep the installed tree at /app (immutable, image-baked) and
+# expose it through NODE_PATH + PATH so:
+#   - `require("@playwright/test")` from a workspace file (no local
+#     node_modules) falls back through NODE_PATH to /app/node_modules.
+#   - `npx playwright`/`npx <bin>` finds the binary on PATH at
+#     /app/node_modules/.bin/playwright instead of going to the registry.
+# Both env vars on the image carry through `container: image:` per GHA.
+WORKDIR /app
 COPY package.json package-lock.json ./
 RUN npm config set cache /opt/npm-cache --global \
     && npm ci --prefer-offline --no-audit --no-fund \
-    && rm -rf /tmp/npm-prebuild /root/.npm
+    && rm -rf /root/.npm
+
+ENV NODE_PATH=/app/node_modules
+ENV PATH=/app/node_modules/.bin:${PATH}
 
 # gitleaks — pinned to the version `.github/workflows/secrets-scan.yml`
 # resolves at runtime. Inside the post-failure-comment composite, the
@@ -100,5 +115,5 @@ RUN set -eux \
     && gitleaks version
 
 # Reset CWD — consumer workflows rely on $GITHUB_WORKSPACE being the
-# active dir, not the build's prebuild dirs.
+# active dir on entry, not the image's /app prebuild dir.
 WORKDIR /
