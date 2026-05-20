@@ -88,30 +88,20 @@ jobs:
           # is accurate.
           fetch-depth: 0
 
-      - name: Mark workspace safe for git
-        # Mirror preview-media.yml — the salient detector runs `git
-        # diff` and would otherwise hit "detected dubious ownership"
-        # under the container's HOME=/root override.
-        run: |
-          git config --global --add safe.directory "$GITHUB_WORKSPACE"
-          git config --global --add safe.directory /__w/adamdaniel.ai/adamdaniel.ai
-
-      - name: Setup Node
-        uses: actions/setup-node@48b55a011bda9f5d6aeb4c2d9c7362e8dae4041e  # v6.4.0 (2026-04-20)
-        with:
-          node-version: '20'
-          cache: 'npm'
-
       - name: Select applicable @parity specs
         id: select
         # Reuse e2e/select-specs.js's SPEC_RULES — same single source
         # of truth the regular `e2e` matrix uses. Emits the subset list
         # as a stringified JSON array on `specs`, plus `count` for the
-        # downstream early-skip gate.
+        # downstream early-skip gate. Runs BEFORE the shared setup
+        # composite so a non-salient PR doesn't pay for apt + Ruby +
+        # Jekyll + npm. Needs git safe.directory configured first.
         env:
           GITHUB_BASE_REF: ${{ github.base_ref }}
         run: |
           set -o pipefail
+          git config --global --add safe.directory "$GITHUB_WORKSPACE"
+          git config --global --add safe.directory /__w/adamdaniel.ai/adamdaniel.ai
           git fetch origin "$GITHUB_BASE_REF" --depth=500 || true
           node e2e/select-specs.js --parity-preview --base "origin/$GITHUB_BASE_REF" \
             | tee /tmp/parity-select.json
@@ -132,34 +122,15 @@ jobs:
             echo "$specs" | tr ' ' '\n' | sed 's/^/  /'
           fi
 
-      - name: Install npm dependencies
+      - name: Setup Playwright + Jekyll
         if: steps.select.outputs.count != '0'
-        run: npm ci
-
-      - name: Install Ruby toolchain prerequisites
-        if: steps.select.outputs.count != '0'
-        # The Playwright noble container ships without libyaml-0-2 /
-        # build-essential, both required by ruby/setup-ruby + bundler.
-        # Same step as e2e-tests.yml's `e2e` and `parity` jobs.
-        run: |
-          apt-get update -qq
-          apt-get install -y -qq --no-install-recommends libyaml-0-2 build-essential
-
-      - name: Setup Ruby
-        if: steps.select.outputs.count != '0'
-        # The parity-preview specs that read `_site/` locally
-        # (sitemap, console-clean, draft-isolation, image-alt-text)
-        # need a Jekyll build. admin-bundle-parity doesn't, but the
-        # extra ~30 s for Ruby/Jekyll is cheaper than branching on a
-        # per-spec flag in the workflow.
-        uses: ruby/setup-ruby@6aaa311d81eba98ae12eaffbcb63296ace0efcde  # v1.307.0 (2026-05-11)
-        with:
-          ruby-version: '3.2'
-          bundler-cache: true
-
-      - name: Build Jekyll site
-        if: steps.select.outputs.count != '0'
-        run: bundle exec jekyll build --quiet
+        # Apt deps + Ruby + Gemfile.lock gems + Jekyll build + Node +
+        # npm ci. Shared with preview-media.yml and e2e-tests.yml's
+        # e2e/e2e-admin jobs so a single edit (e.g. bumping the
+        # ruby/setup-ruby pin) flows to every consumer. The parity-
+        # preview specs include sitemap/console-clean/draft-isolation/
+        # image-alt-text which read `_site/`, so Jekyll IS needed.
+        uses: ./.github/actions/playwright-jekyll-setup
 
       - name: Wait for the preview surface (bounded)
         if: steps.select.outputs.count != '0'
