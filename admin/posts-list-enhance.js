@@ -699,8 +699,32 @@
     scheduleAugment();
   }
 
+  // Synchronous fixture-reorder pre-pass: runs inside the
+  // MutationObserver callback BEFORE the rAF-debounced full augment.
+  // Without this, Decap's React renders the entries list, our
+  // scheduleAugment queues an rAF, and there's a ~16 ms window where
+  // a fixture `<li>` sits at the head of the list — long enough for
+  // an e2e spec doing `a[href*="…/entries/"]`.first().click() to
+  // resolve to (and try to click) a CSS-hidden fixture anchor. The
+  // reorder is idempotent — `c.li !== ul.lastElementChild` short-
+  // circuits, so an already-correct order produces no DOM mutation
+  // and no observer re-fire. Full augment (decorate, ensureBar) keeps
+  // its rAF debounce.
+  function syncFixtureReorder() {
+    if (!isPostsListRoute()) return;
+    var cards = collectCards();
+    if (cards.length) reorderFixturesLast(cards);
+  }
+
   window.addEventListener("hashchange", onRoute);
-  new MutationObserver(scheduleAugment).observe(document.body, {
+  new MutationObserver(function () {
+    try {
+      syncFixtureReorder();
+    } catch (e) {
+      /* swallow — never let our hook block Decap's own updates */
+    }
+    scheduleAugment();
+  }).observe(document.body, {
     childList: true,
     subtree: true,
   });

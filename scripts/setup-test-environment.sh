@@ -131,7 +131,7 @@ cat <<'EOF'
 Run the test stack:
 
   npx playwright test                            # full e2e matrix
-  npx playwright test --project chromium-desktop # single-browser run
+  npx playwright test --project chromium-desktop-1080 # single-browser run
   npx playwright test e2e/cms-smoke.spec.js      # Decap admin save/delete
   bundle exec jekyll build                       # site build
   cd oauth-proxy && python3 -m pytest test_lambda.py -v   # OAuth proxy
