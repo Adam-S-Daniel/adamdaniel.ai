@@ -292,6 +292,48 @@ const SPEC_RULES = {
   "e2e/not-found.spec.js": [
     /^404\.html$/,
   ],
+  // @parity specs that hit Jekyll output through the deployed preview
+  // surface. Path-rules cover the inputs that can shift what's served.
+  // The sitemap/feed/console-clean/image-alt specs ALSO read `_site/`
+  // locally — Jekyll's input set is wider than just _posts (layouts,
+  // config, plugins), so anything that can change the rendered tree
+  // selects them. Picked up by parity-preview.yml's spec selector
+  // (see PARITY_PREVIEW_SPECS / selectParityPreviewSpecs below).
+  "e2e/sitemap.spec.js": [
+    /^_posts\//,
+    /^_projects\//,
+    /^_tags\//,
+    /^pages\//,
+    /^_config\.yml$/,
+    /^_layouts\//,
+    /^_plugins\//,
+  ],
+  "e2e/console-clean.spec.js": [
+    /^_posts\//,
+    /^_projects\//,
+    /^pages\//,
+    /^_config\.yml$/,
+    /^_layouts\//,
+    /^_includes\//,
+    /^_plugins\//,
+    /^assets\/css\//,
+    /^assets\/js\//,
+  ],
+  "e2e/draft-isolation.spec.js": [
+    /^_posts\//,
+    /^_drafts\//,
+    /^_config\.yml$/,
+    /^_layouts\//,
+    /^_includes\//,
+  ],
+  "e2e/image-alt-text.spec.js": [
+    /^_posts\//,
+    /^_projects\//,
+    /^pages\//,
+    /^_layouts\//,
+    /^_includes\//,
+    /^assets\/images\//,
+  ],
   "e2e/glow-banding.spec.js": [
     // CSS-only spec; otherwise idle. Picks up via fanout.
   ],
@@ -662,12 +704,49 @@ function pickShardCount(scope, files) {
   return 4;
 }
 
+// ── @parity-preview selector ─────────────────────────────────────────
+// The five @parity specs that hit the live preview-pr<N>.adamdaniel.ai
+// surface (not /admin/index-local.html). Driven by .github/workflows/
+// parity-preview.yml. The other three @parity-tagged specs
+// (cms-link-crawler / manual-walkthrough-{contributor,content-guide})
+// drive Decap's local_backend at /admin/index-local.html and self-skip
+// on any non-local TARGET — they stay covered by the normal e2e matrix.
+const PARITY_PREVIEW_SPECS = [
+  "e2e/admin-bundle-parity.spec.js",
+  "e2e/console-clean.spec.js",
+  "e2e/draft-isolation.spec.js",
+  "e2e/image-alt-text.spec.js",
+  "e2e/sitemap.spec.js",
+];
+
+// "Direct edit to the spec file itself" counts as applicable so that
+// renaming/touching a parity-preview spec exercises it once before merge.
+function selectParityPreviewSpecs(changedFiles) {
+  const selected = [];
+  const fanout = changedFiles.some((f) =>
+    FANOUT_PATTERNS.some((p) => p.test(f)),
+  );
+  for (const spec of PARITY_PREVIEW_SPECS) {
+    if (fanout || changedFiles.includes(spec)) {
+      selected.push(spec);
+      continue;
+    }
+    const rules = SPEC_RULES[spec] || [];
+    if (rules.some((p) => changedFiles.some((f) => p.test(f)))) {
+      selected.push(spec);
+    }
+  }
+  return selected;
+}
+
 module.exports = {
   ALWAYS_RUN,
   FANOUT_PATTERNS,
   SPEC_RULES,
   HEAVY,
+  PARITY_PREVIEW_SPECS,
   selectSpecs,
+  selectParityPreviewSpecs,
   getChangedFiles,
   parseSpecDirectives,
   parseLaneDirective,
@@ -680,6 +759,28 @@ if (require.main === module) {
   const baseIdx = args.indexOf("--base");
   const baseRef = baseIdx >= 0 ? args[baseIdx + 1] : "origin/main";
   const changed = getChangedFiles(baseRef);
+  // --parity-preview emits the @parity-preview subset for the
+  // parity-preview workflow's salient detector. Output shape matches
+  // the rest of the script (JSON envelope) so the workflow can
+  // ${{ fromJSON(...) }} the file list directly.
+  if (args.includes("--parity-preview")) {
+    const files = selectParityPreviewSpecs(changed);
+    process.stdout.write(
+      JSON.stringify(
+        {
+          scope: files.length ? "subset" : "skip",
+          files,
+          reason: files.length
+            ? `Matched ${files.length} parity-preview spec(s) from ${changed.length} changed file(s).`
+            : `${changed.length} file(s) changed; no parity-preview spec applies.`,
+          changedFiles: changed,
+        },
+        null,
+        2,
+      ) + "\n",
+    );
+    process.exit(0);
+  }
   // GITHUB_HEAD_REF is set by GHA on `pull_request` events; empty for
   // `schedule` / `workflow_dispatch` / `push` (cron, manual, main-push).
   // An empty headRef disables directive filtering — every annotated

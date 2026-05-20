@@ -118,8 +118,20 @@ jobs:
         with:
           loop: media
 
+  # Build (or cache-hit) the prebaked ci-runner image used as
+  # `container.image:` by the media-roundtrip job below. See
+  # e2e-tests.yml for the full rationale. Independent of
+  # `recursion-gate` so a Dockerfile/lockfile-only push still rebuilds
+  # the image even when the recursion gate would skip the loop.
+  build-image:
+    uses: ./.github/workflows/ci-runner-image.yml
+    secrets: inherit
+    permissions:
+      contents: read
+      packages: write
+
   media-roundtrip:
-    needs: recursion-gate
+    needs: [recursion-gate, build-image]
     runs-on: ubuntu-latest
     # Recursion guard delegated to the `recursion-gate` job above
     # (changed-files decision; schedule/dispatch always run; ambiguity
@@ -132,7 +144,7 @@ jobs:
       # simplicity (chromium/webkit unaffected).
       HOME: /root
     container:
-      image: mcr.microsoft.com/playwright:v1.59.1-noble
+      image: ${{ needs.build-image.outputs.image }}
     # One full real-prod loop with THREE deploy waits. Per-spec
     # TEST_TIMEOUT_MS is 55 min; this cap is the outer backstop.
     # 75 → 95: the await-prod-deploy gate can spend up to ~15 min
@@ -155,17 +167,6 @@ jobs:
       - name: Skip — playground mode disabled
         if: vars.PROD_PLAYGROUND_MODE != 'true'
         run: echo "::notice::PROD_PLAYGROUND_MODE is not 'true'; skipping media round-trip."
-
-      - name: Setup Node
-        if: vars.PROD_PLAYGROUND_MODE == 'true'
-        uses: actions/setup-node@48b55a011bda9f5d6aeb4c2d9c7362e8dae4041e  # v6.4.0 (2026-04-20)
-        with:
-          node-version: '20'
-          cache: 'npm'
-
-      - name: Install npm dependencies
-        if: vars.PROD_PLAYGROUND_MODE == 'true'
-        run: npm ci
 
       - name: Run media round-trip spec
         if: vars.PROD_PLAYGROUND_MODE == 'true'

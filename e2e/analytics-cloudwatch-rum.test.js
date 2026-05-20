@@ -43,7 +43,7 @@ test.describe("CloudWatch RUM include", () => {
   test.describe.configure({ mode: "serial" });
 
   test.beforeEach(() => {
-    if (test.info().project.name !== "chromium-desktop") {
+    if (test.info().project.name !== "chromium-desktop-1080") {
       test.skip(
         true,
         "build-output assertion only needs to run once per invocation",
@@ -52,7 +52,7 @@ test.describe("CloudWatch RUM include", () => {
   });
 
   test.beforeAll(() => {
-    if (test.info().project.name !== "chromium-desktop") return;
+    if (test.info().project.name !== "chromium-desktop-1080") return;
     fs.writeFileSync(
       OVERRIDE_CONFIG,
       [

@@ -58,12 +58,23 @@ concurrency:
   cancel-in-progress: false
 
 jobs:
+  # Build (or cache-hit) the prebaked ci-runner image used as
+  # `container.image:` by the canary probe job below. See e2e-tests.yml
+  # for the full rationale. Cheap on hit (~5-10 s manifest probe).
+  build-image:
+    uses: ./.github/workflows/ci-runner-image.yml
+    secrets: inherit
+    permissions:
+      contents: read
+      packages: write
+
   probe:
+    needs: build-image
     runs-on: ubuntu-latest
-    # Prebuilt Playwright image — browsers + their apt deps baked in,
-    # avoiding the apt-mirror tail latency the prior `playwright
-    # install-deps` step paid on every run. Tag is enforced to match
-    # `package-lock.json` by e2e-tests.yml's `select` job drift-guard.
+    # Prebaked ci-runner image — apt deps + Ruby + Gemfile.lock gems +
+    # warm npm cache + gitleaks baked in, replacing the previous
+    # Setup Node + `npm ci` steps inline. Browsers + their apt deps
+    # come from the upstream Playwright base layer.
     env:
       # Firefox refuses to launch when $HOME is owned by a different
       # user. Inside GHA's container jobs the runner injects
@@ -78,20 +89,11 @@ jobs:
       # unaffected; setting it uniformly keeps configuration simple.
       HOME: /root
     container:
-      image: mcr.microsoft.com/playwright:v1.59.1-noble
+      image: ${{ needs.build-image.outputs.image }}
     timeout-minutes: 10
     steps:
       - name: Checkout
         uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd  # v6.0.2 (2026-01-09)
-
-      - name: Setup Node
-        uses: actions/setup-node@48b55a011bda9f5d6aeb4c2d9c7362e8dae4041e  # v6.4.0 (2026-04-20)
-        with:
-          node-version: '20'
-          cache: 'npm'
-
-      - name: Install npm dependencies
-        run: npm ci
 
       - name: Run @canary-readonly probe against prod
         id: probe
@@ -102,7 +104,7 @@ jobs:
           set -o pipefail
           npx playwright test \
             e2e/cms-publish-loop.spec.js \
-            --project=chromium-desktop \
+            --project=chromium-desktop-1080 \
             --grep '@canary-readonly' \
             --reporter=list \
             2>&1 | tee /tmp/canary-output.log

@@ -64,7 +64,7 @@
  *   3. Unpublish leg: toggle OFF, Save, cms PR → cms/ready → wait
  *      for the preview URL to 4xx.
  *
- * Gating: CMS_E2E_PAT + PR_NUMBER + PR_HEAD_REF; chromium-desktop only.
+ * Gating: CMS_E2E_PAT + PR_NUMBER + PR_HEAD_REF; chromium-desktop-3k only.
  */
 const { test, expect } = require("./base");
 const { seedDecapAuth, getPat, HOST_REPO } = require("./decap-pat");

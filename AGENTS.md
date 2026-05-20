@@ -39,7 +39,7 @@ bash oauth-proxy/deploy.sh                  # deploy OAuth proxy (needs env vars
 # Tests
 cd oauth-proxy && python -m pytest test_lambda.py -v
 npx playwright test                               # full browser matrix (8 projects)
-npx playwright test --project chromium-desktop     # single project
+npx playwright test --project chromium-desktop-1080 # single project (public lane)
 npx playwright test e2e/glow-banding.spec.js       # single test file
 ```
 
@@ -366,7 +366,7 @@ Uses `regression-review` GitHub Environment with required reviewers (all write-a
 8. Fetch the public canary URL and assert the new content is live.
 9. Reset the canary baseline asynchronously.
 
-**Gating:** path-based via `e2e/select-specs.js`. Triggers when something contributor-relevant changed: `admin/**`, `_layouts/{post,page,project,canary,default,preview}.html`, `_e2e/**`, `scripts/patch-preview-config.sh`, `.github/workflows/{cms,deploy}-*.yml`, `e2e/{cms,decap-pat,github-actions-poll,canary-content}.*`. Self-skips when `CMS_E2E_PAT` isn't set (so forks/Dependabot don't run it). Runs once on `chromium-desktop`.
+**Gating:** path-based via `e2e/select-specs.js`. Triggers when something contributor-relevant changed: `admin/**`, `_layouts/{post,page,project,canary,default,preview}.html`, `_e2e/**`, `scripts/patch-preview-config.sh`, `.github/workflows/{cms,deploy}-*.yml`, `e2e/{cms,decap-pat,github-actions-poll,canary-content}.*`. Self-skips when `CMS_E2E_PAT` isn't set (so forks/Dependabot don't run it). Runs once on `chromium-desktop-3k`.
 
 **Branch-protection ruleset:** `cms-feature-branches` (id 15756474, see `.github/rulesets/cms-feature-branches.json`) requires `validate-content` on PRs into `cms/**`, `claude/**`, `feat/**`, `fix/**`, `chore/**`, `test/**`, `ci/**`, `docs/**`. Without this required check, GitHub's mergeable_state goes "unstable" the moment the auto-merge job's own pending state is queued — which is exactly what bit PR #78 and motivated issue #79.
 
@@ -600,7 +600,7 @@ Located at `/admin/reviews/` (separate from Decap CMS). Linked from a floating b
    - `all` — fanout files changed (`_layouts/`, `_includes/`, `_config.yml`, `assets/css/`, `_plugins/`, `package*.json`, `Gemfile*`, `e2e/base.js`, `playwright*.config.js`). Run the full matrix.
    - `subset` — match each changed file against `SPEC_RULES` and run only the resulting list (always-run baseline included).
    - `skip` — only docs (`README.md`, `AGENTS.md`, `docs/`, `.agents/skills/`) changed. Run the always-run baseline only as a smoke check.
-4. **`parity`** — `--grep @parity` subset against `TARGET=prod`, single project (`chromium-desktop`), same Playwright container. Non-blocking informational gate.
+4. **`parity`** (`.github/workflows/parity-preview.yml`) — runs the @parity-preview spec subset (sitemap, console-clean, draft-isolation, image-alt-text, admin-bundle-parity) against `TARGET=preview` on the PR's own preview-pr<N>.adamdaniel.ai surface, with per-spec path-applicability via `selectParityPreviewSpecs()`. Polls preview reachability with a 20-min bound (`needs:` deploy-preview can't cross workflows). Non-blocking informational gate. Replaced the prior `parity` job in e2e-tests.yml that ran against prod.
 5. **`finalize`** — merges per-shard blob reports into a single HTML report, assembles the per-test screenshot videos (see below), uploads the `playwright-report`, `per-test-videos`, and per-shard log artifacts, and posts the failure-summary PR comment.
 
 **Dynamic shard count.** `e2e/select-specs.js` returns a `shard_count` field in its envelope (1, 2, 3, or 4). Small subsets — `≤2` light browser specs — collapse to a single shard; mid-sized subsets to 2; the rest fan out to 4. The required check is `e2e (1)`, and the matrix array is built `[1..shard_count]`, so shard 1 always fires.
@@ -689,7 +689,7 @@ The matrix is split into a **public-page lane** (8 projects, full browser × vie
 
 | Project | Browser | Viewport | Special |
 |---|---|---|---|
-| `chromium-desktop` | Chromium | 1920×1080 | — |
+| `chromium-desktop-1080` | Chromium | 1920×1080 | — |
 | `chromium-laptop` | Chromium | 1366×768 | — |
 | `chromium-mobile` | Chromium | 375×667 | — |
 | `firefox-desktop` | Firefox | 1920×1080 | — |

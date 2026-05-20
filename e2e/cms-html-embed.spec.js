@@ -72,7 +72,7 @@ test.describe("HTML Embed renders as HTML on the live post", () => {
 
   test.beforeEach(({ page }, testInfo) => {
     test.skip(
-      testInfo.project.name !== "chromium-desktop",
+      testInfo.project.name !== "chromium-desktop-1080",
       "Single project — local backend mutates the working tree.",
     );
     page.on("pageerror", (err) =>

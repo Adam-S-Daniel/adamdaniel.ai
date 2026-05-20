@@ -1,7 +1,7 @@
 // @lane: local — walks _site/sitemap.xml from the local Jekyll build; @parity-eligible
 const fs = require("node:fs");
 const path = require("node:path");
-const { test, expect } = require("./base");
+const { test, expect, TARGET } = require("./base");
 
 // Plan unit B2 — Image alt-text audit (`@parity`).
 //
@@ -24,7 +24,7 @@ const { test, expect } = require("./base");
 // ships, this spec runs against `localhost:4000` only — exactly the same
 // surface the rest of the suite exercises today.
 //
-// Project gating: chromium-desktop only. The audit is a static-content
+// Project gating: chromium-desktop-1080 only. The audit is a static-content
 // contract — running it across the full browser/viewport matrix would
 // multiply runtime by ~8× without finding additional bugs (the same DOM
 // is served regardless of viewport).
@@ -82,19 +82,30 @@ function toLocalPath(absoluteUrl) {
   }
 }
 
-function shouldSkip(urlPath) {
+// Dev-only admin shells. jekyll-sitemap picks them up from `_site/` but
+// deploy-{production,preview}.yml drop them from the S3 sync (`--exclude`,
+// see those workflows). On TARGET=preview / prod these URLs 404 — that's
+// a sitemap-vs-deploy discrepancy, not an alt-text problem, so skip them
+// here. Audited on `local` where they DO render.
+const ADMIN_DEV_SHELLS = new Set([
+  "/admin/index-local.html",
+  "/admin/index-test.html",
+]);
+
+function shouldSkip(urlPath, target) {
   // `/preview/` is the in-CMS WYSIWYG preview shell — its `<img>` content
   // is injected at runtime via postMessage, so a static crawl audits an
   // empty layout. Covered separately by preview-bridge.spec.js.
   if (urlPath.startsWith("/preview/")) return true;
   if (URL_ALLOWLIST.has(urlPath)) return true;
+  if (target !== "local" && ADMIN_DEV_SHELLS.has(urlPath)) return true;
   return false;
 }
 
 test.describe(
   "@parity image alt-text audit",
   // Tagged @admin-read: drives /admin/* but is read-only (DOM contract,
-  // mocked APIs, byte parity, etc.). Runs on chromium-desktop-3k +
+  // mocked APIs, byte parity, etc.). Runs on chromium-desktop-1080-3k +
   // webkit-iphone16. See playwright.config.js.
   { tag: ["@admin-read"] },
   () => {
@@ -111,7 +122,7 @@ test.describe(
       "sitemap.xml should advertise at least one URL",
     ).toBeGreaterThan(0);
 
-    const urls = allUrls.filter((u) => !shouldSkip(u));
+    const urls = allUrls.filter((u) => !shouldSkip(u, TARGET));
 
     // Accumulate every violation across every page rather than failing
     // on the first one — gives the editor a complete picture in CI logs

@@ -54,7 +54,7 @@
  *      Save, cms PR → cms/ready, wait for /tags/<slug>/ to serve 200.
  *   2. Delete the entry via the Decap UI, wait for /tags/<slug>/ 404.
  *
- * Gating: CMS_E2E_PAT + PR_NUMBER + PR_HEAD_REF; chromium-desktop only.
+ * Gating: CMS_E2E_PAT + PR_NUMBER + PR_HEAD_REF; chromium-desktop-3k only.
  */
 const { test, expect } = require("./base");
 const { seedDecapAuth, getPat, HOST_REPO } = require("./decap-pat");

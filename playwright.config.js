@@ -117,7 +117,18 @@ module.exports = defineConfig({
     },
   },
   reporter: process.env.CI
-    ? [["html", { open: "never" }], ["list"]]
+    ? [
+        ["html", { open: "never" }],
+        ["list"],
+        // Live failure stream — posts a marker-tagged comment per
+        // terminal failure (final retry only) so agents watching the
+        // PR see signal before the whole job ends. No-ops outside CI
+        // and when GITHUB_TOKEN / PR_NUMBER aren't exposed; opt in by
+        // adding `GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}` and
+        // `PR_NUMBER: ${{ github.event.pull_request.number }}` to a
+        // job's env. See e2e/live-failures-reporter.js.
+        ["./e2e/live-failures-reporter.js"],
+      ]
     : [["list"]],
   projects: [
     // ── Public-page lane (7 projects) ─────────────────────────────
@@ -127,7 +138,11 @@ module.exports = defineConfig({
     // via grepInvert so admin specs only run on the dedicated admin
     // projects below.
     {
-      name: "chromium-desktop",
+      // Public-lane Chromium project (viewport DESKTOP = 1920×1080). The
+      // "-1080" suffix mirrors "chromium-desktop-3k" (admin-lane, 3K) so
+      // the project name encodes the viewport — historical "chromium-
+      // desktop" left the resolution implicit.
+      name: "chromium-desktop-1080",
       use: { browserName: "chromium", viewport: DESKTOP },
       grepInvert: ADMIN_TAGS_ALL,
     },

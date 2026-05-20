@@ -8,13 +8,13 @@ const { captureStep } = require("./manual-capture");
 // draft content via postMessage; this spec asserts the shell's contract
 // directly without booting Decap, so it stays fast and hermetic.
 //
-// Tests are gated to chromium-desktop because the contract is DOM-level,
+// Tests are gated to chromium-desktop-3k because the contract is DOM-level,
 // not visual — the cross-browser matrix is covered by visual-regression.
 
 test.describe(
   "Live preview shell at /preview/",
   // Tagged @admin-read: drives /admin/* but is read-only (DOM contract,
-  // mocked APIs, byte parity, etc.). Runs on chromium-desktop-3k +
+  // mocked APIs, byte parity, etc.). Runs on chromium-desktop-3k-3k +
   // webkit-iphone16. See playwright.config.js.
   { tag: ["@admin-read"] },
   () => {

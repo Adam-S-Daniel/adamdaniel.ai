@@ -4,7 +4,6 @@ _site_demo/
 .jekyll-cache/
 .jekyll-metadata
 vendor/
-Gemfile.lock
 *.gem
 .bundle/
 node_modules/

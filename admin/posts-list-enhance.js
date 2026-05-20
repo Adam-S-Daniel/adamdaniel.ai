@@ -437,6 +437,16 @@
     return null;
   }
 
+  // Cache the last-rendered bar HTML and only rewrite when changed.
+  // Without this guard the document.body MutationObserver fires on every
+  // `bar.innerHTML = …` write, schedules another augment(), which writes
+  // identical HTML again — a self-sustaining ~60 Hz re-parse loop that
+  // detaches the checkbox / Refresh button mid-tap on iOS Safari so the
+  // synthesized click lands on a disconnected element (issue: posts
+  // list looked read-only — taps did nothing). Same pattern decorate()
+  // below and live-url-banner.js use.
+  var lastBarHTML = null;
+
   function ensureBar(cards, fixtureCount) {
     var ul = listUl(cards);
     if (!ul || !ul.parentNode) return;
@@ -445,6 +455,7 @@
       bar = document.createElement("div");
       bar.id = "cms-ple-bar";
       ul.parentNode.insertBefore(bar, ul);
+      lastBarHTML = null;
     } else if (bar.nextElementSibling !== ul && bar.parentNode === ul.parentNode) {
       ul.parentNode.insertBefore(bar, ul);
     }
@@ -461,7 +472,7 @@
             '" target="_blank" rel="noopener">run ↗</a>'
           : "")
       : '<span style="color:#8c959f">sign in for deploy / PR data</span>';
-    bar.innerHTML =
+    var nextHTML =
       '<strong style="color:#24292f">Posts</strong>' +
       '<label title="The E2E canary fixtures are hidden by default. ' +
       'Specs that need them navigate by direct URL.">' +
@@ -473,6 +484,10 @@
       '<button type="button" id="cms-ple-refresh" title="Re-fetch ' +
       'last-edited / PR / deploy data">↻ Refresh</button>' +
       '<span id="cms-ple-deploy">' + deployHtml + "</span>";
+    if (nextHTML !== lastBarHTML) {
+      bar.innerHTML = nextHTML;
+      lastBarHTML = nextHTML;
+    }
 
     var cb = bar.querySelector("#cms-ple-show-fixtures");
     if (cb && !cb.__wired) {
@@ -495,6 +510,10 @@
           .then(function () {
             rb.disabled = false;
             rb.textContent = "↻ Refresh";
+            // Invalidate the bar cache so the next augment() repaints
+            // the deploy/PR spans with the freshly-fetched data even if
+            // the rest of the HTML hash happens to match.
+            lastBarHTML = null;
             scheduleAugment();
           });
       });
@@ -680,8 +699,32 @@
     scheduleAugment();
   }
 
+  // Synchronous fixture-reorder pre-pass: runs inside the
+  // MutationObserver callback BEFORE the rAF-debounced full augment.
+  // Without this, Decap's React renders the entries list, our
+  // scheduleAugment queues an rAF, and there's a ~16 ms window where
+  // a fixture `<li>` sits at the head of the list — long enough for
+  // an e2e spec doing `a[href*="…/entries/"]`.first().click() to
+  // resolve to (and try to click) a CSS-hidden fixture anchor. The
+  // reorder is idempotent — `c.li !== ul.lastElementChild` short-
+  // circuits, so an already-correct order produces no DOM mutation
+  // and no observer re-fire. Full augment (decorate, ensureBar) keeps
+  // its rAF debounce.
+  function syncFixtureReorder() {
+    if (!isPostsListRoute()) return;
+    var cards = collectCards();
+    if (cards.length) reorderFixturesLast(cards);
+  }
+
   window.addEventListener("hashchange", onRoute);
-  new MutationObserver(scheduleAugment).observe(document.body, {
+  new MutationObserver(function () {
+    try {
+      syncFixtureReorder();
+    } catch (e) {
+      /* swallow — never let our hook block Decap's own updates */
+    }
+    scheduleAugment();
+  }).observe(document.body, {
     childList: true,
     subtree: true,
   });

@@ -1,0 +1,206 @@
+name: CI Runner Image
+
+# Builds and pushes the `ghcr.io/adam-s-daniel/adamdaniel.ai/ci-runner`
+# image consumed by every Playwright-running workflow as their `container:
+# image:`. The image pre-bakes the apt deps, Ruby + Gemfile.lock gems,
+# Node + npm cache, and the gitleaks binary that each job would otherwise
+# install from scratch (≈90–180 s per job → ≈15–30 runner-minutes per PR
+# across the ~10 Playwright jobs).
+#
+# Tag scheme:
+#   - `:<lockhash>` — content-addressed tag derived from sha256(Dockerfile
+#     + Gemfile.lock + package-lock.json). Consumers reference THIS tag,
+#     so a workflow run always pulls the image that matches the source
+#     tree at that commit. Re-pushes are no-ops once the hash exists.
+#   - `:latest` — moves with every push-to-main build. Used by consumers
+#     as a fallback when the lockhash tag isn't yet in the registry
+#     (e.g. a PR that bumps Gemfile.lock — the main-side build is what
+#     populates the new hash; the PR's first CI run also builds it here).
+#
+# Trigger model:
+#   - `pull_request` on changes to the Dockerfile / Gemfile.lock /
+#     package-lock.json / this workflow → builds the new hash for the
+#     PR's commit. Consumer workflows in the same PR push the same
+#     lockhash, so once this job completes they can pull it.
+#   - `push` to `main` on the same paths → builds the hash AND updates
+#     `:latest`. Other branches use the existing `:latest` on a cache
+#     miss.
+#   - `workflow_dispatch` — manual rebuild (e.g. after a base-image CVE
+#     advisory) with no source-tree change.
+#
+# Visibility: pushes to GHCR linked to this repo via the OCI
+# `org.opencontainers.image.source` label in the Dockerfile + the
+# `--label` on the build step. With the linked-source label set, GHCR
+# auto-inherits the source repo's PUBLIC visibility on the first push,
+# so storage + transfer are free (the GitHub Free 500 MB / 1 GB limits
+# apply only to private packages). The first push from a NEW package
+# may still default to private — flip via Settings → Packages →
+# ci-runner → Change visibility → Public, once.
+#
+# Concurrency: at most one build per lockhash. A second PR push with
+# the same lockfiles is a cache-only no-op; a different lockhash builds
+# independently.
+
+on:
+  # Consumed by every Playwright-running workflow via `uses:
+  # ./.github/workflows/ci-runner-image.yml`. `workflow_call` does NOT
+  # honour the `paths:` filter on the parallel `pull_request:` /
+  # `push:` triggers — every consumer invocation runs this workflow,
+  # but the in-job "Check if image already exists" step makes a
+  # cache hit a fast no-op manifest probe (~5-10 s) so we still pay
+  # the full apt/ruby/npm rebuild only on a real lockhash miss.
+  workflow_call:
+    outputs:
+      tag:
+        description: "Lockhash tag for the built image (sha256(Dockerfile + Gemfile.lock + package-lock.json) truncated to 16 chars)."
+        value: ${{ jobs.build.outputs.tag }}
+      repo_lc:
+        description: "Lowercase GHCR repo path (github.repository tr '[:upper:]' '[:lower:]')."
+        value: ${{ jobs.build.outputs.repo_lc }}
+      image:
+        description: "Fully-qualified ghcr.io image reference: ghcr.io/<repo_lc>/ci-runner:<tag>. Consumer workflows use this directly as their `container.image:`."
+        value: ${{ jobs.build.outputs.image }}
+  pull_request:
+    branches: [main]
+    # Both lockfiles are tracked, so the trigger inputs and the image
+    # tag pin against the resolved-gem set (Gemfile.lock) and the
+    # resolved-npm set (package-lock.json). A lockfile bump rebuilds;
+    # working-tree edits that don't change the lockfiles never rebuild.
+    paths:
+      - '.github/ci-runner/Dockerfile'
+      - '.github/workflows/ci-runner-image.yml'
+      - 'Gemfile'
+      - 'Gemfile.lock'
+      - 'package.json'
+      - 'package-lock.json'
+  push:
+    branches: [main]
+    paths:
+      - '.github/ci-runner/Dockerfile'
+      - '.github/workflows/ci-runner-image.yml'
+      - 'Gemfile'
+      - 'Gemfile.lock'
+      - 'package.json'
+      - 'package-lock.json'
+  workflow_dispatch:
+
+permissions:
+  contents: read
+  # GHCR push.
+  packages: write
+
+concurrency:
+  # One build per (event, ref, lockhash) — same content collapses to a
+  # single in-flight job. Different PR pushes with different lockfiles
+  # run independently.
+  group: ci-runner-image-${{ github.event_name }}-${{ github.ref }}
+  cancel-in-progress: false
+
+defaults:
+  run:
+    shell: bash
+
+jobs:
+  build:
+    runs-on: ubuntu-latest
+    # Job-level outputs surface the step outputs for callers via
+    # `needs.build.outputs.<name>`. Consumer workflows that `uses:`
+    # this file as a reusable workflow read `outputs.image` and feed
+    # it straight into `container: image:` on their Playwright jobs.
+    outputs:
+      tag: ${{ steps.tag.outputs.tag }}
+      repo_lc: ${{ steps.tag.outputs.repo_lc }}
+      image: ${{ steps.tag.outputs.image }}
+    steps:
+      - name: Checkout
+        uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd  # v6.0.2 (2026-01-09)
+
+      - name: Compute lockhash tag and lowercase image path
+        id: tag
+        # SHA-256 of the Dockerfile + Gemfile.lock + package-lock.json
+        # → short (16-char) tag. Same inputs → same tag; reused on
+        # cache hit. Both lockfiles are tracked.
+        #
+        # Also emit `repo_lc` — `github.repository` lowercased. OCI
+        # registries (GHCR included) reject uppercase in image paths, and
+        # this repo's owner ("Adam-S-Daniel") has mixed case. Done in
+        # bash because the `${{ }}` template engine has no lowercase
+        # filter; downstream steps interpolate `steps.tag.outputs.repo_lc`
+        # everywhere they'd otherwise use `github.repository`.
+        #
+        # `image` is the fully-qualified ghcr.io ref consumer workflows
+        # paste into `container: image:`. Emitting it here (rather than
+        # making every caller re-assemble it from tag + repo_lc) keeps
+        # the wire contract narrow — one output, not three.
+        run: |
+          h=$(cat .github/ci-runner/Dockerfile Gemfile.lock package-lock.json | sha256sum | cut -c1-16)
+          repo_lc=$(echo "${{ github.repository }}" | tr '[:upper:]' '[:lower:]')
+          echo "tag=${h}" >> "$GITHUB_OUTPUT"
+          echo "repo_lc=${repo_lc}" >> "$GITHUB_OUTPUT"
+          echo "image=ghcr.io/${repo_lc}/ci-runner:${h}" >> "$GITHUB_OUTPUT"
+          echo "lockhash tag: ${h}"
+          echo "lowercase repo:  ${repo_lc}"
+          echo "image:           ghcr.io/${repo_lc}/ci-runner:${h}"
+
+      - name: Set up Docker Buildx
+        uses: docker/setup-buildx-action@e468171a9de216ec08956ac3ada2f0791b6bd435  # v3.11.1 (2025-06-26)
+
+      - name: Log in to GHCR
+        uses: docker/login-action@184bdaa0721073962dff0199f1fb9940f07167d1  # v3.5.0 (2025-07-25)
+        with:
+          registry: ghcr.io
+          username: ${{ github.actor }}
+          password: ${{ secrets.GITHUB_TOKEN }}
+
+      - name: Check if image already exists
+        id: check
+        # If the lockhash tag is already in the registry, skip the
+        # build entirely — a no-op push. We still re-tag `:latest` on
+        # `main` so the floating tag stays current even when the
+        # lockfiles haven't changed.
+        env:
+          IMAGE: ghcr.io/${{ steps.tag.outputs.repo_lc }}/ci-runner:${{ steps.tag.outputs.tag }}
+        run: |
+          set -uo pipefail
+          if docker manifest inspect "$IMAGE" >/dev/null 2>&1; then
+            echo "exists=true" >> "$GITHUB_OUTPUT"
+            echo "Image $IMAGE already present in registry — skipping build."
+          else
+            echo "exists=false" >> "$GITHUB_OUTPUT"
+            echo "Image $IMAGE not in registry — will build."
+          fi
+
+      - name: Build and push (lockhash + latest on main)
+        if: ${{ steps.check.outputs.exists != 'true' || (github.event_name == 'push' && github.ref == 'refs/heads/main') }}
+        uses: docker/build-push-action@263435318d21b8e681c14492fe198d362a7d2c83  # v6.18.0 (2025-06-04)
+        with:
+          context: .
+          file: .github/ci-runner/Dockerfile
+          push: true
+          # Always tag the lockhash. `:latest` only moves on main pushes
+          # — PR builds populate the lockhash so the same PR's consumer
+          # jobs can pull it, without claiming the canonical floating
+          # tag. Uses the lowercased repo path because OCI registries
+          # reject uppercase in image names (this repo's owner has
+          # mixed case).
+          tags: |
+            ghcr.io/${{ steps.tag.outputs.repo_lc }}/ci-runner:${{ steps.tag.outputs.tag }}
+            ${{ (github.event_name == 'push' && github.ref == 'refs/heads/main') && format('ghcr.io/{0}/ci-runner:latest', steps.tag.outputs.repo_lc) || '' }}
+          # OCI labels — redundant with the Dockerfile LABELs but emit
+          # them on the manifest too. `image.source` is what links the
+          # package to the repo for GHCR visibility-inheritance — uses
+          # the ORIGINAL case here because https://github.com/<owner>/
+          # <repo> URLs are case-sensitive and the link must match the
+          # canonical repo URL.
+          labels: |
+            org.opencontainers.image.source=https://github.com/${{ github.repository }}
+            org.opencontainers.image.revision=${{ github.sha }}
+            org.opencontainers.image.created=${{ github.event.head_commit.timestamp || github.event.pull_request.updated_at }}
+            org.opencontainers.image.description=CI runner image for adamdaniel.ai
+          # BuildKit layer cache via the registry — pulls existing
+          # layers (apt, ruby-full, bundle install, npm ci, gitleaks)
+          # so a Dockerfile-only edit or a single-lockfile bump rebuilds
+          # only the affected layers.
+          cache-from: type=registry,ref=ghcr.io/${{ steps.tag.outputs.repo_lc }}/ci-runner:buildcache
+          cache-to: type=registry,ref=ghcr.io/${{ steps.tag.outputs.repo_lc }}/ci-runner:buildcache,mode=max
+          provenance: false

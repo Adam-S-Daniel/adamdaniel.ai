@@ -42,8 +42,22 @@ function resolveTargetBaseURL() {
 }
 
 function resolvePreviewBaseURL() {
-  // Discover the latest open PR via the GitHub API and construct its preview
-  // subdomain. Throws with a clear message if no open PR exists.
+  // Fast path: when the workflow already knows the PR number (CI sets
+  // PR_NUMBER / GITHUB_PR_NUMBER from `github.event.pull_request.number`),
+  // skip the `gh` round-trip. Used by .github/workflows/parity-preview.yml
+  // and any other workflow that runs TARGET=preview against the PR it
+  // already has the number for.
+  const explicit = process.env.PR_NUMBER || process.env.GITHUB_PR_NUMBER;
+  if (explicit) {
+    if (!/^\d+$/.test(String(explicit))) {
+      throw new Error(
+        `TARGET=preview: PR_NUMBER="${explicit}" is not a positive integer.`,
+      );
+    }
+    return `https://preview-pr${explicit}.adamdaniel.ai`;
+  }
+  // Otherwise discover the latest open PR via the GitHub API and construct
+  // its preview subdomain. Throws with a clear message if no open PR exists.
   let raw;
   try {
     raw = execFileSync(
