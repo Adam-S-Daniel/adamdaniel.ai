@@ -94,7 +94,43 @@ RUN npm config set cache /opt/npm-cache --global \
     && npm ci --prefer-offline --no-audit --no-fund \
     && rm -rf /root/.npm
 
-ENV NODE_PATH=/app/node_modules
+# Node module resolution from a spec under $GITHUB_WORKSPACE walks
+# up looking for a `node_modules` dir at each ancestor. The workspace
+# bind mount masks the image's pre-baked /app/node_modules from that
+# walk (workspace is at /__w/<repo>/<repo>; image filesystem under
+# /__w is hidden by GHA's volume mount). Earlier attempt: NODE_PATH=
+# /app/node_modules — but Playwright's transform-module loader treats
+# NODE_PATH-resolved @playwright/test as a DIFFERENT instance from
+# the CLI's directly-resolved copy, producing
+# `Error: Playwright Test did not expect test.describe() … two
+# different versions of @playwright/test` on every spec.
+#
+# Fix: have every `bash` invocation in the container source a tiny
+# init script that creates an idempotent symlink at
+# `$GITHUB_WORKSPACE/node_modules` → `/app/node_modules`. Node's
+# default symlink resolution (`preserveSymlinks=false`) canonicalises
+# the symlink target, so both the spec's `require("@playwright/test")`
+# (walks up from /__w/<repo>/<repo>/e2e → finds /__w/<repo>/<repo>/
+# node_modules → resolves to /app/node_modules/@playwright/test) and
+# the CLI's load (from /app/node_modules/playwright → /app/node_modules
+# /@playwright/test) cache by the same absolute path → same module
+# instance.
+#
+# BASH_ENV is honoured by `bash --noprofile --norc -c …` (GHA's
+# default shell), even though those flags suppress profile/.bashrc.
+# Idempotent: the second `bash` invocation in the same container
+# (every step is a separate `docker exec` from GHA's perspective)
+# sees the symlink already in place and the script is a no-op.
+RUN mkdir -p /etc/ci-runner \
+    && printf '%s\n' \
+        '# Auto-sourced via BASH_ENV in /etc/ci-runner/Dockerfile.' \
+        'if [ -n "${GITHUB_WORKSPACE:-}" ] && [ ! -e "${GITHUB_WORKSPACE}/node_modules" ]; then' \
+        '  ln -sf /app/node_modules "${GITHUB_WORKSPACE}/node_modules" 2>/dev/null || true' \
+        'fi' \
+        > /etc/ci-runner/bash-init.sh \
+    && chmod 0755 /etc/ci-runner/bash-init.sh
+
+ENV BASH_ENV=/etc/ci-runner/bash-init.sh
 ENV PATH=/app/node_modules/.bin:${PATH}
 
 # gitleaks — pinned to the version `.github/workflows/secrets-scan.yml`
