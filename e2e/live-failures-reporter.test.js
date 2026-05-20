@@ -118,19 +118,22 @@ test.describe("LiveFailuresReporter gating", () => {
     expect(reporter.enabled).toBe(false);
   });
 
-  test("ignores non-final retry attempts", async () => {
+  test("posts on every failed attempt — both retry=0 and retry=1 fire", async () => {
     const reporter = loadReporter({
       GITHUB_TOKEN: "ghs_FAKE",
       PR_NUMBER: "1209",
       GITHUB_REPOSITORY: "Adam-S-Daniel/adamdaniel.ai",
       GITHUB_RUN_ID: "12345",
     });
-    // retries=1, retry=0 → one more attempt coming → must not post
+    // Agents want signal on the first failure, not after Playwright's
+    // retry layer finishes. Each attempt gets its own marker (the
+    // marker template embeds result.retry) so a retry=0 failure
+    // followed by a retry=1 failure lands as two separate comments.
     await reporter.onTestEnd(
       fakeTest({ retries: 1 }),
       fakeResult({ retry: 0 }),
     );
-    expect(fetchCalls).toEqual([]);
+    expect(fetchCalls.some((c) => c.method === "POST")).toBe(true);
   });
 
   test("ignores passing tests", async () => {

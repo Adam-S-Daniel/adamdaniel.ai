@@ -154,29 +154,51 @@ class LiveFailuresReporter {
     if (!this.enabled) return;
     const failed = result.status === "failed" || result.status === "timedOut";
     if (!failed) return;
-    // Final attempt only — let Playwright's retry layer absorb flakes
-    // before we notify. `test.retries` is the configured retry count;
-    // `result.retry` is 0 for the first attempt, 1 for retry #1, etc.
-    if (result.retry !== test.retries) return;
+    // Post on EVERY failure attempt — agents want signal the moment a
+    // test fails, not after Playwright's retry layer has decided
+    // whether the suite stays red. The marker below includes
+    // `result.retry`, so retry=0 and retry=1 land as separate
+    // comments rather than collapsing. A flaky test that passes on
+    // retry will leave a single "failed" comment for retry=0;
+    // reading agents can compare against the green run summary to
+    // judge whether the failure is terminal.
 
     const fullTitle = test.titlePath().filter(Boolean).join(" › ");
     const file = test.location && test.location.file
       ? path.relative(process.cwd(), test.location.file).replace(/\\/g, "/")
       : "";
     const line = test.location ? `${test.location.line}:${test.location.column}` : "";
+    const isFinal = result.retry === test.retries;
+    const attemptLabel = test.retries > 0
+      ? ` (attempt ${result.retry + 1} of ${test.retries + 1}${isFinal ? ", final" : ""})`
+      : "";
+    // Stderr log so the workflow log shows whether the reporter
+    // fired at all. Stays out of stdout / the `list` reporter's
+    // formatted output.
+    process.stderr.write(
+      `[live-failures-reporter] ${fullTitle}${attemptLabel} — posting…\n`,
+    );
     // Unique marker — survives reporter retries and parallel shards.
     const testId = test.id || `${file}:${fullTitle}`.replace(/[^A-Za-z0-9_:./-]/g, "_");
     const marker = `<!-- live-failure:${this.runId}:${testId}:${result.retry} -->`;
 
     // Skip if a prior shard / retry already posted the same failure.
-    if (await this.commentExists(marker)) return;
+    if (await this.commentExists(marker)) {
+      process.stderr.write(
+        `[live-failures-reporter] ${fullTitle} — duplicate marker, skipped.\n`,
+      );
+      return;
+    }
 
     const errMsg = (result.error && (result.error.message || result.error.value)) || "(no error message)";
     const scrubbed = scrubSync(String(errMsg));
     const project = (test.parent && test.parent.project && test.parent.project()?.name) || "";
+    const attemptHeader = test.retries > 0
+      ? `❌ live failure on \`${this.sha.slice(0, 7)}\` — attempt ${result.retry + 1}/${test.retries + 1}${isFinal ? " (final)" : ""}`
+      : `❌ live failure on \`${this.sha.slice(0, 7)}\``;
 
     const lines = [
-      `## ❌ live failure on \`${this.sha.slice(0, 7)}\``,
+      `## ${attemptHeader}`,
       "",
       `**${fullTitle}**`,
       "",
@@ -192,7 +214,16 @@ class LiveFailuresReporter {
     ].filter(Boolean);
 
     const ok = await this.postComment(marker, lines.join("\n"));
-    if (ok) this.posted++;
+    if (ok) {
+      this.posted++;
+      process.stderr.write(
+        `[live-failures-reporter] ${fullTitle} — posted.\n`,
+      );
+    } else {
+      process.stderr.write(
+        `[live-failures-reporter] ${fullTitle} — POST failed (token / permission?).\n`,
+      );
+    }
   }
 
   async onEnd() {
