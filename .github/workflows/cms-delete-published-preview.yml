@@ -68,12 +68,10 @@ defaults:
     shell: bash
 
 jobs:
-  # TEMPORARILY DISABLED 2026-05-21: an external dispatcher was firing this
-  # workflow every ~2 minutes against PR #1228, racking up 296 canary PRs in
-  # 18h and burning CI. Remove `if: ${{ false }}` once the dispatcher is
-  # found and stopped. See the PR that introduced this guard.
+  # Build (or cache-hit) the prebaked ci-runner image used as
+  # `container.image:` by the preview-delete job below. See
+  # e2e-tests.yml for the full rationale.
   build-image:
-    if: ${{ false }}
     uses: ./.github/workflows/ci-runner-image.yml
     secrets: inherit
     permissions:
@@ -81,7 +79,6 @@ jobs:
       packages: write
 
   preview-delete:
-    if: ${{ false }}
     needs: build-image
     runs-on: ubuntu-latest
     env:
