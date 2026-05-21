@@ -1,4 +1,4 @@
-const { defineConfig } = require("@playwright/test");
+const { defineConfig, devices } = require("@playwright/test");
 
 const DESKTOP = { width: 1920, height: 1080 };
 const LAPTOP = { width: 1366, height: 768 };
@@ -201,11 +201,22 @@ module.exports = defineConfig({
     {
       name: "webkit-iphone16",
       use: {
-        browserName: "webkit",
+        // `devices['iPhone 14']` (the closest current device preset
+        // to iPhone 16; Playwright hasn't shipped an iPhone-16 entry
+        // yet) supplies a real iOS Safari user-agent
+        // (`...iPhone OS 16_x...AppleWebKit/...Mobile/15E148 Safari/604.1`)
+        // alongside browserName: 'webkit', isMobile: true, hasTouch:
+        // true, and the device viewport. The UA is what makes
+        // admin/ios-safari-idb-workaround.js's `isIOSSafari()` check
+        // pass — without it the webkit project looks like desktop
+        // Safari and the workaround would never activate under test.
+        ...devices["iPhone 14"],
+        // Override the device viewport with our pinned IPHONE_16
+        // dimensions (393×852) — same logical size as iPhone 14 but
+        // we keep the constant explicit so a future Playwright preset
+        // update doesn't silently change the viewport our screenshots
+        // baseline against.
         viewport: IPHONE_16,
-        deviceScaleFactor: 3,
-        isMobile: true,
-        hasTouch: true,
       },
       // Read-only admin specs only — writes (cms/* PR creation, FS
       // mutations) and screenshot-deterministic specs run on
