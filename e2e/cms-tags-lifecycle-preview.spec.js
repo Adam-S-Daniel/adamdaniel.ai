@@ -73,7 +73,12 @@ const {
   pillId: PILL_PREVIEW,
   prNumber: PR_NUMBER,
 } = previewTarget();
-const PR_HEAD_REF = process.env.PR_HEAD_REF || process.env.GITHUB_HEAD_REF || "";
+// No GITHUB_HEAD_REF fallback — see cms-delete-published-preview.spec.js
+// for the loop it caused. PR_HEAD_REF is set only by the dedicated
+// preview workflow; falling back to the auto-populated GITHUB_HEAD_REF
+// let this @admin-write spec run (and mutate the PR head branch) inside
+// e2e-tests.yml's e2e-admin lane on every pull_request event.
+const PR_HEAD_REF = process.env.PR_HEAD_REF || "";
 
 // Run-unique slug + name avoid races with concurrent runs and stale
 // /tags/<slug>/ pages from prior crashed runs. Distinct prefix from
