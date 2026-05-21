@@ -72,10 +72,12 @@ defaults:
     shell: bash
 
 jobs:
-  # Build (or cache-hit) the prebaked ci-runner image used as
-  # `container.image:` by the preview-loop job below. See e2e-tests.yml
-  # for the full rationale.
+  # TEMPORARILY DISABLED 2026-05-21: companion disable to
+  # cms-delete-published-preview.yml. An external dispatcher was firing
+  # the preview-loop workflows against PR #1228 in a tight loop. Remove
+  # `if: ${{ false }}` once the dispatcher is found and stopped.
   build-image:
+    if: ${{ false }}
     uses: ./.github/workflows/ci-runner-image.yml
     secrets: inherit
     permissions:
@@ -83,6 +85,7 @@ jobs:
       packages: write
 
   preview-loop:
+    if: ${{ false }}
     needs: build-image
     runs-on: ubuntu-latest
     env:
