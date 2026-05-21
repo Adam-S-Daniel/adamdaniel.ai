@@ -125,11 +125,12 @@
 
   <!--
     iOS Safari IndexedDB workaround (PR #1228). Decap's localforage
-    cache silently hangs on iOS Safari's IndexedDB. Stub out
-    indexedDB.open so localforage falls back to localStorage. UA-
+    cache silently hangs on iOS Safari's IndexedDB. Remove
+    window.indexedDB entirely so localforage's driver-detection
+    sees IDB as unsupported and falls through to localStorage. UA-
     targeted at iOS Safari only. MUST load before decap-cms.js so
-    Decap's localforage initialises against the stubbed IDB. See
-    the file header for the full rationale.
+    Decap's localforage initialises against the IDB-less window.
+    See the file header for the full rationale.
   -->
   <script src="ios-safari-idb-workaround.js"></script>
 

@@ -10,10 +10,11 @@
 //
 //   1. UA detection: iPhone UA → workaround activates;
 //      desktop UA → workaround is a no-op.
-//   2. The indexedDB.open() stub returns a request that fires `error`
-//      (not `success`, not silently hung). This is the exact signal
-//      localforage's IDB driver listens for to fall through to its
-//      localStorage driver.
+//   2. `window.indexedDB` and the companion IDB globals are
+//      undefined after the workaround runs. localforage's
+//      `typeof indexedDB === 'undefined'` driver-detect check
+//      therefore returns false, so IDB is skipped entirely and
+//      localforage uses the localStorage driver from the start.
 //   3. The script is loaded BEFORE decap-cms.js (so the stub is in
 //      place when Decap initialises localforage).
 //   4. With the workaround active, Decap CMS still loads cleanly
@@ -75,7 +76,7 @@ test.describe(
       expect(state.active).toBe(isIphoneProject);
     });
 
-    test("on iPhone, indexedDB.open returns a request that fires `error`", async ({
+    test("on iPhone, window.indexedDB and IDB companion globals are undefined", async ({
       page,
     }, testInfo) => {
       test.skip(!/iphone/i.test(testInfo.project.name),
@@ -87,32 +88,18 @@ test.describe(
         { timeout: 10_000 },
       );
 
-      const outcome = await page.evaluate(
-        () =>
-          new Promise((resolve) => {
-            try {
-              const req = window.indexedDB.open("workaround-probe", 1);
-              const timer = setTimeout(() => resolve({ result: "hung-1500ms" }), 1500);
-              req.onerror = () => {
-                clearTimeout(timer);
-                resolve({
-                  result: "error",
-                  message: (req.error && req.error.message) || "",
-                  name: (req.error && req.error.name) || "",
-                });
-              };
-              req.onsuccess = () => {
-                clearTimeout(timer);
-                resolve({ result: "success" });
-              };
-            } catch (e) {
-              resolve({ result: "threw", message: e.message });
-            }
-          }),
-      );
+      const probes = await page.evaluate(() => ({
+        indexedDBType: typeof window.indexedDB,
+        idbKeyRangeType: typeof window.IDBKeyRange,
+        idbDatabaseType: typeof window.IDBDatabase,
+        // localforage's actual driver-detect check.
+        localforageWouldSkipIDB: typeof indexedDB === "undefined",
+      }));
 
-      expect(outcome.result).toBe("error");
-      expect(outcome.message).toMatch(/adamdaniel/);
+      expect(probes.indexedDBType).toBe("undefined");
+      expect(probes.idbKeyRangeType).toBe("undefined");
+      expect(probes.idbDatabaseType).toBe("undefined");
+      expect(probes.localforageWouldSkipIDB).toBe(true);
     });
 
     test("with workaround active, Decap still loads cleanly", async ({

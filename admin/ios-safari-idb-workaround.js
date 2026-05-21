@@ -22,9 +22,18 @@
  * driver. localforage's driver-selection happens at first
  * .getItem() call, so we have to make IDB look unavailable
  * BEFORE Decap's bundle initialises its localforage instance.
- * Defining `window.indexedDB.open` to immediately fire an error
- * on the returned request is enough — localforage catches the
- * error and falls back to the next driver.
+ *
+ * Earlier rev of this file stubbed `indexedDB.open()` to fire
+ * `error` on the request — localforage's open-failure path
+ * then falls through. But user testing (PR #1228 retest after
+ * editorial-workflow PR cleanup) showed that path still hangs:
+ * Decap re-renders fire fresh getItem()s on every state
+ * transition, and the IDB driver re-attempts open each time,
+ * piling up async timers that never converge. Now we
+ * `Object.defineProperty` `indexedDB` to undefined so
+ * localforage's `typeof indexedDB === 'undefined'` driver-
+ * detection check returns false at module init and IDB is
+ * skipped entirely — never even tried.
  *
  * Safe for our admin: no other admin script (preview-bridge,
  * posts-list-enhance, deploy-status-pill, etc.) uses IndexedDB
@@ -82,70 +91,50 @@
   if (!isIOSSafari()) return;
 
   try {
-    if (
-      typeof window.indexedDB === "undefined" ||
-      !window.indexedDB ||
-      typeof window.indexedDB.open !== "function"
-    ) {
+    if (typeof window.indexedDB === "undefined" || !window.indexedDB) {
       return;
     }
 
-    // Replace open() with a stub that returns a request-shaped
-    // object dispatching `error` on the next microtask. localforage
-    // listens for `error` and falls through to its WebSQL /
-    // localStorage drivers.
-    var origOpen = window.indexedDB.open;
-    var fakeError = new Error(
-      "IndexedDB disabled by adamdaniel.ai admin on iOS Safari (see " +
-        "admin/ios-safari-idb-workaround.js)",
-    );
-    fakeError.name = "UnknownError";
-
-    window.indexedDB.open = function () {
-      var req = {
-        result: null,
-        error: fakeError,
-        source: null,
-        transaction: null,
-        readyState: "pending",
-        onerror: null,
-        onsuccess: null,
-        onblocked: null,
-        onupgradeneeded: null,
-        _listeners: {},
-        addEventListener: function (type, fn) {
-          (this._listeners[type] = this._listeners[type] || []).push(fn);
-        },
-        removeEventListener: function (type, fn) {
-          var arr = this._listeners[type] || [];
-          var i = arr.indexOf(fn);
-          if (i >= 0) arr.splice(i, 1);
-        },
-        dispatchEvent: function () {
-          return true;
-        },
-      };
-      Promise.resolve().then(function () {
-        req.readyState = "done";
-        var ev = { type: "error", target: req, currentTarget: req };
+    // window.indexedDB is a getter on WindowOrWorkerGlobalScope's
+    // prototype in WebKit, so plain assignment won't take. Use
+    // defineProperty to install an own-property that shadows the
+    // prototype getter and resolves to `undefined`. Also blank out
+    // the companion IDB globals (IDBKeyRange, IDBDatabase, etc.)
+    // because some libraries probe those instead of `indexedDB`
+    // itself, and we want any IDB feature-detect to return false.
+    var idbGlobals = [
+      "indexedDB",
+      "IDBKeyRange",
+      "IDBDatabase",
+      "IDBTransaction",
+      "IDBObjectStore",
+      "IDBIndex",
+      "IDBCursor",
+      "IDBRequest",
+      "IDBOpenDBRequest",
+      "IDBVersionChangeEvent",
+      "IDBFactory",
+    ];
+    for (var i = 0; i < idbGlobals.length; i++) {
+      var key = idbGlobals[i];
+      try {
+        Object.defineProperty(window, key, {
+          value: undefined,
+          configurable: true,
+          writable: true,
+        });
+      } catch (_) {
+        // Fall back to plain assignment if defineProperty fails
+        // (e.g. if a non-configurable descriptor already exists).
         try {
-          if (typeof req.onerror === "function") req.onerror(ev);
-          (req._listeners.error || []).forEach(function (fn) {
-            try {
-              fn(ev);
-            } catch (_) {}
-          });
-        } catch (_) {}
-      });
-      return req;
-    };
+          window[key] = undefined;
+        } catch (__) {}
+      }
+    }
+
     // Mark on the global so the diagnostic banner can report
     // whether the workaround is active.
     window.__adamdaniel_ios_safari_idb_workaround_active = true;
-
-    // origOpen kept on the namespace in case some future debugging
-    // wants to re-enable IDB without a page reload.
-    window.__adamdaniel_ios_safari_idb_open_original = origOpen;
   } catch (_) {
     // If the override itself throws, leave IDB alone — better to
     // let Decap hit the hang than to break it harder.
