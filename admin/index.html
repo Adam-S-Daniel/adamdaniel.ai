@@ -124,6 +124,17 @@
   <script src="publish-via-auto-merge.js"></script>
 
   <!--
+    Diagnostic-only: detects the iOS Safari "Loading Entries…" hang
+    (PR #1228) and surfaces a banner with pending fetches, IDB
+    errors, console errors, and a Copy button. MUST load before
+    decap-cms.js so its fetch / IndexedDB wraps are in place before
+    Decap captures references. Zero-cost when the spinner doesn't
+    persist past 8s. Remove the script + this comment when the
+    hang is identified and fixed.
+  -->
+  <script src="diag-loadentries.js"></script>
+
+  <!--
     Decap CMS — pinned to an exact version. Editorial workflow + the
     GitHub backend with our custom OAuth proxy (`base_url` +
     `auth_endpoint` in admin/config.yml) drive the cms/<branch> →
