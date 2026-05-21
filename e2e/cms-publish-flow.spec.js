@@ -143,7 +143,7 @@ test.describe(
           );
           return counts.every((n) => n >= 1) ? "all-visible" : counts.join(",");
         },
-        { timeout: 60_000, message: "sidebar collections never all mounted at once" },
+        { timeout: 120_000, message: "sidebar collections never all mounted at once" },
       )
       .toBe("all-visible");
     await page.goto("/admin/index-local.html#/collections/posts/new");

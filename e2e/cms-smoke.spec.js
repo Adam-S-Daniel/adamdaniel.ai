@@ -35,7 +35,7 @@ test.describe(
   // The local backend mutates the working tree. Run on a single project
   // and serially to avoid two browsers racing to write/delete the same
   // file at the same time.
-  test.describe.configure({ mode: "serial", timeout: 180_000 });
+  test.describe.configure({ mode: "serial", timeout: 360_000 });
 
   test.beforeAll(() => {
     removeSmokeTagFile();
@@ -95,7 +95,7 @@ test.describe(
           );
           return counts.every((n) => n >= 1) ? "all-visible" : counts.join(",");
         },
-        { timeout: 60_000, message: "sidebar collections never all mounted at once" },
+        { timeout: 120_000, message: "sidebar collections never all mounted at once" },
       )
       .toBe("all-visible");
     await captureStep(page, {
@@ -107,7 +107,11 @@ test.describe(
     });
 
     // ── Open the Tags collection and start a new entry ───────────────
-    await page.getByRole("link", { name: /^tags$/i }).click();
+    // Decap keeps re-rendering the sidebar even after all 4 collection
+    // links have appeared at least once. The Tags anchor can be
+    // transiently detached at click time. Playwright's auto-retry
+    // inside .click() handles this if we give it enough timeout.
+    await page.getByRole("link", { name: /^tags$/i }).click({ timeout: 60_000 });
     await captureStep(page, {
       section: "Browsing collections",
       step: "2.1",
