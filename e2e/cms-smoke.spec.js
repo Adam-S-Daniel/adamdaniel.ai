@@ -78,16 +78,26 @@ test.describe(
     // Posts first, then Tags / Projects / Pages each a few hundred ms
     // later. At the chromium-desktop-3k viewport (3000×1500) the
     // sequential render is slow enough that the default 5 s
-    // toBeVisible() for the later three loses the race after Posts
-    // is visible. Gate on `Pages` (last in config order) with the
-    // same 30 s timeout — by then the earlier three are guaranteed
-    // visible and the per-collection checks are O(ms).
-    await expect(page.getByRole("link", { name: /^pages$/i })).toBeVisible({
-      timeout: 30_000,
-    });
-    await expect(page.getByRole("link", { name: /^posts$/i })).toBeVisible();
-    await expect(page.getByRole("link", { name: /^tags$/i })).toBeVisible();
-    await expect(page.getByRole("link", { name: /^projects$/i })).toBeVisible();
+    // toBeVisible() loses the race even after Posts is visible.
+    // Worse, Decap re-renders the sidebar shortly after the initial
+    // mount (React strict-mode double-render + initial state hydra-
+    // tion), briefly unmounting all collection links — so even the
+    // "Pages is last, so the others must be visible too" assumption
+    // is wrong on slow CI runners. `expect.poll` waits for ALL four
+    // collections to be mounted SIMULTANEOUSLY, surviving re-renders.
+    await expect
+      .poll(
+        async () => {
+          const counts = await Promise.all(
+            [/^posts$/i, /^tags$/i, /^projects$/i, /^pages$/i].map((re) =>
+              page.getByRole("link", { name: re }).count(),
+            ),
+          );
+          return counts.every((n) => n >= 1) ? "all-visible" : counts.join(",");
+        },
+        { timeout: 60_000, message: "sidebar collections never all mounted at once" },
+      )
+      .toBe("all-visible");
     await captureStep(page, {
       section: "Browsing collections",
       step: "1.2",
