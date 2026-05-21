@@ -263,6 +263,8 @@
     } catch (_) {
       out.serviceWorker = "throws";
     }
+    out.iosSafariIdbWorkaroundActive =
+      !!window.__adamdaniel_ios_safari_idb_workaround_active;
     return out;
   }
 
