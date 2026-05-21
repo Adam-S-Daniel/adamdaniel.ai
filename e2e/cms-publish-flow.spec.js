@@ -116,8 +116,21 @@ test.describe(
   }) => {
     // ── Drive the admin: open New Post, fill Title + Body, publish ────
     await page.goto("/admin/index-local.html");
-    await page.getByRole("button", { name: /login/i }).click();
-    await page.getByRole("link", { name: /^posts$/i }).waitFor({ timeout: 30_000 });
+    // Explicitly wait for Login before clicking — Decap can take 20+ s
+    // to mount on chromium-desktop-3k, and `.click()`'s default
+    // actionability wait (30 s) would otherwise eat into the
+    // post-login render budget below. cms-smoke uses the same
+    // pattern.
+    const loginBtn = page.getByRole("button", { name: /login/i });
+    await expect(loginBtn).toBeVisible({ timeout: 60_000 });
+    await loginBtn.click();
+    // Gate on `Pages` (the last collection mounted) rather than
+    // Posts: Decap renders sidebar links progressively (Posts first,
+    // then Tags / Projects / Pages), and at the 3k viewport the gap
+    // between first and last can be several seconds. Waiting on
+    // Pages guarantees the entry router is fully wired before the
+    // hash-route goto on the next line.
+    await page.getByRole("link", { name: /^pages$/i }).waitFor({ timeout: 30_000 });
     await page.goto("/admin/index-local.html#/collections/posts/new");
 
     const titleField = page.getByLabel(/^Title$/);

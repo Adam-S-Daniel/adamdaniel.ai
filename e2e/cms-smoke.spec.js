@@ -74,12 +74,20 @@ test.describe(
     await loginBtn.click();
 
     // ── Land on the collections page ──────────────────────────────────
-    await expect(page.getByRole("link", { name: /^posts$/i })).toBeVisible({
+    // Decap mounts collection links progressively in the sidebar —
+    // Posts first, then Tags / Projects / Pages each a few hundred ms
+    // later. At the chromium-desktop-3k viewport (3000×1500) the
+    // sequential render is slow enough that the default 5 s
+    // toBeVisible() for the later three loses the race after Posts
+    // is visible. Gate on `Pages` (last in config order) with the
+    // same 30 s timeout — by then the earlier three are guaranteed
+    // visible and the per-collection checks are O(ms).
+    await expect(page.getByRole("link", { name: /^pages$/i })).toBeVisible({
       timeout: 30_000,
     });
+    await expect(page.getByRole("link", { name: /^posts$/i })).toBeVisible();
     await expect(page.getByRole("link", { name: /^tags$/i })).toBeVisible();
     await expect(page.getByRole("link", { name: /^projects$/i })).toBeVisible();
-    await expect(page.getByRole("link", { name: /^pages$/i })).toBeVisible();
     await captureStep(page, {
       section: "Browsing collections",
       step: "1.2",
