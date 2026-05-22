@@ -1,6 +1,6 @@
 ---
 title: Introducing GHA-bench
-slug: introducing-gha-bench
+slug: agents-authoring-github-actions-choosing-a-model-and-language
 date: 2026-05-13 08:51:00 -0400
 excerpt: GHA-bench is a benchmark and a set of evals for how well different
   coding agents author and test GitHub Actions using different languages.
