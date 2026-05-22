@@ -167,7 +167,7 @@ test.describe("Issue #1042 — admin posts UI", () => {
     // copy-paste of the canary frontmatter into a real post).
     const real = path.join(
       postsDir,
-      "2026-05-12-agents-authoring-github-actions-choosing-a-model-and-language.md",
+      "2026-05-12-introducing-gha-bench.md",
     );
     if (fs.existsSync(real)) {
       expect(read(real)).not.toMatch(/^test_fixture:\s*true\s*$/m);
