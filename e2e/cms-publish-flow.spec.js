@@ -116,36 +116,8 @@ test.describe(
   }) => {
     // ── Drive the admin: open New Post, fill Title + Body, publish ────
     await page.goto("/admin/index-local.html");
-    // Explicitly wait for Login before clicking — Decap can take 20+ s
-    // to mount on chromium-desktop-3k, and `.click()`'s default
-    // actionability wait (30 s) would otherwise eat into the
-    // post-login render budget below. cms-smoke uses the same
-    // pattern.
-    const loginBtn = page.getByRole("button", { name: /login/i });
-    await expect(loginBtn).toBeVisible({ timeout: 60_000 });
-    await loginBtn.click();
-    // Wait for ALL four sidebar collections to be mounted at the
-    // same time before proceeding. Decap renders the sidebar
-    // progressively AND re-renders it shortly after the initial
-    // mount (React strict-mode double-render), so a single-locator
-    // waitFor on the last-mounted entry isn't enough — that entry
-    // can be visible during the first render but transiently
-    // unmounted during the re-render, and at the 3k viewport the
-    // gap between first and last mount runs into the tens of
-    // seconds on slow CI runners. cms-smoke uses the same poll.
-    await expect
-      .poll(
-        async () => {
-          const counts = await Promise.all(
-            [/^posts$/i, /^tags$/i, /^projects$/i, /^pages$/i].map((re) =>
-              page.getByRole("link", { name: re }).count(),
-            ),
-          );
-          return counts.every((n) => n >= 1) ? "all-visible" : counts.join(",");
-        },
-        { timeout: 120_000, message: "sidebar collections never all mounted at once" },
-      )
-      .toBe("all-visible");
+    await page.getByRole("button", { name: /login/i }).click();
+    await page.getByRole("link", { name: /^posts$/i }).waitFor({ timeout: 30_000 });
     await page.goto("/admin/index-local.html#/collections/posts/new");
 
     const titleField = page.getByLabel(/^Title$/);

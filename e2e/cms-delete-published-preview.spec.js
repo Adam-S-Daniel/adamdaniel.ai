@@ -65,16 +65,7 @@ const {
   pillId: PILL_PREVIEW,
   prNumber: PR_NUMBER,
 } = previewTarget();
-// PR_HEAD_REF is ONLY honoured when a workflow sets it explicitly (the
-// dedicated cms-delete-published-preview.yml does). The previous
-// `|| process.env.GITHUB_HEAD_REF` fallback was the loop bug: GitHub
-// auto-populates GITHUB_HEAD_REF on every `pull_request` event, so this
-// @admin-write spec passed its PR_HEAD_REF gate inside e2e-tests.yml's
-// e2e-admin lane (which sets CMS_E2E_PAT + PR_NUMBER) on any PR. It then
-// drove Decap to open a cms/e2e/<slug> PR against the PR head branch,
-// editorial-workflow auto-merged it, the push re-fired pull_request:
-// synchronize, and e2e-admin ran the spec again — an unbounded loop.
-const PR_HEAD_REF = process.env.PR_HEAD_REF || "";
+const PR_HEAD_REF = process.env.PR_HEAD_REF || process.env.GITHUB_HEAD_REF || "";
 
 // Stable, checked-in canary entry present on every branch — used as a
 // deterministic pill-mount point for the URL waits (deploy-status-pill.js

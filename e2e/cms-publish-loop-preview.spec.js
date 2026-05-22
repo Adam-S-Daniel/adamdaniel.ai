@@ -46,12 +46,7 @@ const { waitForChangeReflected } = require("./deploy-pill");
 const { previewTarget } = require("./cms-host");
 
 const CANARY = findCanary("page");
-// No GITHUB_HEAD_REF fallback — see cms-delete-published-preview.spec.js
-// for the loop it caused. PR_HEAD_REF is set only by the dedicated
-// preview workflow; falling back to the auto-populated GITHUB_HEAD_REF
-// let this @admin-write spec run (and mutate the PR head branch) inside
-// e2e-tests.yml's e2e-admin lane on every pull_request event.
-const PR_HEAD_REF = process.env.PR_HEAD_REF || "";
+const PR_HEAD_REF = process.env.PR_HEAD_REF || process.env.GITHUB_HEAD_REF || "";
 
 // Host triplet now resolves through the shared cms-host resolver. The
 // `host` is "" when no PR number is resolvable — preserving the old

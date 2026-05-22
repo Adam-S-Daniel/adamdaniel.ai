@@ -35,7 +35,7 @@ test.describe(
   // The local backend mutates the working tree. Run on a single project
   // and serially to avoid two browsers racing to write/delete the same
   // file at the same time.
-  test.describe.configure({ mode: "serial", timeout: 360_000 });
+  test.describe.configure({ mode: "serial", timeout: 180_000 });
 
   test.beforeAll(() => {
     removeSmokeTagFile();
@@ -74,30 +74,12 @@ test.describe(
     await loginBtn.click();
 
     // ── Land on the collections page ──────────────────────────────────
-    // Decap mounts collection links progressively in the sidebar —
-    // Posts first, then Tags / Projects / Pages each a few hundred ms
-    // later. At the chromium-desktop-3k viewport (3000×1500) the
-    // sequential render is slow enough that the default 5 s
-    // toBeVisible() loses the race even after Posts is visible.
-    // Worse, Decap re-renders the sidebar shortly after the initial
-    // mount (React strict-mode double-render + initial state hydra-
-    // tion), briefly unmounting all collection links — so even the
-    // "Pages is last, so the others must be visible too" assumption
-    // is wrong on slow CI runners. `expect.poll` waits for ALL four
-    // collections to be mounted SIMULTANEOUSLY, surviving re-renders.
-    await expect
-      .poll(
-        async () => {
-          const counts = await Promise.all(
-            [/^posts$/i, /^tags$/i, /^projects$/i, /^pages$/i].map((re) =>
-              page.getByRole("link", { name: re }).count(),
-            ),
-          );
-          return counts.every((n) => n >= 1) ? "all-visible" : counts.join(",");
-        },
-        { timeout: 120_000, message: "sidebar collections never all mounted at once" },
-      )
-      .toBe("all-visible");
+    await expect(page.getByRole("link", { name: /^posts$/i })).toBeVisible({
+      timeout: 30_000,
+    });
+    await expect(page.getByRole("link", { name: /^tags$/i })).toBeVisible();
+    await expect(page.getByRole("link", { name: /^projects$/i })).toBeVisible();
+    await expect(page.getByRole("link", { name: /^pages$/i })).toBeVisible();
     await captureStep(page, {
       section: "Browsing collections",
       step: "1.2",
@@ -107,11 +89,7 @@ test.describe(
     });
 
     // ── Open the Tags collection and start a new entry ───────────────
-    // Decap keeps re-rendering the sidebar even after all 4 collection
-    // links have appeared at least once. The Tags anchor can be
-    // transiently detached at click time. Playwright's auto-retry
-    // inside .click() handles this if we give it enough timeout.
-    await page.getByRole("link", { name: /^tags$/i }).click({ timeout: 60_000 });
+    await page.getByRole("link", { name: /^tags$/i }).click();
     await captureStep(page, {
       section: "Browsing collections",
       step: "2.1",
