@@ -1,19 +1,32 @@
 /*
  * admin/preview-bridge.js — wires Decap CMS saves to the live preview page.
  *
- * Boots after Decap's `window.CMS` global is defined, then:
- *   1. Registers a `postSave` event listener. On every save, the current
- *      entry is broadcast via a same-origin BroadcastChannel that the
- *      `/preview/` page subscribes to, so every open preview tab updates
- *      within a frame of Save being pressed.
- *   2. Injects a "Live Preview" link into the editor toolbar. Clicking it
- *      opens `/preview/?collection=<current>` in a new tab.
+ * Boots after Decap's `window.CMS` global is defined and:
+ *   - Registers a `postSave` event listener. On every save, the current
+ *     entry is broadcast via a same-origin BroadcastChannel that the
+ *     `/preview/` page subscribes to, so every open preview tab updates
+ *     within a frame of Save being pressed.
  *
- * Uses only Decap's public CMS API (`registerEventListener`) and a generic
- * DOM observer for the button — no internal selectors, so it survives
- * Decap minor-version churn.
+ * Uses only Decap's public CMS API (`registerEventListener`) — no
+ * internal selectors, so it survives Decap minor-version churn.
  *
  * Exposed for tests: window.adamdaniel_cms_preview_url(collection).
+ *
+ * A previous version of this file also `MutationObserver`-injected a
+ * "Live Preview" link next to Decap's "View on Live Site" toolbar
+ * anchor. The observer ran on `document.documentElement` with
+ * `childList: true, subtree: true`, and on EVERY mutation walked the
+ * entire DOM tree recursively to discover shadow roots before running
+ * an aria-label querySelector. Decap's React reconciliation during
+ * the `loadEntries` phase fires hundreds of mutations a second; at
+ * the 3K viewport this dominated the Safari main thread (WebKit is
+ * markedly slower than V8 at deep recursion + queryselector with
+ * attribute-matches selectors) and could leave the entries spinner
+ * stuck on "Loading Entries…" indefinitely. The injection was
+ * redundant — admin/index.html ships a fixed-position
+ * `#live-preview-link` button that does the same job, and no e2e
+ * spec or admin script references the injected
+ * `[data-adamdaniel-live-preview]` anchor.
  */
 (function () {
   "use strict";
@@ -90,70 +103,9 @@
     tick();
   }
 
-  // Inject a "Live Preview" link into Decap's entry editor toolbar.
-  // The toolbar selectors may shift across Decap releases, so the injector
-  // is defensive: it looks for any anchor/button labelled "View on Live
-  // Site" and attaches a sibling. If no such anchor is found, the link
-  // simply doesn't appear — a harmless no-op.
-  function injectLivePreviewButton() {
-    var inferCollection = function () {
-      // URL hash pattern: #/collections/<name>/entries/<id>
-      var m = /#\/collections\/([^\/]+)/.exec(window.location.hash || "");
-      return m ? m[1] : "posts";
-    };
-
-    var already = function (root) {
-      return root.querySelector('[data-adamdaniel-live-preview]');
-    };
-
-    var tryInject = function () {
-      // Walk all candidate roots including shadow DOMs.
-      var roots = [document];
-      var walk = function (node) {
-        if (node.shadowRoot) roots.push(node.shadowRoot);
-        for (var i = 0; i < node.children.length; i++) walk(node.children[i]);
-      };
-      walk(document.documentElement);
-
-      for (var i = 0; i < roots.length; i++) {
-        var root = roots[i];
-        if (already(root)) continue;
-        var anchor = root.querySelector(
-          'a[aria-label*="Live Site" i], button[aria-label*="Live Site" i]'
-        );
-        if (!anchor) continue;
-        var link = document.createElement("a");
-        link.setAttribute("data-adamdaniel-live-preview", "");
-        link.textContent = "Live Preview";
-        link.href = buildPreviewURL(inferCollection());
-        link.target = "_blank";
-        link.rel = "noopener";
-        link.style.cssText =
-          "margin-left:0.5em;font-size:0.85em;color:var(--primary-color,#285aff);" +
-          "text-decoration:underline;cursor:pointer;align-self:center;";
-        anchor.parentNode.insertBefore(link, anchor.nextSibling);
-        return true;
-      }
-      return false;
-    };
-
-    var observer = new MutationObserver(function () {
-      tryInject();
-    });
-    observer.observe(document.documentElement, {
-      childList: true,
-      subtree: true,
-    });
-    tryInject();
-  }
-
   if (document.readyState === "loading") {
-    document.addEventListener("DOMContentLoaded", function () {
-      waitForCMS();
-      injectLivePreviewButton();
-    });
+    document.addEventListener("DOMContentLoaded", waitForCMS);
   } else {
     waitForCMS();
-    injectLivePreviewButton();
   }
 })();

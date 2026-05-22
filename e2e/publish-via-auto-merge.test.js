@@ -45,7 +45,18 @@ function bootShim() {
   const fakeFetch = (url, init) => {
     const u = typeof url === "string" ? url : url.url;
     const method = (init && init.method) || (url && url.method) || "GET";
-    calls.push({ url: u, method: method.toUpperCase(), body: init && init.body, headers: init && init.headers });
+    calls.push({
+      url: u,
+      method: method.toUpperCase(),
+      body: init && init.body,
+      headers: init && init.headers,
+      // `rawInit` is the literal second arg the shim passed through.
+      // The wrap MUST forward `init` exactly as the caller supplied it
+      // (including `undefined`) for non-matching requests, otherwise
+      // Safari re-derives the Request body / credentials / signal from
+      // defaults and `loadEntries` hangs forever on "Loading Entries…".
+      rawInit: init,
+    });
     if (nextResponses.length === 0) {
       throw new Error(`fake fetch out of canned responses for ${method} ${u}`);
     }
@@ -123,6 +134,26 @@ test.describe("publish-via-auto-merge.js (unit)", () => {
     expect(res.status).toBe(200);
     expect(calls).toHaveLength(1);
     expect(calls[0].method).toBe("GET");
+  });
+
+  test("non-targeted fetch(request) with NO init forwards init as undefined (Safari loadEntries fix)", async () => {
+    // Regression test for the Safari-stuck-on-"Loading Entries…" bug.
+    // Decap CMS's GitHub backend calls fetch with a Request object and
+    // no second arg, attaching its AbortSignal to the Request. The
+    // wrap used to normalise `init = init || {}` at the entry point,
+    // which turned every such call into `origFetch(request, {})`.
+    // Safari treats an empty `init` object as "re-derive Request
+    // defaults" — it drops the AbortSignal Decap attached, the tree
+    // fetch never resolves, and isFetching stays true forever. The
+    // wrap MUST pass `undefined` straight through when the caller
+    // didn't supply init.
+    const { fetch, queueResponse, calls } = bootShim();
+    queueResponse({ tree: [] }, { status: 200 });
+    const request = { url: "https://api.github.com/repos/Adam-S-Daniel/adamdaniel.ai/git/trees/main?recursive=1", method: "GET" };
+    const res = await fetch(request);
+    expect(res.status).toBe(200);
+    expect(calls).toHaveLength(1);
+    expect(calls[0].rawInit).toBe(undefined);
   });
 
   test("PR merge that returns 200 passes through (no recovery)", async () => {

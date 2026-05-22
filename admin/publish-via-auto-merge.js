@@ -138,9 +138,21 @@
   }
 
   window.fetch = function (input, init) {
-    init = init || {};
+    // Read inputs without mutating `init`. Most Decap calls go through
+    // here as `fetch(request)` (no init at all) — the previous
+    // `init = init || {}` reassignment turned every such call into
+    // `origFetch(request, {})`, and Safari is stricter than Chrome
+    // about an empty `init` object: it re-derives the Request body /
+    // credentials / signal from defaults instead of keeping the
+    // ones already on the Request, which wedged `loadEntries` on
+    // Safari (the spinner stays on "Loading Entries…" forever
+    // because the AbortSignal Decap attached to the tree fetch is
+    // dropped, the fetch never resolves, and the entries reducer
+    // never transitions out of isFetching). Pass the caller's
+    // ORIGINAL `init` (possibly undefined) straight through so the
+    // wrap is truly transparent for non-matching requests.
     var url = typeof input === 'string' ? input : (input && input.url) || '';
-    var method = (init.method || (input && input.method) || 'GET').toUpperCase();
+    var method = ((init && init.method) || (input && input.method) || 'GET').toUpperCase();
 
     var match = null;
     var matcher = null;
@@ -159,7 +171,10 @@
         function (body) {
           var msg = body && body.message ? String(body.message) : '';
           if (!/rule violations/i.test(msg)) return res;
-          return matcher.recover(match, init, res).catch(function (err) {
+          // Recovery path reads `init.headers` to forward Authorization;
+          // normalise here (not at the top of the wrap) so the no-match
+          // pass-through above keeps the caller's exact args.
+          return matcher.recover(match, init || {}, res).catch(function (err) {
             console.error('[publish-via-auto-merge] recover threw:', err);
             return res;
           });

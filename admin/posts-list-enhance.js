@@ -617,16 +617,44 @@
   function reorderFixturesLast(cards) {
     var ul = listUl(cards);
     if (!ul) return;
+    // Tag fixtures (and untag former ones), collecting them in list order.
+    var fixtureLis = [];
     for (var i = 0; i < cards.length; i++) {
       var c = cards[i];
       if (!c.li) continue;
       if (c.isFixture) {
         c.li.setAttribute("data-cms-ple-fixture", "1");
-        if (c.li !== ul.lastElementChild) ul.appendChild(c.li);
+        fixtureLis.push(c.li);
       } else if (c.li.getAttribute("data-cms-ple-fixture") === "1") {
         c.li.removeAttribute("data-cms-ple-fixture");
       }
     }
+    // Idempotency guard — only mutate when the fixtures are NOT already a
+    // contiguous tail (i.e. some non-fixture <li> still follows a fixture).
+    // The earlier "append every fixture whose li !== lastElementChild"
+    // form never reached a fixed point with ≥2 fixtures: it moved the
+    // second-to-last fixture to last on every pass, swapping the final two
+    // forever. Each move mutated the list, re-firing the document.body
+    // MutationObserver → scheduleAugment() → reorderFixturesLast() again, a
+    // ~60 Hz reorder/reflow loop that pegged the main thread (worst at the
+    // 3K admin viewport, where Decap never settled and the post-login
+    // sidebar links never became visible within the e2e step budget).
+    var kids = ul.children;
+    var seenFixture = false;
+    var settled = true;
+    for (var k = 0; k < kids.length; k++) {
+      var isFixtureLi =
+        kids[k].getAttribute &&
+        kids[k].getAttribute("data-cms-ple-fixture") === "1";
+      if (isFixtureLi) {
+        seenFixture = true;
+      } else if (seenFixture) {
+        settled = false;
+        break;
+      }
+    }
+    if (settled) return;
+    for (var j = 0; j < fixtureLis.length; j++) ul.appendChild(fixtureLis[j]);
   }
 
   // ── Quick-add: hide the E2E item only ────────────────────────────
