@@ -148,6 +148,13 @@ const SPEC_RULES = {
     /^_posts\//,
     /^\.github\/workflows\/deploy-preview\.yml$/,
   ],
+  // Behavioural unit test (pure-node, no browser) for posts-list-enhance.js's
+  // reorderFixturesLast fixed point — guards the ≥2-fixture infinite reorder
+  // loop that wedged the admin main thread (worst at the 3K viewport). Selects
+  // on any change to the script it exercises.
+  "e2e/posts-list-enhance-reorder.test.js": [
+    /^admin\/posts-list-enhance\.js$/,
+  ],
   // Real-network publish-loop specs. Heavy and slow; run only when
   // something contributor-relevant changed.
   "e2e/cms-publish-loop.spec.js": [
