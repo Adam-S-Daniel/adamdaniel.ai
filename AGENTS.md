@@ -545,7 +545,7 @@ The same required-checks list governs Dependabot's unattended-merge pipeline (`d
 
 **Secrets needed:** none (uses built-in `GITHUB_TOKEN`).
 
-**Pairs with:** `.github/dependabot.yml` — defines the npm / bundler / github-actions ecosystems, a 7-day `cooldown.default-days` on every non-security update, and `update-types: [minor, patch]` grouping per ecosystem so the auto-merge pipeline isn't drowning in N PRs/week.
+**Pairs with:** `.github/dependabot.yml` — defines the npm / bundler / github-actions ecosystems, a 7-day `cooldown.default-days` on every non-security update, and `update-types: [minor, patch]` grouping per ecosystem so the auto-merge pipeline isn't drowning in N PRs/week. The `docker` ecosystem is registered but **fully ignored** (`ignore: dependency-name: "*"`): the only image is the CI-runner's Playwright base (`.github/ci-runner/Dockerfile`), whose tag is hard-coupled to the npm `@playwright/test` version (enforced by `e2e-tests.yml`'s "Verify Playwright image version matches lockfile" drift guard). Dependabot can't bump a docker dep and an npm dep in one PR, so a docker-only base-image bump would desync the image from `package-lock.json` and fail the e2e matrix — the base image is bumped manually alongside the npm Playwright update instead.
 
 #### Job: `auto-merge`
 
