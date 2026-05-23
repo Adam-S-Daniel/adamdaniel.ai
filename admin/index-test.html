@@ -63,20 +63,11 @@
      * pointer events on Save / Status / Delete and the editor
      * stops working. */
     #nc-root, [class*="AppWrapper"] { padding-bottom: 44px !important; }
-    /* Mobile sidebar overlay fix — see admin/index.html. Mirrored
-     * into the test shell so cms-test-backend specs see the same
-     * narrow-viewport behaviour as prod / local-dev. */
-    @media (max-width: 600px) {
-      aside[class*="SidebarContainer"] {
-        position: static !important;
-        width: 100% !important;
-        height: auto !important;
-        max-height: 35vh;
-        overflow-y: auto;
-        border-bottom: 1px solid #d0d7de;
-      }
-    }
   </style>
+  <!-- Responsive layer for the Decap shell (iPhone 16 + small screens).
+       Single source of truth shared by all three admin shells; replaces
+       the old inline narrow-viewport sidebar rule. See admin-mobile.css. -->
+  <link rel="stylesheet" href="admin-mobile.css" />
 </head>
 <body>
   <!-- Diagnostic banner; updated at runtime once Decap mounts -->

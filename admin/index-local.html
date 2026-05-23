@@ -35,20 +35,13 @@
       height: 16px;
       fill: currentColor;
     }
-    /* Mobile sidebar overlay fix — see admin/index.html for the
-     * rationale and constraints. Mirrored here so the local dev
-     * shell (decap-server backend) reproduces the prod behaviour. */
-    @media (max-width: 600px) {
-      aside[class*="SidebarContainer"] {
-        position: static !important;
-        width: 100% !important;
-        height: auto !important;
-        max-height: 35vh;
-        overflow-y: auto;
-        border-bottom: 1px solid #d0d7de;
-      }
-    }
   </style>
+
+  <!-- Responsive layer for the Decap shell — see admin/index.html and
+       docs/decisions/0003-extend-decap-for-mobile-instead-of-forking.md.
+       Mirrored here so the local dev shell (decap-server backend)
+       reproduces the prod narrow-viewport behaviour. -->
+  <link rel="stylesheet" href="admin-mobile.css" />
 </head>
 <body>
   <!-- Live Preview link — see admin/index.html for rationale. -->

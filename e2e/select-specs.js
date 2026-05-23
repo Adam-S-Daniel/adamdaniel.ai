@@ -112,6 +112,13 @@ const SPEC_RULES = {
   "e2e/admin-theme-removed.test.js": [
     /^admin\/(index\.html|custom\.css)$/,
   ],
+  // Responsive-layout invariants for admin/admin-mobile.css (iPhone 16).
+  // Runs on any admin/ change: the stylesheet, the shells that link it,
+  // or a Decap version bump in index*.html could each regress the
+  // mobile overlay. Drives the test-repo backend on the admin lane.
+  "e2e/cms-mobile-layout.spec.js": [
+    /^admin\//,
+  ],
   "e2e/detect-changed-pages.test.js": [
     /^e2e\/detect-changed-pages\.js$/,
   ],
