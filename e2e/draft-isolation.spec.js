@@ -70,9 +70,10 @@ function removeDraft() {
   // accidentally produced one. `_site/blog/<slug>/` would otherwise
   // be served by `npx serve` even though the source post is gone.
   const rendered = path.join(SITE_DIR, "blog", DRAFT_SLUG);
+  // `force: true` makes rmSync a no-op when the path is absent, so no
+  // existsSync guard is needed.
   // @parity-lint-allow: only invoked from afterAll's IS_LOCAL branch (G3).
-  if (fs.existsSync(rendered))
-    fs.rmSync(rendered, { recursive: true, force: true });
+  fs.rmSync(rendered, { recursive: true, force: true });
 }
 
 test.describe(
