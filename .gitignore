@@ -14,6 +14,7 @@ __pycache__/
 .pytest_cache/
 .aws-sam/
 .claude/settings.local.json
+.claude/worktrees/
 test-results/
 playwright-report/
 screenshots/regression/
