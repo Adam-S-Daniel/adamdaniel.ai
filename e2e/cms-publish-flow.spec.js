@@ -4,6 +4,7 @@ const path = require("node:path");
 const { execFileSync } = require("node:child_process");
 const { test, expect } = require("./base");
 const { captureStep } = require("./manual-capture");
+const { pruneSitemapUrls } = require("./sitemap-prune");
 
 // True end-to-end content loop: drive the live Decap admin to create a new
 // post, rebuild the site, then GET /blog/<slug>/ and assert the post is
@@ -77,6 +78,22 @@ function removeSmokePost() {
     path.join(REPO_ROOT, "_site", "tags", SMOKE_TAG_SLUG),
   ]) {
     if (fs.existsSync(dir)) fs.rmSync(dir, { recursive: true, force: true });
+  }
+  // ...and prune those URLs from the prebuilt `_site/sitemap.xml`. The
+  // in-test jekyllBuild() baked /blog/<slug>/ (and the manufactured
+  // /tags/<tag>/ archive) into the sitemap; deleting the rendered dirs
+  // above leaves those <loc>s advertised but 404-ing. image-alt-text.spec.js
+  // runs in the SAME e2e-admin job, shares this `_site/`, walks the
+  // sitemap, and fails on the orphaned 404 — so keep the sitemap
+  // consistent with what's actually on disk.
+  const sitemap = path.join(REPO_ROOT, "_site", "sitemap.xml");
+  if (fs.existsSync(sitemap)) {
+    const xml = fs.readFileSync(sitemap, "utf8");
+    const cleaned = pruneSitemapUrls(xml, [
+      `/blog/${SMOKE_SLUG}/`,
+      `/tags/${SMOKE_TAG_SLUG}/`,
+    ]);
+    if (cleaned !== xml) fs.writeFileSync(sitemap, cleaned);
   }
 }
 
