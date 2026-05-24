@@ -8,3 +8,6 @@
 [hook "secrets-scan"]
 	event = pre-commit
 	command = scripts/secrets-scan.sh
+[hook "lint-staged"]
+	event = pre-commit
+	command = scripts/lint-staged.sh

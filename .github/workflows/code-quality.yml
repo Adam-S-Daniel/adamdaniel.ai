@@ -165,7 +165,7 @@ jobs:
         if: ${{ needs.changes.outputs.rb == 'true' }}
         run: |
           set -o pipefail
-          gem install --no-document rubocop -v 1.86.2 rubocop-performance -v 1.26.1 2>&1 | tee -a /tmp/lint.log
+          gem install --no-document rubocop:1.86.2 rubocop-performance:1.26.1 2>&1 | tee -a /tmp/lint.log
           rubocop 2>&1 | tee -a /tmp/lint.log
 
       # ── Shell: shellcheck + shfmt ──────────────────────────────────
