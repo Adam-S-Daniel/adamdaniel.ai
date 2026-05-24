@@ -221,6 +221,14 @@
     width: calc(100vw - 1.5rem) !important;
     max-width: calc(100vw - 1.5rem) !important;
     min-width: 0 !important;
+    /* Decap lays the modal out as a grid with a fixed-height header row.
+     * On a phone the header needs to grow (its buttons wrap to a second
+     * row), but a grid track won't, so the wrapped row — including
+     * "Delete selected" — gets hidden behind the asset grid. Drop the
+     * grid to normal block flow and let the whole modal scroll. */
+    display: block !important;
+    max-height: calc(100vh - 2rem) !important;
+    overflow-y: auto !important;
   }
   [class*="LibraryTop"],
   [class*="RowContainer"],
@@ -228,6 +236,14 @@
   [class*="SearchContainer"] {
     max-width: 100% !important;
     min-width: 0 !important;
+  }
+  /* The header has a fixed one-row height; once the buttons wrap to a
+   * second row, the extra row overflows the (grid) cell and is hidden
+   * behind the search bar — so "Delete selected" disappears. Let the
+   * header grow to fit the wrapped rows. */
+  [class*="LibraryTop"] {
+    height: auto !important;
+    min-height: 0 !important;
   }
   [class*="RowContainer"],
   [class*="ButtonsContainer"] {

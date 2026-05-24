@@ -119,6 +119,13 @@ const SPEC_RULES = {
   "e2e/cms-mobile-layout.spec.js": [
     /^admin\//,
   ],
+  // Cross-resolution occlusion guard for every admin screen (controls
+  // not clipped off-screen or covered by another element). Runs on any
+  // admin/ change and when the shared visibility helper changes.
+  "e2e/admin-no-occlusion.spec.js": [
+    /^admin\//,
+    /^e2e\/ui-visibility\.js$/,
+  ],
   "e2e/detect-changed-pages.test.js": [
     /^e2e\/detect-changed-pages\.js$/,
   ],

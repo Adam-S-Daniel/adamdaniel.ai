@@ -19,15 +19,9 @@
  * (webkit-iphone16). iOS-anything is WebKit, so the WebKit pass is the
  * load-bearing one; the Chromium pass is a cheap second engine.
  */
-const path = require("node:path");
 const { test, expect } = require("./base");
 
 const IPHONE_16 = { width: 393, height: 852 };
-const PROBE_IMAGE = path.join(
-  __dirname,
-  "..",
-  "assets/images/uploads/e2e-preview-media-probe.png",
-);
 const DESKTOP = { width: 1400, height: 900 };
 
 const SEED_POST_SLUG = "2026-04-25-replacement-test-post-1";
@@ -222,62 +216,6 @@ test.describe(
         box.width,
         "Desktop preview pane collapsed — the mobile breakpoint is too wide",
       ).toBeGreaterThan(200);
-    });
-
-    test("media-library modal fits the viewport and its action buttons stay on-screen", async ({
-      page,
-    }) => {
-      await page.setViewportSize(IPHONE_16);
-      await login(page);
-
-      // Open the global media library from the top-nav "Media" button.
-      await page.getByRole("button", { name: "Media", exact: true }).first().click();
-      const libraryTop = page.locator('[class*="LibraryTop"]').first();
-      await expect(libraryTop).toBeVisible({ timeout: 30_000 });
-
-      // Upload + select an asset so the selection-dependent controls
-      // (Copy Path / Download / Delete) render — those are the ones the
-      // desktop layout ran off the right edge.
-      await page.locator('input[type="file"]').first().setInputFiles(PROBE_IMAGE);
-      const card = page.locator('[class*="CardGridContainer"] button, [class*="CardGridContainer"] img').first();
-      await expect(card).toBeVisible({ timeout: 30_000 });
-      await card.click().catch(() => {});
-      await page.waitForTimeout(500);
-
-      // No control inside the modal may extend past either edge of the
-      // viewport — every button/label and the search input must be
-      // reachable, and the modal card itself must fit.
-      const overflow = await page.evaluate(() => {
-        const vw = window.innerWidth;
-        const bad = [];
-        const sel =
-          '[class*="StyledModal"], [class*="LibraryTop"] button, ' +
-          '[class*="LibraryTop"] label, [class*="LibraryTop"] a, ' +
-          '[class*="SearchInput"], [class*="CardGridContainer"]';
-        for (const el of document.querySelectorAll(sel)) {
-          const cls0 = (typeof el.className === "string" ? el.className : (el.className.baseVal || "")) || "";
-          // The close "X" is a corner affordance that deliberately
-          // straddles the modal edge (upstream Decap design, reachable);
-          // not an overflow bug.
-          if (/CloseButton/.test(cls0)) continue;
-          const r = el.getBoundingClientRect();
-          if (r.width === 0 && r.height === 0) continue;
-          if (r.right > vw + 1 || r.left < -1) {
-            const cls = (typeof el.className === "string" ? el.className : (el.className.baseVal || "")) || "";
-            bad.push({
-              cls: String(cls).replace(/css-\w+-/g, "").slice(0, 30),
-              txt: (el.textContent || "").trim().slice(0, 16),
-              left: Math.round(r.left),
-              right: Math.round(r.right),
-            });
-          }
-        }
-        return { vw, bad };
-      });
-      expect(
-        overflow.bad,
-        `Media-library controls overflow the ${overflow.vw}px viewport: ${JSON.stringify(overflow.bad)}`,
-      ).toEqual([]);
     });
   },
 );
