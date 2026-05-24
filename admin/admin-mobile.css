@@ -206,4 +206,37 @@
     overflow-y: auto;
     border-bottom: 1px solid #d0d7de;
   }
+
+  /* ── 7. Media library modal ─────────────────────────────────────────
+   * The media-library modal (`StyledModal` card → `LibraryTop` header
+   * with the title + Copy Path / Download / Delete / Upload buttons,
+   * then `CardGridContainer`) is sized for desktop: the header's
+   * non-wrapping button row has a ~500px min-content width that
+   * overflows the card and runs the action buttons off the right edge
+   * of the phone (they become unreachable). Widen the card to the
+   * viewport and wrap the header + button rows so every control stays
+   * on-screen. `StyledModal` is Decap's generic modal card, so this also
+   * fits other dialogs (e.g. delete confirmations) to the phone. */
+  [class*="StyledModal"] {
+    width: calc(100vw - 1.5rem) !important;
+    max-width: calc(100vw - 1.5rem) !important;
+    min-width: 0 !important;
+  }
+  [class*="LibraryTop"],
+  [class*="RowContainer"],
+  [class*="CardGridContainer"],
+  [class*="SearchContainer"] {
+    max-width: 100% !important;
+    min-width: 0 !important;
+  }
+  [class*="RowContainer"],
+  [class*="ButtonsContainer"] {
+    flex-wrap: wrap !important;
+    row-gap: 0.5rem;
+  }
+  /* Action buttons keep their natural width and wrap as whole units
+   * (Copy Path / Download / Delete / Upload), rather than being clipped. */
+  [class*="ButtonsContainer"] > * {
+    flex: 0 0 auto !important;
+  }
 }
