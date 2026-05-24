@@ -171,6 +171,37 @@ End-to-end coverage lives in `e2e/cms-html-embed.spec.js`.
 
 Real-user monitoring is via Amazon CloudWatch RUM, deployed as a sibling CloudFormation stack `adamdaniel-ai-rum` (see `infrastructure/rum/`). The Jekyll snippet in `_includes/analytics/cloudwatch-rum.html` is a no-op unless **both** `JEKYLL_ENV=production` AND `site.analytics.cloudwatch_rum.app_monitor_id` are set, so local `jekyll serve` and PR previews stay silent. Identity-pool / app-monitor IDs are non-sensitive (visible in the rendered page source) so they live in `_config.yml`, not GitHub secrets. End-to-end test: `e2e/analytics-cloudwatch-rum.test.js`. Full deploy + tuning notes: [`ANALYTICS_SETUP.md`](ANALYTICS_SETUP.md).
 
+## Code quality
+
+Every language in the repo has a best-in-class linter + static-analyzer + style tool, configured to pass at a strong-but-pragmatic strength. The checks run in three places: locally on demand (`npm run lint`, or each tool directly), as a staged-file pre-commit guard, and in CI (`code-quality.yml`).
+
+| Language | Lint / style | Security / types | Config | CI command |
+| --- | --- | --- | --- | --- |
+| JavaScript | ESLint 10 (flat) + Prettier | `eslint-plugin-security`, `eslint-plugin-no-unsanitized` | `eslint.config.js`, `.prettierrc.json` | `eslint "e2e/**/*.js" "admin/**/*.js" "scripts/*.js" "*.config.js"` + `prettier --check` |
+| Python | Ruff (lint + format) | Bandit, mypy | `pyproject.toml` (`[tool.ruff]`/`[tool.bandit]`/`[tool.mypy]`) | `ruff check` · `ruff format --check` · `mypy` · `bandit -r oauth-proxy scripts tests -c pyproject.toml` |
+| Ruby | RuboCop (+performance) | — | `.rubocop.yml` | `rubocop` (standalone, Ruby ≥ 3.3 — see below) |
+| Shell | shfmt | ShellCheck | inline directives | `shellcheck $(git ls-files '*.sh') .githooks/pre-commit` · `shfmt -i 2 -ci -bn -d ...` |
+| YAML / Actions | yamllint | actionlint (+shellcheck on `run:`) | `.yamllint.yml` | `yamllint -c .yamllint.yml .github/` · `actionlint -ignore '...head_ref... is potentially untrusted'` |
+| CSS | Stylelint (standard) | — | `.stylelintrc.json` | `stylelint "assets/css/*.css" "admin/*.css"` |
+| Markdown | markdownlint-cli2 | — | `.markdownlint.jsonc` + `.markdownlint-cli2.jsonc` | `markdownlint-cli2` |
+
+**RuboCop runs standalone, NOT via the site `Gemfile`.** RuboCop's transitive dep `parallel` resolves to a release that requires Ruby ≥ 3.3, but every Jekyll-building CI job (`validate-content`, `unit`, `generate`, `deploy-preview`, the e2e web-server) installs the site `Gemfile` via `ruby/setup-ruby` on **Ruby 3.2** — so putting RuboCop in a `Gemfile` group made `bundle install` fail on 3.2 before any step ran. The lint workflow installs it with `gem install rubocop:<v> rubocop-performance:<v>` on Ruby 3.3. Keep dev-only linters out of the runtime `Gemfile`.
+
+**Deliberate rule relaxations** (each is documented in its config; never relax to hide a real bug):
+
+- **ESLint** — `security/detect-object-injection` and `security/detect-non-literal-fs-filename` are off (heuristic noise in static-site build/test/admin glue with no untrusted-request surface). The remaining `detect-*-regexp` findings are **warnings**, not errors (the current hits are linear regexes over trusted/bounded input). `no-unsanitized/property` is disabled inline at 6 admin `innerHTML` sinks that already escape via `esc()` or use constant strings.
+- **Python** — Ruff `select = E,W,F,I,B,UP,C4,SIM,S`; test trees ignore `S101/S603/S607/S105/S106/S107` (idiomatic `assert`, controlled-argv subprocess, fixture tokens). mypy is pragmatic (`ignore_missing_imports`). Bandit `# nosec` (with reason) on the OAuth proxy's hardcoded GitHub https URLs / fixture tokens.
+- **Ruby** — `Style/Documentation` off (file headers suffice); `Lint/MissingSuper` excluded for the synthetic `Jekyll::Page` subclasses; metrics tuned for generator code.
+- **YAML/Actions** — yamllint `line-length`/`document-start` off, `truthy: check-keys:false` (so `on:` stays unquoted); the test-locked configs (`admin/config*.yml`, `_config.yml`, `.github/rulesets/`) are in its `ignore:`. actionlint's two `head_ref … potentially untrusted` advisories on same-repo Decap PRs are suppressed via a precise `-ignore` regex (every other input is still flagged); intentional `run:`-block shellcheck findings carry inline `# shellcheck disable=` comments.
+- **CSS** — Stylelint relaxes `selector-class-pattern`, `no-descending-specificity`, `selector-max-specificity` for `admin/admin-mobile.css`'s intentional two-class Emotion-tie selectors (see *Mobile / responsive admin*); that file is otherwise byte-stable.
+- **Markdown** — `MD013` (line-length), `MD033` (inline HTML), `MD041`, `MD038` off for GFM docs.
+
+**CI — `code-quality.yml`** is advisory (NOT in `main.json`, so a lint-infra hiccup never blocks a merge). A `changes` job computes per-language booleans from the PR diff and the `lint` job runs only the toolchains for languages that changed; on failure it posts a gitleaks-scrubbed summary as a PR comment via the `post-failure-comment` composite, so the failure is visible inline to humans and to agents through the PR API.
+
+**Local — pre-commit hook.** `scripts/lint-staged.sh` (wired into `.githooks/pre-commit` and `.gitconfig-fragment`) lints only the **staged** files of each language, and **skips any linter whose tool is absent** — CI is the hard gate, so a contributor without the full toolchain is never blocked. Bypass one commit with `SKIP_LINT_STAGED=1`. `npm run lint` / `npm run format` cover the npm-based tools.
+
+**Repetition, dead code, constants.** The standardisation pass also de-duplicated within each language (e.g. e2e specs reuse `prodTarget()`/`previewTarget()` from `e2e/cms-host.js` rather than hardcoding hosts; the OAuth proxy's GitHub URLs/timeout are module constants), removed unused symbols (every linter's unused-import/var rule is on), and confirmed there are no orphan code files (all `_layouts`/`_includes` are referenced via `layout:`/`include`, all `scripts/` by a workflow or `package.json`). When adding code, prefer extending an existing shared helper/constant over copying.
+
 ## Workflow path-filtering rule
 
 Every workflow that triggers on `pull_request` or `push` MUST filter on its salient paths — the files and directories whose changes can actually affect what the workflow does. The goal is "if nothing salient changed, the workflow either doesn't fire OR emits a green check immediately" — never burning runner minutes (or scheduler slots) on a no-op, never blocking a merge by being absent.
@@ -217,6 +248,7 @@ the verified footguns. Keep both in sync when you change path filters.
 | `skills-mirror.yml` | `push` and `pull_request` to `main` | `paths` (positive) | `.agents/skills/**`, `.claude/skills/**`, `scripts/{bootstrap,verify-skills-mirror,secrets-scan}.{sh,ps1}`, `tests/**`, the workflow itself, `secrets-scan.yml` |
 | `visual-regression.yml` | `pull_request` | `paths` (positive) | templates / rendering / styling: `_layouts/**`, `_includes/**`, `_plugins/**`, `_data/**`, `admin/**`, `_config.yml`, `Gemfile*`, root `index.html` / `404.html` / `robots.txt` / `preview.md`, `assets/css/**`, `assets/js/**`, `assets/images/logo.svg`; pipeline tools (`e2e/{detect-changed-pages,compute-visual-diffs,generate-video,regression-video}.{js,sh,spec.js}`, `playwright.regression.config.js`, the workflow itself). **CMS-managed content is intentionally excluded** (`_posts/**`, `_tags/**`, `_projects/**`, `pages/**`, `_e2e/**`, `assets/images/uploads/**`) — content-only PRs guarantee pixel diffs, so the regression video adds runner time without signal. |
 | `auto-resolve-newline-conflict.yml` | `workflow_run` (after `cms-editorial-workflow`), `workflow_dispatch` | n/a (event-driven, gated by script's PR allowlists) | n/a |
+| `code-quality.yml` | `pull_request`, `workflow_dispatch` | **always-run + early-skip** — a cheap `changes` job computes per-language booleans from the PR diff; the `lint` job self-skips (`if: needs.changes.outputs.any`) when no lintable file changed. NOT a required check (not in `main.json`), so it never blocks a merge | any source the linters cover: `**/*.{js,py,rb,sh,css,md}`, `.github/{workflows,actions}/**`, `pyproject.toml`, `Gemfile*`?(no — Ruby lints `_plugins*`), the lint configs (`eslint.config.js`, `.prettierrc.json`, `.rubocop.yml`, `.yamllint.yml`, `.stylelintrc.json`, `.markdownlint*.jsonc`, `.shellcheckrc`) |
 
 When you add a new workflow, append it to this table in the same commit.
 
