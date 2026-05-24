@@ -4,10 +4,10 @@ The hook integration tests build a synthetic git repository in tmp_path, run
 the bootstrap to register the hook, then attempt to commit a corrupted state
 and assert the commit is rejected.
 """
+
 from __future__ import annotations
 
 import os
-import re
 import shutil
 import subprocess
 import sys
@@ -94,7 +94,9 @@ def test_verify_fails_when_mirror_is_a_real_directory(synthetic_git_repo: Path) 
     (real_mirror / "demo").mkdir()
     (real_mirror / "demo" / "SKILL.md").write_text("---\nname: demo\n---\n", encoding="utf-8")
 
-    result = _bash(synthetic_git_repo / "scripts" / "verify-skills-mirror.sh", cwd=synthetic_git_repo)
+    result = _bash(
+        synthetic_git_repo / "scripts" / "verify-skills-mirror.sh", cwd=synthetic_git_repo
+    )
     assert result.returncode != 0
     assert "regular directory" in (result.stdout + result.stderr)
 
@@ -103,7 +105,9 @@ def test_verify_fails_when_mirror_is_a_real_directory(synthetic_git_repo: Path) 
 def test_verify_fails_when_mirror_missing(synthetic_git_repo: Path) -> None:
     _make_skill(synthetic_git_repo / ".agents" / "skills", "demo")
 
-    result = _bash(synthetic_git_repo / "scripts" / "verify-skills-mirror.sh", cwd=synthetic_git_repo)
+    result = _bash(
+        synthetic_git_repo / "scripts" / "verify-skills-mirror.sh", cwd=synthetic_git_repo
+    )
     assert result.returncode != 0
 
 
@@ -114,7 +118,9 @@ def test_verify_passes_after_bootstrap(synthetic_git_repo: Path) -> None:
     bootstrap = _bash(synthetic_git_repo / "scripts" / "bootstrap.sh", cwd=synthetic_git_repo)
     assert bootstrap.returncode == 0
 
-    result = _bash(synthetic_git_repo / "scripts" / "verify-skills-mirror.sh", cwd=synthetic_git_repo)
+    result = _bash(
+        synthetic_git_repo / "scripts" / "verify-skills-mirror.sh", cwd=synthetic_git_repo
+    )
     assert result.returncode == 0
 
 
@@ -155,7 +161,9 @@ def test_pre_commit_hook_blocks_corrupted_commit(synthetic_git_repo: Path) -> No
     # Commit the initial state cleanly first to prove the hook lets good commits through.
     _git("add", "-A", cwd=synthetic_git_repo)
     initial = _git("commit", "-m", "init", cwd=synthetic_git_repo)
-    assert initial.returncode == 0, f"initial commit blocked unexpectedly:\n{initial.stderr}\n{initial.stdout}"
+    assert initial.returncode == 0, (
+        f"initial commit blocked unexpectedly:\n{initial.stderr}\n{initial.stdout}"
+    )
 
     # Now corrupt: replace the symlink with a real directory + a real file, stage, try to commit.
     mirror = synthetic_git_repo / ".claude" / "skills"
@@ -185,8 +193,7 @@ def test_git_hook_list_shows_skills_mirror_check(synthetic_git_repo: Path) -> No
     # (`git hook run` exists, list does not). Skip in both cases.
     stderr = result.stderr or ""
     if result.returncode != 0 and (
-        "is not a git command" in stderr
-        or "unknown subcommand" in stderr
+        "is not a git command" in stderr or "unknown subcommand" in stderr
     ):
         pytest.skip(f"git hook list not available on this git version: {stderr.strip()[:120]}")
     assert result.returncode == 0

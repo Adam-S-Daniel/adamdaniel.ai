@@ -11,6 +11,7 @@ Tests that depend on the gitleaks binary are skipped when it isn't on
 ``PATH`` (the skills-mirror CI workflow installs it before running
 pytest; local runs without it skip these cases instead of false-failing).
 """
+
 from __future__ import annotations
 
 import os
@@ -66,9 +67,7 @@ def _copy_assets(repo_root: Path, dest: Path) -> None:
     # the chained skills-mirror check rejects an empty mirror.
     demo = dest / ".agents" / "skills" / "demo"
     demo.mkdir(parents=True, exist_ok=True)
-    (demo / "SKILL.md").write_text(
-        "---\nname: demo\ndescription: x\n---\n", encoding="utf-8"
-    )
+    (demo / "SKILL.md").write_text("---\nname: demo\ndescription: x\n---\n", encoding="utf-8")
 
 
 def _git(*args: str, cwd: Path, env: dict | None = None) -> subprocess.CompletedProcess:
@@ -155,8 +154,7 @@ def test_secrets_scan_respects_allowlisted_test_fixture(synthetic_repo: Path) ->
     _stage(synthetic_repo, "oauth-proxy/test_lambda.py", fake)
     result = _bash(synthetic_repo / "scripts" / "secrets-scan.sh", cwd=synthetic_repo)
     assert result.returncode == 0, (
-        "allowlisted fixture should have passed\n"
-        f"stdout: {result.stdout}\nstderr: {result.stderr}"
+        f"allowlisted fixture should have passed\nstdout: {result.stdout}\nstderr: {result.stderr}"
     )
 
 
@@ -230,9 +228,7 @@ def test_pre_commit_chain_allows_clean_commit(synthetic_repo: Path) -> None:
 
     _stage(synthetic_repo, "notes.md", "# tidy text only\n")
     ok = _git("commit", "-m", "tidy commit", cwd=synthetic_repo)
-    assert ok.returncode == 0, (
-        f"clean commit should land\nstdout: {ok.stdout}\nstderr: {ok.stderr}"
-    )
+    assert ok.returncode == 0, f"clean commit should land\nstdout: {ok.stdout}\nstderr: {ok.stderr}"
 
 
 @pytest.mark.skipif(_NOT_LINUX, reason="git hook list is exercised on Unix-likes")

@@ -4,6 +4,8 @@ Unit tests for the OAuth proxy Lambda handler.
 Run locally with:  python -m pytest test_lambda.py -v
 No AWS credentials required — all GitHub API calls are mocked.
 """
+
+import importlib
 import json
 import os
 import sys
@@ -11,12 +13,13 @@ import unittest
 from unittest.mock import MagicMock, patch
 
 # Set required env vars before importing the handler
-os.environ.setdefault("GITHUB_CLIENT_ID",     "test_client_id")
+os.environ.setdefault("GITHUB_CLIENT_ID", "test_client_id")
 os.environ.setdefault("GITHUB_CLIENT_SECRET", "test_client_secret")
-os.environ.setdefault("ALLOWED_ORIGINS",      "https://adamdaniel.ai")
+os.environ.setdefault("ALLOWED_ORIGINS", "https://adamdaniel.ai")
 
+# `lambda` is a reserved word, so it can't be a plain `import`; load it
+# dynamically after the env vars above and the sys.path shim are in place.
 sys.path.insert(0, os.path.dirname(__file__))
-import importlib
 handler_module = importlib.import_module("lambda")
 
 
@@ -24,9 +27,7 @@ def _event(path: str, params: dict | None = None, method: str = "GET") -> dict:
     """Build a minimal API Gateway HTTP API (v2) event."""
     return {
         "rawPath": path,
-        "requestContext": {
-            "http": {"method": method}
-        },
+        "requestContext": {"http": {"method": method}},
         "queryStringParameters": params or {},
         "headers": {"origin": "https://adamdaniel.ai"},
     }
@@ -82,16 +83,18 @@ class TestAuthRedirect(unittest.TestCase):
 
 
 class TestCallbackSuccess(unittest.TestCase):
-    def _mock_urlopen(self, token: str = "ghp_test_access_token"):
+    def _mock_urlopen(self, token: str = "ghp_test_access_token"):  # nosec B107  # fake fixture token
         """Return a context manager that yields a fake GitHub token response."""
         mock_resp = MagicMock()
-        mock_resp.read.return_value = json.dumps({
-            "access_token": token,
-            "token_type":   "bearer",
-            "scope":        "repo,user",
-        }).encode("utf-8")
+        mock_resp.read.return_value = json.dumps(
+            {
+                "access_token": token,
+                "token_type": "bearer",  # nosec B105  # OAuth token_type literal, not a secret
+                "scope": "repo,user",
+            }
+        ).encode("utf-8")
         mock_resp.__enter__ = lambda s: s
-        mock_resp.__exit__  = MagicMock(return_value=False)
+        mock_resp.__exit__ = MagicMock(return_value=False)
         return mock_resp
 
     @patch("urllib.request.urlopen")
@@ -121,8 +124,10 @@ class TestCallbackSuccess(unittest.TestCase):
 
     def test_github_error_param_returns_error(self):
         resp = handler_module.handler(
-            _event("/callback", {"error": "access_denied", "error_description": "User denied access"}),
-            None
+            _event(
+                "/callback", {"error": "access_denied", "error_description": "User denied access"}
+            ),
+            None,
         )
         self.assertEqual(resp["statusCode"], 400)
         self.assertIn("User denied access", resp["body"])
@@ -130,12 +135,14 @@ class TestCallbackSuccess(unittest.TestCase):
     @patch("urllib.request.urlopen")
     def test_github_token_error_response(self, mock_urlopen):
         mock_resp = MagicMock()
-        mock_resp.read.return_value = json.dumps({
-            "error": "bad_verification_code",
-            "error_description": "The code passed is incorrect or expired.",
-        }).encode("utf-8")
+        mock_resp.read.return_value = json.dumps(
+            {
+                "error": "bad_verification_code",
+                "error_description": "The code passed is incorrect or expired.",
+            }
+        ).encode("utf-8")
         mock_resp.__enter__ = lambda s: s
-        mock_resp.__exit__  = MagicMock(return_value=False)
+        mock_resp.__exit__ = MagicMock(return_value=False)
         mock_urlopen.return_value = mock_resp
 
         resp = handler_module.handler(_event("/callback", {"code": "expired_code"}), None)

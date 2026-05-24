@@ -4,6 +4,7 @@ Driven entirely by tests/harness-config.yaml. Adding a harness means dropping
 a module under tests/harnesses/ and flipping `enabled: true` in the config —
 no edits to this file needed.
 """
+
 from __future__ import annotations
 
 import importlib
@@ -53,18 +54,12 @@ def _assert_outcome(result: HarnessResult, *, allow_skip: bool) -> None:
     if result.outcome == Outcome.SKIP:
         if allow_skip:
             pytest.skip(f"{result.harness}: {result.detail}")
-        pytest.fail(
-            f"{result.harness} unexpectedly skipped offline check: {result.detail}"
-        )
+        pytest.fail(f"{result.harness} unexpectedly skipped offline check: {result.detail}")
     pytest.fail(f"{result.harness} FAIL: {result.detail}")
 
 
-@pytest.mark.parametrize(
-    "name, harness", _HARNESSES, ids=_ids(_HARNESSES)
-)
-def test_offline_discovery(
-    repo_root: Path, name: str, harness: AgentHarness
-) -> None:
+@pytest.mark.parametrize("name, harness", _HARNESSES, ids=_ids(_HARNESSES))
+def test_offline_discovery(repo_root: Path, name: str, harness: AgentHarness) -> None:
     """Each active harness's verify_offline must PASS for the canary."""
     result = harness.verify_offline(repo_root, _CANARY)
     assert result.harness == name, "harness name mismatch"
@@ -72,12 +67,8 @@ def test_offline_discovery(
 
 
 @pytest.mark.live
-@pytest.mark.parametrize(
-    "name, harness", _HARNESSES, ids=_ids(_HARNESSES)
-)
-def test_live_discovery(
-    repo_root: Path, name: str, harness: AgentHarness
-) -> None:
+@pytest.mark.parametrize("name, harness", _HARNESSES, ids=_ids(_HARNESSES))
+def test_live_discovery(repo_root: Path, name: str, harness: AgentHarness) -> None:
     """Each active harness's verify_live must PASS or SKIP (never FAIL)."""
     result = harness.verify_live(repo_root, _CANARY)
     assert result.harness == name, "harness name mismatch"

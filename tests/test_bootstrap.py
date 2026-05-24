@@ -3,6 +3,7 @@
 Each test runs bootstrap inside a synthetic minimal repo in tmp_path so the
 real repo state is never disturbed.
 """
+
 from __future__ import annotations
 
 import os
@@ -55,7 +56,9 @@ def test_bootstrap_creates_symlink_when_only_agents_skills_exist(synthetic_repo:
     _make_skill(synthetic_repo / ".agents" / "skills", "demo")
 
     result = _run_bash_bootstrap(synthetic_repo)
-    assert result.returncode == 0, f"bootstrap failed:\nstdout={result.stdout}\nstderr={result.stderr}"
+    assert result.returncode == 0, (
+        f"bootstrap failed:\nstdout={result.stdout}\nstderr={result.stderr}"
+    )
 
     mirror = synthetic_repo / ".claude" / "skills"
     assert mirror.is_symlink(), f"{mirror} should be a symlink, got {mirror!r}"
