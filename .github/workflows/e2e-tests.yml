@@ -357,6 +357,10 @@ jobs:
               shard_count=4
               ;;
           esac
+          # Per-line `>>` is intentional here: each output is set
+          # independently and the explicit form reads clearly against the
+          # mixed local/real-lane logic above. (SC2129 grouping suggestion.)
+          # shellcheck disable=SC2129
           echo "scope=$scope" >> "$GITHUB_OUTPUT"
           echo "files=$files" >> "$GITHUB_OUTPUT"
           echo "shards=$shards" >> "$GITHUB_OUTPUT"
@@ -480,6 +484,10 @@ jobs:
           PR_NUMBER: ${{ github.event.pull_request.number || '' }}
         run: |
           set -o pipefail
+          # PUBLIC_PROJECT_FLAGS is a space-joined list of --project=… flags
+          # that MUST word-split into separate args; quoting it would pass the
+          # whole string as one project name and break the run.
+          # shellcheck disable=SC2086
           npx playwright test \
             $PUBLIC_PROJECT_FLAGS \
             --shard=${{ matrix.shard }}/${{ needs.select.outputs.shard_count }} \
@@ -499,6 +507,10 @@ jobs:
           PR_NUMBER: ${{ github.event.pull_request.number || '' }}
         run: |
           set -o pipefail
+          # PUBLIC_PROJECT_FLAGS is a space-joined list of --project=… flags
+          # that MUST word-split into separate args; quoting it would pass the
+          # whole string as one project name and break the run.
+          # shellcheck disable=SC2086
           npx playwright test ${{ needs.select.outputs.files }} \
             $PUBLIC_PROJECT_FLAGS \
             --shard=${{ matrix.shard }}/${{ needs.select.outputs.shard_count }} \
@@ -610,6 +622,10 @@ jobs:
           PR_NUMBER: ${{ github.event.pull_request.number || '' }}
         run: |
           set -o pipefail
+          # ADMIN_PROJECT_FLAGS is a space-joined list of --project=… flags
+          # that MUST word-split into separate args; quoting it would pass the
+          # whole string as one project name and break the run.
+          # shellcheck disable=SC2086
           npx playwright test \
             $ADMIN_PROJECT_FLAGS \
             --reporter=blob,list \
@@ -629,6 +645,10 @@ jobs:
         # special-case needed.
         run: |
           set -o pipefail
+          # ADMIN_PROJECT_FLAGS is a space-joined list of --project=… flags
+          # that MUST word-split into separate args; quoting it would pass the
+          # whole string as one project name and break the run.
+          # shellcheck disable=SC2086
           npx playwright test ${{ needs.select.outputs.files }} \
             $ADMIN_PROJECT_FLAGS \
             --reporter=blob,list \
