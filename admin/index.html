@@ -40,37 +40,17 @@
     /* Stack Live Preview above Reviews so the more frequent action is on top. */
     #live-preview-link { bottom: 5rem; }
     #reviews-link      { bottom: 1.5rem; }
-
-    /* ── Mobile sidebar overlay fix ─────────────────────────────────
-     * At narrow viewports (iPhone 16 = 393×852, etc.) Decap renders
-     * its <aside> SidebarContainer as a side-by-side rail that ends
-     * up overlapping the entry-list / editor surface — its child
-     * collection-nav links capture pointer events on top of the
-     * content beneath, so a contributor tapping into a post entry
-     * gets the sidebar swallowing the click instead. Stack the
-     * sidebar above the content with bounded height so both
-     * surfaces are interactive.
-     *
-     * Targets `<aside>` matching Decap's Emotion CSS-in-JS class
-     * pattern. The hash prefix changes between Decap versions, but
-     * `-SidebarContainer-` is stable across the versions we ship
-     * against; if Decap reworks its component naming this rule
-     * silently no-ops (no DOM matches → nothing happens, layout
-     * falls back to upstream defaults). The `!important` overrides
-     * Decap's inline-from-Emotion styles, which a non-marked rule
-     * would lose specificity to.
-     */
-    @media (max-width: 600px) {
-      aside[class*="SidebarContainer"] {
-        position: static !important;
-        width: 100% !important;
-        height: auto !important;
-        max-height: 35vh;
-        overflow-y: auto;
-        border-bottom: 1px solid #d0d7de;
-      }
-    }
   </style>
+
+  <!-- This admin shell is intentionally minimal: the cobalt theme was
+       removed in #81 and /preview/?collection=<n> is the editor's WYSIWYG,
+       so we only carry the floating-link chrome above plus the responsive
+       layer below. admin-mobile.css makes the Decap shell usable on phones
+       / small screens (iPhone 16 is the primary target); it's the single
+       source of truth shared by all three admin shells and supersedes the
+       old inline narrow-viewport sidebar rule. Rationale + the no-fork
+       decision: docs/decisions/0003-extend-decap-for-mobile-instead-of-forking.md. -->
+  <link rel="stylesheet" href="admin-mobile.css" />
 </head>
 <body>
   <!--
