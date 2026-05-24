@@ -1,5 +1,6 @@
 const fs = require("node:fs");
 const path = require("node:path");
+const { execFileSync } = require("node:child_process");
 const { test, expect } = require("./base");
 
 // Locks in the per-CMS-slug preview alias structure of
@@ -7,9 +8,10 @@ const { test, expect } = require("./base");
 // docs/preview-pr-ruleset-spike.md. The structural invariant is:
 //
 //   1. Both `deploy-preview` and `teardown-preview` derive `cms_slug`
-//      from `head_ref` using the SAME sed expression (otherwise a
-//      cleanup mismatch would orphan S3 files when the slug shape
-//      drifts).
+//      from `head_ref` via the SAME shared scripts/cms-preview-slug.sh
+//      (otherwise a cleanup mismatch would orphan S3 files when the slug
+//      shape drifts). Because teardown has no build step of its own, it
+//      gains a Checkout so the script is on disk.
 //   2. The deploy job syncs the alias prefix `cms-<slug>/` and registers
 //      a `preview-cms-<slug>` GitHub Deployment.
 //   3. The teardown job removes the alias prefix.
@@ -18,8 +20,8 @@ const { test, expect } = require("./base");
 //   5. The PR-comment step surfaces the slug-derived URL as an
 //      additional row when applicable.
 //
-// All structural invariants are pure-text greps against the workflow
-// file — same approach as visual-regression-skip-review.test.js.
+// The workflow-structure invariants are pure-text greps against the
+// workflow file; the slug-derivation invariants run the real script.
 
 const WORKFLOW = path.join(
   __dirname,
@@ -29,36 +31,42 @@ const WORKFLOW = path.join(
   "deploy-preview.yml",
 );
 
-// Canonical slug-derivation sed expression. Both deploy-preview and
-// teardown-preview must use this exact form so they agree on what
-// `cms-<slug>/` prefix needs cleanup at PR-close.
-const SLUG_SED = "'s|^cms/||; s|/|-|g'";
+const SLUG_SCRIPT = path.join(__dirname, "..", "scripts", "cms-preview-slug.sh");
 
 function readWorkflow() {
   return fs.readFileSync(WORKFLOW, "utf8");
 }
 
+// Run the real shared script the workflow calls. Invoked via `bash` so the
+// test doesn't depend on the file's executable bit being preserved.
+function slug(branch) {
+  return execFileSync("bash", [SLUG_SCRIPT, branch], { encoding: "utf8" });
+}
+
 test.describe("deploy-preview workflow: per-CMS-slug preview alias", () => {
-  test("both jobs derive cms_slug with the same sed expression", () => {
+  test("both jobs derive cms_slug via the shared cms-preview-slug.sh", () => {
     const yml = readWorkflow();
-    // Count occurrences of the canonical sed expression. Should be
-    // exactly two: one in deploy-preview, one in teardown-preview.
-    const escaped = SLUG_SED.replace(/[.*+?^${}()|[\]\\]/g, "\\$&");
-    const matches = yml.match(new RegExp(escaped, "g")) || [];
+    // Exactly two call sites — one in deploy-preview, one in
+    // teardown-preview — so they can never disagree on the slug shape.
+    const matches =
+      yml.match(/\.\/scripts\/cms-preview-slug\.sh/g) || [];
     expect(
       matches.length,
-      `expected exactly two slug-sed expressions (deploy + teardown); found ${matches.length}`,
+      `expected exactly two cms-preview-slug.sh call sites (deploy + teardown); found ${matches.length}`,
     ).toBe(2);
   });
 
-  test("both jobs gate on `BRANCH == cms/*`", () => {
+  test("both jobs check out the repo so the shared script is on disk", () => {
     const yml = readWorkflow();
-    // The bash test for `cms/*` should appear in both jobs. Allow any
-    // amount of whitespace and either single or double quotes around
-    // `cms/*` to accommodate future refactors that don't change the
-    // semantics.
-    const matches = yml.match(/\[\[\s*"\$BRANCH"\s*==\s*cms\/\*\s*\]\]/g) || [];
-    expect(matches.length, "expected `[[ \"$BRANCH\" == cms/* ]]` in both deploy + teardown").toBe(2);
+    // The deploy job always checked out; teardown now must too (it has no
+    // build step that would otherwise put scripts/ on disk). Two checkouts
+    // total guards against a future edit dropping the teardown one and
+    // breaking the slug computation at PR-close.
+    const matches = yml.match(/uses: actions\/checkout@/g) || [];
+    expect(
+      matches.length,
+      `expected a Checkout in both deploy + teardown; found ${matches.length}`,
+    ).toBe(2);
   });
 
   test("deploy syncs the cms-<slug> S3 prefix", () => {
@@ -125,44 +133,70 @@ test.describe("deploy-preview workflow: per-CMS-slug preview alias", () => {
   });
 });
 
-// ── Slug-derivation sanity (the bash logic, ported to JS for the test) ──
+// ── Slug-derivation: run the real scripts/cms-preview-slug.sh ───────────
 //
-// `printf '%s' "cms/posts/foo-bar" | sed -E 's|^cms/||; s|/|-|g'`  → "posts-foo-bar"
-// We re-implement the same transformation here to assert specific
-// inputs produce the expected slugs. If the workflow's sed expression
-// changes, this re-implementation needs to track it (and the
-// `SLUG_SED` constant above keeps them locked).
-function deriveSlug(branch) {
-  // Strip leading `cms/` then replace `/` with `-`.
-  const stripped = branch.replace(/^cms\//, "");
-  return stripped.replace(/\//g, "-");
-}
+// `preview-cms-` (12) + slug must stay within the 63-octet DNS-label limit,
+// so slug <= 51. Short slugs pass through unchanged; over-long ones are
+// truncated and suffixed with a content hash so the alias host is always
+// valid, deterministic, and collision-resistant.
 
-test.describe("deploy-preview workflow: slug-derivation cases", () => {
-  test("posts/foo-bar → posts-foo-bar", () => {
-    expect(deriveSlug("cms/posts/foo-bar")).toBe("posts-foo-bar");
+const MAX_SLUG = 51;
+const MAX_HOST_LABEL = 63; // "preview-cms-" (12) + slug
+
+test.describe("cms-preview-slug.sh", () => {
+  test("non-cms branch yields an empty slug (no alias)", () => {
+    expect(slug("claude/some-feature")).toBe("");
+    expect(slug("feat/foo")).toBe("");
+    expect(slug("")).toBe("");
   });
 
-  test("date-prefixed post slug rounds-trips", () => {
-    expect(deriveSlug("cms/posts/2099-01-01-foo-bar")).toBe(
+  test("short slugs pass through unchanged", () => {
+    expect(slug("cms/posts/foo-bar")).toBe("posts-foo-bar");
+    expect(slug("cms/posts/2099-01-01-foo-bar")).toBe(
       "posts-2099-01-01-foo-bar",
     );
+    expect(slug("cms/pages/about")).toBe("pages-about");
+    expect(slug("cms/projects/category/item")).toBe("projects-category-item");
   });
 
-  test("pages/about → pages-about", () => {
-    expect(deriveSlug("cms/pages/about")).toBe("pages-about");
+  test("a 51-char slug is the boundary and stays unchanged", () => {
+    // "posts-" (6) + 45 chars = 51.
+    const branch = `cms/posts/${"a".repeat(45)}`;
+    const out = slug(branch);
+    expect(out).toBe(`posts-${"a".repeat(45)}`);
+    expect(out.length).toBe(MAX_SLUG);
   });
 
-  test("non-cms branch flattens slashes too — but the workflow's `cms/*` gate prevents this from being reached in practice", () => {
-    // Documents the raw transformation: the sed pipeline doesn't
-    // discriminate; only the surrounding `[[ "$BRANCH" == cms/* ]]`
-    // bash test gates whether the slug is ever produced.
-    expect(deriveSlug("feat/some-feature")).toBe("feat-some-feature");
+  test("a 52-char slug overflows and is bounded", () => {
+    const branch = `cms/posts/${"a".repeat(46)}`; // raw slug = 52
+    const out = slug(branch);
+    expect(out.length).toBeLessThanOrEqual(MAX_SLUG);
+    expect(out).not.toBe(`posts-${"a".repeat(46)}`);
   });
 
-  test("nested slug paths flatten to dashes", () => {
-    expect(deriveSlug("cms/projects/category/item")).toBe(
-      "projects-category-item",
-    );
+  test("the real PR-941 branch produces a valid bounded host", () => {
+    const branch =
+      "cms/posts/2026-05-17-safely-keep-your-agent-iterating-autonomously-with-gitleaks-and-pr-comments";
+    const out = slug(branch);
+    expect(out.length).toBeLessThanOrEqual(MAX_SLUG);
+    expect(`preview-cms-${out}`.length).toBeLessThanOrEqual(MAX_HOST_LABEL);
+    // Lowercase DNS-label charset, no leading/trailing hyphen.
+    expect(out).toMatch(/^[a-z0-9]([a-z0-9-]*[a-z0-9])?$/);
+  });
+
+  test("over-long slugs are deterministic (stable across draft cycles)", () => {
+    const branch =
+      "cms/posts/2026-05-17-safely-keep-your-agent-iterating-autonomously-with-gitleaks-and-pr-comments";
+    expect(slug(branch)).toBe(slug(branch));
+  });
+
+  test("over-long slugs sharing a 42-char prefix stay distinct (hash suffix)", () => {
+    // Both flatten to `posts-` + a run of 'a's long enough that their
+    // first 42 chars are identical — truncation alone would collide; the
+    // content-hash suffix keeps them apart.
+    const a = slug(`cms/posts/${"a".repeat(60)}`);
+    const b = slug(`cms/posts/${"a".repeat(59)}b`);
+    expect(a.slice(0, 42)).toBe(b.slice(0, 42));
+    expect(a).not.toBe(b);
   });
 });
