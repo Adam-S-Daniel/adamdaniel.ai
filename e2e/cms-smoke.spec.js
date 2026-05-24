@@ -45,18 +45,13 @@ test.describe(
     });
 
     test.beforeEach(({ page }) => {
-      page.on("pageerror", (err) =>
-        console.log(`[pageerror] ${err.name}: ${err.message}`),
-      );
+      page.on("pageerror", (err) => console.log(`[pageerror] ${err.name}: ${err.message}`));
       page.on("console", (msg) => {
-        if (msg.type() === "error")
-          console.log(`[console.error] ${msg.text()}`);
+        if (msg.type() === "error") console.log(`[console.error] ${msg.text()}`);
       });
     });
 
-    test("admin loads, logs in, creates a tag, saves it, deletes it", async ({
-      page,
-    }) => {
+    test("admin loads, logs in, creates a tag, saves it, deletes it", async ({ page }) => {
       // ── Load the admin shell ──────────────────────────────────────────
       await page.goto("/admin/index-local.html");
 
@@ -78,9 +73,7 @@ test.describe(
         timeout: 30_000,
       });
       await expect(page.getByRole("link", { name: /^tags$/i })).toBeVisible();
-      await expect(
-        page.getByRole("link", { name: /^projects$/i }),
-      ).toBeVisible();
+      await expect(page.getByRole("link", { name: /^projects$/i })).toBeVisible();
       await expect(page.getByRole("link", { name: /^pages$/i })).toBeVisible();
       await captureStep(page, {
         section: "Browsing collections",
@@ -129,9 +122,7 @@ test.describe(
         .click();
 
       // The file should land in _tags/<slug>.md within a few seconds.
-      await expect
-        .poll(() => fs.existsSync(SMOKE_TAG_FILE), { timeout: 60_000 })
-        .toBe(true);
+      await expect.poll(() => fs.existsSync(SMOKE_TAG_FILE), { timeout: 60_000 }).toBe(true);
 
       const saved = fs.readFileSync(SMOKE_TAG_FILE, "utf8");
       expect(saved).toContain(`name: ${SMOKE_TAG_NAME}`);
@@ -170,9 +161,7 @@ test.describe(
         await inDomConfirm.click();
       }
 
-      await expect
-        .poll(() => fs.existsSync(SMOKE_TAG_FILE), { timeout: 30_000 })
-        .toBe(false);
+      await expect.poll(() => fs.existsSync(SMOKE_TAG_FILE), { timeout: 30_000 }).toBe(false);
       await captureStep(page, {
         section: "Deleting an entry",
         step: "8.2",
@@ -187,19 +176,13 @@ test.describe(
     // collection — it can't catch a Posts schema regression. Open a Posts
     // entry and assert every declared field's input is actually rendered with
     // a non-zero box AND a measurable contrast against its background.
-    test("Posts edit form: every declared field renders with visible content", async ({
-      page,
-    }) => {
+    test("Posts edit form: every declared field renders with visible content", async ({ page }) => {
       await page.goto("/admin/index-local.html");
       await page.getByRole("button", { name: /login/i }).click();
-      await page
-        .getByRole("link", { name: /^posts$/i })
-        .waitFor({ timeout: 30_000 });
+      await page.getByRole("link", { name: /^posts$/i }).waitFor({ timeout: 30_000 });
       await page.getByRole("link", { name: /^posts$/i }).click();
 
-      const firstEntry = page
-        .locator('a[href*="#/collections/posts/entries/"]')
-        .first();
+      const firstEntry = page.locator('a[href*="#/collections/posts/entries/"]').first();
       await firstEntry.waitFor({ timeout: 30_000 });
       await firstEntry.click();
 
@@ -250,9 +233,7 @@ test.describe(
       // publish_date as input/textarea-flavoured fields — at least 4 of
       // these should be on the page even after Decap's hidden-checkbox
       // and shadow-tree quirks.
-      const inputCount = await page
-        .locator("input:visible, textarea:visible")
-        .count();
+      const inputCount = await page.locator("input:visible, textarea:visible").count();
       expect(
         inputCount,
         "Posts edit form should have several input/textarea fields",
@@ -265,10 +246,7 @@ test.describe(
         const cs = getComputedStyle(el);
         return { color: cs.color, bg: cs.backgroundColor };
       });
-      expect(
-        colors.color,
-        "Title input color must differ from background",
-      ).not.toBe(colors.bg);
+      expect(colors.color, "Title input color must differ from background").not.toBe(colors.bg);
 
       // ── Read-only / disabled regression guard ─────────────────────────
       // Decap renders a per-field disabled state by inlining
@@ -280,9 +258,7 @@ test.describe(
       // This explicitly fails the test in that scenario.
       await expect(titleField).toBeEnabled();
       const widgetReport = await page.evaluate(() => {
-        const wrappers = Array.from(
-          document.querySelectorAll('[class*="ControlContainer"]'),
-        );
+        const wrappers = Array.from(document.querySelectorAll('[class*="ControlContainer"]'));
         return wrappers.map((el) => {
           const cs = getComputedStyle(el);
           const labelEl = el.querySelector("label, h3, h4, legend");

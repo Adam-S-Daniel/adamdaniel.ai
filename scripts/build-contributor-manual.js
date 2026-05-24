@@ -30,9 +30,7 @@ function readAllRecords() {
   for (const name of fs.readdirSync(CAPTURE_DIR)) {
     if (!name.endsWith(".json")) continue;
     try {
-      const records = JSON.parse(
-        fs.readFileSync(path.join(CAPTURE_DIR, name), "utf8"),
-      );
+      const records = JSON.parse(fs.readFileSync(path.join(CAPTURE_DIR, name), "utf8"));
       if (Array.isArray(records)) out.push(...records);
     } catch (_) {
       // skip — malformed files shouldn't break the doc build.
@@ -42,8 +40,7 @@ function readAllRecords() {
 }
 
 function readOverrides() {
-  if (!fs.existsSync(OVERRIDES_FILE))
-    return { section_order: [], section_intros: {} };
+  if (!fs.existsSync(OVERRIDES_FILE)) return { section_order: [], section_intros: {} };
   try {
     const yaml = fs.readFileSync(OVERRIDES_FILE, "utf8");
     return parseSimpleYaml(yaml);
@@ -164,10 +161,7 @@ function sortSteps(records) {
 
 function relPath(p) {
   // Resolve a path relative to docs/ so the manual links from inside docs/.
-  return path
-    .relative(path.dirname(OUT_FILE), path.join(REPO_ROOT, p))
-    .split(path.sep)
-    .join("/");
+  return path.relative(path.dirname(OUT_FILE), path.join(REPO_ROOT, p)).split(path.sep).join("/");
 }
 
 function renderRecord(record) {
@@ -195,10 +189,7 @@ function renderRecord(record) {
 
 function buildManual(records, overrides) {
   const groups = groupBySection(records);
-  const sectionNames = sortSections(
-    [...groups.keys()],
-    overrides.section_order || [],
-  );
+  const sectionNames = sortSections([...groups.keys()], overrides.section_order || []);
 
   const intro = [
     "# Contributor Manual",
@@ -213,9 +204,7 @@ function buildManual(records, overrides) {
     "",
     "## Sections",
     "",
-    ...sectionNames.map(
-      (name, idx) => `${idx + 1}. [${name}](#${slugifyAnchor(name)})`,
-    ),
+    ...sectionNames.map((name, idx) => `${idx + 1}. [${name}](#${slugifyAnchor(name)})`),
     "",
   ];
 

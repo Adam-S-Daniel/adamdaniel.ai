@@ -14,13 +14,7 @@ const { test, expect } = require("./base");
 // avoids pulling in a YAML parser and lets us assert specific token shapes
 // (the conditional expression is what GitHub Actions actually evaluates).
 
-const WORKFLOW = path.join(
-  __dirname,
-  "..",
-  ".github",
-  "workflows",
-  "visual-regression.yml",
-);
+const WORKFLOW = path.join(__dirname, "..", ".github", "workflows", "visual-regression.yml");
 
 function readWorkflow() {
   return fs.readFileSync(WORKFLOW, "utf8");

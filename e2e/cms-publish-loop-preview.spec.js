@@ -36,12 +36,7 @@ const { test, expect } = require("./base");
 const { seedDecapAuth, getPat, HOST_REPO } = require("./decap-pat");
 const { findCanary, makeMarker } = require("./canary-content");
 const { closeStaleDecapPrOnBranch } = require("./cms-fixture-pr");
-const {
-  addLabel,
-  fetchPublicUrl,
-  gh,
-  waitForCmsPullRequest,
-} = require("./github-actions-poll");
+const { addLabel, fetchPublicUrl, gh, waitForCmsPullRequest } = require("./github-actions-poll");
 const { waitForChangeReflected } = require("./deploy-pill");
 const { previewTarget } = require("./cms-host");
 
@@ -83,17 +78,14 @@ function toContentBase64(text) {
 }
 
 async function fetchCanaryFromBranch(branch) {
-  return gh(
-    `/repos/${HOST_REPO}/contents/${CANARY.path}?ref=${encodeURIComponent(branch)}`,
-  );
+  return gh(`/repos/${HOST_REPO}/contents/${CANARY.path}?ref=${encodeURIComponent(branch)}`);
 }
 
 async function writeCanaryOnBranch({ branch, bodyText, message }) {
   const current = await fetchCanaryFromBranch(branch);
   const decoded = Buffer.from(current.content, "base64").toString("utf8");
   const fmEnd = decoded.indexOf("\n---\n", 4);
-  if (fmEnd < 0)
-    throw new Error("Canary file is missing closing front-matter delimiter.");
+  if (fmEnd < 0) throw new Error("Canary file is missing closing front-matter delimiter.");
   const frontMatter = decoded.slice(0, fmEnd + 5);
   const newFile = `${frontMatter}\n${bodyText}\n`;
   return gh(`/repos/${HOST_REPO}/contents/${CANARY.path}`, {
@@ -112,10 +104,7 @@ test(
   "CMS publish loop — preview env, target PR head branch",
   { tag: ["@admin-write"] },
   async ({ page }) => {
-    test.skip(
-      !getPat(),
-      "CMS_E2E_PAT not set — preview publish-loop disabled.",
-    );
+    test.skip(!getPat(), "CMS_E2E_PAT not set — preview publish-loop disabled.");
     test.skip(
       !PR_NUMBER || !PR_HEAD_REF,
       "PR_NUMBER / PR_HEAD_REF not set — this spec only runs in PR CI.",
@@ -167,9 +156,9 @@ test(
         `${PREVIEW_ADMIN}#/collections/${CANARY.cmsCollection}/entries/${CANARY.slug}`,
         { waitUntil: "domcontentloaded" },
       );
-      await expect(page.getByRole("textbox", { name: /^Title$/i })).toBeVisible(
-        { timeout: 30_000 },
-      );
+      await expect(page.getByRole("textbox", { name: /^Title$/i })).toBeVisible({
+        timeout: 30_000,
+      });
     });
 
     await test.step("Insert run marker into body and Save", async () => {
@@ -288,11 +277,9 @@ test(
         { waitUntil: "domcontentloaded" },
       );
       await page.reload({ waitUntil: "domcontentloaded" });
-      await expect(page.getByRole("textbox", { name: /^Title$/i })).toBeVisible(
-        {
-          timeout: 30_000,
-        },
-      );
+      await expect(page.getByRole("textbox", { name: /^Title$/i })).toBeVisible({
+        timeout: 30_000,
+      });
 
       // `widget: text` plain textarea — see the marker-insert step above
       // for the rationale.
@@ -396,9 +383,7 @@ test.afterAll(async () => {
   const reason = hasMarker
     ? "marker still present after UI cleanup"
     : "body diverges from canonical baseline (formatting drift)";
-  console.warn(
-    `[cleanup-harness] canary on ${PR_HEAD_REF}: ${reason}; restoring via Contents API`,
-  );
+  console.warn(`[cleanup-harness] canary on ${PR_HEAD_REF}: ${reason}; restoring via Contents API`);
   await writeCanaryOnBranch({
     branch: PR_HEAD_REF,
     bodyText: expectedBody,

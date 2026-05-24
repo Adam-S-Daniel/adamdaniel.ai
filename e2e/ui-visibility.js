@@ -64,9 +64,7 @@ async function expectReachable(page, locator, label) {
             : (n.className && n.className.baseVal) || "";
         return (
           n.tagName.toLowerCase() +
-          (cls
-            ? "." + String(cls).trim().split(/\s+/).join(".").slice(0, 40)
-            : "")
+          (cls ? "." + String(cls).trim().split(/\s+/).join(".").slice(0, 40) : "")
         );
       };
       return {
@@ -76,10 +74,7 @@ async function expectReachable(page, locator, label) {
         // elementFromPoint returns the topmost element at the point; the
         // control is unoccluded iff that's the control itself, a
         // descendant (inner <span>/<svg>), or an ancestor that wraps it.
-        occluded: !(
-          hit &&
-          (el === hit || el.contains(hit) || hit.contains(el))
-        ),
+        occluded: !(hit && (el === hit || el.contains(hit) || hit.contains(el))),
         occluder: describe(hit),
       };
     }, handle);

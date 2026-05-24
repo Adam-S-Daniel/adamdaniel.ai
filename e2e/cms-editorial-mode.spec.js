@@ -36,9 +36,7 @@ test.describe(
       page,
     }) => {
       await loadTestAdmin(page);
-      await page.goto(
-        `/admin/index-test.html#/collections/posts/entries/${SEED_POST_SLUG}`,
-      );
+      await page.goto(`/admin/index-test.html#/collections/posts/entries/${SEED_POST_SLUG}`);
 
       const titleField = page.getByLabel(/^Title$/);
       await expect(titleField).toBeVisible({ timeout: 60_000 });

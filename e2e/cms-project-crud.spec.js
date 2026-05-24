@@ -35,25 +35,20 @@ test.describe(
     test.describe.configure({ mode: "serial", timeout: 240_000 });
 
     test.beforeAll(() => {
-      if (!fs.existsSync(PROJECTS_DIR))
-        fs.mkdirSync(PROJECTS_DIR, { recursive: true });
+      if (!fs.existsSync(PROJECTS_DIR)) fs.mkdirSync(PROJECTS_DIR, { recursive: true });
       removeSmokeFile();
     });
     test.afterAll(() => removeSmokeFile());
 
     test.beforeEach(({ page }) => {
-      page.on("pageerror", (err) =>
-        console.log(`[pageerror] ${err.name}: ${err.message}`),
-      );
+      page.on("pageerror", (err) => console.log(`[pageerror] ${err.name}: ${err.message}`));
     });
 
     test("create → edit → delete a Project end-to-end", async ({ page }) => {
       // ── Load admin and open New Project ──────────────────────────────
       await page.goto("/admin/index-local.html");
       await page.getByRole("button", { name: /login/i }).click();
-      await page
-        .getByRole("link", { name: /^projects$/i })
-        .waitFor({ timeout: 30_000 });
+      await page.getByRole("link", { name: /^projects$/i }).waitFor({ timeout: 30_000 });
       await page.goto("/admin/index-local.html#/collections/projects/new");
 
       const titleField = page.getByLabel(/^Title$/);
@@ -62,9 +57,7 @@ test.describe(
 
       // Decap appends "(optional)" to non-required labels — match by prefix.
       await page.getByLabel(/^Technology \/ Stack/).fill("Rust · Tokio");
-      await page
-        .getByLabel(/^Project URL/)
-        .fill("https://example.com/cool-project");
+      await page.getByLabel(/^Project URL/).fill("https://example.com/cool-project");
 
       // Featured = true so the entry exercises the boolean-toggle write
       // path (the same write the homepage's featured filter relies on).
@@ -83,9 +76,7 @@ test.describe(
         .first()
         .click();
 
-      await expect
-        .poll(() => fs.existsSync(SMOKE_FILE), { timeout: 60_000 })
-        .toBe(true);
+      await expect.poll(() => fs.existsSync(SMOKE_FILE), { timeout: 60_000 }).toBe(true);
 
       const saved = fs.readFileSync(SMOKE_FILE, "utf8");
       expect(saved).toContain(`title: ${SMOKE_TITLE}`);
@@ -95,9 +86,7 @@ test.describe(
 
       // ── Edit ─────────────────────────────────────────────────────────
       // Re-open the entry through the admin and change Technology, save.
-      await page.goto(
-        `/admin/index-local.html#/collections/projects/entries/${SMOKE_SLUG}`,
-      );
+      await page.goto(`/admin/index-local.html#/collections/projects/entries/${SMOKE_SLUG}`);
       const techField = page.getByLabel(/^Technology \/ Stack/);
       await expect(techField).toBeVisible({ timeout: 30_000 });
       await techField.fill("Python · FastAPI");
@@ -111,11 +100,9 @@ test.describe(
         .click();
 
       await expect
-        .poll(
-          () =>
-            fs.readFileSync(SMOKE_FILE, "utf8").includes("Python · FastAPI"),
-          { timeout: 60_000 },
-        )
+        .poll(() => fs.readFileSync(SMOKE_FILE, "utf8").includes("Python · FastAPI"), {
+          timeout: 60_000,
+        })
         .toBe(true);
 
       // ── Delete ───────────────────────────────────────────────────────
@@ -132,9 +119,7 @@ test.describe(
         await inDomConfirm.click();
       }
 
-      await expect
-        .poll(() => fs.existsSync(SMOKE_FILE), { timeout: 30_000 })
-        .toBe(false);
+      await expect.poll(() => fs.existsSync(SMOKE_FILE), { timeout: 30_000 }).toBe(false);
     });
   },
 );

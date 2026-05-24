@@ -136,10 +136,7 @@ test.describe("sitemap structure @parity", () => {
   test("every published _posts/*.md appears as a <loc> entry @parity", () => {
     const locs = readSitemapLocs();
     const posts = listMarkdownFiles(POSTS_DIR);
-    expect(
-      posts.length,
-      "expected at least one post in _posts/",
-    ).toBeGreaterThan(0);
+    expect(posts.length, "expected at least one post in _posts/").toBeGreaterThan(0);
 
     const missing = [];
     for (const file of posts) {
@@ -175,10 +172,7 @@ test.describe("sitemap structure @parity", () => {
         leaks.push({ file: path.relative(REPO_ROOT, file), url });
       }
     }
-    expect(
-      leaks,
-      `drafts leaked into sitemap: ${JSON.stringify(leaks, null, 2)}`,
-    ).toEqual([]);
+    expect(leaks, `drafts leaked into sitemap: ${JSON.stringify(leaks, null, 2)}`).toEqual([]);
   });
 
   test("no _e2e/ canary entry appears in the sitemap @parity", () => {

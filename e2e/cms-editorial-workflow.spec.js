@@ -83,9 +83,7 @@ async function loadAdmin(page) {
     window.repoFilesUnpublished = s.repoFilesUnpublished;
   }, JSON.stringify(seed));
 
-  page.on("pageerror", (err) =>
-    console.log(`[pageerror] ${err.name}: ${err.message}`),
-  );
+  page.on("pageerror", (err) => console.log(`[pageerror] ${err.name}: ${err.message}`));
   page.on("console", (msg) => {
     if (msg.type() === "error") console.log(`[console.error] ${msg.text()}`);
   });
@@ -136,9 +134,7 @@ test.describe(
       await loadAdmin(page);
 
       // Drive directly to the entry URL the user reported the bug on.
-      await page.goto(
-        `/admin/index-test.html#/collections/posts/entries/${SEED_POST_SLUG}`,
-      );
+      await page.goto(`/admin/index-test.html#/collections/posts/entries/${SEED_POST_SLUG}`);
 
       // Title is the canary — if Decap can't mount the form for this
       // entry at all, this fails fast with a clear message.
@@ -163,16 +159,12 @@ test.describe(
         // "ControlContainer". The disabled class injects inline
         // `pointer-events: none; opacity: 0.5` (see styleStrings.disabled
         // in decap-cms-core's EditorControl.js).
-        const wrappers = Array.from(
-          document.querySelectorAll('[class*="ControlContainer"]'),
-        );
+        const wrappers = Array.from(document.querySelectorAll('[class*="ControlContainer"]'));
         return wrappers.map((el) => {
           const cs = getComputedStyle(el);
           // The label text is the most useful identifier for failures.
           const labelEl = el.querySelector("label, h3, h4, legend");
-          const label = labelEl
-            ? labelEl.textContent.trim()
-            : "(unknown field)";
+          const label = labelEl ? labelEl.textContent.trim() : "(unknown field)";
           return {
             label,
             pointerEvents: cs.pointerEvents,
@@ -219,13 +211,9 @@ test.describe(
     // Closes the "tests never edit existing entries" gap. Drives the
     // form, saves, then asserts the change landed in the test backend
     // (workflow draft) — which is exactly what production would do.
-    test("editing an existing post and saving creates a workflow draft", async ({
-      page,
-    }) => {
+    test("editing an existing post and saving creates a workflow draft", async ({ page }) => {
       await loadAdmin(page);
-      await page.goto(
-        `/admin/index-test.html#/collections/posts/entries/${SEED_POST_SLUG}`,
-      );
+      await page.goto(`/admin/index-test.html#/collections/posts/entries/${SEED_POST_SLUG}`);
 
       const titleField = page.getByLabel(/^Title$/);
       await expect(titleField).toBeVisible({ timeout: 60_000 });
@@ -272,9 +260,7 @@ test.describe(
     // a PR. Tags is the simplest collection schema (name + description),
     // so we use it for the speed; the persistEntry code path is shared
     // across all collections.
-    test("creating a new tag through the editorial workflow", async ({
-      page,
-    }) => {
+    test("creating a new tag through the editorial workflow", async ({ page }) => {
       await loadAdmin(page);
       await page.goto("/admin/index-test.html#/collections/tags/new");
 
@@ -331,15 +317,10 @@ test.describe(
         .click();
 
       const readStatus = (slug) =>
-        page.evaluate(
-          (s) => window.repoFilesUnpublished?.[`tags/${s}`]?.status,
-          slug,
-        );
+        page.evaluate((s) => window.repoFilesUnpublished?.[`tags/${s}`]?.status, slug);
 
       // Wait for the workflow draft to land — initial status is "draft".
-      await expect
-        .poll(() => readStatus(NEW_TAG_SLUG), { timeout: 30_000 })
-        .toBe("draft");
+      await expect.poll(() => readStatus(NEW_TAG_SLUG), { timeout: 30_000 }).toBe("draft");
 
       const STATUS_FLOW = [
         { menuLabel: /in review/i, expected: "pending_review" },
@@ -353,14 +334,10 @@ test.describe(
         const trigger = page.getByText(/^Status:\s/i).first();
         await expect(trigger).toBeVisible({ timeout: 15_000 });
         await trigger.click();
-        const menuItem = page
-          .getByRole("menuitem", { name: step.menuLabel })
-          .first();
+        const menuItem = page.getByRole("menuitem", { name: step.menuLabel }).first();
         await expect(menuItem).toBeVisible({ timeout: 5_000 });
         await menuItem.click();
-        await expect
-          .poll(() => readStatus(NEW_TAG_SLUG), { timeout: 10_000 })
-          .toBe(step.expected);
+        await expect.poll(() => readStatus(NEW_TAG_SLUG), { timeout: 10_000 }).toBe(step.expected);
       }
     });
 
@@ -373,13 +350,9 @@ test.describe(
     // is healthy on their environment. If we ever ship a regression
     // that visually appears fine but disables widgets — the exact
     // mode of the read-only bug — the banner must catch it.
-    test("diagnostic banner reports EDITABLE on the seeded post", async ({
-      page,
-    }) => {
+    test("diagnostic banner reports EDITABLE on the seeded post", async ({ page }) => {
       await loadAdmin(page);
-      await page.goto(
-        `/admin/index-test.html#/collections/posts/entries/${SEED_POST_SLUG}`,
-      );
+      await page.goto(`/admin/index-test.html#/collections/posts/entries/${SEED_POST_SLUG}`);
 
       const titleField = page.getByLabel(/^Title$/);
       await expect(titleField).toBeVisible({ timeout: 60_000 });

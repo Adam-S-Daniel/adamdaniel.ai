@@ -139,13 +139,9 @@ const PROBES = [
       // `e2e/cms-smoke.spec.js`.
       await page.goto("/admin/index-local.html");
       await page.getByRole("button", { name: /login/i }).click();
-      await page
-        .getByRole("link", { name: /^posts$/i })
-        .waitFor({ timeout: 30_000 });
+      await page.getByRole("link", { name: /^posts$/i }).waitFor({ timeout: 30_000 });
       await page.getByRole("link", { name: /^posts$/i }).click();
-      const firstEntry = page
-        .locator('a[href*="#/collections/posts/entries/"]')
-        .first();
+      const firstEntry = page.locator('a[href*="#/collections/posts/entries/"]').first();
       await firstEntry.waitFor({ timeout: 30_000 });
       await firstEntry.click();
       await expect(page.getByLabel(/^Title$/)).toBeVisible({ timeout: 60_000 });
@@ -193,12 +189,8 @@ const PROBES = [
       await page.goto("/admin/index-local.html");
       await page.getByRole("button", { name: /login/i }).click();
       await page.getByRole("link", { name: /^tags$/i }).click();
-      const firstTag = page
-        .locator('a[href*="#/collections/tags/entries/"]')
-        .first();
-      const tagExists = await firstTag
-        .isVisible({ timeout: 10_000 })
-        .catch(() => false);
+      const firstTag = page.locator('a[href*="#/collections/tags/entries/"]').first();
+      const tagExists = await firstTag.isVisible({ timeout: 10_000 }).catch(() => false);
       // If no tag entries exist on disk, the manual's delete affordance
       // can't be probed — emit a soft note rather than failing on
       // empty-collection state.
@@ -281,9 +273,7 @@ test.describe(
         TARGET === "prod",
         "Probes drive /admin/index-local.html (local_backend: true). prod has no local proxy, so login can't populate the sidebar.",
       );
-      page.on("pageerror", (err) =>
-        console.log(`[pageerror] ${err.name}: ${err.message}`),
-      );
+      page.on("pageerror", (err) => console.log(`[pageerror] ${err.name}: ${err.message}`));
       // Decap CMS uses native window.confirm() for delete and unpublish
       // confirmations; the contributor probe asserts the Delete button is
       // reachable and may evolve to actually click it (see manual section
@@ -292,8 +282,7 @@ test.describe(
       // See AGENTS.md "Test-Driven Design" section.
       page.on("dialog", (d) => d.accept());
       page.on("console", (msg) => {
-        if (msg.type() === "error")
-          console.log(`[console.error] ${msg.text()}`);
+        if (msg.type() === "error") console.log(`[console.error] ${msg.text()}`);
       });
     });
 
@@ -326,10 +315,9 @@ test.describe(
         );
         return;
       }
-      expect(
-        sections.length,
-        "manual should declare at least 3 sections",
-      ).toBeGreaterThanOrEqual(3);
+      expect(sections.length, "manual should declare at least 3 sections").toBeGreaterThanOrEqual(
+        3,
+      );
     });
 
     // Build one test per parsed section. Sections without a matching
@@ -344,10 +332,7 @@ test.describe(
 
       test(`@parity ${titleLabel}`, async ({ page }) => {
         if (manualMissing || manualSparse) {
-          test.fixme(
-            true,
-            "Manual is missing or sparse — see the gating test above.",
-          );
+          test.fixme(true, "Manual is missing or sparse — see the gating test above.");
           return;
         }
         if (!probe) {

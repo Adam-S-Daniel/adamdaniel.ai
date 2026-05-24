@@ -83,9 +83,7 @@ function readDraftStatus(page) {
 // the simple-mode split Publish control).
 async function openWorkflowEntry(page, status) {
   await loadTestAdmin(page, { seed: seedWithDraftAt(status) });
-  await page.goto(
-    `/admin/index-test.html#/collections/tags/entries/${WORKFLOW_TAG_SLUG}`,
-  );
+  await page.goto(`/admin/index-test.html#/collections/tags/entries/${WORKFLOW_TAG_SLUG}`);
   // Name field is the canary — confirms the entry editor mounted on
   // the seeded draft (not a 404 / empty form / collection list).
   await expect(page.getByLabel(/^Name$/)).toBeVisible({ timeout: 60_000 });
@@ -94,9 +92,7 @@ async function openWorkflowEntry(page, status) {
   // if the test-repo backend ever shape-drifts the `status` field,
   // every transition test would fail with a confusing "menu item
   // not found" instead of the real cause.
-  await expect
-    .poll(() => readDraftStatus(page), { timeout: 10_000 })
-    .toBe(status);
+  await expect.poll(() => readDraftStatus(page), { timeout: 10_000 }).toBe(status);
 }
 
 // Click the Status dropdown trigger and pick the menu item with the
@@ -130,9 +126,7 @@ test.describe(
     // the regression video. Asserts both the in-page badge text and the
     // backend `status` field — if Decap renamed the menu item but kept
     // the internal key, the badge check would catch it.
-    test("draft → In Review updates badge + repoFilesUnpublished[*].status", async ({
-      page,
-    }) => {
+    test("draft → In Review updates badge + repoFilesUnpublished[*].status", async ({ page }) => {
       await openWorkflowEntry(page, "draft");
 
       // Pre-condition: the badge text should show "Status: Draft".
@@ -140,9 +134,7 @@ test.describe(
 
       await setStatus(page, /in review/i);
 
-      await expect
-        .poll(() => readDraftStatus(page), { timeout: 10_000 })
-        .toBe("pending_review");
+      await expect.poll(() => readDraftStatus(page), { timeout: 10_000 }).toBe("pending_review");
       await expect(page.getByText(/^Status:\s*In Review$/i)).toBeVisible({
         timeout: 5_000,
       });
@@ -159,9 +151,7 @@ test.describe(
 
       await setStatus(page, /^ready$/i);
 
-      await expect
-        .poll(() => readDraftStatus(page), { timeout: 10_000 })
-        .toBe("pending_publish");
+      await expect.poll(() => readDraftStatus(page), { timeout: 10_000 }).toBe("pending_publish");
       await expect(page.getByText(/^Status:\s*Ready$/i)).toBeVisible({
         timeout: 5_000,
       });
@@ -179,9 +169,7 @@ test.describe(
 
       await setStatus(page, /^draft$/i);
 
-      await expect
-        .poll(() => readDraftStatus(page), { timeout: 10_000 })
-        .toBe("draft");
+      await expect.poll(() => readDraftStatus(page), { timeout: 10_000 }).toBe("draft");
       await expect(page.getByText(/^Status:\s*Draft$/i)).toBeVisible({
         timeout: 5_000,
       });
@@ -194,17 +182,13 @@ test.describe(
     // this skip to ship trivial fixes without parking a PR for the
     // (non-existent) reviewer to see. If a future bundle introduces an
     // intermediate-state requirement, this test catches the regression.
-    test("draft → Ready (skip review) is allowed as a direct transition", async ({
-      page,
-    }) => {
+    test("draft → Ready (skip review) is allowed as a direct transition", async ({ page }) => {
       await openWorkflowEntry(page, "draft");
       await expect(page.getByText(/^Status:\s*Draft$/i)).toBeVisible();
 
       await setStatus(page, /^ready$/i);
 
-      await expect
-        .poll(() => readDraftStatus(page), { timeout: 10_000 })
-        .toBe("pending_publish");
+      await expect.poll(() => readDraftStatus(page), { timeout: 10_000 }).toBe("pending_publish");
       await expect(page.getByText(/^Status:\s*Ready$/i)).toBeVisible({
         timeout: 5_000,
       });
@@ -223,9 +207,7 @@ test.describe(
     // unpublished entry around, an editor would see two copies in the
     // dashboard. If it cleared the unpublished entry without writing
     // the file, the publish would be a silent data-loss bug.
-    test("ready → publish moves entry from repoFilesUnpublished to repoFiles", async ({
-      page,
-    }) => {
+    test("ready → publish moves entry from repoFilesUnpublished to repoFiles", async ({ page }) => {
       test.fixme(
         true,
         "test-repo backend (admin/index-test.html) doesn't actually flip " +
@@ -260,24 +242,19 @@ test.describe(
         .getByRole("button", { name: /^publish$/i })
         .first()
         .click();
-      const publishNow = page
-        .getByRole("menuitem", { name: /publish now/i })
-        .first();
+      const publishNow = page.getByRole("menuitem", { name: /publish now/i }).first();
       await expect(publishNow).toBeVisible({ timeout: 5_000 });
       await publishNow.click();
 
       // Post-condition (a): the unpublished entry is gone.
-      await expect
-        .poll(() => readDraftStatus(page), { timeout: 30_000 })
-        .toBe(null);
+      await expect.poll(() => readDraftStatus(page), { timeout: 30_000 }).toBe(null);
 
       // Post-condition (b): the file landed in the published repo tree.
       await expect
         .poll(
           () =>
             page.evaluate(
-              (slug) =>
-                window.repoFiles?._tags?.[`${slug}.md`]?.content || null,
+              (slug) => window.repoFiles?._tags?.[`${slug}.md`]?.content || null,
               WORKFLOW_TAG_SLUG,
             ),
           { timeout: 30_000 },
@@ -299,9 +276,7 @@ test.describe(
     // is rendered-but-inert" (clicking is a no-op) — Decap has shipped
     // both shapes across versions and either is acceptable from an
     // editor-experience standpoint.
-    test("invalid: Publish from Draft is refused (button absent or no-op)", async ({
-      page,
-    }) => {
+    test("invalid: Publish from Draft is refused (button absent or no-op)", async ({ page }) => {
       test.fixme(
         true,
         "Pairs with the ready→publish fixme above — test-repo's mock " +
@@ -315,13 +290,9 @@ test.describe(
       await expect(page.getByText(/^Status:\s*Draft$/i)).toBeVisible();
 
       // Capture the published-tree state before the attempt.
-      const filesBefore = await page.evaluate(() =>
-        Object.keys(window.repoFiles?._tags || {}),
-      );
+      const filesBefore = await page.evaluate(() => Object.keys(window.repoFiles?._tags || {}));
 
-      const publishBtn = page
-        .getByRole("button", { name: /^publish$/i })
-        .first();
+      const publishBtn = page.getByRole("button", { name: /^publish$/i }).first();
       const isVisible = await publishBtn.isVisible().catch(() => false);
 
       if (!isVisible) {
@@ -339,27 +310,13 @@ test.describe(
         // bans `() => {}`).
         await publishBtn
           .click()
-          .catch((err) =>
-            console.warn(
-              "publishBtn click failed (likely inert):",
-              err.message,
-            ),
-          );
-        const publishNow = page
-          .getByRole("menuitem", { name: /publish now/i })
-          .first();
-        const menuVisible = await publishNow
-          .isVisible({ timeout: 1_500 })
-          .catch(() => false);
+          .catch((err) => console.warn("publishBtn click failed (likely inert):", err.message));
+        const publishNow = page.getByRole("menuitem", { name: /publish now/i }).first();
+        const menuVisible = await publishNow.isVisible({ timeout: 1_500 }).catch(() => false);
         if (menuVisible) {
           await publishNow
             .click()
-            .catch((err) =>
-              console.warn(
-                "publishNow click failed (no-op menu):",
-                err.message,
-              ),
-            );
+            .catch((err) => console.warn("publishNow click failed (no-op menu):", err.message));
         }
         // Close any half-open menu so subsequent state poll isn't racing
         // a transient overlay.
@@ -380,9 +337,7 @@ test.describe(
         "Publish from Draft must not move the entry out of repoFilesUnpublished — status stays 'draft'.",
       ).toBe("draft");
 
-      const filesAfter = await page.evaluate(() =>
-        Object.keys(window.repoFiles?._tags || {}),
-      );
+      const filesAfter = await page.evaluate(() => Object.keys(window.repoFiles?._tags || {}));
       expect(
         filesAfter,
         "Publish from Draft must not write a new file into repoFiles._tags — the workflow gate should refuse.",

@@ -31,8 +31,8 @@ const { test, expect } = require("./base");
 
 const REPO_ROOT = path.join(__dirname, "..");
 const ADMIN = path.join(REPO_ROOT, "admin");
-const INDEX_FILES = ["index.html", "index-local.html", "index-test.html"].map(
-  (f) => path.join(ADMIN, f),
+const INDEX_FILES = ["index.html", "index-local.html", "index-test.html"].map((f) =>
+  path.join(ADMIN, f),
 );
 const CONFIGS = ["config.yml", "config-local.yml", "config-test.yml"].map((f) =>
   path.join(ADMIN, f),
@@ -40,9 +40,7 @@ const CONFIGS = ["config.yml", "config-local.yml", "config-test.yml"].map((f) =>
 
 const read = (p) => fs.readFileSync(p, "utf8");
 const scriptIdx = (html, file) => {
-  const re = new RegExp(
-    `<script[^>]+src=["']${file.replace(/[.]/g, "\\.")}["'][^>]*>`,
-  );
+  const re = new RegExp(`<script[^>]+src=["']${file.replace(/[.]/g, "\\.")}["'][^>]*>`);
   const m = re.exec(html);
   return m ? m.index : -1;
 };
@@ -77,18 +75,9 @@ test.describe("Issue #1042 — admin posts UI", () => {
       const override = scriptIdx(html, "native-preview-href.js");
       const enhance = scriptIdx(html, "posts-list-enhance.js");
       expect(derive, `${rel} must load live-url-derive.js`).toBeGreaterThan(-1);
-      expect(
-        banner,
-        `${rel} must load live-url-banner.js (restored #1042)`,
-      ).toBeGreaterThan(-1);
-      expect(
-        override,
-        `${rel} must load native-preview-href.js`,
-      ).toBeGreaterThan(-1);
-      expect(
-        enhance,
-        `${rel} must load posts-list-enhance.js (#1042)`,
-      ).toBeGreaterThan(-1);
+      expect(banner, `${rel} must load live-url-banner.js (restored #1042)`).toBeGreaterThan(-1);
+      expect(override, `${rel} must load native-preview-href.js`).toBeGreaterThan(-1);
+      expect(enhance, `${rel} must load posts-list-enhance.js (#1042)`).toBeGreaterThan(-1);
       // derive defines window.LiveURL; the banner consumes it on first
       // render — derive MUST precede the banner, banner MUST precede the
       // native override (the historical, now-locked, load order).
@@ -147,10 +136,7 @@ test.describe("Issue #1042 — admin posts UI", () => {
       "2099-01-01-e2e-mutation-canary",
       "2099-01-03-e2e-media-roundtrip",
     ]) {
-      expect(
-        FIXTURE_SLUG_RE.test(slug),
-        `${slug} must be detected as a fixture`,
-      ).toBe(true);
+      expect(FIXTURE_SLUG_RE.test(slug), `${slug} must be detected as a fixture`).toBe(true);
     }
     expect(
       FIXTURE_SLUG_RE.test("2026-05-12-introducing-gha-bench"),
@@ -167,13 +153,10 @@ test.describe("Issue #1042 — admin posts UI", () => {
     test(`${rel}: INVALID-DATE fix + Automated tests filter + test_fixture field`, () => {
       const yml = read(cfg);
       // The dayjs `date(...)` summary filter is the INVALID DATE bug.
-      expect(
-        yml,
-        `${rel} must not reintroduce the date(...) summary filter`,
-      ).not.toMatch(/summary:.*date\(/);
-      expect(yml).toMatch(
-        /summary:\s*"\{\{title\}\} \(\{\{year\}\}-\{\{month\}\}-\{\{day\}\}\)/,
+      expect(yml, `${rel} must not reintroduce the date(...) summary filter`).not.toMatch(
+        /summary:.*date\(/,
       );
+      expect(yml).toMatch(/summary:\s*"\{\{title\}\} \(\{\{year\}\}-\{\{month\}\}-\{\{day\}\}\)/);
       // `Automated tests` view_filter keyed off test_fixture.
       expect(yml).toMatch(/-\s*label:\s*Automated tests/);
       expect(yml).toMatch(/field:\s*test_fixture/);
@@ -236,13 +219,8 @@ test.describe("Admin preview/PR links + Check-for-Preview fix", () => {
     expect(src).toContain("view published changes");
     // Old bare labels gone (distinctive source fragments) so a
     // regression can't silently restore them.
-    expect(
-      src,
-      'the bare "preview-pr<N>" link label was renamed',
-    ).not.toContain(">preview-pr");
-    expect(src, 'the bare "PR #<N>" link label was renamed').not.toContain(
-      ">PR #",
-    );
+    expect(src, 'the bare "preview-pr<N>" link label was renamed').not.toContain(">preview-pr");
+    expect(src, 'the bare "PR #<N>" link label was renamed').not.toContain(">PR #");
     // Both change links resolve to the GitHub Files-changed diff.
     expect(src, "draft-changes link must be the PR /files diff").toMatch(
       /esc\(pr\.url\)[\s\S]{0,40}\/files/,
@@ -264,10 +242,7 @@ test.describe("Admin preview/PR links + Check-for-Preview fix", () => {
     ).toBeLessThan(src.indexOf("preview draft"));
     // Gated on a merged PR existing — an unpublished draft (no main
     // history → no le.pr) must not show "view published changes".
-    const block = src.slice(
-      src.indexOf("var publishedPr"),
-      src.indexOf("var pr ="),
-    );
+    const block = src.slice(src.indexOf("var publishedPr"), src.indexOf("var pr ="));
     expect(block).toMatch(/if \(publishedPr\)/);
   });
 
@@ -299,14 +274,11 @@ test.describe("Admin preview/PR links + Check-for-Preview fix", () => {
     expect(wf).toMatch(/context:\s*['"]deploy\/preview['"]/);
     expect(wf).toMatch(/state:\s*['"]success['"]/);
     // Needs the statuses:write scope to post it.
-    expect(
-      wf,
-      "statuses:write scope is required to set a commit status",
-    ).toMatch(/^\s*statuses:\s*write\s*$/m);
-    // Set on the PR head SHA (the ref Decap's getStatuses queries).
-    expect(wf).toMatch(
-      /PR_HEAD_SHA:\s*\$\{\{\s*github\.event\.pull_request\.head\.sha/,
+    expect(wf, "statuses:write scope is required to set a commit status").toMatch(
+      /^\s*statuses:\s*write\s*$/m,
     );
+    // Set on the PR head SHA (the ref Decap's getStatuses queries).
+    expect(wf).toMatch(/PR_HEAD_SHA:\s*\$\{\{\s*github\.event\.pull_request\.head\.sha/);
   });
 
   for (const cfg of CONFIGS) {

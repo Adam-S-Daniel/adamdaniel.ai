@@ -126,9 +126,7 @@ function idempotencyKey(baseSha, headSha) {
 }
 
 async function gh(endpoint, opts = {}) {
-  const url = endpoint.startsWith("https://")
-    ? endpoint
-    : `https://api.github.com${endpoint}`;
+  const url = endpoint.startsWith("https://") ? endpoint : `https://api.github.com${endpoint}`;
   const res = await fetch(url, {
     ...opts,
     headers: {
@@ -153,9 +151,7 @@ async function gh(endpoint, opts = {}) {
 
 async function fetchFileAtRef(repo, ref, path) {
   try {
-    const r = await gh(
-      `/repos/${repo}/contents/${encodeURI(path)}?ref=${encodeURIComponent(ref)}`,
-    );
+    const r = await gh(`/repos/${repo}/contents/${encodeURI(path)}?ref=${encodeURIComponent(ref)}`);
     if (Array.isArray(r) || r.type !== "file") return null;
     return Buffer.from(r.content, "base64").toString("utf8");
   } catch (e) {
@@ -248,9 +244,7 @@ async function run({ repo, prNumber, dryRun, log }) {
     return { outcome: "skip", reason: "mergeable_state=unknown" };
   }
   if (pr.mergeable_state !== "dirty") {
-    log(
-      `skip: mergeable_state is ${pr.mergeable_state} (only resolving dirty)`,
-    );
+    log(`skip: mergeable_state is ${pr.mergeable_state} (only resolving dirty)`);
     return { outcome: "skip", reason: `mergeable_state=${pr.mergeable_state}` };
   }
   if (!isHeadRefAllowed(pr.head.ref)) {
@@ -279,9 +273,7 @@ async function run({ repo, prNumber, dryRun, log }) {
   // remit.
   const files = await gh(`/repos/${repo}/pulls/${prNumber}/files?per_page=300`);
   if (files.length >= 300) {
-    const reasons = [
-      "PR has 300+ changed files (this resolver only handles small CMS edits)",
-    ];
+    const reasons = ["PR has 300+ changed files (this resolver only handles small CMS edits)"];
     log(`abort: ${reasons.join(", ")}`);
     if (!dryRun) {
       await postComment(repo, prNumber, formatAbortComment(idemKey, reasons));
@@ -296,9 +288,7 @@ async function run({ repo, prNumber, dryRun, log }) {
       continue;
     }
     if (f.status === "removed") {
-      reasons.push(
-        `\`${f.filename}\` was removed in this PR — resolver doesn't handle deletes`,
-      );
+      reasons.push(`\`${f.filename}\` was removed in this PR — resolver doesn't handle deletes`);
       continue;
     }
     if (f.status === "added") {
@@ -341,9 +331,7 @@ async function run({ repo, prNumber, dryRun, log }) {
       continue;
     }
     if (canonical(baseContent) !== canonical(headContent)) {
-      reasons.push(
-        `\`${f.filename}\` diff is not newline-only (canonical-collapse mismatch)`,
-      );
+      reasons.push(`\`${f.filename}\` diff is not newline-only (canonical-collapse mismatch)`);
       continue;
     }
     resolvedPaths.push(f.filename);
@@ -361,9 +349,7 @@ async function run({ repo, prNumber, dryRun, log }) {
   // already has the canonical content, so closing the PR loses no
   // intent.
   if (dryRun) {
-    log(
-      `dry-run: would close PR #${prNumber} (paths: ${resolvedPaths.join(", ")})`,
-    );
+    log(`dry-run: would close PR #${prNumber} (paths: ${resolvedPaths.join(", ")})`);
     return { outcome: "would-close", paths: resolvedPaths };
   }
 

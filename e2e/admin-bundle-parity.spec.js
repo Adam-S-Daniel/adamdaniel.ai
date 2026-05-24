@@ -149,24 +149,15 @@ test.describe(
       const allFiles = listAdminFiles(adminDir);
       const files = allFiles.filter((p) => !isExcluded(p));
 
-      expect(
-        files.length,
-        "Expected at least one admin/ file after exclusions",
-      ).toBeGreaterThan(0);
+      expect(files.length, "Expected at least one admin/ file after exclusions").toBeGreaterThan(0);
 
       const previewPr = await findLatestOpenPrNumber(request);
       const previewBase =
-        previewPr !== null
-          ? `https://preview-pr${previewPr}.adamdaniel.ai`
-          : null;
+        previewPr !== null ? `https://preview-pr${previewPr}.adamdaniel.ai` : null;
       if (previewBase) {
-        console.log(
-          `[admin-bundle-parity] comparing prod vs. preview-pr${previewPr}`,
-        );
+        console.log(`[admin-bundle-parity] comparing prod vs. preview-pr${previewPr}`);
       } else {
-        console.log(
-          `[admin-bundle-parity] no open PR — running prod-side parity only`,
-        );
+        console.log(`[admin-bundle-parity] no open PR — running prod-side parity only`);
       }
 
       const failures = [];
@@ -183,13 +174,8 @@ test.describe(
           // surface obviously-broken prod responses (anything other
           // than 200 or 404; 404 is acceptable for files added in a
           // not-yet-merged PR).
-          if (
-            prod.status !== 200 &&
-            !ACCEPTABLE_STATUSES_MISSING.has(prod.status)
-          ) {
-            failures.push(
-              `${rel}: prod returned ${prod.status} (expected 200 or 404)`,
-            );
+          if (prod.status !== 200 && !ACCEPTABLE_STATUSES_MISSING.has(prod.status)) {
+            failures.push(`${rel}: prod returned ${prod.status} (expected 200 or 404)`);
           }
           continue;
         }
@@ -276,9 +262,7 @@ test.describe(
 
       expect(
         failures,
-        `Admin bundle parity failures (${failures.length}):\n  ${failures.join(
-          "\n  ",
-        )}`,
+        `Admin bundle parity failures (${failures.length}):\n  ${failures.join("\n  ")}`,
       ).toEqual([]);
     });
   },

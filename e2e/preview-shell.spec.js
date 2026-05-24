@@ -20,83 +20,56 @@ test.describe(
   () => {
     test.beforeEach(async () => {});
 
-    test("serves 200 with the site chrome and preview root", async ({
-      page,
-    }) => {
+    test("serves 200 with the site chrome and preview root", async ({ page }) => {
       const response = await page.goto("/preview/");
       expect(response.status()).toBe(200);
       // Explicit marker so a 404-page fallback (which also wears the default
       // layout and would match `.site-header`/`.site-footer`) can't satisfy
       // this test.
       await expect(page.locator("[data-preview-root]")).toBeAttached();
-      await expect(page.locator(".site-header .site-logo")).toHaveText(
-        "Adam Daniel",
-      );
+      await expect(page.locator(".site-header .site-logo")).toHaveText("Adam Daniel");
       await expect(page.locator(".site-footer")).toBeVisible();
     });
 
-    test("defaults to the post layout and exposes named slots", async ({
-      page,
-    }) => {
+    test("defaults to the post layout and exposes named slots", async ({ page }) => {
       await page.goto("/preview/");
       // Active variant is kept; other variants are stripped from the DOM so
       // selectors like `.post-header h1` resolve unambiguously and the
       // document reflects only the real layout.
-      await expect(
-        page.locator('[data-preview-layout="posts"]'),
-      ).toBeAttached();
-      await expect(page.locator('[data-preview-layout="pages"]')).toHaveCount(
-        0,
-      );
-      await expect(
-        page.locator('[data-preview-layout="projects"]'),
-      ).toHaveCount(0);
+      await expect(page.locator('[data-preview-layout="posts"]')).toBeAttached();
+      await expect(page.locator('[data-preview-layout="pages"]')).toHaveCount(0);
+      await expect(page.locator('[data-preview-layout="projects"]')).toHaveCount(0);
       await expect(page.locator(".post-header h1")).toBeAttached();
       await expect(page.locator(".post-content")).toBeAttached();
       // Body is empty by default — the CMS is expected to populate it.
       await expect(page.locator(".post-content")).toHaveText("");
     });
 
-    test("switches to the page layout when ?collection=pages", async ({
-      page,
-    }) => {
+    test("switches to the page layout when ?collection=pages", async ({ page }) => {
       await page.goto("/preview/?collection=pages");
-      await expect(
-        page.locator('[data-preview-layout="pages"]'),
-      ).toBeAttached();
-      await expect(page.locator('[data-preview-layout="posts"]')).toHaveCount(
-        0,
-      );
+      await expect(page.locator('[data-preview-layout="pages"]')).toBeAttached();
+      await expect(page.locator('[data-preview-layout="posts"]')).toHaveCount(0);
       await expect(page.locator(".page-header h1")).toBeAttached();
       await expect(page.locator(".page-content")).toBeAttached();
     });
 
-    test("switches to the project layout when ?collection=projects", async ({
-      page,
-    }) => {
+    test("switches to the project layout when ?collection=projects", async ({ page }) => {
       await page.goto("/preview/?collection=projects");
-      await expect(
-        page.locator('[data-preview-layout="projects"]'),
-      ).not.toHaveAttribute("hidden", "");
+      await expect(page.locator('[data-preview-layout="projects"]')).not.toHaveAttribute(
+        "hidden",
+        "",
+      );
       // Project layout uses .post-header too, but scoped under the active variant.
+      await expect(page.locator('[data-preview-layout="projects"] .post-header h1')).toBeAttached();
       await expect(
-        page.locator('[data-preview-layout="projects"] .post-header h1'),
+        page.locator('[data-preview-layout="projects"] [data-preview-slot="technology"]'),
       ).toBeAttached();
       await expect(
-        page.locator(
-          '[data-preview-layout="projects"] [data-preview-slot="technology"]',
-        ),
-      ).toBeAttached();
-      await expect(
-        page.locator(
-          '[data-preview-layout="projects"] [data-preview-slot="project-link"]',
-        ),
+        page.locator('[data-preview-layout="projects"] [data-preview-slot="project-link"]'),
       ).toBeAttached();
     });
 
-    test("emits cms-preview-ready on load so callers know to start streaming", async ({
-      page,
-    }) => {
+    test("emits cms-preview-ready on load so callers know to start streaming", async ({ page }) => {
       await page.goto("/preview/");
       const received = await page.evaluate(
         () =>
@@ -121,9 +94,7 @@ test.describe(
       expect(received.type).toBe("cms-preview-ready");
     });
 
-    test("postMessage cms-preview-update replaces title and body", async ({
-      page,
-    }) => {
+    test("postMessage cms-preview-update replaces title and body", async ({ page }) => {
       await page.goto("/preview/");
       await page.evaluate(() => {
         window.postMessage(
@@ -137,15 +108,11 @@ test.describe(
           window.location.origin,
         );
       });
-      await expect(page.locator(".post-header h1")).toHaveText(
-        "My draft headline",
-      );
+      await expect(page.locator(".post-header h1")).toHaveText("My draft headline");
       await expect(page.locator(".post-content strong")).toHaveText("world");
     });
 
-    test("subsequent updates overwrite previous content (no appending)", async ({
-      page,
-    }) => {
+    test("subsequent updates overwrite previous content (no appending)", async ({ page }) => {
       await page.goto("/preview/");
       await page.evaluate(() => {
         window.postMessage(
@@ -172,9 +139,7 @@ test.describe(
       await expect(page.locator(".post-content")).not.toContainText("One");
     });
 
-    test("post layout: featured_image, date, reading_time, tags all render", async ({
-      page,
-    }) => {
+    test("post layout: featured_image, date, reading_time, tags all render", async ({ page }) => {
       await page.goto("/preview/?collection=posts");
       await page.evaluate(() => {
         window.postMessage(
@@ -191,17 +156,13 @@ test.describe(
           window.location.origin,
         );
       });
-      await expect(
-        page.locator(".post-header .featured-image"),
-      ).toHaveAttribute("src", /placeholder\.svg$/);
-      await expect(page.locator(".post-date")).toContainText("2026");
-      await expect(page.locator(".post-tags .tag-pill")).toHaveText([
-        "ai",
-        "python",
-      ]);
-      await expect(page.locator(".post-reading-time")).toContainText(
-        "min read",
+      await expect(page.locator(".post-header .featured-image")).toHaveAttribute(
+        "src",
+        /placeholder\.svg$/,
       );
+      await expect(page.locator(".post-date")).toContainText("2026");
+      await expect(page.locator(".post-tags .tag-pill")).toHaveText(["ai", "python"]);
+      await expect(page.locator(".post-reading-time")).toContainText("min read");
       await captureStep(page, {
         section: "Real-layout preview",
         step: "4.2",
@@ -227,12 +188,11 @@ test.describe(
           window.location.origin,
         );
       });
-      await expect(page.locator('[data-preview-slot="technology"]')).toHaveText(
-        "Rust · Tokio",
+      await expect(page.locator('[data-preview-slot="technology"]')).toHaveText("Rust · Tokio");
+      await expect(page.locator('[data-preview-slot="project-link"]')).toHaveAttribute(
+        "href",
+        "https://example.com",
       );
-      await expect(
-        page.locator('[data-preview-slot="project-link"]'),
-      ).toHaveAttribute("href", "https://example.com");
     });
 
     test("ignores messages from other origins", async ({ page }) => {
@@ -267,9 +227,7 @@ test.describe(
       await expect(page.locator(".post-header h1")).toHaveText("Kept");
     });
 
-    test("markdown renders images, lists, and code blocks", async ({
-      page,
-    }) => {
+    test("markdown renders images, lists, and code blocks", async ({ page }) => {
       await page.goto("/preview/");
       await page.evaluate(() => {
         window.postMessage(
@@ -283,23 +241,14 @@ test.describe(
           window.location.origin,
         );
       });
-      await expect(page.locator(".post-content ul li").first()).toHaveText(
-        "one",
-      );
-      await expect(page.locator(".post-content img")).toHaveAttribute(
-        "alt",
-        "alt",
-      );
-      await expect(page.locator(".post-content pre code")).toContainText(
-        "code block",
-      );
+      await expect(page.locator(".post-content ul li").first()).toHaveText("one");
+      await expect(page.locator(".post-content img")).toHaveAttribute("alt", "alt");
+      await expect(page.locator(".post-content pre code")).toContainText("code block");
     });
 
     test("robots noindex — preview is not indexable", async ({ page }) => {
       await page.goto("/preview/");
-      const robots = await page
-        .locator('meta[name="robots"]')
-        .getAttribute("content");
+      const robots = await page.locator('meta[name="robots"]').getAttribute("content");
       expect(robots).toMatch(/noindex/i);
     });
 
@@ -324,9 +273,7 @@ test.describe(
         ch.close();
       });
 
-      await expect(page.locator(".post-header h1")).toHaveText(
-        "From broadcast",
-      );
+      await expect(page.locator(".post-header h1")).toHaveText("From broadcast");
       await expect(page.locator(".post-content")).toContainText("Channel body");
       await sender.close();
     });

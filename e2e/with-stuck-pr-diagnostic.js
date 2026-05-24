@@ -35,12 +35,7 @@
 const path = require("node:path");
 const { spawn } = require("node:child_process");
 
-const DIAGNOSTIC_SCRIPT = path.resolve(
-  __dirname,
-  "..",
-  "scripts",
-  "diagnose-stuck-pr.js",
-);
+const DIAGNOSTIC_SCRIPT = path.resolve(__dirname, "..", "scripts", "diagnose-stuck-pr.js");
 const BUDGET_MS = 30_000;
 
 function shouldRunDiagnostic() {
@@ -49,11 +44,7 @@ function shouldRunDiagnostic() {
   // PAT the test was already using (CMS_E2E_PAT), fall back to
   // GITHUB_TOKEN. If neither is available the diagnostic is a no-op
   // anyway, so skip the spawn cost.
-  if (
-    !process.env.CMS_E2E_PAT &&
-    !process.env.GITHUB_TOKEN &&
-    !process.env.GH_TOKEN
-  ) {
+  if (!process.env.CMS_E2E_PAT && !process.env.GITHUB_TOKEN && !process.env.GH_TOKEN) {
     return false;
   }
   return true;
@@ -63,11 +54,7 @@ function spawnDiagnosticAndCollect({ waitingFor, kind, waitPrNumber }) {
   return new Promise((resolve) => {
     const env = {
       ...process.env,
-      GH_TOKEN:
-        process.env.CMS_E2E_PAT ||
-        process.env.GH_TOKEN ||
-        process.env.GITHUB_TOKEN ||
-        "",
+      GH_TOKEN: process.env.CMS_E2E_PAT || process.env.GH_TOKEN || process.env.GITHUB_TOKEN || "",
       GH_REPO: process.env.GH_REPO || "Adam-S-Daniel/adamdaniel.ai",
       WAITING_FOR: waitingFor || "",
       WAITING_FOR_KIND: kind || "",
@@ -102,9 +89,7 @@ function spawnDiagnosticAndCollect({ waitingFor, kind, waitPrNumber }) {
     child.on("exit", () => {
       if (stdout.trim()) finish(stdout.trim());
       else if (stderr.trim())
-        finish(
-          `_(diagnostic emitted only stderr — first 300 chars)_\n\n${stderr.slice(0, 300)}`,
-        );
+        finish(`_(diagnostic emitted only stderr — first 300 chars)_\n\n${stderr.slice(0, 300)}`);
       else finish(`_(diagnostic produced no output)_`);
     });
     setTimeout(() => {

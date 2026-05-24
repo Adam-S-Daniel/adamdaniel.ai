@@ -23,10 +23,7 @@ const { SEED_POST_SLUG, loadTestAdmin } = require("./cms-test-backend");
 //      shape of a future namespace divergence).
 
 const REPO_ROOT = path.join(__dirname, "..");
-const WORKFLOW = path.join(
-  REPO_ROOT,
-  ".github/workflows/cms-editorial-workflow.yml",
-);
+const WORKFLOW = path.join(REPO_ROOT, ".github/workflows/cms-editorial-workflow.yml");
 
 function readyLabelFromWorkflow(yml) {
   const m = yml.match(/github\.event\.label\.name\s*==\s*['"]([^'"]+)['"]/);
@@ -34,9 +31,7 @@ function readyLabelFromWorkflow(yml) {
 }
 
 function labelsCreatedByValidateContent(yml) {
-  return [...yml.matchAll(/createLabel\([^)]*name:\s*['"]([^'"]+)['"]/g)].map(
-    (m) => m[1],
-  );
+  return [...yml.matchAll(/createLabel\([^)]*name:\s*['"]([^'"]+)['"]/g)].map((m) => m[1]);
 }
 
 test.describe(
@@ -58,9 +53,7 @@ test.describe(
       expect(ready).toBe("cms/ready");
 
       const created = labelsCreatedByValidateContent(yml);
-      expect(created).toEqual(
-        expect.arrayContaining(["cms/draft", "cms/ready"]),
-      );
+      expect(created).toEqual(expect.arrayContaining(["cms/draft", "cms/ready"]));
       expect(
         created,
         `auto-merge trigger label "${ready}" must be created by validate-content (got: ${JSON.stringify(created)})`,
@@ -74,9 +67,7 @@ test.describe(
         page,
       }) => {
         await loadTestAdmin(page);
-        await page.goto(
-          `/admin/index-test.html#/collections/posts/entries/${SEED_POST_SLUG}`,
-        );
+        await page.goto(`/admin/index-test.html#/collections/posts/entries/${SEED_POST_SLUG}`);
         const titleField = page.getByLabel(/^Title$/);
         await expect(titleField).toBeVisible({ timeout: 60_000 });
         await titleField.fill("Replacement test post 1 — label-contract probe");

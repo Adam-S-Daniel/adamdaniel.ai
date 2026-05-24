@@ -32,9 +32,7 @@ test.describe(
         const beforePath = path.join(BEFORE_DIR, file);
         if (!fs.existsSync(beforePath)) continue;
 
-        const afterPng = PNG.sync.read(
-          fs.readFileSync(path.join(AFTER_DIR, file)),
-        );
+        const afterPng = PNG.sync.read(fs.readFileSync(path.join(AFTER_DIR, file)));
         const beforePng = PNG.sync.read(fs.readFileSync(beforePath));
 
         // Count pixels that differ in any RGB channel.

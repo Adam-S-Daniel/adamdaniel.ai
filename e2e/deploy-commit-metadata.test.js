@@ -49,9 +49,7 @@ for (const wf of ["deploy-preview.yml", "deploy-production.yml"]) {
       expect(code).toMatch(/git log\b/);
       const offenders = code
         .split("\n")
-        .filter(
-          (l) => /git log\b/.test(l) && /\$\{\{\s*github\.sha\s*\}\}/.test(l),
-        );
+        .filter((l) => /git log\b/.test(l) && /\$\{\{\s*github\.sha\s*\}\}/.test(l));
       expect(
         offenders,
         `git log in ${wf} must use HEAD or github.event.pull_request.head.sha, ` +

@@ -42,20 +42,14 @@ test.describe(
     test.afterAll(() => removeSmokeFile());
 
     test.beforeEach(({ page }) => {
-      page.on("pageerror", (err) =>
-        console.log(`[pageerror] ${err.name}: ${err.message}`),
-      );
+      page.on("pageerror", (err) => console.log(`[pageerror] ${err.name}: ${err.message}`));
     });
 
-    test("create page → render at permalink → edit → delete", async ({
-      page,
-    }) => {
+    test("create page → render at permalink → edit → delete", async ({ page }) => {
       // ── Load admin, create new Page ───────────────────────────────────
       await page.goto("/admin/index-local.html");
       await page.getByRole("button", { name: /login/i }).click();
-      await page
-        .getByRole("link", { name: /^pages$/i })
-        .waitFor({ timeout: 30_000 });
+      await page.getByRole("link", { name: /^pages$/i }).waitFor({ timeout: 30_000 });
       await page.goto("/admin/index-local.html#/collections/pages/new");
 
       const titleField = page.getByLabel(/^Title$/);
@@ -73,9 +67,7 @@ test.describe(
         .first()
         .click();
 
-      const bodyEditor = page
-        .locator('[role="textbox"][contenteditable="true"]')
-        .last();
+      const bodyEditor = page.locator('[role="textbox"][contenteditable="true"]').last();
       await bodyEditor.waitFor({ timeout: 30_000 });
       await bodyEditor.click();
       await bodyEditor.fill(SMOKE_BODY);
@@ -90,9 +82,7 @@ test.describe(
         .click();
 
       // ── On-disk asserts ──────────────────────────────────────────────
-      await expect
-        .poll(() => fs.existsSync(SMOKE_FILE), { timeout: 60_000 })
-        .toBe(true);
+      await expect.poll(() => fs.existsSync(SMOKE_FILE), { timeout: 60_000 }).toBe(true);
       const saved = fs.readFileSync(SMOKE_FILE, "utf8");
       expect(saved).toContain(`title: ${SMOKE_TITLE}`);
       expect(saved).toContain(`permalink: ${SMOKE_PERMALINK}`);
@@ -105,17 +95,11 @@ test.describe(
       });
       const resp = await page.goto(SMOKE_PERMALINK);
       expect(resp.status(), `${SMOKE_PERMALINK} should be 200`).toBe(200);
-      await expect(page.locator(".page-header h1, h1").first()).toContainText(
-        SMOKE_TITLE,
-      );
-      await expect(
-        page.locator(".page-content, .post-content").first(),
-      ).toContainText(SMOKE_BODY);
+      await expect(page.locator(".page-header h1, h1").first()).toContainText(SMOKE_TITLE);
+      await expect(page.locator(".page-content, .post-content").first()).toContainText(SMOKE_BODY);
 
       // ── Edit ─────────────────────────────────────────────────────────
-      await page.goto(
-        `/admin/index-local.html#/collections/pages/entries/${SMOKE_SLUG}`,
-      );
+      await page.goto(`/admin/index-local.html#/collections/pages/entries/${SMOKE_SLUG}`);
       const titleField2 = page.getByLabel(/^Title$/);
       await expect(titleField2).toBeVisible({ timeout: 30_000 });
       const EDITED_TITLE = `${SMOKE_TITLE} (edited)`;
@@ -129,10 +113,7 @@ test.describe(
         .first()
         .click();
       await expect
-        .poll(
-          () => fs.readFileSync(SMOKE_FILE, "utf8").includes(EDITED_TITLE),
-          { timeout: 60_000 },
-        )
+        .poll(() => fs.readFileSync(SMOKE_FILE, "utf8").includes(EDITED_TITLE), { timeout: 60_000 })
         .toBe(true);
 
       // ── Delete ───────────────────────────────────────────────────────
@@ -148,9 +129,7 @@ test.describe(
       if (await inDomConfirm.isVisible({ timeout: 1000 }).catch(() => false)) {
         await inDomConfirm.click();
       }
-      await expect
-        .poll(() => fs.existsSync(SMOKE_FILE), { timeout: 30_000 })
-        .toBe(false);
+      await expect.poll(() => fs.existsSync(SMOKE_FILE), { timeout: 30_000 }).toBe(false);
     });
   },
 );

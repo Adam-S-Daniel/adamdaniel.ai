@@ -35,9 +35,7 @@
 // whitespace and single/double quoting. Returns true | false, or null
 // when there is no parseable line.
 function readPublishedFlag(text) {
-  const m = text.match(
-    /^published:\s*(true|false|"true"|"false"|'true'|'false')\s*$/m,
-  );
+  const m = text.match(/^published:\s*(true|false|"true"|"false"|'true'|'false')\s*$/m);
   if (!m) return null;
   return m[1].replace(/['"]/g, "") === "true";
 }
@@ -51,9 +49,7 @@ function readPublishedFlag(text) {
 function splitFrontMatter(fileText, fixturePath) {
   const fmEnd = fileText.indexOf("\n---\n", 4);
   if (fmEnd < 0) {
-    throw new Error(
-      `Fixture ${fixturePath} is missing its closing front-matter delimiter.`,
-    );
+    throw new Error(`Fixture ${fixturePath} is missing its closing front-matter delimiter.`);
   }
   return {
     frontMatter: fileText.slice(0, fmEnd), // up to (not incl) "\n---\n"

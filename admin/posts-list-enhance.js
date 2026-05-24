@@ -175,15 +175,11 @@
 
   // ── card discovery ───────────────────────────────────────────────
   function collectCards() {
-    var anchors = document.querySelectorAll(
-      'a[href*="#/collections/posts/entries/"]',
-    );
+    var anchors = document.querySelectorAll('a[href*="#/collections/posts/entries/"]');
     var cards = [];
     for (var i = 0; i < anchors.length; i++) {
       var a = anchors[i];
-      var m = /#\/collections\/posts\/entries\/([^?#]+)/.exec(
-        a.getAttribute("href") || "",
-      );
+      var m = /#\/collections\/posts\/entries\/([^?#]+)/.exec(a.getAttribute("href") || "");
       if (!m) continue;
       var slug;
       try {
@@ -195,8 +191,7 @@
       var h2 = a.querySelector("h2");
       var summaryText = (h2 ? h2.textContent : a.textContent || "").trim();
       var title = summaryText.replace(/\s*\(.*$/, "").trim() || slug;
-      var isFixture =
-        FIXTURE_SLUG_RE.test(slug) || FIXTURE_TITLE_RE.test(title);
+      var isFixture = FIXTURE_SLUG_RE.test(slug) || FIXTURE_TITLE_RE.test(title);
       cards.push({
         a: a,
         li: li,
@@ -230,10 +225,7 @@
 
   function writeCache(data) {
     try {
-      sessionStorage.setItem(
-        CACHE_KEY,
-        JSON.stringify({ at: Date.now(), data: data }),
-      );
+      sessionStorage.setItem(CACHE_KEY, JSON.stringify({ at: Date.now(), data: data }));
     } catch {
       /* sessionStorage full / disabled — in-memory only */
     }
@@ -290,19 +282,12 @@
       });
       var j = await safeJson(res);
       var commit =
-        j &&
-        j.data &&
-        j.data.repository &&
-        j.data.repository.ref &&
-        j.data.repository.ref.target
+        j && j.data && j.data.repository && j.data.repository.ref && j.data.repository.ref.target
           ? j.data.repository.ref.target
           : null;
       if (commit) {
         files.forEach(function (fp, idx) {
-          var node =
-            commit["f" + idx] &&
-            commit["f" + idx].nodes &&
-            commit["f" + idx].nodes[0];
+          var node = commit["f" + idx] && commit["f" + idx].nodes && commit["f" + idx].nodes[0];
           if (!node) return;
           // associatedPullRequests(first:1) on the last main commit =
           // the PR whose merge published the current live version of
@@ -322,8 +307,7 @@
       }
     } catch (e) {
       console.warn(
-        "[posts-list-enhance] last-edited query failed: " +
-          (e && e.message ? e.message : e),
+        "[posts-list-enhance] last-edited query failed: " + (e && e.message ? e.message : e),
       );
     }
     return out;
@@ -331,26 +315,20 @@
 
   async function fetchSiteDeploy(token) {
     try {
-      var dRes = await fetch(
-        REST + "/deployments?environment=production&per_page=1",
-        {
-          headers: {
-            Authorization: "token " + token,
-            Accept: "application/vnd.github+json",
-          },
+      var dRes = await fetch(REST + "/deployments?environment=production&per_page=1", {
+        headers: {
+          Authorization: "token " + token,
+          Accept: "application/vnd.github+json",
         },
-      );
+      });
       var deps = await safeJson(dRes);
       if (!Array.isArray(deps) || !deps.length) return null;
-      var sRes = await fetch(
-        REST + "/deployments/" + deps[0].id + "/statuses?per_page=1",
-        {
-          headers: {
-            Authorization: "token " + token,
-            Accept: "application/vnd.github+json",
-          },
+      var sRes = await fetch(REST + "/deployments/" + deps[0].id + "/statuses?per_page=1", {
+        headers: {
+          Authorization: "token " + token,
+          Accept: "application/vnd.github+json",
         },
-      );
+      });
       var st = await safeJson(sRes);
       if (!Array.isArray(st) || !st.length) return null;
       return {
@@ -478,10 +456,7 @@
       bar.id = "cms-ple-bar";
       ul.parentNode.insertBefore(bar, ul);
       lastBarHTML = null;
-    } else if (
-      bar.nextElementSibling !== ul &&
-      bar.parentNode === ul.parentNode
-    ) {
+    } else if (bar.nextElementSibling !== ul && bar.parentNode === ul.parentNode) {
       ul.parentNode.insertBefore(bar, ul);
     }
     var deploy =
@@ -493,9 +468,7 @@
         " " +
         esc(timeAgo(deploy.at)) +
         (deploy.url
-          ? ' · <a href="' +
-            esc(deploy.url) +
-            '" target="_blank" rel="noopener">run ↗</a>'
+          ? ' · <a href="' + esc(deploy.url) + '" target="_blank" rel="noopener">run ↗</a>'
           : "")
       : '<span style="color:#8c959f">sign in for deploy / PR data</span>';
     var nextHTML =
@@ -694,8 +667,7 @@
     var settled = true;
     for (var k = 0; k < kids.length; k++) {
       var isFixtureLi =
-        kids[k].getAttribute &&
-        kids[k].getAttribute("data-cms-ple-fixture") === "1";
+        kids[k].getAttribute && kids[k].getAttribute("data-cms-ple-fixture") === "1";
       if (isFixtureLi) {
         seenFixture = true;
       } else if (seenFixture) {
@@ -734,10 +706,7 @@
       try {
         augment();
       } catch (e) {
-        console.warn(
-          "[posts-list-enhance] augment error: " +
-            (e && e.message ? e.message : e),
-        );
+        console.warn("[posts-list-enhance] augment error: " + (e && e.message ? e.message : e));
       }
     });
   }

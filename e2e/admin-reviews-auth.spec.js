@@ -21,9 +21,7 @@ test.describe(
   // webkit-iphone16. See playwright.config.js.
   { tag: ["@admin-read"] },
   () => {
-    test("replies to authorizing handshake and stores the access token", async ({
-      page,
-    }) => {
+    test("replies to authorizing handshake and stores the access token", async ({ page }) => {
       await page.addInitScript(() => {
         // Capture the popup the dashboard opens. The fake popup acts as
         // both sides: when the dashboard does popup.postMessage(...) we
@@ -81,17 +79,13 @@ test.describe(
       // The opener MUST reply with the same string — that's the
       // Decap CMS handshake. Without the reply, the popup never
       // sends the token and stays stuck on "Completing authorisation…".
-      await page.evaluate(() =>
-        window.__simulatePopupMessage("authorizing:github"),
-      );
+      await page.evaluate(() => window.__simulatePopupMessage("authorizing:github"));
 
       await expect
         .poll(() => page.evaluate(() => window.__popupMessages.length))
         .toBeGreaterThan(0);
 
-      const handshakeReply = await page.evaluate(
-        () => window.__popupMessages[0],
-      );
+      const handshakeReply = await page.evaluate(() => window.__popupMessages[0]);
       expect(handshakeReply).toBe("authorizing:github");
 
       // Step 2: the popup posts the success payload. The dashboard must
@@ -105,15 +99,11 @@ test.describe(
       );
 
       await expect
-        .poll(() =>
-          page.evaluate(() => localStorage.getItem("gh_reviews_token")),
-        )
+        .poll(() => page.evaluate(() => localStorage.getItem("gh_reviews_token")))
         .toBe(token);
 
       // The dashboard should also close the popup once it has the token.
-      await expect
-        .poll(() => page.evaluate(() => window.__popupClosed))
-        .toBe(true);
+      await expect.poll(() => page.evaluate(() => window.__popupClosed)).toBe(true);
     });
   },
 );

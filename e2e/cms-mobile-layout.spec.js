@@ -56,9 +56,7 @@ async function login(page) {
     window.repoFilesUnpublished = [];
   });
 
-  page.on("pageerror", (err) =>
-    console.log(`[pageerror] ${err.name}: ${err.message}`),
-  );
+  page.on("pageerror", (err) => console.log(`[pageerror] ${err.name}: ${err.message}`));
 
   await page.goto("/admin/index-test.html");
   const loginBtn = page.getByRole("button", { name: /login/i });
@@ -70,9 +68,7 @@ async function login(page) {
 }
 
 async function openEditor(page) {
-  await page.goto(
-    `/admin/index-test.html#/collections/posts/entries/${SEED_POST_SLUG}`,
-  );
+  await page.goto(`/admin/index-test.html#/collections/posts/entries/${SEED_POST_SLUG}`);
   await expect(page.getByLabel(/^Title$/)).toBeVisible({ timeout: 60_000 });
   // The split-pane + toolbar settle a beat after the editor mounts.
   await page.waitForTimeout(800);
@@ -86,9 +82,7 @@ test.describe(
   () => {
     test.describe.configure({ mode: "serial", timeout: 180_000 });
 
-    test("entry editor fits the viewport with no dead horizontal scroll", async ({
-      page,
-    }) => {
+    test("entry editor fits the viewport with no dead horizontal scroll", async ({ page }) => {
       await page.setViewportSize(IPHONE_16);
       await login(page);
       await openEditor(page);
@@ -117,9 +111,7 @@ test.describe(
       const fieldOverflow = await page.evaluate(() => {
         const vw = window.innerWidth;
         const bad = [];
-        for (const el of document.querySelectorAll(
-          '[class*="ControlContainer"]',
-        )) {
+        for (const el of document.querySelectorAll('[class*="ControlContainer"]')) {
           const r = el.getBoundingClientRect();
           if (r.width === 0 && r.height === 0) continue;
           if (r.right > vw + 1 || r.left < -1) {
@@ -134,9 +126,7 @@ test.describe(
       ).toEqual([]);
     });
 
-    test("form inputs are ≥16px so iOS Safari doesn't zoom on focus", async ({
-      page,
-    }) => {
+    test("form inputs are ≥16px so iOS Safari doesn't zoom on focus", async ({ page }) => {
       await page.setViewportSize(IPHONE_16);
       await login(page);
       await openEditor(page);
@@ -162,9 +152,7 @@ test.describe(
       ).toEqual([]);
     });
 
-    test("Save and Delete toolbar controls are on-screen and full-label", async ({
-      page,
-    }) => {
+    test("Save and Delete toolbar controls are on-screen and full-label", async ({ page }) => {
       await page.setViewportSize(IPHONE_16);
       await login(page);
       await openEditor(page);
@@ -182,16 +170,11 @@ test.describe(
           box.x + box.width,
           `Toolbar control ${name} is clipped off the right edge`,
         ).toBeLessThanOrEqual(vw + 1);
-        expect(
-          box.x,
-          `Toolbar control ${name} is off the left edge`,
-        ).toBeGreaterThanOrEqual(-1);
+        expect(box.x, `Toolbar control ${name} is off the left edge`).toBeGreaterThanOrEqual(-1);
       }
     });
 
-    test("desktop layout is untouched — the preview pane still renders wide", async ({
-      page,
-    }) => {
+    test("desktop layout is untouched — the preview pane still renders wide", async ({ page }) => {
       // Guard against the breakpoint creeping up and stealing the
       // side-by-side preview from desktop editors.
       await page.setViewportSize(DESKTOP);

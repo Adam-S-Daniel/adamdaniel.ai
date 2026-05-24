@@ -44,10 +44,7 @@ test.describe("CloudWatch RUM include", () => {
 
   test.beforeEach(() => {
     if (test.info().project.name !== "chromium-desktop-1080") {
-      test.skip(
-        true,
-        "build-output assertion only needs to run once per invocation",
-      );
+      test.skip(true, "build-output assertion only needs to run once per invocation");
     }
   });
 

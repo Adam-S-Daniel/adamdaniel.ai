@@ -44,11 +44,7 @@
 
   function buildPreviewURL(collection) {
     var safe = String(collection || "posts").replace(/[^a-zA-Z0-9_-]/g, "");
-    return (
-      window.location.origin +
-      "/preview/?collection=" +
-      encodeURIComponent(safe)
-    );
+    return window.location.origin + "/preview/?collection=" + encodeURIComponent(safe);
   }
   window.adamdaniel_cms_preview_url = buildPreviewURL;
 
@@ -57,17 +53,12 @@
 
     // Decap passes Immutable.js records with `get()` / `toJS()`; our
     // test harness passes plain objects with the same shape. Handle both.
-    var dataHolder =
-      typeof entry.get === "function" ? entry.get("data") : entry.data;
+    var dataHolder = typeof entry.get === "function" ? entry.get("data") : entry.data;
     var fields =
-      dataHolder && typeof dataHolder.toJS === "function"
-        ? dataHolder.toJS()
-        : dataHolder || {};
+      dataHolder && typeof dataHolder.toJS === "function" ? dataHolder.toJS() : dataHolder || {};
 
     var collection =
-      (typeof entry.get === "function"
-        ? entry.get("collection")
-        : entry.collection) || null;
+      (typeof entry.get === "function" ? entry.get("collection") : entry.collection) || null;
 
     return { collection: collection, fields: fields };
   }

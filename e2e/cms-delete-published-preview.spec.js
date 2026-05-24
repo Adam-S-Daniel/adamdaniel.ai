@@ -109,9 +109,7 @@ let pendingFixture = null;
 async function fileShaOnBranch(filePath, branch) {
   try {
     const res = await gh(
-      `/repos/${HOST_REPO}/contents/${filePath}?ref=${encodeURIComponent(
-        branch,
-      )}`,
+      `/repos/${HOST_REPO}/contents/${filePath}?ref=${encodeURIComponent(branch)}`,
     );
     return res.sha;
   } catch (e) {
@@ -144,10 +142,7 @@ test(
   "Delete published entry — preview env, target PR head branch → preview URL 404s",
   { tag: ["@admin-write"] },
   async ({ page }) => {
-    test.skip(
-      !getPat(),
-      "CMS_E2E_PAT not set — preview delete-published spec disabled.",
-    );
+    test.skip(!getPat(), "CMS_E2E_PAT not set — preview delete-published spec disabled.");
     test.skip(
       !PR_NUMBER || !PR_HEAD_REF,
       "PR_NUMBER / PR_HEAD_REF not set — this spec only runs in the dedicated preview workflow.",
@@ -208,10 +203,7 @@ test(
         maxRedirects: 0,
         failOnStatusCode: false,
       });
-      expect(
-        res.status(),
-        `${publicUrl} must not exist yet (unique per-run slug)`,
-      ).toBe(404);
+      expect(res.status(), `${publicUrl} must not exist yet (unique per-run slug)`).toBe(404);
     });
 
     // ── 1. SEED leg — create + publish the throw-away canary ───────
@@ -255,10 +247,9 @@ test(
         // Move to a stable, always-present entry editor so the
         // deploy-status pill has a mount point while the auto-merge →
         // deploy-preview chain runs in the background.
-        await p.goto(
-          `${PREVIEW_ADMIN}#/collections/e2e/entries/${PILL_MOUNT_SLUG}`,
-          { waitUntil: "domcontentloaded" },
-        );
+        await p.goto(`${PREVIEW_ADMIN}#/collections/e2e/entries/${PILL_MOUNT_SLUG}`, {
+          waitUntil: "domcontentloaded",
+        });
         await expect(p.getByRole("textbox", { name: /^Title$/i })).toBeVisible({
           timeout: 60_000,
         });
@@ -301,9 +292,7 @@ test(
         // every action so a UI-shape change fails in ~30s, not at the
         // outer test timeout. Mirrors cms-delete-published.spec.js
         // step 4 exactly.
-        const trigger = p
-          .getByRole("button", { name: /delete (published )?entry/i })
-          .first();
+        const trigger = p.getByRole("button", { name: /delete (published )?entry/i }).first();
         if (await trigger.isVisible({ timeout: 5_000 }).catch(() => false)) {
           await trigger.click({ timeout: 30_000 });
         } else {
@@ -360,23 +349,16 @@ test(
             );
           } catch (e) {
             console.warn(
-              `[cms-delete-published-preview] transient pulls list error: ${
-                e && e.message
-              }`,
+              `[cms-delete-published-preview] transient pulls list error: ${e && e.message}`,
             );
           }
           const cmsPrs = (prs || []).filter(
-            (pr) =>
-              pr.head &&
-              typeof pr.head.ref === "string" &&
-              pr.head.ref.startsWith("cms/"),
+            (pr) => pr.head && typeof pr.head.ref === "string" && pr.head.ref.startsWith("cms/"),
           );
           for (const pr of cmsPrs) {
             let files;
             try {
-              files = await gh(
-                `/repos/${HOST_REPO}/pulls/${pr.number}/files?per_page=100`,
-              );
+              files = await gh(`/repos/${HOST_REPO}/pulls/${pr.number}/files?per_page=100`);
             } catch (e) {
               console.warn(
                 `[cms-delete-published-preview] could not read PR #${pr.number} files: ${
@@ -414,10 +396,9 @@ test(
         }
         // Re-mount the pill on a stable entry editor (the deleted
         // entry's editor unmounts; the collection list has no pill).
-        await p.goto(
-          `${PREVIEW_ADMIN}#/collections/e2e/entries/${PILL_MOUNT_SLUG}`,
-          { waitUntil: "domcontentloaded" },
-        );
+        await p.goto(`${PREVIEW_ADMIN}#/collections/e2e/entries/${PILL_MOUNT_SLUG}`, {
+          waitUntil: "domcontentloaded",
+        });
         await expect(p.getByRole("textbox", { name: /^Title$/i })).toBeVisible({
           timeout: 60_000,
         });
@@ -496,9 +477,7 @@ test.afterAll(async () => {
     console.warn(`[cleanup-harness] removed ${filePath} from ${PR_HEAD_REF}`);
   } catch (e) {
     console.warn(
-      `[cleanup-harness] could not remove ${filePath} from ${PR_HEAD_REF}: ${
-        e && e.message
-      }`,
+      `[cleanup-harness] could not remove ${filePath} from ${PR_HEAD_REF}: ${e && e.message}`,
     );
   }
 });

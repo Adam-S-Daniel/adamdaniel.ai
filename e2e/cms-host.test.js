@@ -45,9 +45,7 @@ test.describe("cms-host target resolver", () => {
   });
 
   test("previewTarget falls back to PR_NUMBER then GITHUB_PR_NUMBER", () => {
-    expect(previewTarget("", { PR_NUMBER: "41" }).host).toBe(
-      "https://preview-pr41.adamdaniel.ai",
-    );
+    expect(previewTarget("", { PR_NUMBER: "41" }).host).toBe("https://preview-pr41.adamdaniel.ai");
     expect(previewTarget("", { GITHUB_PR_NUMBER: "42" }).host).toBe(
       "https://preview-pr42.adamdaniel.ai",
     );
@@ -84,8 +82,6 @@ test.describe("cms-host target resolver", () => {
   });
 
   test("CMS_TARGET is case-insensitive", () => {
-    expect(
-      resolveCmsTarget({ CMS_TARGET: "PREVIEW", PR_NUMBER: "3" }).isPreview,
-    ).toBe(true);
+    expect(resolveCmsTarget({ CMS_TARGET: "PREVIEW", PR_NUMBER: "3" }).isPreview).toBe(true);
   });
 });

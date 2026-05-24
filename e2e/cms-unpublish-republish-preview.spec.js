@@ -69,17 +69,10 @@
 const { test, expect } = require("./base");
 const { seedDecapAuth, getPat, HOST_REPO } = require("./decap-pat");
 const { closeStaleDecapPrOnBranch } = require("./cms-fixture-pr");
-const {
-  addLabel,
-  gh,
-  waitForCmsPullRequest,
-} = require("./github-actions-poll");
+const { addLabel, gh, waitForCmsPullRequest } = require("./github-actions-poll");
 const { waitForChangeReflected } = require("./deploy-pill");
 const { previewTarget } = require("./cms-host");
-const {
-  readPublishedFlag,
-  forcePublishedFalse,
-} = require("./fixture-baseline");
+const { readPublishedFlag, forcePublishedFalse } = require("./fixture-baseline");
 
 const FIXTURE_PATH = "_posts/2024-01-02-e2e-unpublish-canary.md";
 const FIXTURE_SLUG = "e2e-unpublish-canary";
@@ -116,9 +109,7 @@ function toContentBase64(text) {
 }
 
 async function fetchFixtureFromBranch(branch) {
-  return gh(
-    `/repos/${HOST_REPO}/contents/${FIXTURE_PATH}?ref=${encodeURIComponent(branch)}`,
-  );
+  return gh(`/repos/${HOST_REPO}/contents/${FIXTURE_PATH}?ref=${encodeURIComponent(branch)}`);
 }
 
 // `readPublishedFlag` and `forcePublishedFalse` are shared from
@@ -177,10 +168,7 @@ test(
   "CMS unpublish + re-publish — preview env, target PR head branch",
   { tag: ["@admin-write"] },
   async ({ page }) => {
-    test.skip(
-      !getPat(),
-      "CMS_E2E_PAT not set — preview unpublish/re-publish disabled.",
-    );
+    test.skip(!getPat(), "CMS_E2E_PAT not set — preview unpublish/re-publish disabled.");
     test.skip(
       !PR_NUMBER || !PR_HEAD_REF,
       "PR_NUMBER / PR_HEAD_REF not set — this spec only runs in the cms-preview-loops workflow.",
@@ -210,16 +198,13 @@ test(
           { cause: e },
         );
       }
-      const remoteBody = Buffer.from(current.content, "base64").toString(
-        "utf8",
-      );
+      const remoteBody = Buffer.from(current.content, "base64").toString("utf8");
       baselineFileText = forcePublishedFalse(remoteBody, FIXTURE_PATH);
       if (remoteBody !== baselineFileText) {
         await writeFixtureOnBranch({
           branch: PR_HEAD_REF,
           fileText: baselineFileText,
-          message:
-            "test(preview-unpublish): reset fixture baseline (published: false) before run",
+          message: "test(preview-unpublish): reset fixture baseline (published: false) before run",
         });
       }
     });
@@ -238,10 +223,9 @@ test(
         if (res.status() >= 400 && res.status() < 500) break;
         await page.waitForTimeout(8000);
       }
-      expect(
-        lastStatus,
-        `${PUBLIC_URL} should 4xx at baseline (published: false)`,
-      ).toMatch(/^4\d\d$/);
+      expect(lastStatus, `${PUBLIC_URL} should 4xx at baseline (published: false)`).toMatch(
+        /^4\d\d$/,
+      );
     });
 
     // ── 2. Open admin, navigate to the unpublish-canary entry ───────
@@ -346,20 +330,21 @@ test(
       await closeStaleDecapPrOnBranch({
         branch: `cms/posts/${FIXTURE_FILE_SLUG}`,
       });
-      await page.goto(
-        `${PREVIEW_ADMIN}#/collections/posts/entries/${FIXTURE_FILE_SLUG}`,
-        { waitUntil: "domcontentloaded" },
-      );
+      await page.goto(`${PREVIEW_ADMIN}#/collections/posts/entries/${FIXTURE_FILE_SLUG}`, {
+        waitUntil: "domcontentloaded",
+      });
       await page.reload({ waitUntil: "domcontentloaded" });
-      await expect(page.getByRole("textbox", { name: /^Title$/i })).toBeVisible(
-        { timeout: 60_000 },
-      );
+      await expect(page.getByRole("textbox", { name: /^Title$/i })).toBeVisible({
+        timeout: 60_000,
+      });
       // After the re-publish chain landed, the editor should now read
       // the toggle as ON; assert it so the OFF flip below is a real
       // state transition (not a no-op on a stale view).
-      await expect(
-        page.getByRole("switch", { name: /^Published$/i }).first(),
-      ).toHaveAttribute("aria-checked", "true", { timeout: 30_000 });
+      await expect(page.getByRole("switch", { name: /^Published$/i }).first()).toHaveAttribute(
+        "aria-checked",
+        "true",
+        { timeout: 30_000 },
+      );
     });
 
     await test.step("Toggle Published → OFF via UI", async () => {

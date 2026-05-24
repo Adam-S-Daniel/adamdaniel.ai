@@ -30,9 +30,7 @@ const PROD_FIXTURES = [
 function legacyForcePublishedFalse(fileText, FIXTURE_PATH) {
   const fmEnd = fileText.indexOf("\n---\n", 4);
   if (fmEnd < 0) {
-    throw new Error(
-      `Fixture ${FIXTURE_PATH} is missing its closing front-matter delimiter.`,
-    );
+    throw new Error(`Fixture ${FIXTURE_PATH} is missing its closing front-matter delimiter.`);
   }
   const frontMatter = fileText.slice(0, fmEnd);
   const body = fileText.slice(fmEnd);
@@ -44,9 +42,7 @@ function legacyForcePublishedFalse(fileText, FIXTURE_PATH) {
 function legacySanitizeToBaseline(fileText, FIXTURE_PATH, BASELINE_BODY) {
   const fmEnd = fileText.indexOf("\n---\n", 4);
   if (fmEnd < 0) {
-    throw new Error(
-      `Fixture ${FIXTURE_PATH} is missing its closing front-matter delimiter.`,
-    );
+    throw new Error(`Fixture ${FIXTURE_PATH} is missing its closing front-matter delimiter.`);
   }
   let frontMatter = fileText.slice(0, fmEnd);
   if (/^published:\s*.*$/m.test(frontMatter)) {
@@ -69,8 +65,7 @@ test.describe("fixture-baseline shared helpers (#1053)", () => {
   });
 
   test("forcePublishedFalse forces false, preserves body, is idempotent", () => {
-    const src =
-      "---\ntitle: T\npublished: true\ntags: []\n---\nBODY line 1\nBODY 2\n";
+    const src = "---\ntitle: T\npublished: true\ntags: []\n---\nBODY line 1\nBODY 2\n";
     const out = forcePublishedFalse(src, "x.md");
     expect(readPublishedFlag(out)).toBe(false);
     // Body byte-for-byte intact.
@@ -99,13 +94,10 @@ test.describe("fixture-baseline shared helpers (#1053)", () => {
   });
 
   test("sanitizeToBaseline forces false AND swaps body for baseline", () => {
-    const src =
-      "---\ntitle: T\npublished: true\n---\nstale marker e2e:run:123\n";
+    const src = "---\ntitle: T\npublished: true\n---\nstale marker e2e:run:123\n";
     const out = sanitizeToBaseline(src, "x.md", "CLEAN BASELINE BODY");
     expect(readPublishedFlag(out)).toBe(false);
-    expect(out).toBe(
-      "---\ntitle: T\npublished: false\n---\nCLEAN BASELINE BODY",
-    );
+    expect(out).toBe("---\ntitle: T\npublished: false\n---\nCLEAN BASELINE BODY");
     expect(out).not.toContain("stale marker");
   });
 
@@ -117,9 +109,7 @@ test.describe("fixture-baseline shared helpers (#1053)", () => {
       '---\ntitle: T\npublished: "true"\n---\nquoted\n',
     ];
     for (const s of samples) {
-      expect(forcePublishedFalse(s, "f.md")).toBe(
-        legacyForcePublishedFalse(s, "f.md"),
-      );
+      expect(forcePublishedFalse(s, "f.md")).toBe(legacyForcePublishedFalse(s, "f.md"));
       expect(sanitizeToBaseline(s, "f.md", "BASE")).toBe(
         legacySanitizeToBaseline(s, "f.md", "BASE"),
       );
@@ -171,12 +161,8 @@ test.describe("fixture-baseline shared helpers (#1053)", () => {
     const MUTATE = "_posts/2099-01-01-e2e-mutation-canary.md";
 
     // Branch construction matches the specs' DECAP_BRANCH constant.
-    expect(ownDecapBranchFor(MEDIA)).toBe(
-      "cms/posts/2099-01-03-e2e-media-roundtrip",
-    );
-    expect(ownDecapBranchFor(MUTATE)).toBe(
-      "cms/posts/2099-01-01-e2e-mutation-canary",
-    );
+    expect(ownDecapBranchFor(MEDIA)).toBe("cms/posts/2099-01-03-e2e-media-roundtrip");
+    expect(ownDecapBranchFor(MUTATE)).toBe("cms/posts/2099-01-01-e2e-mutation-canary");
 
     // push / main / local dev (no PR head ref): strict assertion
     // APPLIES — this IS the #1053 main-protection, unchanged.
@@ -194,35 +180,17 @@ test.describe("fixture-baseline shared helpers (#1053)", () => {
 
     // The fixture's OWN Decap branch: assertion RELAXED so the loop's
     // transient publish PR can merge (the deadlock this fix removes).
-    expect(
-      baselineAssertionApplies(
-        MEDIA,
-        "cms/posts/2099-01-03-e2e-media-roundtrip",
-      ),
-    ).toBe(false);
-    expect(
-      baselineAssertionApplies(
-        MUTATE,
-        "cms/posts/2099-01-01-e2e-mutation-canary",
-      ),
-    ).toBe(false);
+    expect(baselineAssertionApplies(MEDIA, "cms/posts/2099-01-03-e2e-media-roundtrip")).toBe(false);
+    expect(baselineAssertionApplies(MUTATE, "cms/posts/2099-01-01-e2e-mutation-canary")).toBe(
+      false,
+    );
 
     // Per-fixture PRECISION: one fixture's branch must NOT relax the
     // other fixture's assertion — a cross-fixture published:true is
     // still caught (a media-branch PR can't sneak the mutation canary
     // to published:true, and vice-versa).
-    expect(
-      baselineAssertionApplies(
-        MUTATE,
-        "cms/posts/2099-01-03-e2e-media-roundtrip",
-      ),
-    ).toBe(true);
-    expect(
-      baselineAssertionApplies(
-        MEDIA,
-        "cms/posts/2099-01-01-e2e-mutation-canary",
-      ),
-    ).toBe(true);
+    expect(baselineAssertionApplies(MUTATE, "cms/posts/2099-01-03-e2e-media-roundtrip")).toBe(true);
+    expect(baselineAssertionApplies(MEDIA, "cms/posts/2099-01-01-e2e-mutation-canary")).toBe(true);
   });
 
   test("isScheduledMustRun / loudBail: loud on schedule, fixme otherwise", () => {

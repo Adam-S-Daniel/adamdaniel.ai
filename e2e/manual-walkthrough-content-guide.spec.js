@@ -156,9 +156,7 @@ async function probeMediaLibrary(page, section) {
   ).toBeVisible({ timeout: 60_000 });
   await loginBtn.click();
 
-  await page
-    .getByRole("link", { name: /^posts$/i })
-    .waitFor({ timeout: 30_000 });
+  await page.getByRole("link", { name: /^posts$/i }).waitFor({ timeout: 30_000 });
   await page.goto("/admin/index-local.html#/collections/posts/new");
 
   const titleField = page.getByLabel(/^Title$/);
@@ -170,9 +168,7 @@ async function probeMediaLibrary(page, section) {
   // The guide: "Click any image field → Choose Image". Decap's button
   // is labelled "Choose an Image" / "Choose Image" depending on
   // version; match both.
-  const chooseImage = page
-    .getByRole("button", { name: /choose (an )?image/i })
-    .first();
+  const chooseImage = page.getByRole("button", { name: /choose (an )?image/i }).first();
   await expect(
     chooseImage,
     `${citation(section)}: the Featured Image widget did not render its "Choose Image" button — the documented "click any image field" entry-point is gone.`,
@@ -264,9 +260,7 @@ const PROBES = {
 // ── Test wiring ──────────────────────────────────────────────────────
 
 const guideExists = fs.existsSync(GUIDE_PATH);
-const sections = guideExists
-  ? parseSections(fs.readFileSync(GUIDE_PATH, "utf8"))
-  : [];
+const sections = guideExists ? parseSections(fs.readFileSync(GUIDE_PATH, "utf8")) : [];
 
 test.describe(
   "Manual walkthrough — docs/CONTENT_GUIDE.md @parity",
@@ -283,9 +277,7 @@ test.describe(
         TARGET === "prod",
         "Probes drive /admin/index-local.html (local_backend: true). prod has no local proxy, so login can't populate the sidebar.",
       );
-      page.on("pageerror", (err) =>
-        console.log(`[pageerror] ${err.name}: ${err.message}`),
-      );
+      page.on("pageerror", (err) => console.log(`[pageerror] ${err.name}: ${err.message}`));
       // Decap CMS uses native window.confirm() for delete / unpublish
       // confirmations; without a persistent listener, Playwright auto-
       // dismisses the dialog and Decap reads it as "user cancelled."

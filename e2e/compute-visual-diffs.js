@@ -58,11 +58,7 @@ function pixelDiffRatio(a, b) {
     const dr = Math.abs(a.data[i + 0] - b.data[i + 0]);
     const dg = Math.abs(a.data[i + 1] - b.data[i + 1]);
     const db = Math.abs(a.data[i + 2] - b.data[i + 2]);
-    if (
-      dr > PER_CHANNEL_TOLERANCE ||
-      dg > PER_CHANNEL_TOLERANCE ||
-      db > PER_CHANNEL_TOLERANCE
-    ) {
+    if (dr > PER_CHANNEL_TOLERANCE || dg > PER_CHANNEL_TOLERANCE || db > PER_CHANNEL_TOLERANCE) {
       diff++;
     }
   }
@@ -82,11 +78,7 @@ function readPNG(file) {
 function computeAll({ changesPath, prDir, prodDir, outPath }) {
   const changes = JSON.parse(fs.readFileSync(changesPath, "utf8"));
   const newSet = new Set(changes.new || []);
-  const all = [
-    ...(changes.changed || []),
-    ...(changes.new || []),
-    ...(changes.unchanged || []),
-  ];
+  const all = [...(changes.changed || []), ...(changes.new || []), ...(changes.unchanged || [])];
 
   const pages = [];
   let identical = 0;
@@ -156,9 +148,7 @@ module.exports = {
 if (require.main === module) {
   const [, , changesPath, prDir, prodDir, outPath] = process.argv;
   if (!changesPath || !prDir || !prodDir || !outPath) {
-    console.error(
-      "usage: compute-visual-diffs.js <changes.json> <pr-dir> <prod-dir> <out.json>",
-    );
+    console.error("usage: compute-visual-diffs.js <changes.json> <pr-dir> <prod-dir> <out.json>");
     process.exit(2);
   }
   const summary = computeAll({ changesPath, prDir, prodDir, outPath });

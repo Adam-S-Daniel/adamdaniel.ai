@@ -86,9 +86,7 @@ function baseDeps(log, overrides = {}) {
       log.push(`dep.addLabel(${JSON.stringify(args)})`);
     },
     waitForChangeReflected: async (args) => {
-      log.push(
-        `dep.waitForChangeReflected(pill=${args.pillId},urlTimeoutMs=${args.urlTimeoutMs})`,
-      );
+      log.push(`dep.waitForChangeReflected(pill=${args.pillId},urlTimeoutMs=${args.urlTimeoutMs})`);
       // Exercise the urlCheck closure so a broken assertReflected
       // surfaces here rather than silently.
       await args.urlCheck();
@@ -106,11 +104,7 @@ const TARGET = {
 
 test.describe("run-cms-loop spine", () => {
   test("exports the ready-strategy allow-list", () => {
-    expect([...READY_STRATEGIES].sort()).toEqual([
-      "label",
-      "none",
-      "ui-publish",
-    ]);
+    expect([...READY_STRATEGIES].sort()).toEqual(["label", "none", "ui-publish"]);
   });
 
   test("happy path (label): phases run in spine order and return the matched PR", async () => {
@@ -131,8 +125,7 @@ test.describe("run-cms-loop spine", () => {
         filePath: "_e2e/canary-delete-preview-1.md",
         canaryMarker: "e2e-delete-preview:1",
         ready: "label",
-        beforeReflect: async (p) =>
-          p.goto("ADMIN#/collections/e2e/entries/canary-page"),
+        beforeReflect: async (p) => p.goto("ADMIN#/collections/e2e/entries/canary-page"),
         assertReflected: async () => true,
         urlTimeoutMs: 123,
       },
@@ -183,9 +176,7 @@ test.describe("run-cms-loop spine", () => {
     expect(log).not.toContain("page.getByText(/Changes saved/i)");
     // No PR wait (no base/filePath/canaryMarker) and ready:none → no
     // addLabel.
-    expect(log.some((l) => l.startsWith("dep.waitForCmsPullRequest"))).toBe(
-      false,
-    );
+    expect(log.some((l) => l.startsWith("dep.waitForCmsPullRequest"))).toBe(false);
     expect(log.some((l) => l.startsWith("dep.addLabel"))).toBe(false);
     expect(log.some((l) => l.startsWith("dep.seedDecapAuth"))).toBe(false);
   });
@@ -251,18 +242,16 @@ test.describe("run-cms-loop spine", () => {
       mutate: async () => {},
       assertReflected: async () => true,
     };
-    await expect(runCmsLoop(null, ok, baseDeps(log))).rejects.toThrow(
-      /page is required/,
+    await expect(runCmsLoop(null, ok, baseDeps(log))).rejects.toThrow(/page is required/);
+    await expect(runCmsLoop(page, { ...ok, target: undefined }, baseDeps(log))).rejects.toThrow(
+      /target with a pillId/,
     );
-    await expect(
-      runCmsLoop(page, { ...ok, target: undefined }, baseDeps(log)),
-    ).rejects.toThrow(/target with a pillId/);
-    await expect(
-      runCmsLoop(page, { ...ok, openEntry: undefined }, baseDeps(log)),
-    ).rejects.toThrow(/openEntry/);
-    await expect(
-      runCmsLoop(page, { ...ok, mutate: undefined }, baseDeps(log)),
-    ).rejects.toThrow(/mutate/);
+    await expect(runCmsLoop(page, { ...ok, openEntry: undefined }, baseDeps(log))).rejects.toThrow(
+      /openEntry/,
+    );
+    await expect(runCmsLoop(page, { ...ok, mutate: undefined }, baseDeps(log))).rejects.toThrow(
+      /mutate/,
+    );
     await expect(
       runCmsLoop(page, { ...ok, assertReflected: undefined }, baseDeps(log)),
     ).rejects.toThrow(/assertReflected/);
@@ -302,8 +291,6 @@ test.describe("run-cms-loop spine", () => {
         },
         baseDeps(log),
       ),
-    ).rejects.toThrow(
-      /ready:'label' requires base \+ filePath \+ canaryMarker/,
-    );
+    ).rejects.toThrow(/ready:'label' requires base \+ filePath \+ canaryMarker/);
   });
 });

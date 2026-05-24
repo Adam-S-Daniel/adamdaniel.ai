@@ -162,9 +162,7 @@ test.describe(
     test.beforeEach(() => {});
 
     for (const url of CONTENT_URLS) {
-      test(`@parity no console.error or pageerror on ${url}`, async ({
-        page,
-      }) => {
+      test(`@parity no console.error or pageerror on ${url}`, async ({ page }) => {
         const consoleErrors = [];
         const pageErrors = [];
 
@@ -188,10 +186,7 @@ test.describe(
           ...filteredPage.map((t) => `pageerror: ${t}`),
         ];
 
-        expect(
-          all,
-          `Unexpected JS errors on ${url}:\n  ${all.join("\n  ")}`,
-        ).toEqual([]);
+        expect(all, `Unexpected JS errors on ${url}:\n  ${all.join("\n  ")}`).toEqual([]);
       });
     }
   },

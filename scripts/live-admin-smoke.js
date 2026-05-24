@@ -20,12 +20,9 @@
  */
 (async function liveAdminSmoke() {
   const out = [];
-  const ok = (k, v, hint) =>
-    out.push({ check: k, status: "✓", detail: v, hint: hint || "" });
-  const bad = (k, v, hint) =>
-    out.push({ check: k, status: "✗", detail: v, hint });
-  const meh = (k, v, hint) =>
-    out.push({ check: k, status: "?", detail: v, hint });
+  const ok = (k, v, hint) => out.push({ check: k, status: "✓", detail: v, hint: hint || "" });
+  const bad = (k, v, hint) => out.push({ check: k, status: "✗", detail: v, hint });
+  const meh = (k, v, hint) => out.push({ check: k, status: "?", detail: v, hint });
 
   // ── 1. Shim is loaded ─────────────────────────────────────────────
   if (window.__publishViaAutoMergeInstalled) {
@@ -96,16 +93,11 @@
     const have =
       scopeList.includes(s) ||
       (s === "user" && scopeList.some((x) => x.startsWith("user"))) ||
-      (s === "repo" &&
-        scopeList.some((x) => x === "repo" || x.startsWith("repo:")));
+      (s === "repo" && scopeList.some((x) => x === "repo" || x.startsWith("repo:")));
     if (have) {
       ok("  has " + s + " scope", "yes");
     } else {
-      bad(
-        "  has " + s + " scope",
-        "NO",
-        "CMS API calls will fail. Re-authenticate.",
-      );
+      bad("  has " + s + " scope", "NO", "CMS API calls will fail. Re-authenticate.");
     }
   }
 

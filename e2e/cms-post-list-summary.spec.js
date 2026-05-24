@@ -103,10 +103,7 @@ test.describe(
         const posts = findCollection(yml, "posts");
         expect(posts, "posts collection must exist").not.toBeNull();
         const summary = findSummaryLine(posts);
-        expect(
-          summary,
-          "posts collection must declare a summary template",
-        ).not.toBeNull();
+        expect(summary, "posts collection must declare a summary template").not.toBeNull();
         // The literal template is shared across all three configs — drift
         // between them would mean the local / test runs render a different
         // list label than production.

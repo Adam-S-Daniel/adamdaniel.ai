@@ -58,11 +58,7 @@ const { prodTarget } = require("./cms-host");
 
 // Prod host triplet resolved through the shared cms-host SSOT (byte-identical
 // to the old hardcoded literals) so prod/preview surfaces can't drift.
-const {
-  host: PROD_HOST,
-  adminUrl: PROD_ADMIN,
-  pillId: PILL_PROD,
-} = prodTarget();
+const { host: PROD_HOST, adminUrl: PROD_ADMIN, pillId: PILL_PROD } = prodTarget();
 const PROD_CANARY = process.env.PROD_CANARY === "1";
 
 // Runtime-unique slug + name avoid race with concurrent runs and stale
@@ -89,9 +85,7 @@ test.describe.configure({
 // reads it as "user cancelled".
 test.beforeEach(({ page }) => {
   page.on("dialog", (d) => d.accept());
-  page.on("pageerror", (err) =>
-    console.log(`[pageerror] ${err.name}: ${err.message}`),
-  );
+  page.on("pageerror", (err) => console.log(`[pageerror] ${err.name}: ${err.message}`));
 });
 
 // Fire-and-forget safety-net cleanup. If the UI-driven delete in the
@@ -175,9 +169,7 @@ test.afterAll(async () => {
       `[cleanup-safety-net] opened cleanup PR #${pr.number} on branch ${branch}; not waiting for merge`,
     );
   } catch (e) {
-    console.warn(
-      `[cleanup-safety-net] failed to open cleanup PR: ${e && e.message}`,
-    );
+    console.warn(`[cleanup-safety-net] failed to open cleanup PR: ${e && e.message}`);
   }
 });
 
@@ -185,10 +177,7 @@ test(
   "CMS — tags lifecycle (host repo, target main)",
   { tag: ["@admin-write"] },
   async ({ page }) => {
-    test.skip(
-      PROD_CANARY,
-      "PROD_CANARY=1 — daily canary probe doesn't run mutation specs.",
-    );
+    test.skip(PROD_CANARY, "PROD_CANARY=1 — daily canary probe doesn't run mutation specs.");
     test.skip(
       !getPat(),
       "CMS_E2E_PAT not set — host-repo tags-lifecycle disabled. (Forks and Dependabot are expected to land here.)",
@@ -255,9 +244,9 @@ test(
     await test.step("Drive Status: Draft → Ready", async () => {
       await page.getByRole("button", { name: /^Status:\s*Draft$/i }).click();
       await page.getByRole("menuitem", { name: /^Ready$/i }).click();
-      await expect(
-        page.getByRole("button", { name: /^Status:\s*Ready$/i }),
-      ).toBeVisible({ timeout: 30_000 });
+      await expect(page.getByRole("button", { name: /^Status:\s*Ready$/i })).toBeVisible({
+        timeout: 30_000,
+      });
     });
 
     await test.step("Click Publish → Publish Now", async () => {

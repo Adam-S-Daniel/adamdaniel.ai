@@ -52,10 +52,7 @@
 
 "use strict";
 
-const {
-  canonical,
-  HEAD_REF_ALLOWLIST,
-} = require("./auto-resolve-newline-conflict");
+const { canonical, HEAD_REF_ALLOWLIST } = require("./auto-resolve-newline-conflict");
 
 const TIMEBOX_MS = 25_000;
 const RATE_LIMIT_FLOOR = 50;
@@ -81,9 +78,7 @@ async function gh(endpoint, { headers = {}, deadline } = {}) {
     e.timebox = true;
     throw e;
   }
-  const url = endpoint.startsWith("https://")
-    ? endpoint
-    : `https://api.github.com${endpoint}`;
+  const url = endpoint.startsWith("https://") ? endpoint : `https://api.github.com${endpoint}`;
   const res = await fetch(url, {
     headers: {
       Authorization: `token ${process.env.GH_TOKEN}`,
@@ -93,18 +88,13 @@ async function gh(endpoint, { headers = {}, deadline } = {}) {
       ...headers,
     },
   });
-  const remaining = parseInt(
-    res.headers.get("x-ratelimit-remaining") || "9999",
-    10,
-  );
+  const remaining = parseInt(res.headers.get("x-ratelimit-remaining") || "9999", 10);
   if (remaining < RATE_LIMIT_FLOOR) {
     throw new RateLimitedError(remaining, res.headers.get("x-ratelimit-reset"));
   }
   if (!res.ok) {
     const body = await res.text();
-    const err = new Error(
-      `GH API ${endpoint} → ${res.status}: ${body.slice(0, 200)}`,
-    );
+    const err = new Error(`GH API ${endpoint} → ${res.status}: ${body.slice(0, 200)}`);
     err.status = res.status;
     throw err;
   }
@@ -119,10 +109,7 @@ async function tryCanonicalCollapse(repo, pr, deadline) {
   //   "real-conflict"  — manual rebase or content fix needed
   //   "indeterminate"  — couldn't decide (binary, timebox, etc.)
   try {
-    const files = await gh(
-      `/repos/${repo}/pulls/${pr.number}/files?per_page=50`,
-      { deadline },
-    );
+    const files = await gh(`/repos/${repo}/pulls/${pr.number}/files?per_page=50`, { deadline });
     if (!files || files.length === 0) return "indeterminate";
     for (const f of files.slice(0, 5)) {
       if (f.status !== "modified") return "real-conflict";
@@ -135,12 +122,7 @@ async function tryCanonicalCollapse(repo, pr, deadline) {
         `/repos/${repo}/contents/${encodeURI(f.filename)}?ref=${encodeURIComponent(pr.head.ref)}`,
         { deadline },
       );
-      if (
-        !baseRes ||
-        !headRes ||
-        baseRes.type !== "file" ||
-        headRes.type !== "file"
-      ) {
+      if (!baseRes || !headRes || baseRes.type !== "file" || headRes.type !== "file") {
         return "indeterminate";
       }
       const base = Buffer.from(baseRes.content, "base64").toString("utf8");
@@ -178,10 +160,9 @@ async function classifyPr(repo, pr, deadline) {
     }
   } else if (pr.mergeable_state === "blocked") {
     try {
-      const checks = await gh(
-        `/repos/${repo}/commits/${pr.head.sha}/check-runs?per_page=50`,
-        { deadline },
-      );
+      const checks = await gh(`/repos/${repo}/commits/${pr.head.sha}/check-runs?per_page=50`, {
+        deadline,
+      });
       const runs = (checks && checks.check_runs) || [];
       const failing = runs.filter(
         (c) =>
@@ -189,33 +170,21 @@ async function classifyPr(repo, pr, deadline) {
           c.conclusion === "cancelled" ||
           c.conclusion === "timed_out",
       );
-      const pending = runs.filter(
-        (c) => c.status === "in_progress" || c.status === "queued",
-      );
-      out.push(
-        `  - blocked: ${failing.length} failing, ${pending.length} pending check(s)`,
-      );
+      const pending = runs.filter((c) => c.status === "in_progress" || c.status === "queued");
+      out.push(`  - blocked: ${failing.length} failing, ${pending.length} pending check(s)`);
       for (const c of failing.slice(0, MAX_CHECKS_SHOWN)) {
-        out.push(
-          `    - ⛔ ${c.name} (${c.conclusion}) → <${c.html_url || c.details_url || ""}>`,
-        );
+        out.push(`    - ⛔ ${c.name} (${c.conclusion}) → <${c.html_url || c.details_url || ""}>`);
       }
       for (const c of pending.slice(0, MAX_CHECKS_SHOWN)) {
-        out.push(
-          `    - ⏳ ${c.name} (${c.status}) → <${c.html_url || c.details_url || ""}>`,
-        );
+        out.push(`    - ⏳ ${c.name} (${c.status}) → <${c.html_url || c.details_url || ""}>`);
       }
     } catch (e) {
-      out.push(
-        `  - blocked: couldn't fetch check details (${e.message.slice(0, 100)})`,
-      );
+      out.push(`  - blocked: couldn't fetch check details (${e.message.slice(0, 100)})`);
     }
   } else if (pr.mergeable_state === "unstable") {
     out.push(`  - unstable: a non-required check failed; auto-merge holding`);
   } else if (pr.mergeable_state === "behind") {
-    out.push(
-      `  - behind: PR head is behind its base; needs a base-update or rebase to merge`,
-    );
+    out.push(`  - behind: PR head is behind its base; needs a base-update or rebase to merge`);
   } else if (pr.auto_merge && pr.auto_merge.enabled_by) {
     out.push(
       `  - auto-merge enabled by @${pr.auto_merge.enabled_by.login}; merging when checks pass`,
@@ -267,9 +236,7 @@ async function diagnoseOpenCmsPrs(repo, deadline) {
     const shown = candidates.slice(0, MAX_PRS);
     for (const pr of shown) {
       if (Date.now() > deadline) {
-        lines.push(
-          `  _(timebox exceeded; ${candidates.length - shown.indexOf(pr)} PRs elided)_`,
-        );
+        lines.push(`  _(timebox exceeded; ${candidates.length - shown.indexOf(pr)} PRs elided)_`);
         break;
       }
       lines.push(...(await classifyPr(repo, pr, deadline)));
@@ -312,9 +279,7 @@ async function diagnoseDeployQueue(repo, deadline) {
       );
     }
   } catch (e) {
-    lines.push(
-      `_couldn't fetch deploy-production runs: ${e.message.slice(0, 200)}_`,
-    );
+    lines.push(`_couldn't fetch deploy-production runs: ${e.message.slice(0, 200)}_`);
   }
   return lines;
 }
@@ -328,9 +293,7 @@ function shouldCheckDeployQueue(waitingFor, kind) {
   if (kind === "url") return true;
   if (kind === "merge") return true; // merging blocked on required checks blocked on deploy
   if (!waitingFor) return true; // default-on; one extra API call
-  return /url|public|deploy|fetchPublicUrl|reflected|live|baseline/i.test(
-    waitingFor,
-  );
+  return /url|public|deploy|fetchPublicUrl|reflected|live|baseline/i.test(waitingFor);
 }
 
 async function buildReport({ repo, waitingFor, waitPrNumber, kind }) {
@@ -359,9 +322,7 @@ async function buildReport({ repo, waitingFor, waitPrNumber, kind }) {
 async function main() {
   const repo = process.env.GH_REPO;
   if (!repo) {
-    process.stdout.write(
-      `### Stuck-PR diagnostic\n\n_GH_REPO unavailable; diagnostic skipped._\n`,
-    );
+    process.stdout.write(`### Stuck-PR diagnostic\n\n_GH_REPO unavailable; diagnostic skipped._\n`);
     process.exit(0);
   }
   if (!process.env.GH_TOKEN) {

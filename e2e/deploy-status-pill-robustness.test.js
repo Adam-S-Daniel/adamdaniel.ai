@@ -45,14 +45,10 @@ test.describe("deploy-status-pill: robustness invariants", () => {
 
   test("rate-limit detection inspects X-RateLimit-Remaining and status 429", () => {
     const src = readScript();
-    expect(src, "missing X-RateLimit-Remaining check").toMatch(
-      /X-RateLimit-Remaining/,
-    );
+    expect(src, "missing X-RateLimit-Remaining check").toMatch(/X-RateLimit-Remaining/);
     // Both "=== 429" comparison styles are accepted (=== or .status === 429
     // or just `429` literal in a comparison expression).
-    expect(src, "missing status 429 handling").toMatch(
-      /[=]==?\s*429|status\s*===?\s*429|429/,
-    );
+    expect(src, "missing status 429 handling").toMatch(/[=]==?\s*429|status\s*===?\s*429|429/);
   });
 
   test("rate-limited responses do NOT retry (just warn + return null)", () => {
@@ -68,13 +64,10 @@ test.describe("deploy-status-pill: robustness invariants", () => {
 
   test("STALE_THRESHOLD_MS is defined and amber rendering exists", () => {
     const src = readScript();
-    expect(src, "missing STALE_THRESHOLD_MS constant").toMatch(
-      /STALE_THRESHOLD_MS\s*=/,
+    expect(src, "missing STALE_THRESHOLD_MS constant").toMatch(/STALE_THRESHOLD_MS\s*=/);
+    expect(src, "missing renderStalePill function — visible pills can never flip to amber").toMatch(
+      /function\s+renderStalePill/,
     );
-    expect(
-      src,
-      "missing renderStalePill function — visible pills can never flip to amber",
-    ).toMatch(/function\s+renderStalePill/);
     // Amber colour family. GitHub Primer's warning yellow is #d4a72c
     // (border) / #9a6700 (text). Any of these confirm the amber path.
     expect(
@@ -88,9 +81,7 @@ test.describe("deploy-status-pill: robustness invariants", () => {
     // Both pills track lastSeenStatusIds; the comparison happens
     // against `status.id` not `state` (the latter would miss revert
     // transitions like success → in_progress on re-publish).
-    expect(src, "missing lastSeenStatusIds bookkeeping").toMatch(
-      /lastSeenStatusIds/,
-    );
+    expect(src, "missing lastSeenStatusIds bookkeeping").toMatch(/lastSeenStatusIds/);
     expect(
       src,
       "expected dedup to compare against status.id — comparing against status.state would miss success→in_progress transitions on re-publish",

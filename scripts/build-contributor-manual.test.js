@@ -67,10 +67,7 @@ test("sortSteps sorts numerically across step ids", () => {
 });
 
 test("sortSections honours section_order then alphabetises the rest", () => {
-  const ordered = sortSections(
-    ["Editing", "Logging in", "Cleanup"],
-    ["Logging in"],
-  );
+  const ordered = sortSections(["Editing", "Logging in", "Cleanup"], ["Logging in"]);
   assert.deepEqual(ordered, ["Logging in", "Cleanup", "Editing"]);
 });
 

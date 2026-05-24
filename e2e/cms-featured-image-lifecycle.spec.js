@@ -110,18 +110,14 @@ function jekyllBuild() {
 async function loginAndOpenNew(page) {
   await page.goto("/admin/index-local.html");
   await page.getByRole("button", { name: /login/i }).click();
-  await page
-    .getByRole("link", { name: /^posts$/i })
-    .waitFor({ timeout: 30_000 });
+  await page.getByRole("link", { name: /^posts$/i }).waitFor({ timeout: 30_000 });
   await page.goto("/admin/index-local.html#/collections/posts/new");
 }
 
 async function openExistingEntry(page) {
   await page.goto("/admin/index-local.html");
   await page.getByRole("button", { name: /login/i }).click();
-  await page
-    .getByRole("link", { name: /^posts$/i })
-    .waitFor({ timeout: 30_000 });
+  await page.getByRole("link", { name: /^posts$/i }).waitFor({ timeout: 30_000 });
   await page.goto(ENTRY_URL);
   await expect(page.getByLabel(/^Title$/)).toBeVisible({ timeout: 60_000 });
 }
@@ -143,9 +139,7 @@ async function uploadFeaturedImage(page, fixturePath) {
   await fileInput.setInputFiles(fixturePath);
   // Decap auto-selects the freshly uploaded asset; commit selection.
   // Library's confirm button label varies by Decap version.
-  const insertBtn = page
-    .getByRole("button", { name: /^(choose selected|insert)$/i })
-    .first();
+  const insertBtn = page.getByRole("button", { name: /^(choose selected|insert)$/i }).first();
   await expect(insertBtn).toBeVisible({ timeout: 30_000 });
   await insertBtn.click();
 }
@@ -155,9 +149,7 @@ async function uploadFeaturedImage(page, fixturePath) {
 async function clearFeaturedImage(page) {
   // Try the most specific known label first, then fall back to any
   // button containing "Remove" inside the Featured Image control.
-  const removeBtn = page
-    .getByRole("button", { name: /^(remove image|remove|clear)$/i })
-    .first();
+  const removeBtn = page.getByRole("button", { name: /^(remove image|remove|clear)$/i }).first();
   await expect(removeBtn).toBeVisible({ timeout: 30_000 });
   await removeBtn.click();
 }
@@ -188,14 +180,10 @@ test.describe(
     test.afterAll(() => cleanup());
 
     test.beforeEach(({ page }) => {
-      page.on("pageerror", (err) =>
-        console.log(`[pageerror] ${err.name}: ${err.message}`),
-      );
+      page.on("pageerror", (err) => console.log(`[pageerror] ${err.name}: ${err.message}`));
     });
 
-    test("set image A → save → front matter + rendered <img.featured-image>", async ({
-      page,
-    }) => {
+    test("set image A → save → front matter + rendered <img.featured-image>", async ({ page }) => {
       await loginAndOpenNew(page);
 
       const titleField = page.getByLabel(/^Title$/);
@@ -212,9 +200,7 @@ test.describe(
       const dateField = page.getByLabel(/^Date$/);
       await dateField.fill(`${POST_DATE_DATE}T${POST_DATE_TIME}`);
 
-      const bodyEditor = page
-        .locator('[role="textbox"][contenteditable="true"]')
-        .last();
+      const bodyEditor = page.locator('[role="textbox"][contenteditable="true"]').last();
       await bodyEditor.waitFor({ timeout: 30_000 });
       await bodyEditor.click();
       await bodyEditor.fill("Body for featured-image lifecycle test.");
@@ -230,9 +216,7 @@ test.describe(
       await publishNow(page);
 
       // ── On-disk asserts ──────────────────────────────────────────────
-      await expect
-        .poll(() => fs.existsSync(POST_PATH), { timeout: 60_000 })
-        .toBe(true);
+      await expect.poll(() => fs.existsSync(POST_PATH), { timeout: 60_000 }).toBe(true);
       const written = fs.readFileSync(POST_PATH, "utf8");
       expect(written).toContain(`title: ${TITLE}`);
       // media_folder is flat + template-free, so the URL is exactly
@@ -259,10 +243,7 @@ test.describe(
       // broken-image regression, not a tolerated local-only gap.
       const imgAbs = new URL(imgSrc, page.url()).toString();
       const imgResp = await page.request.get(imgAbs);
-      expect(
-        imgResp.status(),
-        `Featured image ${imgAbs} must resolve 200`,
-      ).toBe(200);
+      expect(imgResp.status(), `Featured image ${imgAbs} must resolve 200`).toBe(200);
     });
 
     test("replace with image B → save → front matter references B; A still on disk", async ({
@@ -351,9 +332,7 @@ test.describe(
           },
           { timeout: 60_000 },
         )
-        .not.toMatch(
-          /featured_image:\s*['"]?\/assets\/images\/uploads\/[^/]*tiny-pixel/,
-        );
+        .not.toMatch(/featured_image:\s*['"]?\/assets\/images\/uploads\/[^/]*tiny-pixel/);
       const afterClear = fs.readFileSync(POST_PATH, "utf8");
       expect(
         afterClear,
@@ -365,9 +344,7 @@ test.describe(
       const liveURL = `/blog/${SLUG}/`;
       const resp = await page.goto(liveURL);
       expect(resp.status(), `${liveURL} should be 200`).toBe(200);
-      await expect(page.locator(".post-header img.featured-image")).toHaveCount(
-        0,
-      );
+      await expect(page.locator(".post-header img.featured-image")).toHaveCount(0);
     });
   },
 );

@@ -80,11 +80,7 @@
 const { test, expect } = require("./base");
 const { seedDecapAuth, getPat, HOST_REPO } = require("./decap-pat");
 const { closeStaleDecapPrOnBranch } = require("./cms-fixture-pr");
-const {
-  addLabel,
-  gh,
-  waitForCmsPullRequest,
-} = require("./github-actions-poll");
+const { addLabel, gh, waitForCmsPullRequest } = require("./github-actions-poll");
 const { waitForChangeReflected } = require("./deploy-pill");
 const { previewTarget } = require("./cms-host");
 const { readPublishedFlag, sanitizeToBaseline } = require("./fixture-baseline");
@@ -117,8 +113,7 @@ const PREVIEW_PUBLIC_URL = `${PREVIEW_HOST}${PUBLIC_PATH}`;
 // `waitForCmsPullRequest` marker for the cleanup leg: it only appears
 // as an added (`+`) line when the body is restored, so it can't
 // accidentally match the forward (publish) PR's diff.
-const BASELINE_SENTINEL =
-  "preview-prod-mutate baseline — no test currently in progress";
+const BASELINE_SENTINEL = "preview-prod-mutate baseline — no test currently in progress";
 const BASELINE_BODY = [
   "Adam Daniel — E2E mutation canary post (do not edit by hand).",
   "",
@@ -159,9 +154,7 @@ function toContentBase64(text) {
 }
 
 async function fetchFixtureFromBranch(branch) {
-  return gh(
-    `/repos/${HOST_REPO}/contents/${FIXTURE_PATH}?ref=${encodeURIComponent(branch)}`,
-  );
+  return gh(`/repos/${HOST_REPO}/contents/${FIXTURE_PATH}?ref=${encodeURIComponent(branch)}`);
 }
 
 // `readPublishedFlag` and `sanitizeToBaseline` are shared from
@@ -219,10 +212,7 @@ test(
   "CMS publish loop — preview env, prod-mutation parity (real _posts/ entry)",
   { tag: ["@admin-write"] },
   async ({ page }) => {
-    test.skip(
-      !getPat(),
-      "CMS_E2E_PAT not set — preview prod-mutation parity disabled.",
-    );
+    test.skip(!getPat(), "CMS_E2E_PAT not set — preview prod-mutation parity disabled.");
     test.skip(
       !PR_NUMBER || !PR_HEAD_REF,
       "PR_NUMBER / PR_HEAD_REF not set — this spec only runs in the cms-preview-loops workflow.",
@@ -258,11 +248,7 @@ test(
 
     const runId = Date.now();
     const marker = makePreviewMarker(runId);
-    const baselineFileText = sanitizeToBaseline(
-      initialFileText,
-      FIXTURE_PATH,
-      BASELINE_BODY,
-    );
+    const baselineFileText = sanitizeToBaseline(initialFileText, FIXTURE_PATH, BASELINE_BODY);
 
     // ── 0a. Close any stale Decap editorial-workflow PR on the
     // post's fixed branch ───────────────────────────────────────────
@@ -270,19 +256,14 @@ test(
     // that crashed past Save can leave a non-Draft labelled PR;
     // closing it lets Decap open a fresh draft on the next Save.
     await test.step("Close any stale Decap PR on the cms/posts/<slug> branch", async () => {
-      const fileSlug = FIXTURE_PATH.replace(/^_posts\//, "").replace(
-        /\.md$/,
-        "",
-      );
+      const fileSlug = FIXTURE_PATH.replace(/^_posts\//, "").replace(/\.md$/, "");
       await closeStaleDecapPrOnBranch({ branch: `cms/posts/${fileSlug}` });
     });
 
     // ── 0b. Reset the fixture to a clean baseline on the PR head ────
     await test.step("Reset fixture to baseline (published: false) on the PR head branch", async () => {
       const current = await fetchFixtureFromBranch(PR_HEAD_REF);
-      const remoteBody = Buffer.from(current.content, "base64").toString(
-        "utf8",
-      );
+      const remoteBody = Buffer.from(current.content, "base64").toString("utf8");
       if (remoteBody !== baselineFileText) {
         await writeFixtureOnBranch({
           branch: PR_HEAD_REF,
@@ -329,16 +310,10 @@ test(
       // hides automated-test fixtures from the Posts list by DEFAULT
       // (#1042); navigate to the canary directly (same pattern as the
       // steps below and cms-unpublish-republish.spec.js).
-      const fileSlug = FIXTURE_PATH.replace(/^_posts\//, "").replace(
-        /\.md$/,
-        "",
-      );
-      await page.goto(
-        `${PREVIEW_ADMIN}#/collections/posts/entries/${fileSlug}`,
-        {
-          waitUntil: "domcontentloaded",
-        },
-      );
+      const fileSlug = FIXTURE_PATH.replace(/^_posts\//, "").replace(/\.md$/, "");
+      await page.goto(`${PREVIEW_ADMIN}#/collections/posts/entries/${fileSlug}`, {
+        waitUntil: "domcontentloaded",
+      });
       const titleBox = page.getByRole("textbox", { name: /^Title$/i });
       await expect(titleBox).toBeVisible({ timeout: 30_000 });
       // Confirm we deep-linked to the right canary.
@@ -350,9 +325,7 @@ test(
       // no longer exposes "Body" as the textbox's accessible name —
       // mirror the prod spec and grab the last contenteditable
       // textbox on the page.
-      const body = page
-        .locator('[role="textbox"][contenteditable="true"]')
-        .last();
+      const body = page.locator('[role="textbox"][contenteditable="true"]').last();
       await body.click();
       await body.press("End");
       await body.pressSequentially(`\n\n${marker}\n`);
@@ -429,19 +402,15 @@ test(
       // run #26006678919 surfaced in the model spec). Close any stale
       // branch/PR server-side, then force a full document reload so
       // Decap re-reads the entry's editorial status from GitHub.
-      const fileSlug = FIXTURE_PATH.replace(/^_posts\//, "").replace(
-        /\.md$/,
-        "",
-      );
+      const fileSlug = FIXTURE_PATH.replace(/^_posts\//, "").replace(/\.md$/, "");
       await closeStaleDecapPrOnBranch({ branch: `cms/posts/${fileSlug}` });
-      await page.goto(
-        `${PREVIEW_ADMIN}#/collections/posts/entries/${fileSlug}`,
-        { waitUntil: "domcontentloaded" },
-      );
+      await page.goto(`${PREVIEW_ADMIN}#/collections/posts/entries/${fileSlug}`, {
+        waitUntil: "domcontentloaded",
+      });
       await page.reload({ waitUntil: "domcontentloaded" });
-      await expect(page.getByRole("textbox", { name: /^Title$/i })).toBeVisible(
-        { timeout: 30_000 },
-      );
+      await expect(page.getByRole("textbox", { name: /^Title$/i })).toBeVisible({
+        timeout: 30_000,
+      });
 
       const toggle = page.getByRole("switch", { name: /^Published$/i }).first();
       await expect(toggle).toBeVisible({ timeout: 30_000 });
@@ -451,9 +420,7 @@ test(
         timeout: 5_000,
       });
 
-      const body = page
-        .locator('[role="textbox"][contenteditable="true"]')
-        .last();
+      const body = page.locator('[role="textbox"][contenteditable="true"]').last();
       await body.click();
       await page.keyboard.press("Control+A");
       await page.keyboard.press("Backspace");

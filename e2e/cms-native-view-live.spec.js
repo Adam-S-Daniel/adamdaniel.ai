@@ -60,9 +60,7 @@ async function loadAdmin(page) {
     window.repoFilesUnpublished = s.repoFilesUnpublished;
   }, JSON.stringify(seed));
 
-  page.on("pageerror", (err) =>
-    console.log(`[pageerror] ${err.name}: ${err.message}`),
-  );
+  page.on("pageerror", (err) => console.log(`[pageerror] ${err.name}: ${err.message}`));
   page.on("console", (msg) => {
     if (msg.type() === "error") console.log(`[console.error] ${msg.text()}`);
   });
@@ -105,9 +103,7 @@ test.describe(
       // Drive directly to the canary entry — same one cms-banner-clickable
       // and cms-editorial-workflow specs use, so all three lock the same
       // surface against the same fixture.
-      await page.goto(
-        `/admin/index-test.html#/collections/posts/entries/${SEED_POST_SLUG}`,
-      );
+      await page.goto(`/admin/index-test.html#/collections/posts/entries/${SEED_POST_SLUG}`);
       await expect(page.getByLabel(/^Title$/)).toBeVisible({ timeout: 60_000 });
 
       // Wait for the editor toolbar to render — its presence proves
@@ -147,9 +143,7 @@ test.describe(
               ]);
               const visible = [];
               for (const tb of toolbars) {
-                const as = tb.querySelectorAll(
-                  'a[target="_blank"][rel*="noopener"][href]',
-                );
+                const as = tb.querySelectorAll('a[target="_blank"][rel*="noopener"][href]');
                 for (const a of as) {
                   if (excluded.has(a.id)) continue;
                   const cs = window.getComputedStyle(a);

@@ -67,18 +67,10 @@ const path = require("node:path");
 const { test, expect } = require("./base");
 const { seedDecapAuth, getPat, HOST_REPO } = require("./decap-pat");
 const { closeStaleDecapPrOnBranch } = require("./cms-fixture-pr");
-const {
-  addLabel,
-  gh,
-  waitForCmsPullRequest,
-} = require("./github-actions-poll");
+const { addLabel, gh, waitForCmsPullRequest } = require("./github-actions-poll");
 const { waitForChangeReflected } = require("./deploy-pill");
 const { prodTarget } = require("./cms-host");
-const {
-  readPublishedFlag,
-  forcePublishedFalse,
-  loudBail,
-} = require("./fixture-baseline");
+const { readPublishedFlag, forcePublishedFalse, loudBail } = require("./fixture-baseline");
 
 const REPO_ROOT = path.resolve(__dirname, "..");
 const FIXTURE_PATH = "_posts/2099-01-01-e2e-mutation-canary.md";
@@ -90,11 +82,7 @@ const PUBLIC_PATH = `/blog/${FIXTURE_SLUG}/`;
 
 // Fixed-prod loop, resolved through the shared cms-host resolver
 // (byte-identical to the old literals) so prod/preview can't drift.
-const {
-  host: PROD_HOST,
-  adminUrl: PROD_ADMIN,
-  pillId: PILL_PROD,
-} = prodTarget();
+const { host: PROD_HOST, adminUrl: PROD_ADMIN, pillId: PILL_PROD } = prodTarget();
 const PUBLIC_URL = `${PROD_HOST}${PUBLIC_PATH}`;
 // Read-only daily probe gate — set in canary-prod.yml. The afterAll
 // harness consults this so the probe never tries to write to main.
@@ -196,10 +184,7 @@ async function writeFixtureOnMain({ fileText, message }) {
 // `published: true`, skips on the next run's guard, and reports green
 // forever (#1053). Idempotent once the fixture is checked in false.
 function buildBaselineFileText() {
-  return forcePublishedFalse(
-    fs.readFileSync(FIXTURE_ABS, "utf8"),
-    FIXTURE_PATH,
-  );
+  return forcePublishedFalse(fs.readFileSync(FIXTURE_ABS, "utf8"), FIXTURE_PATH);
 }
 
 // Today's date as YYYY-MM-DD in UTC. Compared lexicographically
@@ -232,10 +217,7 @@ test(
     // run (and a green test.fixme on local/PR runs, as before) — #1053:
     // a non-running scheduled loop must never masquerade as green.
     if (!getPat()) {
-      loudBail(
-        test,
-        "CMS_E2E_PAT not set — prod-mutation playground cannot run.",
-      );
+      loudBail(test, "CMS_E2E_PAT not set — prod-mutation playground cannot run.");
       return;
     }
     if (!fs.existsSync(FIXTURE_ABS)) {
@@ -294,10 +276,7 @@ test(
       // Decap's branch shape for a Posts entry is
       // `cms/posts/<file-slug>`, where <file-slug> matches the
       // YYYY-MM-DD-<slug> filename without the .md extension.
-      const fileSlug = FIXTURE_PATH.replace(/^_posts\//, "").replace(
-        /\.md$/,
-        "",
-      );
+      const fileSlug = FIXTURE_PATH.replace(/^_posts\//, "").replace(/\.md$/, "");
       await closeStaleDecapPrOnBranch({ branch: `cms/posts/${fileSlug}` });
     });
 
@@ -308,9 +287,7 @@ test(
     // API treats matching content as a 200 with no new commit).
     await test.step("Reset fixture to baseline (published: false) via Contents API", async () => {
       const current = await fetchFixtureFromMain();
-      const remoteBody = Buffer.from(current.content, "base64").toString(
-        "utf8",
-      );
+      const remoteBody = Buffer.from(current.content, "base64").toString("utf8");
       const remotePublished = readPublishedFlag(remoteBody);
       if (remotePublished !== false || remoteBody !== baselineFileText) {
         await writeFixtureOnMain({
@@ -357,10 +334,7 @@ test(
       // so the canary is intentionally not clickable from the list —
       // navigate straight to it (same pattern as the cleanup step below
       // and cms-unpublish-republish.spec.js).
-      const fileSlug = FIXTURE_PATH.replace(/^_posts\//, "").replace(
-        /\.md$/,
-        "",
-      );
+      const fileSlug = FIXTURE_PATH.replace(/^_posts\//, "").replace(/\.md$/, "");
       await page.goto(`${PROD_ADMIN}#/collections/posts/entries/${fileSlug}`, {
         waitUntil: "domcontentloaded",
       });
@@ -377,9 +351,7 @@ test(
       // The pinned Decap version no longer exposes "Body" as the
       // textbox's accessible name — mirror cms-publish-flow.spec.js
       // and grab the last contenteditable textbox on the page.
-      const body = page
-        .locator('[role="textbox"][contenteditable="true"]')
-        .last();
+      const body = page.locator('[role="textbox"][contenteditable="true"]').last();
       await body.click();
       await body.press("End");
       await body.pressSequentially(`\n\n${marker}\n`);
@@ -479,11 +451,9 @@ test(
         `${PROD_ADMIN}#/collections/posts/entries/${FIXTURE_PATH.replace(/^_posts\//, "").replace(/\.md$/, "")}`,
         { waitUntil: "domcontentloaded" },
       );
-      await expect(page.getByRole("textbox", { name: /^Title$/i })).toBeVisible(
-        {
-          timeout: 30_000,
-        },
-      );
+      await expect(page.getByRole("textbox", { name: /^Title$/i })).toBeVisible({
+        timeout: 30_000,
+      });
 
       const publishedToggle = page.getByRole("checkbox", {
         name: /^Published$/i,
@@ -492,9 +462,7 @@ test(
       await publishedToggle.uncheck();
       await expect(publishedToggle).not.toBeChecked();
 
-      const body = page
-        .locator('[role="textbox"][contenteditable="true"]')
-        .last();
+      const body = page.locator('[role="textbox"][contenteditable="true"]').last();
       await body.click();
       await page.keyboard.press("Control+A");
       await page.keyboard.press("Backspace");
@@ -511,9 +479,9 @@ test(
       });
       await page.getByRole("button", { name: /^Status:\s*Draft$/i }).click();
       await page.getByRole("menuitem", { name: /^Ready$/i }).click();
-      await expect(
-        page.getByRole("button", { name: /^Status:\s*Ready$/i }),
-      ).toBeVisible({ timeout: 30_000 });
+      await expect(page.getByRole("button", { name: /^Status:\s*Ready$/i })).toBeVisible({
+        timeout: 30_000,
+      });
       await page.getByRole("button", { name: /^Publish$/i }).click();
       await page
         .getByRole("menuitem", { name: /publish now/i })

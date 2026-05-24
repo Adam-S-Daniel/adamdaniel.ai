@@ -129,10 +129,7 @@ test.describe("LiveFailuresReporter gating", () => {
     // retry layer finishes. Each attempt gets its own marker (the
     // marker template embeds result.retry) so a retry=0 failure
     // followed by a retry=1 failure lands as two separate comments.
-    await reporter.onTestEnd(
-      fakeTest({ retries: 1 }),
-      fakeResult({ retry: 0 }),
-    );
+    await reporter.onTestEnd(fakeTest({ retries: 1 }), fakeResult({ retry: 0 }));
     expect(fetchCalls.some((c) => c.method === "POST")).toBe(true);
   });
 
@@ -163,9 +160,7 @@ test.describe("LiveFailuresReporter gating", () => {
     expect(fetchCalls.length).toBeGreaterThanOrEqual(1);
     const post = fetchCalls.find((c) => c.method === "POST");
     expect(post, "expected a POST to the comments endpoint").toBeTruthy();
-    expect(post.url).toContain(
-      "/repos/Adam-S-Daniel/adamdaniel.ai/issues/1209/comments",
-    );
+    expect(post.url).toContain("/repos/Adam-S-Daniel/adamdaniel.ai/issues/1209/comments");
   });
 
   test("posts on final timedOut attempt", async () => {

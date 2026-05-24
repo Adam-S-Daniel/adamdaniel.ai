@@ -64,10 +64,7 @@ function globToRegExp(glob) {
 }
 
 const COMPILED = Object.fromEntries(
-  Object.entries(SELF_CHURN).map(([loop, globs]) => [
-    loop,
-    globs.map(globToRegExp),
-  ]),
+  Object.entries(SELF_CHURN).map(([loop, globs]) => [loop, globs.map(globToRegExp)]),
 );
 
 // Is a single repo-relative path part of `loop`'s self-churn set?

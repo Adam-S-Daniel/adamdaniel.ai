@@ -51,9 +51,7 @@ const EMBED_BLOCK = [
 
 function findSmokePostFile() {
   if (!fs.existsSync(POSTS_DIR)) return null;
-  const match = fs
-    .readdirSync(POSTS_DIR)
-    .find((f) => f.endsWith(`-${SMOKE_SLUG}.md`));
+  const match = fs.readdirSync(POSTS_DIR).find((f) => f.endsWith(`-${SMOKE_SLUG}.md`));
   return match ? path.join(POSTS_DIR, match) : null;
 }
 
@@ -75,9 +73,7 @@ test.describe("HTML Embed renders as HTML on the live post", () => {
       testInfo.project.name !== "chromium-desktop-1080",
       "Single project — local backend mutates the working tree.",
     );
-    page.on("pageerror", (err) =>
-      console.log(`[pageerror] ${err.name}: ${err.message}`),
-    );
+    page.on("pageerror", (err) => console.log(`[pageerror] ${err.name}: ${err.message}`));
   });
 
   test("post body with html-embed sentinel block → wrapper div renders, surrounding markdown still renders", async ({
@@ -86,9 +82,7 @@ test.describe("HTML Embed renders as HTML on the live post", () => {
     // ── Drive the admin: open New Post, fill Title / Slug / Body ─────
     await page.goto("/admin/index-local.html");
     await page.getByRole("button", { name: /login/i }).click();
-    await page
-      .getByRole("link", { name: /^posts$/i })
-      .waitFor({ timeout: 30_000 });
+    await page.getByRole("link", { name: /^posts$/i }).waitFor({ timeout: 30_000 });
     await page.goto("/admin/index-local.html#/collections/posts/new");
 
     const titleField = page.getByLabel(/^Title$/);
@@ -98,9 +92,7 @@ test.describe("HTML Embed renders as HTML on the live post", () => {
     const slugField = page.getByLabel(/^URL Slug/);
     await slugField.fill(SMOKE_SLUG);
 
-    const bodyEditor = page
-      .locator('[role="textbox"][contenteditable="true"]')
-      .last();
+    const bodyEditor = page.locator('[role="textbox"][contenteditable="true"]').last();
     await bodyEditor.waitFor({ timeout: 30_000 });
     await bodyEditor.click();
     await bodyEditor.pressSequentially("Body filler before the embed.\n");
@@ -122,9 +114,7 @@ test.describe("HTML Embed renders as HTML on the live post", () => {
       .click();
 
     // ── On-disk asserts: patch the body with the sentinel block ──────
-    await expect
-      .poll(() => findSmokePostFile() !== null, { timeout: 60_000 })
-      .toBe(true);
+    await expect.poll(() => findSmokePostFile() !== null, { timeout: 60_000 }).toBe(true);
     const postPath = findSmokePostFile();
 
     // Surround the embed with markdown prose so the assertions below
@@ -169,9 +159,7 @@ test.describe("HTML Embed renders as HTML on the live post", () => {
     // produced the expected tags around the embed. Confirms the
     // markdown + HTML mix documented in AGENTS.md.
     const content = page.locator(".post-content");
-    await expect(
-      content.locator("strong", { hasText: "before" }),
-    ).toBeVisible();
+    await expect(content.locator("strong", { hasText: "before" })).toBeVisible();
     await expect(content.locator("em", { hasText: "after" })).toBeVisible();
   });
 });

@@ -63,18 +63,11 @@ const { seedDecapAuth, getPat, HOST_REPO } = require("./decap-pat");
 const { gh } = require("./github-actions-poll");
 const { waitForChangeReflected } = require("./deploy-pill");
 const { prodTarget } = require("./cms-host");
-const {
-  readPublishedFlag,
-  forcePublishedFalse,
-} = require("./fixture-baseline");
+const { readPublishedFlag, forcePublishedFalse } = require("./fixture-baseline");
 
 // Prod host triplet resolved through the shared cms-host SSOT (byte-identical
 // to the old hardcoded literals) so prod/preview surfaces can't drift.
-const {
-  host: PROD_HOST,
-  adminUrl: PROD_ADMIN,
-  pillId: PILL_PROD,
-} = prodTarget();
+const { host: PROD_HOST, adminUrl: PROD_ADMIN, pillId: PILL_PROD } = prodTarget();
 const FIXTURE_PATH = "_posts/2024-01-02-e2e-unpublish-canary.md";
 const FIXTURE_SLUG = "e2e-unpublish-canary";
 const PUBLIC_URL = `${PROD_HOST}/blog/${FIXTURE_SLUG}/`;
@@ -145,10 +138,7 @@ test(
   "CMS unpublish + re-publish — flip published flag toggles URL visibility",
   { tag: ["@admin-write"] },
   async ({ page }) => {
-    test.skip(
-      !getPat(),
-      "CMS_E2E_PAT not set — host-repo unpublish spec disabled.",
-    );
+    test.skip(!getPat(), "CMS_E2E_PAT not set — host-repo unpublish spec disabled.");
     test.skip(
       process.env.RUN_HOST_REPO_PUBLISH_LOOP !== "1",
       "RUN_HOST_REPO_PUBLISH_LOOP not set — opt-in via the cms-publish-loop-host workflow.",
@@ -168,10 +158,7 @@ test(
     // baseline would corrupt the next run. UI-driven assertion below
     // confirms the editor agrees.
     await test.step("Confirm fixture file's baseline is published: false on main", async () => {
-      const text = fs.readFileSync(
-        path.join(__dirname, "..", FIXTURE_PATH),
-        "utf8",
-      );
+      const text = fs.readFileSync(path.join(__dirname, "..", FIXTURE_PATH), "utf8");
       if (!/^published:\s*false\s*$/m.test(text)) {
         throw new Error(
           `${FIXTURE_PATH} on main is not at baseline (published: false). Reset before running this spec.`,
@@ -260,9 +247,9 @@ test(
       });
       await page.getByRole("button", { name: /^Status:\s*Draft$/i }).click();
       await page.getByRole("menuitem", { name: /^Ready$/i }).click();
-      await expect(
-        page.getByRole("button", { name: /^Status:\s*Ready$/i }),
-      ).toBeVisible({ timeout: 30_000 });
+      await expect(page.getByRole("button", { name: /^Status:\s*Ready$/i })).toBeVisible({
+        timeout: 30_000,
+      });
       await page.getByRole("button", { name: /^Publish$/i }).click();
       await page
         .getByRole("menuitem", { name: /publish now/i })
@@ -296,9 +283,9 @@ test(
       });
       await page.getByRole("button", { name: /^Status:\s*Draft$/i }).click();
       await page.getByRole("menuitem", { name: /^Ready$/i }).click();
-      await expect(
-        page.getByRole("button", { name: /^Status:\s*Ready$/i }),
-      ).toBeVisible({ timeout: 30_000 });
+      await expect(page.getByRole("button", { name: /^Status:\s*Ready$/i })).toBeVisible({
+        timeout: 30_000,
+      });
       await page.getByRole("button", { name: /^Publish$/i }).click();
       await page
         .getByRole("menuitem", { name: /publish now/i })

@@ -40,10 +40,9 @@ async function loadBridgeHarness(page) {
     { bridgeSrc },
   );
   // Allow the bridge's CMS-ready wait loop to observe window.CMS.
-  await page.waitForFunction(
-    () => typeof window.__capturedListeners?.postSave === "function",
-    { timeout: 5000 },
-  );
+  await page.waitForFunction(() => typeof window.__capturedListeners?.postSave === "function", {
+    timeout: 5000,
+  });
 }
 
 test.describe(
@@ -57,9 +56,7 @@ test.describe(
 
     test("registers a postSave event listener with Decap", async ({ page }) => {
       await loadBridgeHarness(page);
-      const registered = await page.evaluate(() =>
-        Object.keys(window.__capturedListeners),
-      );
+      const registered = await page.evaluate(() => Object.keys(window.__capturedListeners));
       expect(registered).toContain("postSave");
     });
 
@@ -120,18 +117,12 @@ test.describe(
       await listener.close();
     });
 
-    test("exposes a helper that builds the preview URL for a collection", async ({
-      page,
-    }) => {
+    test("exposes a helper that builds the preview URL for a collection", async ({ page }) => {
       await loadBridgeHarness(page);
-      const url = await page.evaluate(() =>
-        window.adamdaniel_cms_preview_url("posts"),
-      );
+      const url = await page.evaluate(() => window.adamdaniel_cms_preview_url("posts"));
       expect(url).toMatch(/\/preview\/\?collection=posts$/);
 
-      const pagesUrl = await page.evaluate(() =>
-        window.adamdaniel_cms_preview_url("pages"),
-      );
+      const pagesUrl = await page.evaluate(() => window.adamdaniel_cms_preview_url("pages"));
       expect(pagesUrl).toMatch(/\/preview\/\?collection=pages$/);
     });
   },

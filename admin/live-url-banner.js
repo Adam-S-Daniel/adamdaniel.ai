@@ -95,9 +95,7 @@
   // hash route `#/collections/<col>/entries/<slug>`. null on the
   // "new entry" route (no PR can exist yet) and the list route.
   function currentEntrySlug() {
-    var m = /#\/collections\/[^/]+\/entries\/([^?#]+)/.exec(
-      window.location.hash || "",
-    );
+    var m = /#\/collections\/[^/]+\/entries\/([^?#]+)/.exec(window.location.hash || "");
     if (!m) return null;
     try {
       return decodeURIComponent(m[1]);
@@ -165,10 +163,7 @@
         }
         prBySlug = map;
         try {
-          sessionStorage.setItem(
-            PR_CACHE_KEY,
-            JSON.stringify({ at: Date.now(), data: map }),
-          );
+          sessionStorage.setItem(PR_CACHE_KEY, JSON.stringify({ at: Date.now(), data: map }));
         } catch {
           /* sessionStorage full/disabled — in-memory only */
         }
@@ -270,13 +265,10 @@
     if (data.published === false) {
       // No destination → render plain spans, no anchor. An anchor with
       // no href would be misleading; the row is informational here.
-      nextHTML =
-        labelHTML +
-        ' <span style="font-style:italic;">Not yet published.</span>';
+      nextHTML = labelHTML + ' <span style="font-style:italic;">Not yet published.</span>';
     } else if (!data.url) {
       nextHTML =
-        labelHTML +
-        ' <span style="font-style:italic;">Set a title or slug to see the URL.</span>';
+        labelHTML + ' <span style="font-style:italic;">Set a title or slug to see the URL.</span>';
     } else {
       // Live URL state: wrap the *entire row* in a single anchor so any
       // click in the banner opens the live URL. The URL span keeps the

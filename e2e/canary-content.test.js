@@ -14,9 +14,7 @@ test.describe("Canary content invariants", () => {
       // cleanup step writes it back after each test run, so a drift
       // here means the canary doesn't reset to the same content the
       // descriptor claims.
-      expect(src, `${c.path} body must contain the baseline string`).toContain(
-        c.baseline,
-      );
+      expect(src, `${c.path} body must contain the baseline string`).toContain(c.baseline);
       // The FULL canonical body (title sentence + explanatory paragraphs
       // + footer) must also match the checked-in file byte-for-byte.
       // Without this assertion the canary file could drift gradually —
@@ -25,10 +23,7 @@ test.describe("Canary content invariants", () => {
       // mangled cms/e2e/* PR that disagrees with the API-path setup
       // reset, leaving conflicting PRs in their wake.
       const fmEnd = src.indexOf("\n---\n", 4);
-      expect(
-        fmEnd,
-        `${c.path} must have a closing front-matter delimiter`,
-      ).toBeGreaterThan(0);
+      expect(fmEnd, `${c.path} must have a closing front-matter delimiter`).toBeGreaterThan(0);
       const fileBody = src
         .slice(fmEnd + 5)
         .replace(/^\n+/, "")
@@ -46,10 +41,7 @@ test.describe("Canary content invariants", () => {
   });
 
   test("admin/config.yml exposes the e2e canary collection", () => {
-    const cfg = fs.readFileSync(
-      path.join(__dirname, "..", "admin", "config.yml"),
-      "utf8",
-    );
+    const cfg = fs.readFileSync(path.join(__dirname, "..", "admin", "config.yml"), "utf8");
     // The publish-loop test drives admin actions on this collection.
     // If it disappears, the test goes silently green (no PR opened ≠
     // success) — fail loudly here.
@@ -87,9 +79,7 @@ test.describe("Canary content invariants", () => {
     // field from a different collection (posts/projects/pages).
     const nextCollection = cfg.slice(e2eStart + 1).search(/^\s{2}- name: \w/m);
     const e2eBlock =
-      nextCollection < 0
-        ? cfg.slice(e2eStart)
-        : cfg.slice(e2eStart, e2eStart + 1 + nextCollection);
+      nextCollection < 0 ? cfg.slice(e2eStart) : cfg.slice(e2eStart, e2eStart + 1 + nextCollection);
     expect(e2eBlock).toMatch(/^\s{6}- name: body\s*$/m);
     expect(
       e2eBlock,
@@ -109,10 +99,7 @@ test.describe("Canary content invariants", () => {
   });
 
   test("_config.yml registers the e2e collection with the right permalink", () => {
-    const cfg = fs.readFileSync(
-      path.join(__dirname, "..", "_config.yml"),
-      "utf8",
-    );
+    const cfg = fs.readFileSync(path.join(__dirname, "..", "_config.yml"), "utf8");
     // Without `output: true` Jekyll won't render an HTML file; the
     // publish-loop's "assert it shows up at the public URL" step would
     // never satisfy.

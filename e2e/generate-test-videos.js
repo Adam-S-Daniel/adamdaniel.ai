@@ -75,11 +75,9 @@ const { spawnSync } = require("node:child_process");
 
 const REPO_ROOT = path.resolve(__dirname, "..");
 const FRAMES_ROOT =
-  process.env.FRAMES_ROOT ||
-  path.join(REPO_ROOT, "test-results", "per-test-frames");
+  process.env.FRAMES_ROOT || path.join(REPO_ROOT, "test-results", "per-test-frames");
 const VIDEOS_ROOT =
-  process.env.VIDEOS_ROOT ||
-  path.join(REPO_ROOT, "test-results", "per-test-videos");
+  process.env.VIDEOS_ROOT || path.join(REPO_ROOT, "test-results", "per-test-videos");
 const FFMPEG = process.env.FFMPEG || "ffmpeg";
 const IMAGEMAGICK = process.env.IMAGEMAGICK || "convert";
 
@@ -97,8 +95,7 @@ const CANVAS_HEIGHT = 1080;
 // Monospace font baked into the Playwright noble image. LiberationMono
 // is a Helvetica-compatible alternative to DejaVuSansMono and is the
 // default Ubuntu monospace font.
-const MONO_FONT =
-  "/usr/share/fonts/truetype/liberation/LiberationMono-Regular.ttf";
+const MONO_FONT = "/usr/share/fonts/truetype/liberation/LiberationMono-Regular.ttf";
 
 const PR_NUMBER = process.env.PR_NUMBER || "local";
 
@@ -302,10 +299,7 @@ const BUCKETS = ["local", "preview", "prod", "other"];
 
 function bucketFor(host) {
   if (host === "localhost" || host === "127.0.0.1") return "local";
-  if (
-    typeof host === "string" &&
-    /^preview-pr\d+\.adamdaniel\.ai$/.test(host)
-  ) {
+  if (typeof host === "string" && /^preview-pr\d+\.adamdaniel\.ai$/.test(host)) {
     return "preview";
   }
   if (host === "adamdaniel.ai") return "prod";
@@ -330,10 +324,7 @@ function hostFromUrl(url) {
 // captured frame's URL; tests with no frames (zero-navigation specs)
 // fall through to `other`.
 function bucketForEntry(entry) {
-  const frames =
-    entry && entry.meta && Array.isArray(entry.meta.frames)
-      ? entry.meta.frames
-      : [];
+  const frames = entry && entry.meta && Array.isArray(entry.meta.frames) ? entry.meta.frames : [];
   const firstUrl = frames.length > 0 ? frames[0].url : "";
   return bucketFor(hostFromUrl(firstUrl));
 }
@@ -360,15 +351,9 @@ function buildFrameBannerLines({
     `Step ${stepIndex} of ${stepCount}: ${stepLabel} · ${status || "unknown"}`,
   );
   const easternTime = formatEastern(
-    endTime instanceof Date
-      ? endTime
-      : endTime
-        ? new Date(endTime)
-        : new Date(),
+    endTime instanceof Date ? endTime : endTime ? new Date(endTime) : new Date(),
   );
-  const line3 = sanitizeBannerText(
-    `project: ${projectName || "unknown-project"} · ${easternTime}`,
-  );
+  const line3 = sanitizeBannerText(`project: ${projectName || "unknown-project"} · ${easternTime}`);
   return [line1, line2, line3];
 }
 
@@ -381,9 +366,7 @@ function runFfmpeg(args, opts = {}) {
   });
   if (result.status !== 0) {
     const tail = (result.stderr || "").split("\n").slice(-30).join("\n");
-    throw new Error(
-      `ffmpeg failed (exit ${result.status}):\n  args: ${args.join(" ")}\n${tail}`,
-    );
+    throw new Error(`ffmpeg failed (exit ${result.status}):\n  args: ${args.join(" ")}\n${tail}`);
   }
   return result;
 }
@@ -395,9 +378,7 @@ function runConvert(args) {
   });
   if (result.status !== 0) {
     const tail = (result.stderr || "").split("\n").slice(-30).join("\n");
-    throw new Error(
-      `convert failed (exit ${result.status}):\n  args: ${args.join(" ")}\n${tail}`,
-    );
+    throw new Error(`convert failed (exit ${result.status}):\n  args: ${args.join(" ")}\n${tail}`);
   }
   return result;
 }
@@ -491,13 +472,7 @@ function composeFrame({ inputFrame, outputFrame, fontFile, lines }) {
 
 // ── Per-test video build ────────────────────────────────────────────
 
-function buildPerTestVideo({
-  entry,
-  fontFile,
-  testIndex,
-  testCount,
-  prNumber,
-}) {
+function buildPerTestVideo({ entry, fontFile, testIndex, testCount, prNumber }) {
   const { dir, frames, meta } = entry;
   const safeId = entry.name;
   const outputPath = path.join(VIDEOS_ROOT, `${safeId}.mp4`);
@@ -594,11 +569,7 @@ function buildPerTestVideo({
 // output path on success, throws on failure.
 function concatPerTestVideos(perTestPaths, output, tag) {
   if (perTestPaths.length === 0) return null;
-  const concatList = path.join(
-    VIDEOS_ROOT,
-    ".tmp",
-    `concat-${tag || "all"}.txt`,
-  );
+  const concatList = path.join(VIDEOS_ROOT, ".tmp", `concat-${tag || "all"}.txt`);
   ensureDir(path.dirname(concatList));
   const lines = perTestPaths.map((p) => {
     // ffmpeg concat demuxer requires single-quoted paths and only
@@ -695,9 +666,7 @@ function writeManifest(records, prNumber, emittedBuckets) {
     }
     const rows = list.map((r, i) => {
       const meta = r.entry.meta;
-      const endLocal = meta.endTime
-        ? formatEastern(new Date(meta.endTime))
-        : "";
+      const endLocal = meta.endTime ? formatEastern(new Date(meta.endTime)) : "";
       return [
         `  [${bucket} ${i + 1} of ${list.length}] ${path.basename(r.perTestPath)}`,
         `      file:    ${meta.file || ""}`,
@@ -755,9 +724,7 @@ function main() {
   const fontFile = detectFontFile();
   checkConvertAvailable();
   const Y = entries.length;
-  console.log(
-    `Generating ${Y} per-test video(s) → ${path.relative(REPO_ROOT, VIDEOS_ROOT)}/`,
-  );
+  console.log(`Generating ${Y} per-test video(s) → ${path.relative(REPO_ROOT, VIDEOS_ROOT)}/`);
   console.log(`  font:      ${fontFile}`);
   console.log(`  PR:        #${PR_NUMBER}`);
   console.log(`  convert:   ${IMAGEMAGICK}`);
@@ -780,9 +747,7 @@ function main() {
       });
       perTestPaths.push(out);
       succeeded += 1;
-      console.log(
-        `  ok   [Test ${testIndex} of ${Y}, ${entry.frames.length} frames] ${label}`,
-      );
+      console.log(`  ok   [Test ${testIndex} of ${Y}, ${entry.frames.length} frames] ${label}`);
     } catch (err) {
       failed += 1;
       console.error(`  FAIL ${label}: ${err.message}`);
@@ -813,9 +778,7 @@ function main() {
       console.log("No bucket emitted a combined video.");
     } else {
       for (const b of emittedNames) {
-        console.log(
-          `Combined video → ${path.relative(REPO_ROOT, emittedBuckets[b])}`,
-        );
+        console.log(`Combined video → ${path.relative(REPO_ROOT, emittedBuckets[b])}`);
       }
     }
   } catch (err) {
@@ -830,9 +793,7 @@ function main() {
     console.error(`Manifest write failed: ${err.message}`);
   }
 
-  console.log(
-    `Done. ${succeeded} per-test video(s) built, ${failed} failure(s).`,
-  );
+  console.log(`Done. ${succeeded} per-test video(s) built, ${failed} failure(s).`);
   return 0;
 }
 

@@ -106,9 +106,7 @@ test.describe(
     });
 
     test.beforeEach(({ page }) => {
-      page.on("pageerror", (err) =>
-        console.log(`[pageerror] ${err.name}: ${err.message}`),
-      );
+      page.on("pageerror", (err) => console.log(`[pageerror] ${err.name}: ${err.message}`));
     });
 
     test("rendered draft URL responds 404 @parity", async ({ page }) => {
@@ -146,10 +144,9 @@ test.describe(
         test.skip(true, "Remote feed fetch lands with G3.");
         return;
       }
-      expect(
-        fs.existsSync(feedPath),
-        "Expected _site/feed.xml to exist after Jekyll build.",
-      ).toBe(true);
+      expect(fs.existsSync(feedPath), "Expected _site/feed.xml to exist after Jekyll build.").toBe(
+        true,
+      );
       const xml = fs.readFileSync(feedPath, "utf8");
       expect(
         xml.includes(DRAFT_SLUG),

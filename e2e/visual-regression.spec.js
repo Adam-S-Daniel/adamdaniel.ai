@@ -64,9 +64,7 @@ test.describe("Visual regression", () => {
     // etc.) make the captured page non-deterministic across runs.
     // The snapshot baseline only makes sense when /tags/ is in its
     // steady-state production layout with curated content.
-    const stableTags = (await discoverTags(page)).filter(
-      (t) => !t.slug.startsWith("e2e-"),
-    );
+    const stableTags = (await discoverTags(page)).filter((t) => !t.slug.startsWith("e2e-"));
     test.skip(
       stableTags.length === 0,
       "no curated (non-e2e-fixture) tags on the site → /tags/ layout is non-deterministic; baseline would shift between runs",
@@ -86,9 +84,7 @@ test.describe("Visual regression", () => {
     // the test captured `tag-archive-e2e-smoke-flow-tag-...png`, a
     // baseline that never gets committed to source because the tag
     // is transient.
-    const stableTags = (await discoverTags(page)).filter(
-      (t) => !t.slug.startsWith("e2e-"),
-    );
+    const stableTags = (await discoverTags(page)).filter((t) => !t.slug.startsWith("e2e-"));
     test.skip(
       stableTags.length === 0,
       "no curated (non-e2e-fixture) tags → no stable archive page to capture",

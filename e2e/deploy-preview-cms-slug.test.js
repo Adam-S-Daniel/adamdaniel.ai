@@ -23,20 +23,9 @@ const { test, expect } = require("./base");
 // The workflow-structure invariants are pure-text greps against the
 // workflow file; the slug-derivation invariants run the real script.
 
-const WORKFLOW = path.join(
-  __dirname,
-  "..",
-  ".github",
-  "workflows",
-  "deploy-preview.yml",
-);
+const WORKFLOW = path.join(__dirname, "..", ".github", "workflows", "deploy-preview.yml");
 
-const SLUG_SCRIPT = path.join(
-  __dirname,
-  "..",
-  "scripts",
-  "cms-preview-slug.sh",
-);
+const SLUG_SCRIPT = path.join(__dirname, "..", "scripts", "cms-preview-slug.sh");
 
 function readWorkflow() {
   return fs.readFileSync(WORKFLOW, "utf8");
@@ -95,18 +84,14 @@ test.describe("deploy-preview workflow: per-CMS-slug preview alias", () => {
 
   test("deploy registers a `preview-cms-<slug>` GitHub Deployment", () => {
     const yml = readWorkflow();
-    expect(
-      yml,
-      "missing `environment: \\`preview-cms-${slug}\\`` deployment registration",
-    ).toMatch(/environment:\s*`preview-cms-\$\{slug\}`/);
+    expect(yml, "missing `environment: \\`preview-cms-${slug}\\`` deployment registration").toMatch(
+      /environment:\s*`preview-cms-\$\{slug\}`/,
+    );
   });
 
   test("teardown removes the cms-<slug> S3 prefix", () => {
     const yml = readWorkflow();
-    expect(
-      yml,
-      "missing `aws s3 rm s3://${PREVIEW_BUCKET}/cms-${SLUG}/`",
-    ).toMatch(
+    expect(yml, "missing `aws s3 rm s3://${PREVIEW_BUCKET}/cms-${SLUG}/`").toMatch(
       /aws s3 rm "?s3:\/\/\$\{PREVIEW_BUCKET\}\/cms-\$\{SLUG\}\/"?\s+--recursive/,
     );
   });
@@ -153,9 +138,7 @@ test.describe("cms-preview-slug.sh", () => {
 
   test("short slugs pass through unchanged", () => {
     expect(slug("cms/posts/foo-bar")).toBe("posts-foo-bar");
-    expect(slug("cms/posts/2099-01-01-foo-bar")).toBe(
-      "posts-2099-01-01-foo-bar",
-    );
+    expect(slug("cms/posts/2099-01-01-foo-bar")).toBe("posts-2099-01-01-foo-bar");
     expect(slug("cms/pages/about")).toBe("pages-about");
     expect(slug("cms/projects/category/item")).toBe("projects-category-item");
   });

@@ -90,35 +90,15 @@ test.describe("compute-visual-diffs", () => {
     };
 
     // Same → identical
-    writePNG(
-      makePNG(8, 8, [0, 0, 0, 255]),
-      prDir,
-      `${safeFileName("/blog/post-a/")}.png`,
-    );
-    writePNG(
-      makePNG(8, 8, [0, 0, 0, 255]),
-      prodDir,
-      `${safeFileName("/blog/post-a/")}.png`,
-    );
+    writePNG(makePNG(8, 8, [0, 0, 0, 255]), prDir, `${safeFileName("/blog/post-a/")}.png`);
+    writePNG(makePNG(8, 8, [0, 0, 0, 255]), prodDir, `${safeFileName("/blog/post-a/")}.png`);
 
     // Different → different
-    writePNG(
-      makePNG(8, 8, [0, 0, 0, 255]),
-      prDir,
-      `${safeFileName("/blog/post-b/")}.png`,
-    );
-    writePNG(
-      makePNG(8, 8, [255, 255, 255, 255]),
-      prodDir,
-      `${safeFileName("/blog/post-b/")}.png`,
-    );
+    writePNG(makePNG(8, 8, [0, 0, 0, 255]), prDir, `${safeFileName("/blog/post-b/")}.png`);
+    writePNG(makePNG(8, 8, [255, 255, 255, 255]), prodDir, `${safeFileName("/blog/post-b/")}.png`);
 
     // Missing prod image (simulates a NEW page) → "new"
-    writePNG(
-      makePNG(8, 8, [0, 0, 0, 255]),
-      prDir,
-      `${safeFileName("/blog/post-c/")}.png`,
-    );
+    writePNG(makePNG(8, 8, [0, 0, 0, 255]), prDir, `${safeFileName("/blog/post-c/")}.png`);
 
     const out = path.join(tmp, "diffs.json");
     const summary = computeAll({
@@ -128,15 +108,9 @@ test.describe("compute-visual-diffs", () => {
       outPath: out,
     });
 
-    expect(summary.pages.find((p) => p.path === "/blog/post-a/").status).toBe(
-      "identical",
-    );
-    expect(summary.pages.find((p) => p.path === "/blog/post-b/").status).toBe(
-      "different",
-    );
-    expect(summary.pages.find((p) => p.path === "/blog/post-c/").status).toBe(
-      "new",
-    );
+    expect(summary.pages.find((p) => p.path === "/blog/post-a/").status).toBe("identical");
+    expect(summary.pages.find((p) => p.path === "/blog/post-b/").status).toBe("different");
+    expect(summary.pages.find((p) => p.path === "/blog/post-c/").status).toBe("new");
 
     expect(summary.totals.identical).toBe(1);
     expect(summary.totals.different).toBe(1);

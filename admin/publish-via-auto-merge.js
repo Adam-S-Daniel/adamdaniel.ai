@@ -36,8 +36,7 @@
 (function () {
   "use strict";
 
-  if (typeof window === "undefined" || typeof window.fetch !== "function")
-    return;
+  if (typeof window === "undefined" || typeof window.fetch !== "function") return;
   if (window.__publishViaAutoMergeInstalled) return;
   window.__publishViaAutoMergeInstalled = true;
 
@@ -58,20 +57,15 @@
       kind: "merge",
       test: function (url, method) {
         if (method !== "PUT") return null;
-        var m = url.match(
-          /^https:\/\/api\.github\.com\/repos\/[^/]+\/[^/]+\/pulls\/(\d+)\/merge$/,
-        );
+        var m = url.match(/^https:\/\/api\.github\.com\/repos\/[^/]+\/[^/]+\/pulls\/(\d+)\/merge$/);
         return m ? { prNumber: m[1] } : null;
       },
       recover: async function (ctx, init, originalRes) {
-        var labelRes = await origFetch(
-          API + "/issues/" + ctx.prNumber + "/labels",
-          {
-            method: "POST",
-            headers: extractAuth(init.headers),
-            body: JSON.stringify({ labels: ["cms/ready"] }),
-          },
-        );
+        var labelRes = await origFetch(API + "/issues/" + ctx.prNumber + "/labels", {
+          method: "POST",
+          headers: extractAuth(init.headers),
+          body: JSON.stringify({ labels: ["cms/ready"] }),
+        });
         // 200/201 = label added; some GitHub responses use 422 when the
         // label is already on the issue, which is fine — it means the
         // editorial workflow already knows about this PR.
@@ -108,9 +102,7 @@
     if (typeof headers.get === "function") {
       var auth = headers.get("Authorization") || headers.get("authorization");
       if (auth) out.Authorization = auth;
-      var apiv =
-        headers.get("X-GitHub-Api-Version") ||
-        headers.get("x-github-api-version");
+      var apiv = headers.get("X-GitHub-Api-Version") || headers.get("x-github-api-version");
       if (apiv) out["X-GitHub-Api-Version"] = apiv;
       return out;
     }
@@ -125,8 +117,7 @@
       });
     }
     if (lower.authorization) out.Authorization = lower.authorization;
-    if (lower["x-github-api-version"])
-      out["X-GitHub-Api-Version"] = lower["x-github-api-version"];
+    if (lower["x-github-api-version"]) out["X-GitHub-Api-Version"] = lower["x-github-api-version"];
     return out;
   }
 
@@ -171,11 +162,7 @@
     // ORIGINAL `init` (possibly undefined) straight through so the
     // wrap is truly transparent for non-matching requests.
     var url = typeof input === "string" ? input : (input && input.url) || "";
-    var method = (
-      (init && init.method) ||
-      (input && input.method) ||
-      "GET"
-    ).toUpperCase();
+    var method = ((init && init.method) || (input && input.method) || "GET").toUpperCase();
 
     var match = null;
     var matcher = null;

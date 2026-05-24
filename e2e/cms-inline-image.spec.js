@@ -59,9 +59,7 @@ function uploadPublicPath() {
 
 function findSmokePostFile() {
   if (!fs.existsSync(POSTS_DIR)) return null;
-  const match = fs
-    .readdirSync(POSTS_DIR)
-    .find((f) => f.endsWith(`-${SMOKE_SLUG}.md`));
+  const match = fs.readdirSync(POSTS_DIR).find((f) => f.endsWith(`-${SMOKE_SLUG}.md`));
   return match ? path.join(POSTS_DIR, match) : null;
 }
 
@@ -92,9 +90,7 @@ test.describe(
     test.afterAll(() => cleanup());
 
     test.beforeEach(({ page }) => {
-      page.on("pageerror", (err) =>
-        console.log(`[pageerror] ${err.name}: ${err.message}`),
-      );
+      page.on("pageerror", (err) => console.log(`[pageerror] ${err.name}: ${err.message}`));
     });
 
     test("create post with inline image markdown → renders <img> with reachable src", async ({
@@ -112,9 +108,7 @@ test.describe(
       // ── Drive the admin: open New Post, fill Title / Slug / Body ─────
       await page.goto("/admin/index-local.html");
       await page.getByRole("button", { name: /login/i }).click();
-      await page
-        .getByRole("link", { name: /^posts$/i })
-        .waitFor({ timeout: 30_000 });
+      await page.getByRole("link", { name: /^posts$/i }).waitFor({ timeout: 30_000 });
       await page.goto("/admin/index-local.html#/collections/posts/new");
 
       const titleField = page.getByLabel(/^Title$/);
@@ -138,9 +132,7 @@ test.describe(
       // the same render-pipeline contract (kramdown → <img>; uploads
       // pipeline serves the asset; layout doesn't strip the leading /)
       // without depending on the unstable WYSIWYG mode-toggle.
-      const bodyEditor = page
-        .locator('[role="textbox"][contenteditable="true"]')
-        .last();
+      const bodyEditor = page.locator('[role="textbox"][contenteditable="true"]').last();
       await bodyEditor.waitFor({ timeout: 30_000 });
       await bodyEditor.click();
       await bodyEditor.pressSequentially("Body for inline-image test.\n");
@@ -162,9 +154,7 @@ test.describe(
         .click();
 
       // ── On-disk asserts ──────────────────────────────────────────────
-      await expect
-        .poll(() => findSmokePostFile() !== null, { timeout: 60_000 })
-        .toBe(true);
+      await expect.poll(() => findSmokePostFile() !== null, { timeout: 60_000 }).toBe(true);
       const postPath = findSmokePostFile();
 
       // Patch the saved body to append the inline-image markdown atom.
@@ -206,9 +196,7 @@ test.describe(
 
       // HEAD-fetch the src on the same origin so the test catches a
       // build-time path drift (e.g. relative_url stripping the leading /).
-      const srcAbs = imgSrc.startsWith("http")
-        ? imgSrc
-        : new URL(imgSrc, page.url()).toString();
+      const srcAbs = imgSrc.startsWith("http") ? imgSrc : new URL(imgSrc, page.url()).toString();
       const head = await page.request.fetch(srcAbs, { method: "HEAD" });
       expect(head.status(), `${srcAbs} should be 200`).toBe(200);
     });

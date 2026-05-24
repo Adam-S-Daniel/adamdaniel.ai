@@ -16,12 +16,7 @@ const { chromium } = require("playwright");
 const fs = require("fs");
 const path = require("path");
 
-const AFTER_DIR = path.join(
-  __dirname,
-  "..",
-  "e2e",
-  "visual-regression.spec.js-snapshots",
-);
+const AFTER_DIR = path.join(__dirname, "..", "e2e", "visual-regression.spec.js-snapshots");
 const BEFORE_DIR = AFTER_DIR + "-before";
 const OUTPUT_DIR = path.join(__dirname, "..", "recordings");
 const MS_PER_SLIDE = 3500;
@@ -127,17 +122,13 @@ function singleSlide({ label, imgB64, index, total }) {
     .sort();
 
   if (afterFiles.length === 0) {
-    console.error(
-      "No snapshots found. Run tests with --update-snapshots first.",
-    );
+    console.error("No snapshots found. Run tests with --update-snapshots first.");
     process.exit(1);
   }
 
   const hasBefore = fs.existsSync(BEFORE_DIR);
   const mode = hasBefore ? "before/after comparison" : "current baselines";
-  console.log(
-    `Found ${afterFiles.length} snapshots (${mode}). Recording showcase...`,
-  );
+  console.log(`Found ${afterFiles.length} snapshots (${mode}). Recording showcase...`);
 
   const browser = await chromium.launch();
   const context = await browser.newContext({

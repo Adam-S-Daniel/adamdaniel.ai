@@ -105,9 +105,7 @@ test.describe(
     test.afterAll(() => cleanup());
 
     test.beforeEach(({ page }) => {
-      page.on("pageerror", (err) =>
-        console.log(`[pageerror] ${err.name}: ${err.message}`),
-      );
+      page.on("pageerror", (err) => console.log(`[pageerror] ${err.name}: ${err.message}`));
     });
 
     test("project saved with 3-image gallery; uploads land on disk; image URLs resolve", async ({
@@ -116,9 +114,7 @@ test.describe(
       // ── Load admin and open New Project ──────────────────────────────
       await page.goto("/admin/index-local.html");
       await page.getByRole("button", { name: /login/i }).click();
-      await page
-        .getByRole("link", { name: /^projects$/i })
-        .waitFor({ timeout: 30_000 });
+      await page.getByRole("link", { name: /^projects$/i }).waitFor({ timeout: 30_000 });
       await page.goto("/admin/index-local.html#/collections/projects/new");
 
       const titleField = page.getByLabel(/^Title$/);
@@ -128,9 +124,7 @@ test.describe(
       // Required slug — Projects collection uses {{slug}}, so this is what
       // the on-disk file is named after.
       await page.getByLabel(/^Technology \/ Stack/).fill("HTML · CSS");
-      await page
-        .getByLabel(/^Project URL/)
-        .fill("https://example.com/gallery-project");
+      await page.getByLabel(/^Project URL/).fill("https://example.com/gallery-project");
 
       // ── Add 3 images via the list widget ─────────────────────────────
       // The Images field is a `widget: list` with `field.name: image,
@@ -169,15 +163,11 @@ test.describe(
 
         // Decap's media library shares one hidden <input type="file"> per
         // open dialog — same pattern as cms-image-upload.spec.js.
-        const fileInput = page
-          .locator('input[type="file"][accept*="image"]')
-          .first();
+        const fileInput = page.locator('input[type="file"][accept*="image"]').first();
         await fileInput.waitFor({ state: "attached", timeout: 30_000 });
         await fileInput.setInputFiles(FIXTURES[i]);
 
-        const insertBtn = page
-          .getByRole("button", { name: /^(choose selected|insert)$/i })
-          .first();
+        const insertBtn = page.getByRole("button", { name: /^(choose selected|insert)$/i }).first();
         await expect(insertBtn).toBeVisible({ timeout: 30_000 });
         await insertBtn.click();
       }
@@ -193,9 +183,7 @@ test.describe(
         .click();
 
       // ── Assertion 1: file on disk ────────────────────────────────────
-      await expect
-        .poll(() => fs.existsSync(SMOKE_FILE), { timeout: 60_000 })
-        .toBe(true);
+      await expect.poll(() => fs.existsSync(SMOKE_FILE), { timeout: 60_000 }).toBe(true);
 
       const saved = fs.readFileSync(SMOKE_FILE, "utf8");
       expect(saved).toContain(`title: ${SMOKE_TITLE}`);
@@ -203,13 +191,8 @@ test.describe(
       // Each list entry is one line `  - /assets/images/uploads/<file>.png`.
       // `[^/\s]+` (no path separator) is the regression guard against a
       // nested/templated media_folder reappearing.
-      const imageLines = saved.match(
-        /-\s+\/assets\/images\/uploads\/[^/\s]+\.png/g,
-      );
-      expect(
-        imageLines,
-        "front matter should contain 3 image-URL list entries",
-      ).not.toBeNull();
+      const imageLines = saved.match(/-\s+\/assets\/images\/uploads\/[^/\s]+\.png/g);
+      expect(imageLines, "front matter should contain 3 image-URL list entries").not.toBeNull();
       expect(imageLines.length).toBe(3);
 
       // ── Assertion 2: 3 fixtures on disk under uploads/ ───────────────
@@ -248,19 +231,16 @@ test.describe(
       for (const u of urls) {
         expect(u).toMatch(/^\/assets\/images\/uploads\/[^/]+\.png$/);
         const status = await headStatus(u).catch(() => 0);
-        expect(
-          status,
-          `HEAD ${u} must return 200 (gallery image must resolve end-to-end)`,
-        ).toBe(200);
+        expect(status, `HEAD ${u} must return 200 (gallery image must resolve end-to-end)`).toBe(
+          200,
+        );
       }
 
       // ── Assertion 4 (homepage card): currently disabled section ──────
       // Re-enable Featured Projects on index.html to flip this fixme.
     });
 
-    test.fixme("homepage shows the new Featured Projects card", async ({
-      page,
-    }) => {
+    test.fixme("homepage shows the new Featured Projects card", async ({ page }) => {
       // index.html wraps the Featured Projects section in `{% comment %}`
       // so the projects-grid never renders. Removing that comment will
       // make this test runnable. Until then it stays a `fixme` so the

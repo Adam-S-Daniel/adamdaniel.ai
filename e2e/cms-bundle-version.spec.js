@@ -37,14 +37,10 @@ test.describe(
     test.describe.configure({ timeout: 120_000 });
 
     test.beforeEach(async ({ page }) => {
-      page.on("pageerror", (err) =>
-        console.log(`[pageerror] ${err.name}: ${err.message}`),
-      );
+      page.on("pageerror", (err) => console.log(`[pageerror] ${err.name}: ${err.message}`));
     });
 
-    test("runtime decap-cms version major.minor matches admin/index.html pin", async ({
-      page,
-    }) => {
+    test("runtime decap-cms version major.minor matches admin/index.html pin", async ({ page }) => {
       const pinned = readPinnedVersion();
 
       // Decap announces its version via `console.log("decap-cms X.Y.Z")`
@@ -61,28 +57,23 @@ test.describe(
       await page.goto("/admin/index.html", { waitUntil: "domcontentloaded" });
       // Wait for the announce log to land. The bundle pushes it shortly
       // after the script tag parses, well before any backend call.
-      await page.waitForFunction(
-        () => !!(window.CMS || window.decapCms || window.DecapCms),
-        null,
-        { timeout: 60_000 },
-      );
+      await page.waitForFunction(() => !!(window.CMS || window.decapCms || window.DecapCms), null, {
+        timeout: 60_000,
+      });
       // Console events flush asynchronously — give the announce line a
       // beat to arrive before reading.
       await page.waitForTimeout(2000);
 
-      const announce = versionMessages.find((m) =>
-        /^decap-cms\s+\d+\.\d+\.\d+/.test(m),
-      );
+      const announce = versionMessages.find((m) => /^decap-cms\s+\d+\.\d+\.\d+/.test(m));
       expect(
         announce,
         `Decap should announce its version on the console at startup; got: ${JSON.stringify(versionMessages)}`,
       ).toBeDefined();
       const runtime = announce.match(/^decap-cms\s+(\d+\.\d+\.\d+)/)[1];
 
-      expect(
-        runtime,
-        "Decap should expose a runtime VERSION on the CMS global",
-      ).toMatch(/^\d+\.\d+\.\d+/);
+      expect(runtime, "Decap should expose a runtime VERSION on the CMS global").toMatch(
+        /^\d+\.\d+\.\d+/,
+      );
 
       // Loose comparison: the pinned tag and the resolved bundle must
       // agree on major.minor. Patch releases are intentionally allowed

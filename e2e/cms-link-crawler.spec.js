@@ -100,9 +100,7 @@ async function openCollectionEditor(page, collection) {
   // Decap renders entry links as <a href="…#/collections/<name>/entries/<slug>">.
   // Wait briefly for any to appear; if none do, route into the New form
   // to still mount the editor surface.
-  const entryLink = page
-    .locator(`a[href*="#/collections/${collection}/entries/"]`)
-    .first();
+  const entryLink = page.locator(`a[href*="#/collections/${collection}/entries/"]`).first();
   const haveEntry = await entryLink
     .waitFor({ timeout: 15_000 })
     .then(() => true)
@@ -117,9 +115,7 @@ async function openCollectionEditor(page, collection) {
   // Wait until *some* form control mounts. Title is shared across
   // posts / projects / pages; tags has Name. Either way the labelled
   // input proves the editor is up before we harvest hrefs.
-  const editorMounted = page.locator(
-    'label, h3, h4, legend, input[type="text"], textarea',
-  );
+  const editorMounted = page.locator('label, h3, h4, legend, input[type="text"], textarea');
   await expect(editorMounted.first()).toBeVisible({ timeout: 60_000 });
 }
 
@@ -137,14 +133,10 @@ test.describe(
         TARGET === "prod",
         "Crawler drives /admin/index-local.html (local_backend: true). prod has no local proxy, so login can't populate the sidebar.",
       );
-      page.on("pageerror", (err) =>
-        console.log(`[pageerror] ${err.name}: ${err.message}`),
-      );
+      page.on("pageerror", (err) => console.log(`[pageerror] ${err.name}: ${err.message}`));
     });
 
-    test("every <a href> in the admin returns 200/302/304 (HEAD)", async ({
-      page,
-    }) => {
+    test("every <a href> in the admin returns 200/302/304 (HEAD)", async ({ page }) => {
       // ── Login (local-backend skips OAuth) ─────────────────────────────
       await page.goto(ADMIN_PATH);
       const loginBtn = page.getByRole("button", { name: /login/i });
@@ -161,9 +153,7 @@ test.describe(
       // once per surface (collection list / entry editor) — the de-dup
       // happens in the surrounding Set.
       async function harvest() {
-        const hrefs = await page.$$eval("a[href]", (els) =>
-          els.map((a) => a.href),
-        );
+        const hrefs = await page.$$eval("a[href]", (els) => els.map((a) => a.href));
         for (const href of hrefs) harvested.add(href);
       }
 
@@ -182,9 +172,7 @@ test.describe(
       }
 
       // ── Filter to same-origin, non-SPA URLs and HEAD each one ─────────
-      const candidates = Array.from(harvested).filter(
-        (href) => !shouldSkip(href, adminOrigin),
-      );
+      const candidates = Array.from(harvested).filter((href) => !shouldSkip(href, adminOrigin));
 
       // Belt-and-braces: the harvested set will almost always include at
       // least one same-origin href (the floating Live Preview link points
@@ -208,9 +196,7 @@ test.describe(
           status = response.status();
           if (ACCEPTED_STATUSES.has(status)) continue;
           if (isKnownBug(url)) {
-            knownBugHits.push(
-              `${url} → ${status} (allowlisted; see KNOWN_BUGS)`,
-            );
+            knownBugHits.push(`${url} → ${status} (allowlisted; see KNOWN_BUGS)`);
             continue;
           }
           failures.push(`${url} → ${status}`);
@@ -228,9 +214,7 @@ test.describe(
 
       expect(
         failures,
-        `Admin links must respond 200/302/304 (HEAD). Failures:\n  ${failures.join(
-          "\n  ",
-        )}`,
+        `Admin links must respond 200/302/304 (HEAD). Failures:\n  ${failures.join("\n  ")}`,
       ).toEqual([]);
     });
   },

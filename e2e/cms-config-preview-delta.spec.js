@@ -45,11 +45,7 @@ const FIXTURE_PREVIEW_URL = `https://${FIXTURE_HOST}`;
 // `  branch:` field (it uses `backend.name: test-repo`), so the
 // branch sed silently no-ops there. The allowed-delta check accepts
 // "fewer than three changes, but every change is in the set."
-const CONFIGS = [
-  "admin/config.yml",
-  "admin/config-local.yml",
-  "admin/config-test.yml",
-];
+const CONFIGS = ["admin/config.yml", "admin/config-local.yml", "admin/config-test.yml"];
 
 // A line is allowed to change if and only if its NEW form looks like
 // the output of one of the three sed substitutions. Matching the
@@ -125,10 +121,7 @@ function formatUnexpectedDelta(label, change) {
 }
 
 test.describe("scripts/patch-preview-config.sh delta lock", () => {
-  test.skip(
-    os.platform() === "win32",
-    "patch-preview-config.sh requires bash + GNU sed",
-  );
+  test.skip(os.platform() === "win32", "patch-preview-config.sh requires bash + GNU sed");
 
   test.describe.configure({ mode: "serial" });
 
@@ -159,10 +152,7 @@ test.describe("scripts/patch-preview-config.sh delta lock", () => {
 
       // Every change must match one of the three allowed substitutions.
       for (const change of diff.changes) {
-        expect(
-          isAllowedNewLine(change.newLine),
-          formatUnexpectedDelta(relPath, change),
-        ).toBe(true);
+        expect(isAllowedNewLine(change.newLine), formatUnexpectedDelta(relPath, change)).toBe(true);
       }
 
       // Sanity floor: the patch must actually do *something* on every

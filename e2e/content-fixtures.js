@@ -46,9 +46,7 @@ async function discoverTags(page) {
     const m = href.match(/\/tags\/([^/]+)\/?$/);
     if (!m) continue;
     const name = (await item.locator(".tag-list-name").innerText()).trim();
-    const countText = (
-      await item.locator(".tag-list-count").innerText()
-    ).trim();
+    const countText = (await item.locator(".tag-list-count").innerText()).trim();
     const c = parseInt(countText, 10);
     tags.push({ slug: m[1], name, count: Number.isNaN(c) ? 0 : c });
   }

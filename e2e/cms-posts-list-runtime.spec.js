@@ -19,14 +19,10 @@ test.describe(
     // checkbox / Refresh button mid-tap on iOS Safari so the
     // synthesized click landed on a disconnected element — the page
     // looked normal but tapping anything in the bar did nothing.
-    test("bar does not enter an infinite innerHTML rewrite loop", async ({
-      page,
-    }) => {
+    test("bar does not enter an infinite innerHTML rewrite loop", async ({ page }) => {
       await page.goto("/admin/index-local.html");
       await page.getByRole("button", { name: /login/i }).click();
-      await page
-        .getByRole("link", { name: /^posts$/i })
-        .waitFor({ timeout: 30_000 });
+      await page.getByRole("link", { name: /^posts$/i }).waitFor({ timeout: 30_000 });
       await page.getByRole("link", { name: /^posts$/i }).click();
       await page.locator("#cms-ple-bar").waitFor({ timeout: 30_000 });
 
@@ -58,14 +54,10 @@ test.describe(
       ).toBeLessThan(20);
     });
 
-    test("show-fixtures checkbox toggles and the click lands", async ({
-      page,
-    }) => {
+    test("show-fixtures checkbox toggles and the click lands", async ({ page }) => {
       await page.goto("/admin/index-local.html");
       await page.getByRole("button", { name: /login/i }).click();
-      await page
-        .getByRole("link", { name: /^posts$/i })
-        .waitFor({ timeout: 30_000 });
+      await page.getByRole("link", { name: /^posts$/i }).waitFor({ timeout: 30_000 });
       await page.getByRole("link", { name: /^posts$/i }).click();
 
       const cb = page.locator("#cms-ple-show-fixtures");

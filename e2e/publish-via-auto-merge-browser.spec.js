@@ -74,14 +74,11 @@ test.describe("publish-via-auto-merge.js — browser context", () => {
     });
   });
 
-  test("shim installs in browser context with the merge matcher", async ({
-    page,
-  }) => {
+  test("shim installs in browser context with the merge matcher", async ({ page }) => {
     await page.setContent(FIXTURE_HTML);
     const status = await page.evaluate(() => ({
       installed: !!window.__publishViaAutoMergeInstalled,
-      kinds:
-        window.__publishViaAutoMerge && window.__publishViaAutoMerge.matchers,
+      kinds: window.__publishViaAutoMerge && window.__publishViaAutoMerge.matchers,
     }));
     expect(status).toEqual({ installed: true, kinds: ["merge"] });
   });
@@ -140,9 +137,7 @@ test.describe("publish-via-auto-merge.js — browser context", () => {
     expect(result.body.sha).toBe("real-sha-deadbeef");
   });
 
-  test("422 with non-rule-violation message passes through", async ({
-    page,
-  }) => {
+  test("422 with non-rule-violation message passes through", async ({ page }) => {
     await page.route(/\/pulls\/\d+\/merge$/, async (route) => {
       await route.fulfill({
         status: 422,
@@ -156,9 +151,7 @@ test.describe("publish-via-auto-merge.js — browser context", () => {
     expect(result.body.message).toMatch(/unstable/);
   });
 
-  test("recovery toast renders in DOM with [role=status] and survives ~12s", async ({
-    page,
-  }) => {
+  test("recovery toast renders in DOM with [role=status] and survives ~12s", async ({ page }) => {
     await page.route(/\/pulls\/\d+\/merge$/, async (route) => {
       await route.fulfill({
         status: 422,
@@ -179,9 +172,7 @@ test.describe("publish-via-auto-merge.js — browser context", () => {
     await expect(toast).toContainText(/auto-merge|automatically/i);
   });
 
-  test("recovery POST failure surfaces the original 422 (does not lie)", async ({
-    page,
-  }) => {
+  test("recovery POST failure surfaces the original 422 (does not lie)", async ({ page }) => {
     await page.route(/\/pulls\/\d+\/merge$/, async (route) => {
       await route.fulfill({
         status: 422,

@@ -20,14 +20,10 @@ test.describe("Tags index page", () => {
     const response = await page.goto("/tags/");
     expect(response.status()).toBe(200);
 
-    await expect(
-      page.locator(".page-header h1", { hasText: /^Tags$/i }),
-    ).toBeVisible();
+    await expect(page.locator(".page-header h1", { hasText: /^Tags$/i })).toBeVisible();
   });
 
-  test("/tags/ either lists tags or shows the empty placeholder", async ({
-    page,
-  }) => {
+  test("/tags/ either lists tags or shows the empty placeholder", async ({ page }) => {
     await page.goto("/tags/");
     // Two valid renderings: a non-empty `.tag-list`, or the
     // "No tags yet." paragraph. A site mid-deletion shouldn't render
@@ -50,14 +46,9 @@ test.describe("Tags index page", () => {
 });
 
 test.describe("Tag archive pages", () => {
-  test("each discovered tag's /tags/<slug>/ resolves with the right header", async ({
-    page,
-  }) => {
+  test("each discovered tag's /tags/<slug>/ resolves with the right header", async ({ page }) => {
     const tags = await discoverTags(page);
-    test.skip(
-      tags.length === 0,
-      "no tags exist on the site — nothing to assert against",
-    );
+    test.skip(tags.length === 0, "no tags exist on the site — nothing to assert against");
     for (const { name, slug } of tags) {
       const response = await page.goto(`/tags/${slug}/`);
       expect(response.status(), `/tags/${slug}/ should respond 200`).toBe(200);
@@ -65,9 +56,7 @@ test.describe("Tag archive pages", () => {
     }
   });
 
-  test("a tag with no matching posts shows the empty-state placeholder", async ({
-    page,
-  }) => {
+  test("a tag with no matching posts shows the empty-state placeholder", async ({ page }) => {
     // Find a tag with count 0 (a curated tag entry that no post
     // currently references). Its archive should render the
     // "No posts yet" placeholder, not a broken empty list.
@@ -111,10 +100,7 @@ test.describe("Homepage tag cloud", () => {
       return;
     }
 
-    expect(
-      sectionVisible,
-      "homepage should show .tag-cloud-section when tags exist",
-    ).toBe(true);
+    expect(sectionVisible, "homepage should show .tag-cloud-section when tags exist").toBe(true);
     await expect(section.locator('a[href$="/tags/"]')).toBeVisible();
 
     const cloud = section.locator(".tag-cloud");

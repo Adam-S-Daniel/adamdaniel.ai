@@ -73,15 +73,7 @@ function shouldCapture() {
  */
 async function captureStep(page, opts) {
   if (!shouldCapture()) return;
-  const {
-    section,
-    step,
-    title,
-    body = "",
-    elementSelector,
-    fullPage = true,
-    mask,
-  } = opts || {};
+  const { section, step, title, body = "", elementSelector, fullPage = true, mask } = opts || {};
   if (!section || !step || !title) {
     throw new Error("captureStep requires { section, step, title }.");
   }
@@ -92,10 +84,7 @@ async function captureStep(page, opts) {
   const sectionDir = path.join(SCREENSHOT_DIR, sectionSlug);
   ensureDir(sectionDir);
   const screenshotPath = path.join(sectionDir, `${stepSlug}.png`);
-  const screenshotRel = path
-    .relative(REPO_ROOT, screenshotPath)
-    .split(path.sep)
-    .join("/");
+  const screenshotRel = path.relative(REPO_ROOT, screenshotPath).split(path.sep).join("/");
 
   const screenshotOpts = { path: screenshotPath, fullPage };
   if (Array.isArray(mask) && mask.length) {
@@ -108,16 +97,11 @@ async function captureStep(page, opts) {
   }
 
   ensureDir(CAPTURE_DIR);
-  const file = path.join(
-    CAPTURE_DIR,
-    captureKey(testInfo.file, testInfo.title),
-  );
+  const file = path.join(CAPTURE_DIR, captureKey(testInfo.file, testInfo.title));
   const records = readExisting(file);
   // Replace any prior record for the same { section, step } so reruns
   // overwrite cleanly.
-  const idx = records.findIndex(
-    (r) => r.section === section && r.step === step,
-  );
+  const idx = records.findIndex((r) => r.section === section && r.step === step);
   const record = {
     section,
     step,

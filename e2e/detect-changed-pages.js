@@ -175,11 +175,7 @@ function mapFileToUrls(filePath) {
 //
 // `fileExistsOnMain` is injected so tests don't need a real `origin/main`.
 // In CI the production binding queries git; tests pass a pure stub.
-function classifyPages({
-  allPages,
-  changedFiles,
-  fileExistsOnMain = () => true,
-}) {
+function classifyPages({ allPages, changedFiles, fileExistsOnMain = () => true }) {
   const directlyChanged = new Set();
   const newPages = new Set();
   let globalChange = false;
@@ -200,10 +196,7 @@ function classifyPages({
         // placeholder for the prod side instead of the real
         // production admin, and the resulting video shows admin
         // pages with the wrong reference image.
-        if (
-          !fileExistsOnMain(file) &&
-          !ALWAYS_INCLUDED_ADMIN_PAGES.includes(url)
-        ) {
+        if (!fileExistsOnMain(file) && !ALWAYS_INCLUDED_ADMIN_PAGES.includes(url)) {
           newPages.add(url);
         }
       }

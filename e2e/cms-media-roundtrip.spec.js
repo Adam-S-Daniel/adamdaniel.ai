@@ -64,18 +64,10 @@ const path = require("node:path");
 const { test, expect } = require("./base");
 const { seedDecapAuth, getPat, HOST_REPO } = require("./decap-pat");
 const { closeStaleDecapPrOnBranch } = require("./cms-fixture-pr");
-const {
-  addLabel,
-  gh,
-  waitForCmsPullRequest,
-} = require("./github-actions-poll");
+const { addLabel, gh, waitForCmsPullRequest } = require("./github-actions-poll");
 const { waitForChangeReflected } = require("./deploy-pill");
 const { resolveCmsTarget } = require("./cms-host");
-const {
-  readPublishedFlag,
-  forcePublishedFalse,
-  loudBail,
-} = require("./fixture-baseline");
+const { readPublishedFlag, forcePublishedFalse, loudBail } = require("./fixture-baseline");
 
 const REPO_ROOT = path.resolve(__dirname, "..");
 const FIXTURE_PATH = "_posts/2099-01-03-e2e-media-roundtrip.md";
@@ -95,11 +87,7 @@ const PUBLIC_PATH = `/blog/${FIXTURE_SLUG}/`;
 // The local names stay PROD_* to keep this large spec's body and diff
 // minimal — the *value* is whatever resolveCmsTarget() picks (prod or
 // preview), which is the point of the parameterization.
-const {
-  host: PROD_HOST,
-  adminUrl: PROD_ADMIN,
-  pillId: PILL_PROD,
-} = resolveCmsTarget();
+const { host: PROD_HOST, adminUrl: PROD_ADMIN, pillId: PILL_PROD } = resolveCmsTarget();
 const PUBLIC_URL = `${PROD_HOST}${PUBLIC_PATH}`;
 
 // Source bytes for the upload. We re-upload these under a per-run
@@ -179,9 +167,7 @@ async function writeFixtureOnMain({ fileText, message }) {
 async function deleteFileFromMainIfPresent(filePath, message) {
   let current;
   try {
-    current = await gh(
-      `/repos/${HOST_REPO}/contents/${encodeURI(filePath)}?ref=main`,
-    );
+    current = await gh(`/repos/${HOST_REPO}/contents/${encodeURI(filePath)}?ref=main`);
   } catch (e) {
     if (e && e.status === 404) return false; // already gone — good
     throw e;
@@ -214,10 +200,7 @@ function readFeaturedImage(text) {
 // check forever (#1053). Idempotent once the fixture is checked in
 // false.
 function buildBaselineFileText() {
-  return forcePublishedFalse(
-    fs.readFileSync(FIXTURE_ABS, "utf8"),
-    FIXTURE_PATH,
-  );
+  return forcePublishedFalse(fs.readFileSync(FIXTURE_ABS, "utf8"), FIXTURE_PATH);
 }
 
 function todayUtcIso() {
@@ -261,10 +244,7 @@ test(
       return;
     }
     if (!fs.existsSync(FIXTURE_ABS)) {
-      loudBail(
-        test,
-        `Fixture ${FIXTURE_PATH} is missing — restore it from git history.`,
-      );
+      loudBail(test, `Fixture ${FIXTURE_PATH} is missing — restore it from git history.`);
       return;
     }
     const initialText = fs.readFileSync(FIXTURE_ABS, "utf8");
@@ -359,10 +339,7 @@ test(
         `${PUBLIC_URL} must 404 before the run (published:false should drop it)`,
       ).toBe("404");
       const imgRes = await fetch(imageUrlAbs, { cache: "no-store" });
-      expect(
-        imgRes.status,
-        `${imageUrlAbs} must not exist yet (unique per-run name)`,
-      ).toBe(404);
+      expect(imgRes.status, `${imageUrlAbs} must not exist yet (unique per-run name)`).toBe(404);
     });
 
     // ── 2. Load prod admin (PAT-seeded session, no OAuth popup) ───
@@ -401,29 +378,23 @@ test(
         .getByRole("button", { name: /choose (an |different )?image/i })
         .first()
         .click();
-      const fileInput = page
-        .locator('input[type="file"][accept*="image"]')
-        .first();
+      const fileInput = page.locator('input[type="file"][accept*="image"]').first();
       await fileInput.waitFor({ state: "attached", timeout: 30_000 });
       await fileInput.setInputFiles({
         name: imageName,
         mimeType: "image/png",
         buffer: imageBuffer,
       });
-      const insertBtn = page
-        .getByRole("button", { name: /^(choose selected|insert)$/i })
-        .first();
+      const insertBtn = page.getByRole("button", { name: /^(choose selected|insert)$/i }).first();
       await expect(insertBtn).toBeVisible({ timeout: 30_000 });
       await insertBtn.click();
       // The widget must now reflect the upload. Decap renders the
       // chosen path; assert it surfaces the unique filename so we
       // know the attach actually took before we Save.
       await expect
-        .poll(
-          async () =>
-            (await page.locator("body").innerText()).includes(imageName),
-          { timeout: 30_000 },
-        )
+        .poll(async () => (await page.locator("body").innerText()).includes(imageName), {
+          timeout: 30_000,
+        })
         .toBe(true);
     });
 
@@ -446,9 +417,9 @@ test(
       });
       await page.getByRole("button", { name: /^Status:\s*Draft$/i }).click();
       await page.getByRole("menuitem", { name: /^Ready$/i }).click();
-      await expect(
-        page.getByRole("button", { name: /^Status:\s*Ready$/i }),
-      ).toBeVisible({ timeout: 30_000 });
+      await expect(page.getByRole("button", { name: /^Status:\s*Ready$/i })).toBeVisible({
+        timeout: 30_000,
+      });
     });
 
     // ── 6. Find the cms/... PR Decap opened ───────────────────────
@@ -494,9 +465,7 @@ test(
         `${imageUrlAbs} must resolve 200 on the live site (broken-image regression guard)`,
       ).toBe(200);
       const ct = (res.headers()["content-type"] || "").toLowerCase();
-      expect(ct, `unexpected content-type for ${imageUrlAbs}`).toContain(
-        "image",
-      );
+      expect(ct, `unexpected content-type for ${imageUrlAbs}`).toContain("image");
       expect(
         (await res.body()).length,
         "live image response must have non-empty bytes",
@@ -508,9 +477,9 @@ test(
       await page.goto(`${PROD_ADMIN}#/collections/posts/entries/${FILE_SLUG}`, {
         waitUntil: "domcontentloaded",
       });
-      await expect(page.getByRole("textbox", { name: /^Title$/i })).toBeVisible(
-        { timeout: 30_000 },
-      );
+      await expect(page.getByRole("textbox", { name: /^Title$/i })).toBeVisible({
+        timeout: 30_000,
+      });
 
       // Clear the Featured Image widget. Decap renders a remove/clear
       // control next to the chosen-image preview. We click it, then
@@ -527,11 +496,9 @@ test(
       ).toBeVisible({ timeout: 30_000 });
       await removeBtn.click();
       await expect
-        .poll(
-          async () =>
-            (await page.locator("body").innerText()).includes(imageName),
-          { timeout: 20_000 },
-        )
+        .poll(async () => (await page.locator("body").innerText()).includes(imageName), {
+          timeout: 20_000,
+        })
         .toBe(false);
 
       const toggle = page.getByRole("switch", { name: /^Published$/i }).first();
@@ -549,9 +516,9 @@ test(
       });
       await page.getByRole("button", { name: /^Status:\s*Draft$/i }).click();
       await page.getByRole("menuitem", { name: /^Ready$/i }).click();
-      await expect(
-        page.getByRole("button", { name: /^Status:\s*Ready$/i }),
-      ).toBeVisible({ timeout: 30_000 });
+      await expect(page.getByRole("button", { name: /^Status:\s*Ready$/i })).toBeVisible({
+        timeout: 30_000,
+      });
     });
 
     await test.step("Wait for Decap to open the cms/... PR (remove)", async () => {
@@ -600,9 +567,7 @@ test(
         `uploaded asset ${imageName} must be visible in the Media library`,
       ).toBeVisible({ timeout: 30_000 });
       await card.click();
-      const deleteBtn = page
-        .getByRole("button", { name: /^delete( selected)?$/i })
-        .first();
+      const deleteBtn = page.getByRole("button", { name: /^delete( selected)?$/i }).first();
       await expect(
         deleteBtn,
         "Media library must expose a Delete control for the selected asset",
@@ -611,11 +576,9 @@ test(
       // The card must disappear from the library — proves the delete
       // was accepted client-side before we wait on the live URL.
       await expect
-        .poll(
-          async () =>
-            (await page.locator("body").innerText()).includes(imageName),
-          { timeout: 30_000 },
-        )
+        .poll(async () => (await page.locator("body").innerText()).includes(imageName), {
+          timeout: 30_000,
+        })
         .toBe(false);
     });
 
@@ -631,25 +594,18 @@ test(
       while (Date.now() < deadline) {
         let prs = [];
         try {
-          prs = await gh(
-            `/repos/${HOST_REPO}/pulls?state=open&base=main&per_page=50`,
-          );
+          prs = await gh(`/repos/${HOST_REPO}/pulls?state=open&base=main&per_page=50`);
         } catch (_) {
           /* transient — retry */
         }
         const cmsPrs = (prs || []).filter(
-          (pr) =>
-            pr.head &&
-            typeof pr.head.ref === "string" &&
-            pr.head.ref.startsWith("cms/"),
+          (pr) => pr.head && typeof pr.head.ref === "string" && pr.head.ref.startsWith("cms/"),
         );
         let labelled = false;
         for (const pr of cmsPrs) {
           let files;
           try {
-            files = await gh(
-              `/repos/${HOST_REPO}/pulls/${pr.number}/files?per_page=100`,
-            );
+            files = await gh(`/repos/${HOST_REPO}/pulls/${pr.number}/files?per_page=100`);
           } catch (_) {
             continue;
           }
@@ -660,9 +616,7 @@ test(
             try {
               await addLabel({ prNumber: pr.number, label: "cms/ready" });
             } catch (e) {
-              console.warn(
-                `[media-delete] could not label PR #${pr.number}: ${e && e.message}`,
-              );
+              console.warn(`[media-delete] could not label PR #${pr.number}: ${e && e.message}`);
             }
             labelled = true;
             break;
@@ -680,9 +634,9 @@ test(
       await page.goto(`${PROD_ADMIN}#/collections/posts/entries/${FILE_SLUG}`, {
         waitUntil: "domcontentloaded",
       });
-      await expect(page.getByRole("textbox", { name: /^Title$/i })).toBeVisible(
-        { timeout: 30_000 },
-      );
+      await expect(page.getByRole("textbox", { name: /^Title$/i })).toBeVisible({
+        timeout: 30_000,
+      });
       await waitForChangeReflected({
         page,
         pillId: PILL_PROD,
@@ -699,10 +653,7 @@ test(
     // ── 12. Final ground-truth assertions ─────────────────────────
     await test.step("Assert image URL 404s and post 4xx (final)", async () => {
       const imgRes = await fetch(imageUrlAbs, { cache: "no-store" });
-      expect(
-        imgRes.status,
-        `${imageUrlAbs} must 404 after the Media-UI delete`,
-      ).toBe(404);
+      expect(imgRes.status, `${imageUrlAbs} must 404 after the Media-UI delete`).toBe(404);
       const postRes = await fetch(PUBLIC_URL, { cache: "no-store" });
       expect(
         postRes.status >= 400 && postRes.status < 500,
@@ -734,9 +685,7 @@ test.afterAll(async () => {
   }
   const decoded = Buffer.from(current.content, "base64").toString("utf8");
   if (!isBaseline(decoded)) {
-    console.warn(
-      "[cleanup-harness] fixture on main not at baseline; restoring via Contents API",
-    );
+    console.warn("[cleanup-harness] fixture on main not at baseline; restoring via Contents API");
     try {
       await writeFixtureOnMain({
         fileText: buildBaselineFileText(),
@@ -744,23 +693,17 @@ test.afterAll(async () => {
           "test(media-roundtrip): harness safety-net reset of fixture (UI cleanup left mutation)",
       });
     } catch (e) {
-      console.warn(
-        `[cleanup-harness] fixture restore failed: ${e && e.message}`,
-      );
+      console.warn(`[cleanup-harness] fixture restore failed: ${e && e.message}`);
     }
   } else {
-    console.log(
-      "[cleanup-harness] media-roundtrip fixture at baseline — UI cleanup succeeded",
-    );
+    console.log("[cleanup-harness] media-roundtrip fixture at baseline — UI cleanup succeeded");
   }
 
   // Sweep any leftover per-run uploads (UI delete leg didn't land, or
   // the test crashed before it). The name pattern is unique to this
   // spec so this can't touch real media.
   try {
-    const dir = await gh(
-      `/repos/${HOST_REPO}/contents/${UPLOADS_DIR}?ref=main`,
-    );
+    const dir = await gh(`/repos/${HOST_REPO}/contents/${UPLOADS_DIR}?ref=main`);
     const leftovers = (Array.isArray(dir) ? dir : []).filter(
       (f) => f.type === "file" && /^e2e-media-roundtrip-\d+\.png$/.test(f.name),
     );
@@ -772,14 +715,10 @@ test.afterAll(async () => {
         );
         console.warn(`[cleanup-harness] removed leftover upload ${f.name}`);
       } catch (e) {
-        console.warn(
-          `[cleanup-harness] couldn't remove ${f.name}: ${e && e.message}`,
-        );
+        console.warn(`[cleanup-harness] couldn't remove ${f.name}: ${e && e.message}`);
       }
     }
   } catch (e) {
-    console.warn(
-      `[cleanup-harness] couldn't list ${UPLOADS_DIR}: ${e && e.message}`,
-    );
+    console.warn(`[cleanup-harness] couldn't list ${UPLOADS_DIR}: ${e && e.message}`);
   }
 });

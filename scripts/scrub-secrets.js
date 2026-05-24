@@ -69,10 +69,7 @@ for (const f of findings || []) {
   seen.add(f.Match);
   // Global, case-sensitive replace. Escape regex metacharacters.
   const escaped = f.Match.replace(/[.*+?^${}()|[\]\\]/g, "\\$&");
-  scrubbed = scrubbed.replace(
-    new RegExp(escaped, "g"),
-    `<REDACTED:${f.RuleID || "secret"}>`,
-  );
+  scrubbed = scrubbed.replace(new RegExp(escaped, "g"), `<REDACTED:${f.RuleID || "secret"}>`);
 }
 
 if (outputFile) {

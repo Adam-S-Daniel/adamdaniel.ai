@@ -57,11 +57,7 @@ const { prodTarget } = require("./cms-host");
 
 // Fixed-prod loop, resolved through the shared cms-host resolver
 // (byte-identical to the old literals) so prod/preview can't drift.
-const {
-  host: PROD_HOST,
-  adminUrl: PROD_ADMIN,
-  pillId: PILL_PROD,
-} = prodTarget();
+const { host: PROD_HOST, adminUrl: PROD_ADMIN, pillId: PILL_PROD } = prodTarget();
 
 // The delete spec runs two editorial-workflow auto-merge cycles end
 // to end:
@@ -136,10 +132,7 @@ test(
   "Delete published entry — UI click → public URL 404s",
   { tag: ["@admin-write"] },
   async ({ page }) => {
-    test.skip(
-      !getPat(),
-      "CMS_E2E_PAT not set — host-repo delete-published spec disabled.",
-    );
+    test.skip(!getPat(), "CMS_E2E_PAT not set — host-repo delete-published spec disabled.");
     // Same opt-in as cms-publish-loop.spec.js so this also only fires
     // inside the dedicated cms-publish-loop-host workflow.
     test.skip(
@@ -187,20 +180,14 @@ test(
     page.on("request", (req) => {
       const method = req.method();
       const url = req.url();
-      if (
-        /api\.github\.com\/repos\/Adam-S-Daniel\/adamdaniel\.ai\//.test(url)
-      ) {
+      if (/api\.github\.com\/repos\/Adam-S-Daniel\/adamdaniel\.ai\//.test(url)) {
         console.info(`[trace] ${method} → ${url}`);
       }
     });
     page.on("response", (res) => {
       const url = res.url();
-      if (
-        /api\.github\.com\/repos\/Adam-S-Daniel\/adamdaniel\.ai\//.test(url)
-      ) {
-        console.info(
-          `[trace] ${res.status()} ${res.request().method()} ← ${url}`,
-        );
+      if (/api\.github\.com\/repos\/Adam-S-Daniel\/adamdaniel\.ai\//.test(url)) {
+        console.info(`[trace] ${res.status()} ${res.request().method()} ← ${url}`);
       }
     });
     page.on("console", (msg) => {
@@ -236,11 +223,9 @@ test(
       await page.goto(`${PROD_ADMIN}#/collections/e2e/new`, {
         waitUntil: "domcontentloaded",
       });
-      await expect(page.getByRole("textbox", { name: /^Title$/i })).toBeVisible(
-        {
-          timeout: 30_000,
-        },
-      );
+      await expect(page.getByRole("textbox", { name: /^Title$/i })).toBeVisible({
+        timeout: 30_000,
+      });
     });
 
     await test.step("Fill Title and Body", async () => {
@@ -282,21 +267,15 @@ test(
     });
 
     await test.step("Status:Draft → Ready (label flip → cms/ready)", async () => {
-      await page
-        .getByRole("button", { name: /^Status:\s*Draft$/i })
-        .click({ timeout: 30_000 });
-      await page
-        .getByRole("menuitem", { name: /^Ready$/i })
-        .click({ timeout: 30_000 });
-      await expect(
-        page.getByRole("button", { name: /^Status:\s*Ready$/i }),
-      ).toBeVisible({ timeout: 30_000 });
+      await page.getByRole("button", { name: /^Status:\s*Draft$/i }).click({ timeout: 30_000 });
+      await page.getByRole("menuitem", { name: /^Ready$/i }).click({ timeout: 30_000 });
+      await expect(page.getByRole("button", { name: /^Status:\s*Ready$/i })).toBeVisible({
+        timeout: 30_000,
+      });
     });
 
     await test.step("Publish → Publish Now (engages auto-merge)", async () => {
-      await page
-        .getByRole("button", { name: /^Publish$/i })
-        .click({ timeout: 30_000 });
+      await page.getByRole("button", { name: /^Publish$/i }).click({ timeout: 30_000 });
       await page
         .getByRole("menuitem", { name: /publish now/i })
         .first()
@@ -340,11 +319,9 @@ test(
       await page.goto(`${PROD_ADMIN}#/collections/e2e/entries/${slug}`, {
         waitUntil: "domcontentloaded",
       });
-      await expect(page.getByRole("textbox", { name: /^Title$/i })).toBeVisible(
-        {
-          timeout: 30_000,
-        },
-      );
+      await expect(page.getByRole("textbox", { name: /^Title$/i })).toBeVisible({
+        timeout: 30_000,
+      });
     });
 
     // ── 4. Click "Delete published entry" (hits the shim) ──────────
@@ -363,9 +340,7 @@ test(
       // outer test timeout fired. Match either label and pin a
       // timeout on every action so a UI shape change next time fails
       // in 30 s instead of 40 min.
-      const trigger = page
-        .getByRole("button", { name: /delete (published )?entry/i })
-        .first();
+      const trigger = page.getByRole("button", { name: /delete (published )?entry/i }).first();
       if (await trigger.isVisible({ timeout: 5_000 }).catch(() => false)) {
         await trigger.click({ timeout: 30_000 });
       } else {
@@ -413,11 +388,9 @@ test(
       await page.goto(`${PROD_ADMIN}#/collections/e2e/entries/canary-page`, {
         waitUntil: "domcontentloaded",
       });
-      await expect(page.getByRole("textbox", { name: /^Title$/i })).toBeVisible(
-        {
-          timeout: 60_000,
-        },
-      );
+      await expect(page.getByRole("textbox", { name: /^Title$/i })).toBeVisible({
+        timeout: 60_000,
+      });
       await waitForChangeReflected({
         page,
         pillId: PILL_PROD,
@@ -446,9 +419,7 @@ test(
       });
       const status = res.status();
       if (status < 400 || status >= 500) {
-        throw new Error(
-          `${publicUrl} returned ${status} — expected 4xx after delete + deploy.`,
-        );
+        throw new Error(`${publicUrl} returned ${status} — expected 4xx after delete + deploy.`);
       }
     });
   },

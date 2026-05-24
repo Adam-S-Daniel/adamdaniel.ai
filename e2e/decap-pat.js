@@ -70,10 +70,7 @@ function buildAuthRecord(token, login) {
  * are gated to the host repo, so a missing token is a setup error, not
  * a soft skip.
  */
-async function seedDecapAuth(
-  page,
-  { token = getPat(), login = getLogin() } = {},
-) {
+async function seedDecapAuth(page, { token = getPat(), login = getLogin() } = {}) {
   if (!token) {
     throw new Error(
       "CMS_E2E_PAT env var is empty. The CMS publish-loop test needs a fine-grained PAT in repo secrets. See AGENTS.md.",

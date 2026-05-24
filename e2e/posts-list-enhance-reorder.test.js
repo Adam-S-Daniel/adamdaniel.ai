@@ -28,10 +28,7 @@ const path = require("node:path");
 const vm = require("node:vm");
 const { test, expect } = require("./base");
 
-const SRC = fs.readFileSync(
-  path.resolve(__dirname, "../admin/posts-list-enhance.js"),
-  "utf8",
-);
+const SRC = fs.readFileSync(path.resolve(__dirname, "../admin/posts-list-enhance.js"), "utf8");
 
 // ── Minimal DOM ─────────────────────────────────────────────────────
 function makeDom() {
@@ -121,8 +118,7 @@ function makeDom() {
       this.children = [];
     }
     get textContent() {
-      if (this.children.length)
-        return this.children.map((c) => c.textContent).join("");
+      if (this.children.length) return this.children.map((c) => c.textContent).join("");
       return this._text;
     }
     set innerHTML(v) {
@@ -144,8 +140,7 @@ function makeDom() {
     _matches(sel) {
       if (sel === "ul") return this.tagName === "UL";
       if (sel === "li") return this.tagName === "LI";
-      if (sel[0] === ".")
-        return this.className.split(/\s+/).includes(sel.slice(1));
+      if (sel[0] === ".") return this.className.split(/\s+/).includes(sel.slice(1));
       return false;
     }
     _walk(out) {
@@ -163,16 +158,12 @@ function makeDom() {
     }
     _qsa(sel) {
       let m = /^:scope\s*>\s*\.(\S+)$/.exec(sel);
-      if (m)
-        return this.children.filter((c) =>
-          c.className.split(/\s+/).includes(m[1]),
-        );
+      if (m) return this.children.filter((c) => c.className.split(/\s+/).includes(m[1]));
       const all = this._walk([]);
       m = /^a\[href\*=["'](.+)["']\]$/.exec(sel);
       if (m)
         return all.filter(
-          (e) =>
-            e.tagName === "A" && (e.getAttribute("href") || "").includes(m[1]),
+          (e) => e.tagName === "A" && (e.getAttribute("href") || "").includes(m[1]),
         );
       m = /^\[role=["'](\w+)["']\]$/.exec(sel);
       if (m) return all.filter((e) => e.getAttribute("role") === m[1]);
@@ -269,8 +260,7 @@ function runEnhance(posts) {
     readyState: "complete",
     body,
     head,
-    getElementById: (id) =>
-      body._qsa("#" + id)[0] || head._qsa("#" + id)[0] || null,
+    getElementById: (id) => body._qsa("#" + id)[0] || head._qsa("#" + id)[0] || null,
     querySelectorAll: (sel) => body._qsa(sel),
     querySelector: (sel) => body._qsa(sel)[0] || null,
     createElement: (tag) => new El(tag),
@@ -324,10 +314,9 @@ test.describe("posts-list-enhance.js — reorderFixturesLast fixed point", () =>
       ).toBe(true);
       // Once settled, every subsequent pass is a pure no-op.
       expect(perCycle[perCycle.length - 1]).toBe(0);
-      expect(
-        cardCount,
-        "entry cards must never be removed (augment, not replace)",
-      ).toBe(posts.length);
+      expect(cardCount, "entry cards must never be removed (augment, not replace)").toBe(
+        posts.length,
+      );
     });
   }
 

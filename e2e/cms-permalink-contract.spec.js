@@ -42,10 +42,7 @@ const { test, expect } = require("./base");
 const REPO_ROOT = path.join(__dirname, "..");
 const ADMIN_CONFIG = path.join(REPO_ROOT, "admin/config.yml");
 const JEKYLL_CONFIG = path.join(REPO_ROOT, "_config.yml");
-const NATIVE_PREVIEW_OVERRIDE = path.join(
-  REPO_ROOT,
-  "admin/native-preview-href.js",
-);
+const NATIVE_PREVIEW_OVERRIDE = path.join(REPO_ROOT, "admin/native-preview-href.js");
 const INDEX_FILES = [
   path.join(REPO_ROOT, "admin/index.html"),
   path.join(REPO_ROOT, "admin/index-local.html"),
@@ -95,10 +92,7 @@ function jekyllPermalinkFor(jekyllYml, collection) {
   }
   // Match `<name>:` block at indent 2 inside `collections:` and pull the
   // `permalink:` line within it.
-  const re = new RegExp(
-    `^\\s{2}${collection}:\\s*$([\\s\\S]*?)(?=^\\S|^\\s{2}\\S)`,
-    "m",
-  );
+  const re = new RegExp(`^\\s{2}${collection}:\\s*$([\\s\\S]*?)(?=^\\S|^\\s{2}\\S)`, "m");
   const block = jekyllYml.match(re);
   if (!block) return null;
   const m = block[1].match(/^\s+permalink:\s*(\S+)\s*$/m);
@@ -160,10 +154,7 @@ test.describe("CMS permalink contract — Decap two-pass vs Jekyll", () => {
       const adminYml = readText(ADMIN_CONFIG);
       const jekyllYml = readText(JEKYLL_CONFIG);
       const chunk = findCollection(adminYml, name);
-      expect(
-        chunk,
-        `admin/config.yml must define collection "${name}"`,
-      ).not.toBeNull();
+      expect(chunk, `admin/config.yml must define collection "${name}"`).not.toBeNull();
 
       const slugTemplate = readKey(chunk, "slug") || "{{slug}}";
       const previewPath = readKey(chunk, "preview_path");

@@ -87,10 +87,7 @@ function toLocalPath(absoluteUrl) {
 // see those workflows). On TARGET=preview / prod these URLs 404 — that's
 // a sitemap-vs-deploy discrepancy, not an alt-text problem, so skip them
 // here. Audited on `local` where they DO render.
-const ADMIN_DEV_SHELLS = new Set([
-  "/admin/index-local.html",
-  "/admin/index-test.html",
-]);
+const ADMIN_DEV_SHELLS = new Set(["/admin/index-local.html", "/admin/index-test.html"]);
 
 function shouldSkip(urlPath, target) {
   // `/preview/` is the in-CMS WYSIWYG preview shell — its `<img>` content
@@ -116,10 +113,7 @@ test.describe(
     }) => {
       const xml = readSitemap();
       const allUrls = parseSitemapUrls(xml).map(toLocalPath);
-      expect(
-        allUrls.length,
-        "sitemap.xml should advertise at least one URL",
-      ).toBeGreaterThan(0);
+      expect(allUrls.length, "sitemap.xml should advertise at least one URL").toBeGreaterThan(0);
 
       const urls = allUrls.filter((u) => !shouldSkip(u, TARGET));
 
@@ -162,10 +156,7 @@ test.describe(
         'Every <img> must have a non-empty alt, role="presentation", or ' +
           'aria-hidden="true". Violations:\n' +
           allViolations
-            .map(
-              (v) =>
-                `  - ${v.url}: <img src="${v.src}"> (parent: ${v.parent || "?"})`,
-            )
+            .map((v) => `  - ${v.url}: <img src="${v.src}"> (parent: ${v.parent || "?"})`)
             .join("\n"),
       ).toEqual([]);
     });

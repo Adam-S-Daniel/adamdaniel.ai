@@ -1,10 +1,6 @@
 // @lane: local — uses the in-browser test-repo backend with a seeded fixture
 const { test, expect } = require("./base");
-const {
-  SEED_POST_SLUG,
-  loadTestAdmin,
-  readDraftContent,
-} = require("./cms-test-backend");
+const { SEED_POST_SLUG, loadTestAdmin, readDraftContent } = require("./cms-test-backend");
 
 // Audit finding #18: catch the "body text accidentally typed into the
 // excerpt field" regression. The Sveltia 0.158 layout shift moved the
@@ -44,18 +40,14 @@ test.describe(
       page,
     }) => {
       await loadTestAdmin(page);
-      await page.goto(
-        `/admin/index-test.html#/collections/posts/entries/${SEED_POST_SLUG}`,
-      );
+      await page.goto(`/admin/index-test.html#/collections/posts/entries/${SEED_POST_SLUG}`);
 
       const titleField = page.getByLabel(/^Title$/);
       await expect(titleField).toBeVisible({ timeout: 60_000 });
 
       // Same locator pattern cms-publish-flow.spec.js uses — the markdown
       // widget's editing surface is a contenteditable role=textbox.
-      const bodyEditor = page
-        .locator('[role="textbox"][contenteditable="true"]')
-        .last();
+      const bodyEditor = page.locator('[role="textbox"][contenteditable="true"]').last();
       await bodyEditor.waitFor({ timeout: 30_000 });
       await bodyEditor.click();
       await bodyEditor.fill(SENTINEL);
@@ -86,13 +78,8 @@ test.describe(
         `Body block (after the second ---) should contain the typed sentinel. Saved content was:\n${saved}`,
       ).toContain(SENTINEL);
 
-      const excerptLine = frontMatter
-        .split(/\r?\n/)
-        .find((l) => /^excerpt:/.test(l));
-      expect(
-        excerptLine,
-        "excerpt front-matter line should exist",
-      ).toBeDefined();
+      const excerptLine = frontMatter.split(/\r?\n/).find((l) => /^excerpt:/.test(l));
+      expect(excerptLine, "excerpt front-matter line should exist").toBeDefined();
       // Acceptable shapes for "empty": `excerpt:`, `excerpt: ''`, `excerpt: ""`.
       expect(
         excerptLine.replace(/^excerpt:\s*/, "").trim(),

@@ -60,9 +60,7 @@ test.describe("real-prod loop workflows are serialized + deploy-gated (#1101)", 
   });
 
   test("the concurrency block is byte-identical across the three (drift guard)", () => {
-    const blocks = LOOP_WORKFLOWS.map((wf) =>
-      topBlock(readWorkflow(wf), "concurrency").trim(),
-    );
+    const blocks = LOOP_WORKFLOWS.map((wf) => topBlock(readWorkflow(wf), "concurrency").trim());
     expect(
       blocks[1],
       "cms-media-roundtrip.yml concurrency block drifted from cms-publish-loop-prod.yml — keep them byte-identical (#1101)",
@@ -126,15 +124,12 @@ test.describe("real-prod loop workflows are serialized + deploy-gated (#1101)", 
       // precedes the step that invokes the playwright loop spec.
       const gateIdx = steps.indexOf(gate);
       const specIdx = steps.findIndex((s) =>
-        JSON.stringify(s || {}).match(
-          /playwright test|RUN_PROD_MUTATE|RUN_HOST_REPO/i,
-        ),
+        JSON.stringify(s || {}).match(/playwright test|RUN_PROD_MUTATE|RUN_HOST_REPO/i),
       );
       if (specIdx !== -1) {
-        expect(
-          gateIdx,
-          `${wf}: await-prod-deploy must run BEFORE the loop spec step`,
-        ).toBeLessThan(specIdx);
+        expect(gateIdx, `${wf}: await-prod-deploy must run BEFORE the loop spec step`).toBeLessThan(
+          specIdx,
+        );
       }
     }
   });
@@ -172,10 +167,7 @@ test.describe("changed-files recursion gate wiring (run 26108485428)", () => {
 
       const steps = gateJob.steps || [];
       const gateStep = steps.find((s) => s && s.uses === GATE_ACTION);
-      expect(
-        gateStep,
-        `${wf}: ${GATE_JOB} must invoke ${GATE_ACTION}`,
-      ).toBeTruthy();
+      expect(gateStep, `${wf}: ${GATE_JOB} must invoke ${GATE_ACTION}`).toBeTruthy();
       expect(
         gateStep.id,
         `${wf}: the ${GATE_ACTION} step must have an id so outputs.run can reference it`,
@@ -189,15 +181,9 @@ test.describe("changed-files recursion gate wiring (run 26108485428)", () => {
       // <before> <sha>` can't resolve and the gate always fails OPEN,
       // silently defeating the skip.
       const checkout = steps.find(
-        (s) =>
-          s &&
-          typeof s.uses === "string" &&
-          s.uses.startsWith("actions/checkout@"),
+        (s) => s && typeof s.uses === "string" && s.uses.startsWith("actions/checkout@"),
       );
-      expect(
-        checkout,
-        `${wf}: ${GATE_JOB} must check the repo out (for git diff)`,
-      ).toBeTruthy();
+      expect(checkout, `${wf}: ${GATE_JOB} must check the repo out (for git diff)`).toBeTruthy();
       expect(
         checkout.with && Number(checkout.with["fetch-depth"]),
         `${wf}: ${GATE_JOB} checkout must set fetch-depth: 2 (git diff <before> <sha> needs the parent commit)`,

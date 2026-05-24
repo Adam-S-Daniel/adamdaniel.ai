@@ -34,11 +34,7 @@ test("canonical() preserves single LF (paragraph structure is irrelevant after c
 
 test("canonical() — all three observed Slate transforms are equivalent under collapse", () => {
   // Soft wrap inside a paragraph doubled into a paragraph break.
-  assert.equal(
-    canonical("a\nb"),
-    canonical("a\n\nb"),
-    "\\n vs \\n\\n must collapse equal",
-  );
+  assert.equal(canonical("a\nb"), canonical("a\n\nb"), "\\n vs \\n\\n must collapse equal");
   // Paragraph break tripled.
   assert.equal(
     canonical("a\n\nb"),
@@ -182,10 +178,7 @@ test("idempotencyKey() — encodes both SHAs deterministically", () => {
 });
 
 test("formatAbortComment() — embeds marker and key, lists reasons", () => {
-  const c = formatAbortComment("<!-- key:a:b -->", [
-    "path X not allowed",
-    "binary file Y",
-  ]);
+  const c = formatAbortComment("<!-- key:a:b -->", ["path X not allowed", "binary file Y"]);
   assert.ok(c.includes(COMMENT_MARKER));
   assert.ok(c.includes("<!-- key:a:b -->"));
   assert.ok(c.includes("path X not allowed"));
@@ -194,10 +187,7 @@ test("formatAbortComment() — embeds marker and key, lists reasons", () => {
 });
 
 test("formatCloseComment() — embeds marker, key, file list", () => {
-  const c = formatCloseComment("<!-- key:a:b -->", [
-    "_e2e/canary-post.md",
-    "_posts/2026-foo.md",
-  ]);
+  const c = formatCloseComment("<!-- key:a:b -->", ["_e2e/canary-post.md", "_posts/2026-foo.md"]);
   assert.ok(c.includes(COMMENT_MARKER));
   assert.ok(c.includes("<!-- key:a:b -->"));
   assert.ok(c.includes("_e2e/canary-post.md"));
@@ -223,8 +213,7 @@ function makeMockFetch(scenarios) {
       return {
         ok: s.status >= 200 && s.status < 300,
         status: s.status,
-        text: async () =>
-          typeof s.body === "string" ? s.body : JSON.stringify(s.body),
+        text: async () => (typeof s.body === "string" ? s.body : JSON.stringify(s.body)),
         json: async () => s.body,
       };
     },
@@ -275,14 +264,13 @@ test("run() — closes a pure-newline-mangling PR (#882-style case)", async () =
         content: Buffer.from(main, "utf8").toString("base64"),
       },
     },
-    "GET /repos/owner/r/contents/_e2e/canary-post.md?ref=cms%2Fe2e%2Fcanary-post":
-      {
-        status: 200,
-        body: {
-          type: "file",
-          content: Buffer.from(mangled, "utf8").toString("base64"),
-        },
+    "GET /repos/owner/r/contents/_e2e/canary-post.md?ref=cms%2Fe2e%2Fcanary-post": {
+      status: 200,
+      body: {
+        type: "file",
+        content: Buffer.from(mangled, "utf8").toString("base64"),
       },
+    },
     "POST /repos/owner/r/issues/123/comments": { status: 201, body: { id: 1 } },
     "PATCH /repos/owner/r/pulls/123": {
       status: 200,
@@ -302,14 +290,8 @@ test("run() — closes a pure-newline-mangling PR (#882-style case)", async () =
     assert.equal(result.outcome, "closed");
     assert.deepEqual(result.paths, ["_e2e/canary-post.md"]);
     // Verify we posted the close-comment AND patched state to closed
-    assert.ok(
-      mock.calls.some(
-        (c) => c.key === "POST /repos/owner/r/issues/123/comments",
-      ),
-    );
-    assert.ok(
-      mock.calls.some((c) => c.key === "PATCH /repos/owner/r/pulls/123"),
-    );
+    assert.ok(mock.calls.some((c) => c.key === "POST /repos/owner/r/issues/123/comments"));
+    assert.ok(mock.calls.some((c) => c.key === "PATCH /repos/owner/r/pulls/123"));
   } finally {
     globalThis.fetch = origFetch;
   }
@@ -373,20 +355,10 @@ test("run() — aborts when a non-newline diff is detected (real content change)
       log: () => {},
     });
     assert.equal(result.outcome, "abort");
-    assert.ok(
-      result.reasons.some((r) => r.includes("canonical-collapse mismatch")),
-    );
+    assert.ok(result.reasons.some((r) => r.includes("canonical-collapse mismatch")));
     // We posted an abort-comment but did NOT close the PR
-    assert.ok(
-      mock.calls.some(
-        (c) => c.key === "POST /repos/owner/r/issues/124/comments",
-      ),
-    );
-    assert.equal(
-      mock.calls.filter((c) => c.key === "PATCH /repos/owner/r/pulls/124")
-        .length,
-      0,
-    );
+    assert.ok(mock.calls.some((c) => c.key === "POST /repos/owner/r/issues/124/comments"));
+    assert.equal(mock.calls.filter((c) => c.key === "PATCH /repos/owner/r/pulls/124").length, 0);
   } finally {
     globalThis.fetch = origFetch;
   }
@@ -664,14 +636,13 @@ test("run() — code-fence guard aborts", async () => {
         content: Buffer.from(main, "utf8").toString("base64"),
       },
     },
-    "GET /repos/owner/r/contents/_posts/2026-cf.md?ref=cms%2Fposts%2Fcodefence":
-      {
-        status: 200,
-        body: {
-          type: "file",
-          content: Buffer.from(mangled, "utf8").toString("base64"),
-        },
+    "GET /repos/owner/r/contents/_posts/2026-cf.md?ref=cms%2Fposts%2Fcodefence": {
+      status: 200,
+      body: {
+        type: "file",
+        content: Buffer.from(mangled, "utf8").toString("base64"),
       },
+    },
     "POST /repos/owner/r/issues/130/comments": { status: 201, body: { id: 1 } },
   });
   const origFetch = globalThis.fetch;

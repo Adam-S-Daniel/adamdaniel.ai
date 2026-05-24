@@ -21,9 +21,7 @@ test.describe(
   { tag: ["@admin-read"] },
   () => {
     test.beforeEach(({ page }) => {
-      page.on("pageerror", (err) =>
-        console.log(`[pageerror] ${err.name}: ${err.message}`),
-      );
+      page.on("pageerror", (err) => console.log(`[pageerror] ${err.name}: ${err.message}`));
     });
 
     for (const url of ["/admin/", "/admin/?notheme"]) {

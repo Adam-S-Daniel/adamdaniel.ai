@@ -39,9 +39,7 @@ test.describe("preview media resolves on the deployed surface", () => {
       "this gate is a no-op outside the dedicated preview-media.yml workflow.",
   );
 
-  test("committed media_folder image returns 200 on the preview env", async ({
-    page,
-  }) => {
+  test("committed media_folder image returns 200 on the preview env", async ({ page }) => {
     const res = await page.request.get(PROBE_URL, { failOnStatusCode: false });
 
     expect(
@@ -62,9 +60,6 @@ test.describe("preview media resolves on the deployed surface", () => {
     ).toMatch(/^image\//i);
 
     const body = await res.body();
-    expect(
-      body.length,
-      `${PROBE_URL} served a 200 with an empty body.`,
-    ).toBeGreaterThan(0);
+    expect(body.length, `${PROBE_URL} served a 200 with an empty body.`).toBeGreaterThan(0);
   });
 });

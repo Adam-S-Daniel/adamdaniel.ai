@@ -35,9 +35,7 @@ test.describe(
   // webkit-iphone16. See playwright.config.js.
   { tag: ["@admin-read"] },
   () => {
-    test("renders stat grid and per-page list from regression.json", async ({
-      page,
-    }) => {
+    test("renders stat grid and per-page list from regression.json", async ({ page }) => {
       // Pre-seed the auth token so the dashboard skips the sign-in screen.
       await page.addInitScript((token) => {
         localStorage.setItem("gh_reviews_token", token);
@@ -114,19 +112,13 @@ test.describe(
       await expect(grid).toBeVisible();
 
       // Visually different — 3
-      await expect(
-        grid.locator(".stat-card.stat-different .stat-value"),
-      ).toHaveText("3");
+      await expect(grid.locator(".stat-card.stat-different .stat-value")).toHaveText("3");
 
       // Potentially affected — 10
-      await expect(
-        grid.locator(".stat-card.stat-affected .stat-value"),
-      ).toHaveText("10");
+      await expect(grid.locator(".stat-card.stat-affected .stat-value")).toHaveText("10");
 
       // Identical — 7
-      await expect(
-        grid.locator(".stat-card.stat-identical .stat-value"),
-      ).toHaveText("7");
+      await expect(grid.locator(".stat-card.stat-identical .stat-value")).toHaveText("7");
 
       // The per-page list of visually-different paths must include each
       // different + new entry. We don't assert order — the implementation
@@ -151,9 +143,7 @@ test.describe(
       });
     });
 
-    test("falls back gracefully when regression.json is unavailable", async ({
-      page,
-    }) => {
+    test("falls back gracefully when regression.json is unavailable", async ({ page }) => {
       await page.addInitScript((token) => {
         localStorage.setItem("gh_reviews_token", token);
       }, FAKE_TOKEN);
@@ -214,9 +204,9 @@ test.describe(
       // Card still renders, video still plays — only the stats area
       // shows a polite placeholder.
       await expect(page.locator(".review-card")).toBeVisible();
-      await expect(
-        page.locator(".review-card .stat-pages-loading"),
-      ).toContainText(/not available/i);
+      await expect(page.locator(".review-card .stat-pages-loading")).toContainText(
+        /not available/i,
+      );
       await captureStep(page, {
         section: "Reviewing visual regressions",
         step: "11.2",
@@ -232,9 +222,7 @@ test.describe(
     // motivator. Today the dashboard uses its own form controls (no Decap),
     // so the assertion skips when no `ControlHint` is visible — but if one
     // ever appears, contrast gets enforced automatically.
-    test("any rendered ControlHint has ≥ 4.5:1 contrast on its background", async ({
-      page,
-    }) => {
+    test("any rendered ControlHint has ≥ 4.5:1 contrast on its background", async ({ page }) => {
       await page.addInitScript((token) => {
         localStorage.setItem("gh_reviews_token", token);
       }, FAKE_TOKEN);
@@ -286,9 +274,7 @@ test.describe(
             const [r, g, b] = m.slice(0, 3).map(Number);
             const norm = [r, g, b].map((c) => {
               const v = c / 255;
-              return v <= 0.03928
-                ? v / 12.92
-                : Math.pow((v + 0.055) / 1.055, 2.4);
+              return v <= 0.03928 ? v / 12.92 : Math.pow((v + 0.055) / 1.055, 2.4);
             });
             return 0.2126 * norm[0] + 0.7152 * norm[1] + 0.0722 * norm[2];
           }
@@ -310,9 +296,7 @@ test.describe(
             }
             cur = cur.parentElement;
           }
-          if (!bg)
-            bg =
-              getComputedStyle(document.body).backgroundColor || "rgb(4,6,15)";
+          if (!bg) bg = getComputedStyle(document.body).backgroundColor || "rgb(4,6,15)";
 
           const lFg = rgbToLuma(fg);
           const lBg = rgbToLuma(bg);

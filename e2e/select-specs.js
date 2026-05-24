@@ -115,13 +115,7 @@ const SPEC_RULES = {
   // admin/ change and when the shared visibility helper changes.
   "e2e/admin-no-occlusion.spec.js": [/^admin\//, /^e2e\/ui-visibility\.js$/],
   "e2e/detect-changed-pages.test.js": [/^e2e\/detect-changed-pages\.js$/],
-  "e2e/cms-smoke.spec.js": [
-    /^admin\//,
-    /^_posts\//,
-    /^_tags\//,
-    /^_projects\//,
-    /^pages\//,
-  ],
+  "e2e/cms-smoke.spec.js": [/^admin\//, /^_posts\//, /^_tags\//, /^_projects\//, /^pages\//],
   "e2e/cms-editorial-workflow.spec.js": [/^admin\//, /^_posts\//],
   // Canary content invariants — fast, no browser. Cross-checks the
   // _e2e/ collection wiring stays consistent across _config.yml,
@@ -449,9 +443,9 @@ function parseSpecDirectives(absPath) {
           .map((v) => v.trim())
           .filter(Boolean);
         if (values.length > 0) {
-          directives.skipWhenHeadRefPrefix = (
-            directives.skipWhenHeadRefPrefix || []
-          ).concat(values);
+          directives.skipWhenHeadRefPrefix = (directives.skipWhenHeadRefPrefix || []).concat(
+            values,
+          );
         }
         break;
       }
@@ -519,17 +513,13 @@ function selectSpecs(changedFiles, options = {}) {
   // `scope: "all"` implies "every spec", and on a `real` lane that
   // means "every @lane: real spec", not "every spec ignoring lane".
   const resolvedLane =
-    (options.lane !== undefined
-      ? options.lane
-      : process.env.TEST_LANE || "local"
-    ).toLowerCase() === "real"
+    (options.lane !== undefined ? options.lane : process.env.TEST_LANE || "local").toLowerCase() ===
+    "real"
       ? "real"
       : "local";
 
   // Fanout files include all specs.
-  const fanoutHit = changedFiles.find((f) =>
-    FANOUT_PATTERNS.some((rx) => rx.test(f)),
-  );
+  const fanoutHit = changedFiles.find((f) => FANOUT_PATTERNS.some((rx) => rx.test(f)));
   if (fanoutHit) {
     if (resolvedLane === "local") {
       return {
@@ -591,9 +581,7 @@ function selectSpecs(changedFiles, options = {}) {
   // rule-matched specs; the ALWAYS_RUN baseline is intentionally
   // exempt (those are tiny and self-document the change).
   const headRef =
-    options.headRef !== undefined
-      ? options.headRef
-      : process.env.GITHUB_HEAD_REF || "";
+    options.headRef !== undefined ? options.headRef : process.env.GITHUB_HEAD_REF || "";
   const skippedByDirective = [];
   const repoRoot = options.repoRoot || path.resolve(__dirname, "..");
   if (headRef) {
@@ -602,10 +590,7 @@ function selectSpecs(changedFiles, options = {}) {
       if (baseline.has(spec)) continue;
       const directives = parseSpecDirectives(path.join(repoRoot, spec));
       const prefixes = directives.skipWhenHeadRefPrefix;
-      if (
-        Array.isArray(prefixes) &&
-        prefixes.some((p) => headRef.startsWith(p))
-      ) {
+      if (Array.isArray(prefixes) && prefixes.some((p) => headRef.startsWith(p))) {
         specs.delete(spec);
         skippedByDirective.push(spec);
       }
@@ -654,8 +639,7 @@ function selectSpecs(changedFiles, options = {}) {
   // run baselines, the payload is identical to scope=skip. Collapse it
   // so the workflow can run a single shard instead of a 4-way matrix —
   // sharding 3 sub-second file-comparison tests is pure overhead.
-  const onlyBaseline =
-    specs.size === ALWAYS_RUN.length && ALWAYS_RUN.every((s) => specs.has(s));
+  const onlyBaseline = specs.size === ALWAYS_RUN.length && ALWAYS_RUN.every((s) => specs.has(s));
   if (onlyBaseline && !options.disableSkip) {
     return {
       scope: "skip",
@@ -690,9 +674,7 @@ function pickShardCount(scope, files) {
   if (scope === "skip") return 1;
   if (scope === "all") return 4;
   if (scope === "subset") {
-    const browser = (files || []).filter(
-      (f) => f.endsWith(".spec.js") && !HEAVY.has(f),
-    );
+    const browser = (files || []).filter((f) => f.endsWith(".spec.js") && !HEAVY.has(f));
     if (browser.length <= 2) return 1;
     if (browser.length <= 6) return 2;
     return 4;
@@ -720,9 +702,7 @@ const PARITY_PREVIEW_SPECS = [
 // renaming/touching a parity-preview spec exercises it once before merge.
 function selectParityPreviewSpecs(changedFiles) {
   const selected = [];
-  const fanout = changedFiles.some((f) =>
-    FANOUT_PATTERNS.some((p) => p.test(f)),
-  );
+  const fanout = changedFiles.some((f) => FANOUT_PATTERNS.some((p) => p.test(f)));
   for (const spec of PARITY_PREVIEW_SPECS) {
     if (fanout || changedFiles.includes(spec)) {
       selected.push(spec);

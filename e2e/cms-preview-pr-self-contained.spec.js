@@ -110,8 +110,7 @@ async function composeCanaryFile(bodyText) {
   const current = await fetchCanaryFromMain();
   const decoded = Buffer.from(current.content, "base64").toString("utf8");
   const fmEnd = decoded.indexOf("\n---\n", 4);
-  if (fmEnd < 0)
-    throw new Error("Canary file is missing closing front-matter delimiter.");
+  if (fmEnd < 0) throw new Error("Canary file is missing closing front-matter delimiter.");
   const frontMatter = decoded.slice(0, fmEnd + 5);
   return `${frontMatter}\n${bodyText}\n`;
 }
@@ -151,15 +150,12 @@ test(
     // ── 0. Reset canary baseline before driving admin ────────────────
     await test.step("Reset canary to baseline via labelled PR", async () => {
       const current = await fetchCanaryFromMain();
-      const currentBody = Buffer.from(current.content, "base64").toString(
-        "utf8",
-      );
+      const currentBody = Buffer.from(current.content, "base64").toString("utf8");
       if (!currentBody.includes(baselineBody)) {
         await writeCanaryViaPr({
           runId: `spike-setup-${runId}`,
           bodyText: `${baselineBody}\n\nSpike harness baseline — see e2e/cms-preview-pr-self-contained.spec.js.\n`,
-          message:
-            "test(spike): reset canary baseline before spike-harness run",
+          message: "test(spike): reset canary baseline before spike-harness run",
         });
       }
     });
@@ -182,21 +178,16 @@ test(
 
     // ── 2. Open canary entry, edit body, Save ───────────────────────
     await test.step("Navigate to canary entry", async () => {
-      await page.goto(
-        `${PROD_ADMIN}#/collections/${CANARY.cmsCollection}/entries/${CANARY.slug}`,
-        { waitUntil: "domcontentloaded" },
-      );
-      await expect(page.getByRole("textbox", { name: /^Title$/i })).toBeVisible(
-        {
-          timeout: 30_000,
-        },
-      );
+      await page.goto(`${PROD_ADMIN}#/collections/${CANARY.cmsCollection}/entries/${CANARY.slug}`, {
+        waitUntil: "domcontentloaded",
+      });
+      await expect(page.getByRole("textbox", { name: /^Title$/i })).toBeVisible({
+        timeout: 30_000,
+      });
     });
 
     await test.step("Insert run marker into body and Save", async () => {
-      const body = page
-        .locator('[role="textbox"][contenteditable="true"]')
-        .last();
+      const body = page.locator('[role="textbox"][contenteditable="true"]').last();
       await body.click();
       await body.press("End");
       await body.pressSequentially(`\n\n${marker}\n`);
@@ -217,9 +208,7 @@ test(
         timeoutMs: 5 * 60 * 1000,
       });
       expect(pr.number, "Decap PR number").toBeGreaterThan(0);
-      expect(pr.head.ref, "Decap branch is cms/<col>/<slug>-shaped").toMatch(
-        /^cms\//,
-      );
+      expect(pr.head.ref, "Decap branch is cms/<col>/<slug>-shaped").toMatch(/^cms\//);
     });
 
     // [TODO step 3a — preview-pr-mimicry rollout] Once the per-slug
@@ -263,9 +252,9 @@ test(
     await test.step("Set Status: Ready via UI dropdown", async () => {
       await page.getByRole("button", { name: /^Status:\s*Draft$/i }).click();
       await page.getByRole("menuitem", { name: /^Ready$/i }).click();
-      await expect(
-        page.getByRole("button", { name: /^Status:\s*Ready$/i }),
-      ).toBeVisible({ timeout: 30_000 });
+      await expect(page.getByRole("button", { name: /^Status:\s*Ready$/i })).toBeVisible({
+        timeout: 30_000,
+      });
     });
 
     await test.step("Wait for auto-merge to be enabled", async () => {
@@ -332,7 +321,6 @@ test.afterAll(async () => {
   await writeCanaryViaPr({
     runId: `spike-harness-cleanup-${Date.now()}`,
     bodyText: `${baselineBody}\n\nSpike harness baseline — see e2e/cms-preview-pr-self-contained.spec.js.\n`,
-    message:
-      "test(spike): harness safety-net reset of canary baseline (marker remained on main)",
+    message: "test(spike): harness safety-net reset of canary baseline (marker remained on main)",
   });
 });

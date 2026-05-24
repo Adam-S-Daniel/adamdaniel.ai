@@ -60,23 +60,15 @@ const publishedPosts = fs
 
 test.describe("CMS preview URL round-trip", () => {
   test("admin/config.yml and admin/config-local.yml share the Posts preview_path", () => {
-    const remote = fs.readFileSync(
-      path.join(REPO_ROOT, "admin/config.yml"),
-      "utf8",
-    );
-    const local = fs.readFileSync(
-      path.join(REPO_ROOT, "admin/config-local.yml"),
-      "utf8",
-    );
+    const remote = fs.readFileSync(path.join(REPO_ROOT, "admin/config.yml"), "utf8");
+    const local = fs.readFileSync(path.join(REPO_ROOT, "admin/config-local.yml"), "utf8");
     expect(remote).toContain(POSTS_PREVIEW_PATH);
     expect(local).toContain(POSTS_PREVIEW_PATH);
   });
 
   for (const { file, fm } of publishedPosts) {
     const previewSlug = slugify(fm.slug || fm.title);
-    test(`${file} is served at the preview URL /blog/${previewSlug}/`, async ({
-      page,
-    }) => {
+    test(`${file} is served at the preview URL /blog/${previewSlug}/`, async ({ page }) => {
       const response = await page.goto(`/blog/${previewSlug}/`);
       expect(response.status()).toBe(200);
       await expect(page.locator(".post-header h1")).toHaveText(fm.title);

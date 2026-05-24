@@ -88,10 +88,8 @@ const PROD_HINTS = {
   posts: {
     title: "The post headline — make it compelling",
     slug: "URL path segment (leave blank to auto-generate from title). Must match any existing published URL to avoid breaking inbound links.",
-    excerpt:
-      "A short summary shown in post listings and meta tags (≤ 160 chars recommended)",
-    featured_image:
-      "Displayed as the post hero image and in social sharing cards",
+    excerpt: "A short summary shown in post listings and meta tags (≤ 160 chars recommended)",
+    featured_image: "Displayed as the post hero image and in social sharing cards",
     published:
       "ON = goes live on the next deploy. Leave OFF to schedule a future publish via the Publish Date below — the scheduled-posts workflow flips this toggle on when the date arrives.",
     publish_date:
@@ -104,8 +102,7 @@ const PROD_HINTS = {
   },
   projects: {
     title: null,
-    technology:
-      "e.g. 'Python · LangChain · FastAPI' — shown as the accent label",
+    technology: "e.g. 'Python · LangChain · FastAPI' — shown as the accent label",
     url_link: "Live URL or GitHub repo link",
     featured: "Featured projects appear on the homepage",
     images: "Upload screenshots or demo images",
@@ -115,8 +112,7 @@ const PROD_HINTS = {
     title: "The page heading — also used as the browser tab title",
     permalink:
       "The URL path the page lives at. Convention is /pages/<slug>/, but you can use any path. Must start and end with a slash.",
-    published:
-      "ON = page goes live on the next deploy. Leave OFF to keep it as a draft.",
+    published: "ON = page goes live on the next deploy. Leave OFF to keep it as a draft.",
     body: "Page content. For a real-layout preview that updates on every Save, open /preview/?collection=pages in a second tab.",
   },
 };

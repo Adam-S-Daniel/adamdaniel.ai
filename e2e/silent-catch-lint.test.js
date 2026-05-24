@@ -170,9 +170,7 @@ function findSilentCatches(rawSrc, label) {
 
     if (isSilent(body)) {
       const line = src.slice(0, idx).split("\n").length;
-      offenders.push(
-        `${label}:${line}: silent .catch(() => ${body.trim() || "{}"})`,
-      );
+      offenders.push(`${label}:${line}: silent .catch(() => ${body.trim() || "{}"})`);
     }
     i = j;
   }

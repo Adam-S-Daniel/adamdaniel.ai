@@ -177,10 +177,7 @@ test.describe("publish-via-auto-merge.js (unit)", () => {
 
   test("PR merge 422 with rule-violations triggers cms/ready label add + synthetic merged response", async () => {
     const { fetch, queueResponse, calls } = bootShim();
-    queueResponse(
-      { message: "Repository rule violations found" },
-      { status: 422 },
-    );
+    queueResponse({ message: "Repository rule violations found" }, { status: 422 });
     queueResponse({ id: 1 }, { status: 200 }); // labels response
     const res = await fetch(
       "https://api.github.com/repos/Adam-S-Daniel/adamdaniel.ai/pulls/42/merge",
@@ -202,10 +199,7 @@ test.describe("publish-via-auto-merge.js (unit)", () => {
 
   test("PR merge 422 with non-ruleset message does NOT recover", async () => {
     const { fetch, queueResponse, calls } = bootShim();
-    queueResponse(
-      { message: "Pull request is in unstable state" },
-      { status: 422 },
-    );
+    queueResponse({ message: "Pull request is in unstable state" }, { status: 422 });
     const res = await fetch(
       "https://api.github.com/repos/Adam-S-Daniel/adamdaniel.ai/pulls/42/merge",
       { method: "PUT", headers: { Authorization: "Bearer t" } },
@@ -216,10 +210,7 @@ test.describe("publish-via-auto-merge.js (unit)", () => {
 
   test("PR merge 422 + label-add fails → original error propagates", async () => {
     const { fetch, queueResponse, calls } = bootShim();
-    queueResponse(
-      { message: "Repository rule violations found" },
-      { status: 422 },
-    );
+    queueResponse({ message: "Repository rule violations found" }, { status: 422 });
     queueResponse({ message: "Bad credentials" }, { status: 401 });
     const res = await fetch(
       "https://api.github.com/repos/Adam-S-Daniel/adamdaniel.ai/pulls/42/merge",
@@ -236,10 +227,7 @@ test.describe("publish-via-auto-merge.js (unit)", () => {
     // so query strings would slip through. This test pins that
     // behaviour so a future refactor knows what was intentional.
     const { fetch, queueResponse, calls } = bootShim();
-    queueResponse(
-      { message: "Repository rule violations found" },
-      { status: 422 },
-    );
+    queueResponse({ message: "Repository rule violations found" }, { status: 422 });
     const res = await fetch(
       "https://api.github.com/repos/Adam-S-Daniel/adamdaniel.ai/pulls/42/merge?foo=bar",
       { method: "PUT", headers: { Authorization: "Bearer t" } },
@@ -250,10 +238,7 @@ test.describe("publish-via-auto-merge.js (unit)", () => {
 
   test("Authorization header is forwarded as-is to the recovery call (Headers instance variant)", async () => {
     const { fetch, queueResponse, calls } = bootShim();
-    queueResponse(
-      { message: "Repository rule violations found" },
-      { status: 422 },
-    );
+    queueResponse({ message: "Repository rule violations found" }, { status: 422 });
     queueResponse({ id: 1 }, { status: 200 });
     // Pass a Headers-like object exposing .get(...).
     const headers = {
@@ -265,10 +250,10 @@ test.describe("publish-via-auto-merge.js (unit)", () => {
         return this._store[k.toLowerCase()] || null;
       },
     };
-    await fetch(
-      "https://api.github.com/repos/Adam-S-Daniel/adamdaniel.ai/pulls/7/merge",
-      { method: "PUT", headers },
-    );
+    await fetch("https://api.github.com/repos/Adam-S-Daniel/adamdaniel.ai/pulls/7/merge", {
+      method: "PUT",
+      headers,
+    });
     expect(calls[1].headers.Authorization).toBe("token gho_xyz");
     expect(calls[1].headers["X-GitHub-Api-Version"]).toBe("2022-11-28");
   });

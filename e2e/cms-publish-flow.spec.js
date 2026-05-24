@@ -51,8 +51,7 @@ const POSTS_DIR = path.join(REPO_ROOT, "_posts");
 
 const SMOKE_TITLE = "E2E Publish Flow Smoke";
 const SMOKE_SLUG = "e2e-publish-flow-smoke";
-const SMOKE_BODY =
-  "This post was created by the cms-publish-flow e2e spec. Safe to delete.";
+const SMOKE_BODY = "This post was created by the cms-publish-flow e2e spec. Safe to delete.";
 // Tag chosen so auto_tag_pages has to manufacture the archive (no curated
 // _tags/<slug>.md exists). Slug is what Jekyll's slugify will produce.
 const SMOKE_TAG_LABEL = "e2e-smoke-flow-tag";
@@ -60,9 +59,7 @@ const SMOKE_TAG_SLUG = "e2e-smoke-flow-tag";
 
 function findSmokePostFile() {
   if (!fs.existsSync(POSTS_DIR)) return null;
-  const match = fs
-    .readdirSync(POSTS_DIR)
-    .find((f) => f.endsWith(`-${SMOKE_SLUG}.md`));
+  const match = fs.readdirSync(POSTS_DIR).find((f) => f.endsWith(`-${SMOKE_SLUG}.md`));
   return match ? path.join(POSTS_DIR, match) : null;
 }
 
@@ -90,10 +87,7 @@ function removeSmokePost() {
   const sitemap = path.join(REPO_ROOT, "_site", "sitemap.xml");
   if (fs.existsSync(sitemap)) {
     const xml = fs.readFileSync(sitemap, "utf8");
-    const cleaned = pruneSitemapUrls(xml, [
-      `/blog/${SMOKE_SLUG}/`,
-      `/tags/${SMOKE_TAG_SLUG}/`,
-    ]);
+    const cleaned = pruneSitemapUrls(xml, [`/blog/${SMOKE_SLUG}/`, `/tags/${SMOKE_TAG_SLUG}/`]);
     if (cleaned !== xml) fs.writeFileSync(sitemap, cleaned);
   }
 }
@@ -124,9 +118,7 @@ test.describe(
     });
 
     test.beforeEach(({ page }) => {
-      page.on("pageerror", (err) =>
-        console.log(`[pageerror] ${err.name}: ${err.message}`),
-      );
+      page.on("pageerror", (err) => console.log(`[pageerror] ${err.name}: ${err.message}`));
     });
 
     test("create a post in Decap, rebuild, and assert /blog/<slug>/ renders it", async ({
@@ -135,9 +127,7 @@ test.describe(
       // ── Drive the admin: open New Post, fill Title + Body, publish ────
       await page.goto("/admin/index-local.html");
       await page.getByRole("button", { name: /login/i }).click();
-      await page
-        .getByRole("link", { name: /^posts$/i })
-        .waitFor({ timeout: 30_000 });
+      await page.getByRole("link", { name: /^posts$/i }).waitFor({ timeout: 30_000 });
       await page.goto("/admin/index-local.html#/collections/posts/new");
 
       const titleField = page.getByLabel(/^Title$/);
@@ -153,9 +143,7 @@ test.describe(
       // Decap's markdown widget defaults to rich-text mode. The
       // contentEditable surface accepts plain typed text, which is good
       // enough for asserting the post renders end-to-end.
-      const bodyEditor = page
-        .locator('[role="textbox"][contenteditable="true"]')
-        .last();
+      const bodyEditor = page.locator('[role="textbox"][contenteditable="true"]').last();
       await bodyEditor.waitFor({ timeout: 30_000 });
       await bodyEditor.click();
       await bodyEditor.fill(SMOKE_BODY);
@@ -199,9 +187,7 @@ test.describe(
         .click();
 
       // ── Wait for the file to land in _posts/ ──────────────────────────
-      await expect
-        .poll(() => findSmokePostFile() !== null, { timeout: 60_000 })
-        .toBe(true);
+      await expect.poll(() => findSmokePostFile() !== null, { timeout: 60_000 }).toBe(true);
       const postPath = findSmokePostFile();
       const written = fs.readFileSync(postPath, "utf8");
       expect(written).toMatch(/^---/);

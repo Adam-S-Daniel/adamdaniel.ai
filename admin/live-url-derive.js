@@ -72,10 +72,7 @@
     for (var k = 0; k < matches.length; k++) {
       var cur = matches[k];
       for (var d = 0; d < 6 && cur; d++) {
-        if (
-          typeof cur.className === "string" &&
-          cur.className.indexOf("ControlContainer") !== -1
-        ) {
+        if (typeof cur.className === "string" && cur.className.indexOf("ControlContainer") !== -1) {
           var toggle = cur.querySelector('button[role="switch"]');
           if (toggle) return toggle.getAttribute("aria-checked") === "true";
         }

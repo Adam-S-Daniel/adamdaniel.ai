@@ -203,10 +203,7 @@ test.describe("select-specs", () => {
   });
 
   test("its dedicated workflow change selects the preview delete spec (lane=real)", () => {
-    const r = selectSpecs(
-      [".github/workflows/cms-delete-published-preview.yml"],
-      { lane: "real" },
-    );
+    const r = selectSpecs([".github/workflows/cms-delete-published-preview.yml"], { lane: "real" });
     expect(r.scope).toBe("subset");
     expect(r.files).toContain("e2e/cms-delete-published-preview.spec.js");
   });
@@ -232,9 +229,7 @@ test.describe("select-specs", () => {
     });
     expect(r.scope).toBe("subset");
     expect(r.files).not.toContain("e2e/cms-delete-published-preview.spec.js");
-    expect(r.skippedByDirective).toContain(
-      "e2e/cms-delete-published-preview.spec.js",
-    );
+    expect(r.skippedByDirective).toContain("e2e/cms-delete-published-preview.spec.js");
   });
 
   // ── Spec-header directives (Layer 3.A) ──────────────────────────────
@@ -466,9 +461,7 @@ test.describe("pickShardCount", () => {
   test("subset with 0-2 browser specs → 1 shard", () => {
     expect(pickShardCount("subset", [])).toBe(1);
     expect(pickShardCount("subset", ["e2e/blog-post.spec.js"])).toBe(1);
-    expect(
-      pickShardCount("subset", ["e2e/blog-post.spec.js", "e2e/tags.spec.js"]),
-    ).toBe(1);
+    expect(pickShardCount("subset", ["e2e/blog-post.spec.js", "e2e/tags.spec.js"])).toBe(1);
   });
 
   test("subset with 3-6 browser specs → 2 shards", () => {

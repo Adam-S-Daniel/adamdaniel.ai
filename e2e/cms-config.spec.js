@@ -98,10 +98,9 @@ test.describe("Decap CMS config invariants", () => {
         mediaFolder,
         "media_folder must not contain Decap template tokens (e.g. {{year}})",
       ).not.toMatch(/\{\{.*?\}\}/);
-      expect(
-        publicFolder,
-        "public_folder must not contain Decap template tokens",
-      ).not.toMatch(/\{\{.*?\}\}/);
+      expect(publicFolder, "public_folder must not contain Decap template tokens").not.toMatch(
+        /\{\{.*?\}\}/,
+      );
 
       // The exact path is pinned so a future edit can't quietly
       // reintroduce nesting.
@@ -206,18 +205,8 @@ test.describe("Decap CMS config invariants", () => {
     test(`${label}: posts collection exposes title, date, body, tags, featured_image`, () => {
       const yml = readConfig(configPath);
       const posts = findCollection(yml, "posts");
-      for (const f of [
-        "title",
-        "date",
-        "body",
-        "tags",
-        "featured_image",
-        "published",
-      ]) {
-        expect(
-          findField(posts, f),
-          `posts.${f} field must exist`,
-        ).not.toBeNull();
+      for (const f of ["title", "date", "body", "tags", "featured_image", "published"]) {
+        expect(findField(posts, f), `posts.${f} field must exist`).not.toBeNull();
       }
       const featured = findField(posts, "featured_image");
       expect(featured).toMatch(/widget:\s*image/);
@@ -239,10 +228,7 @@ test.describe("Decap CMS config invariants", () => {
       const yml = readConfig(configPath);
       const tags = findCollection(yml, "tags");
       expect(findField(tags, "name"), "tags.name must exist").not.toBeNull();
-      expect(
-        findField(tags, "description"),
-        "tags.description must exist",
-      ).not.toBeNull();
+      expect(findField(tags, "description"), "tags.description must exist").not.toBeNull();
     });
 
     test(`${label}: pages collection exposes title, body, permalink, published`, () => {
@@ -320,13 +306,8 @@ test.describe("Decap CMS config invariants", () => {
     const decapPreviewURL = previewPath.replace(/\{\{slug\}\}/g, "foo-bar");
     expect(decapPreviewURL).toBe("/pages/foo-bar/");
 
-    const permalinkField = findField(
-      findCollection(adminYml, "pages"),
-      "permalink",
-    );
-    const defaultMatch = permalinkField.match(
-      /^\s+default:\s*['"]?([^'"\n]+?)['"]?\s*$/m,
-    );
+    const permalinkField = findField(findCollection(adminYml, "pages"), "permalink");
+    const defaultMatch = permalinkField.match(/^\s+default:\s*['"]?([^'"\n]+?)['"]?\s*$/m);
     expect(
       defaultMatch,
       "pages.permalink should ship a `default:` so the New Page form pre-fills a sensible value",

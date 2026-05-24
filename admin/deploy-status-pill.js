@@ -127,9 +127,7 @@
     if (res.status !== 403 && res.status !== 429) return false;
     try {
       var remaining =
-        res.headers && res.headers.get
-          ? res.headers.get("X-RateLimit-Remaining")
-          : null;
+        res.headers && res.headers.get ? res.headers.get("X-RateLimit-Remaining") : null;
       // GitHub returns "X-RateLimit-Remaining: 0" with status 403 when
       // the primary rate limit trips. status 429 with no header is the
       // secondary/abuse limit; treat that as rate-limited too.
@@ -143,9 +141,7 @@
   function rateLimitResetSummary(res) {
     try {
       var reset =
-        res && res.headers && res.headers.get
-          ? res.headers.get("X-RateLimit-Reset")
-          : null;
+        res && res.headers && res.headers.get ? res.headers.get("X-RateLimit-Reset") : null;
       if (!reset) return "unknown";
       var when = new Date(parseInt(reset, 10) * 1000);
       return when.toISOString();
@@ -220,10 +216,7 @@
 
   async function fetchLatestStatusForEnvironment(token, environment) {
     var deplRes = await fetchWithRetry(
-      API +
-        "/deployments?environment=" +
-        encodeURIComponent(environment) +
-        "&per_page=1",
+      API + "/deployments?environment=" + encodeURIComponent(environment) + "&per_page=1",
       { headers: ghHeaders(token) },
       "deployments?environment=" + environment,
     );
@@ -254,11 +247,9 @@
     );
     if (!deplRes) return null;
     var deployments = await deplRes.json();
-    var preview = (Array.isArray(deployments) ? deployments : []).filter(
-      function (d) {
-        return /^preview-pr-\d+$/.test(d.environment || "");
-      },
-    )[0];
+    var preview = (Array.isArray(deployments) ? deployments : []).filter(function (d) {
+      return /^preview-pr-\d+$/.test(d.environment || "");
+    })[0];
     if (!preview) return null;
     var statRes = await fetchWithRetry(
       API + "/deployments/" + preview.id + "/statuses?per_page=1",
@@ -457,12 +448,7 @@
       if (prodResult === null) {
         // Permanent failure (rate limit / network) — see if we should
         // flip a visible pill to amber.
-        applyStaleIfNeeded(
-          prodPill,
-          "Publishing",
-          lastSuccessfulPollAt.prod,
-          now,
-        );
+        applyStaleIfNeeded(prodPill, "Publishing", lastSuccessfulPollAt.prod, now);
       }
     }
 
@@ -478,12 +464,7 @@
         now: now,
       });
       if (previewResult === null) {
-        applyStaleIfNeeded(
-          previewPill,
-          "Preview build",
-          lastSuccessfulPollAt.preview,
-          now,
-        );
+        applyStaleIfNeeded(previewPill, "Preview build", lastSuccessfulPollAt.preview, now);
       }
     }
   }
@@ -523,9 +504,7 @@
       // Hide the pill and log a one-liner so devtools shows the
       // polling chain is alive even when the pill is invisible.
       console.info(
-        "[deploy-status-pill] no deployment yet for " +
-          envLabel +
-          " — pill hidden, will re-poll.",
+        "[deploy-status-pill] no deployment yet for " + envLabel + " — pill hidden, will re-poll.",
       );
       renderPill(pill, label, null, null);
       lastSeenStatusIds[kind] = null;

@@ -85,9 +85,7 @@ const stepTimings = [];
 
 function findSmokePostFile() {
   if (!fs.existsSync(POSTS_DIR)) return null;
-  const match = fs
-    .readdirSync(POSTS_DIR)
-    .find((f) => f.endsWith(`-${SMOKE_SLUG}.md`));
+  const match = fs.readdirSync(POSTS_DIR).find((f) => f.endsWith(`-${SMOKE_SLUG}.md`));
   return match ? path.join(POSTS_DIR, match) : null;
 }
 
@@ -192,9 +190,7 @@ test.describe(
     });
 
     test.beforeEach(({ page }) => {
-      page.on("pageerror", (err) =>
-        console.log(`[pageerror] ${err.name}: ${err.message}`),
-      );
+      page.on("pageerror", (err) => console.log(`[pageerror] ${err.name}: ${err.message}`));
       // Decap CMS uses native window.confirm() for delete and unpublish
       // confirmations; without a persistent listener, Playwright's
       // default behavior auto-dismisses the dialog and Decap reads it
@@ -216,9 +212,7 @@ test.describe(
         const loginBtn = page.getByRole("button", { name: /login/i });
         await expect(loginBtn).toBeVisible({ timeout: 60_000 });
         await loginBtn.click();
-        await page
-          .getByRole("link", { name: /^posts$/i })
-          .waitFor({ timeout: 30_000 });
+        await page.getByRole("link", { name: /^posts$/i }).waitFor({ timeout: 30_000 });
         await captureStep(page, {
           section: "First post walkthrough",
           step: "C3.1",
@@ -254,9 +248,7 @@ test.describe(
         // contentEditable surface accepts plain typed text, which is
         // what a contributor would see when they start typing into the
         // empty body field.
-        const bodyEditor = page
-          .locator('[role="textbox"][contenteditable="true"]')
-          .last();
+        const bodyEditor = page.locator('[role="textbox"][contenteditable="true"]').last();
         await bodyEditor.waitFor({ timeout: 30_000 });
         await bodyEditor.click();
         await bodyEditor.fill(SMOKE_BODY);
@@ -281,16 +273,12 @@ test.describe(
           .getByRole("button", { name: /choose (an )?image/i })
           .first()
           .click();
-        const fileInput = page
-          .locator('input[type="file"][accept*="image"]')
-          .first();
+        const fileInput = page.locator('input[type="file"][accept*="image"]').first();
         await fileInput.waitFor({ state: "attached", timeout: 30_000 });
         await fileInput.setInputFiles(FIXTURE_PNG);
         // Library's confirm button label varies between Decap versions
         // ("Choose selected" in 3.x, "Insert" historically). Match either.
-        const insertBtn = page
-          .getByRole("button", { name: /^(choose selected|insert)$/i })
-          .first();
+        const insertBtn = page.getByRole("button", { name: /^(choose selected|insert)$/i }).first();
         await expect(insertBtn).toBeVisible({ timeout: 30_000 });
         await insertBtn.click();
         await captureStep(page, {
@@ -330,26 +318,18 @@ test.describe(
       // Polls `fs.existsSync` rather than relying on a Decap UI signal,
       // because the Decap toast can appear before the file write
       // completes (decap-server-side race).
-      await measure(
-        "06-wait-for-post-file",
-        COMMIT_POLL_BUDGET_MS,
-        async () => {
-          await expect
-            .poll(() => findSmokePostFile() !== null, { timeout: 60_000 })
-            .toBe(true);
-          const written = fs.readFileSync(findSmokePostFile(), "utf8");
-          expect(written, "front matter delimiter").toMatch(/^---/);
-          expect(written).toContain(`title: ${SMOKE_TITLE}`);
-          expect(written).toContain(`slug: ${SMOKE_SLUG}`);
-          expect(written).toContain("published: true");
-          expect(
-            written,
-            "front matter must reference the uploaded image directly in /assets/images/uploads/ (no subdirectory)",
-          ).toMatch(
-            /featured_image:\s*['"]?\/assets\/images\/uploads\/[^/\s'"]+\.\w+/,
-          );
-        },
-      );
+      await measure("06-wait-for-post-file", COMMIT_POLL_BUDGET_MS, async () => {
+        await expect.poll(() => findSmokePostFile() !== null, { timeout: 60_000 }).toBe(true);
+        const written = fs.readFileSync(findSmokePostFile(), "utf8");
+        expect(written, "front matter delimiter").toMatch(/^---/);
+        expect(written).toContain(`title: ${SMOKE_TITLE}`);
+        expect(written).toContain(`slug: ${SMOKE_SLUG}`);
+        expect(written).toContain("published: true");
+        expect(
+          written,
+          "front matter must reference the uploaded image directly in /assets/images/uploads/ (no subdirectory)",
+        ).toMatch(/featured_image:\s*['"]?\/assets\/images\/uploads\/[^/\s'"]+\.\w+/);
+      });
 
       // ── Step 7: Trigger Jekyll rebuild explicitly ───────────────────
       // CRITICAL: do NOT rely on `--watch` to be fast enough between
@@ -380,39 +360,31 @@ test.describe(
       // `<img class="featured-image" ...>` inside the .post-header when
       // `page.featured_image` is non-empty. If the front matter wrote
       // the wrong path or the layout regressed, this fails clearly.
-      await measure(
-        "09-assert-featured-image",
-        PER_STEP_BUDGET_MS,
-        async () => {
-          const img = page.locator(".post-header img.featured-image");
-          await expect(
-            img,
-            "Rendered post must include the featured-image <img>",
-          ).toBeVisible({ timeout: 10_000 });
-          const imgSrc = await img.getAttribute("src");
-          expect(
-            imgSrc,
-            "featured-image src must point directly under /assets/images/uploads/ (no subdirectory)",
-          ).toMatch(/\/assets\/images\/uploads\/[^/]*tiny-pixel[^/]*\.png$/i);
-          // Prove the src actually resolves — the flat media_folder means
-          // this local run writes the identical path production would, so
-          // a 404 here is a real broken-image regression.
-          const imgAbs = new URL(imgSrc, page.url()).toString();
-          const imgResp = await page.request.get(imgAbs);
-          expect(
-            imgResp.status(),
-            `Featured image ${imgAbs} must resolve 200`,
-          ).toBe(200);
-          await expect(page.locator(".post-header h1")).toHaveText(SMOKE_TITLE);
-          await expect(page.locator(".post-content")).toContainText(SMOKE_BODY);
-          await captureStep(page, {
-            section: "First post walkthrough",
-            step: "C3.7",
-            title: "Featured image renders on the live post",
-            body: 'The post layout renders `<img class="featured-image">` inside the `.post-header` block when `featured_image` is set. On production the same `<img>` resolves through CloudFront → S3, so the contributor sees the image they uploaded without any further action.',
-          });
-        },
-      );
+      await measure("09-assert-featured-image", PER_STEP_BUDGET_MS, async () => {
+        const img = page.locator(".post-header img.featured-image");
+        await expect(img, "Rendered post must include the featured-image <img>").toBeVisible({
+          timeout: 10_000,
+        });
+        const imgSrc = await img.getAttribute("src");
+        expect(
+          imgSrc,
+          "featured-image src must point directly under /assets/images/uploads/ (no subdirectory)",
+        ).toMatch(/\/assets\/images\/uploads\/[^/]*tiny-pixel[^/]*\.png$/i);
+        // Prove the src actually resolves — the flat media_folder means
+        // this local run writes the identical path production would, so
+        // a 404 here is a real broken-image regression.
+        const imgAbs = new URL(imgSrc, page.url()).toString();
+        const imgResp = await page.request.get(imgAbs);
+        expect(imgResp.status(), `Featured image ${imgAbs} must resolve 200`).toBe(200);
+        await expect(page.locator(".post-header h1")).toHaveText(SMOKE_TITLE);
+        await expect(page.locator(".post-content")).toContainText(SMOKE_BODY);
+        await captureStep(page, {
+          section: "First post walkthrough",
+          step: "C3.7",
+          title: "Featured image renders on the live post",
+          body: 'The post layout renders `<img class="featured-image">` inside the `.post-header` block when `featured_image` is set. On production the same `<img>` resolves through CloudFront → S3, so the contributor sees the image they uploaded without any further action.',
+        });
+      });
 
       // Final timing summary — surface the full timeline as a console
       // breadcrumb so a slow run leaves a trail even when nothing failed.

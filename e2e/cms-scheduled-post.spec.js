@@ -19,26 +19,15 @@ const { test, expect } = require("./base");
 
 const REPO_ROOT = path.join(__dirname, "..");
 const POSTS_DIR = path.join(REPO_ROOT, "_posts");
-const PUBLISH_SCRIPT = path.join(
-  REPO_ROOT,
-  "scripts",
-  "publish_scheduled_posts.py",
-);
-const WORKFLOW_FILE = path.join(
-  REPO_ROOT,
-  ".github",
-  "workflows",
-  "publish-scheduled-posts.yml",
-);
+const PUBLISH_SCRIPT = path.join(REPO_ROOT, "scripts", "publish_scheduled_posts.py");
+const WORKFLOW_FILE = path.join(REPO_ROOT, ".github", "workflows", "publish-scheduled-posts.yml");
 
 const SMOKE_TITLE = "E2E Scheduled Post Smoke";
 const SMOKE_SLUG = "e2e-scheduled-post-smoke";
 
 function findSmokePostFile() {
   if (!fs.existsSync(POSTS_DIR)) return null;
-  const match = fs
-    .readdirSync(POSTS_DIR)
-    .find((f) => f.endsWith(`-${SMOKE_SLUG}.md`));
+  const match = fs.readdirSync(POSTS_DIR).find((f) => f.endsWith(`-${SMOKE_SLUG}.md`));
   return match ? path.join(POSTS_DIR, match) : null;
 }
 
@@ -59,19 +48,13 @@ test.describe(
     test.afterAll(() => removeSmokePost());
 
     test.beforeEach(({ page }) => {
-      page.on("pageerror", (err) =>
-        console.log(`[pageerror] ${err.name}: ${err.message}`),
-      );
+      page.on("pageerror", (err) => console.log(`[pageerror] ${err.name}: ${err.message}`));
     });
 
-    test("CMS save lands a scheduled draft with future publish_date", async ({
-      page,
-    }) => {
+    test("CMS save lands a scheduled draft with future publish_date", async ({ page }) => {
       await page.goto("/admin/index-local.html");
       await page.getByRole("button", { name: /login/i }).click();
-      await page
-        .getByRole("link", { name: /^posts$/i })
-        .waitFor({ timeout: 30_000 });
+      await page.getByRole("link", { name: /^posts$/i }).waitFor({ timeout: 30_000 });
       await page.goto("/admin/index-local.html#/collections/posts/new");
 
       const titleField = page.getByLabel(/^Title$/);
@@ -81,9 +64,7 @@ test.describe(
       const slugField = page.getByLabel(/^URL Slug/);
       await slugField.fill(SMOKE_SLUG);
 
-      const bodyEditor = page
-        .locator('[role="textbox"][contenteditable="true"]')
-        .last();
+      const bodyEditor = page.locator('[role="textbox"][contenteditable="true"]').last();
       await bodyEditor.waitFor({ timeout: 30_000 });
       await bodyEditor.click();
       await bodyEditor.fill("Body content for the scheduled post.");
@@ -107,9 +88,7 @@ test.describe(
         .first()
         .click();
 
-      await expect
-        .poll(() => findSmokePostFile() !== null, { timeout: 60_000 })
-        .toBe(true);
+      await expect.poll(() => findSmokePostFile() !== null, { timeout: 60_000 }).toBe(true);
       const written = fs.readFileSync(findSmokePostFile(), "utf8");
       expect(written).toContain(`title: ${SMOKE_TITLE}`);
       expect(written).toMatch(/published:\s*false/);

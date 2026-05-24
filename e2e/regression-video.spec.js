@@ -12,11 +12,7 @@ try {
   changes = { changed: [], new: [], unchanged: [] };
 }
 
-const allPages = [
-  ...(changes.changed || []),
-  ...(changes.new || []),
-  ...(changes.unchanged || []),
-];
+const allPages = [...(changes.changed || []), ...(changes.new || []), ...(changes.unchanged || [])];
 const PROD_BASE = "https://adamdaniel.ai";
 const OUTPUT_DIR = path.join(__dirname, "..", "screenshots", "regression");
 
