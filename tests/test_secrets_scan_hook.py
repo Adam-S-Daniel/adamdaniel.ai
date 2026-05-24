@@ -36,7 +36,13 @@ def _copy_assets(repo_root: Path, dest: Path) -> None:
     """Mirror the minimum slice of the repo needed to exercise the hook."""
     src_scripts = repo_root / "scripts"
     (dest / "scripts").mkdir(parents=True, exist_ok=True)
-    for n in ("bootstrap.sh", "verify-skills-mirror.sh", "secrets-scan.sh"):
+    # Keep in sync with .githooks/pre-commit's guard chain.
+    for n in (
+        "bootstrap.sh",
+        "verify-skills-mirror.sh",
+        "secrets-scan.sh",
+        "lint-staged.sh",
+    ):
         s = src_scripts / n
         if s.exists():
             shutil.copy(s, dest / "scripts" / n)

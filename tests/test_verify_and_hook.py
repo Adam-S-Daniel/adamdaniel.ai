@@ -21,10 +21,15 @@ _NOT_LINUX = sys.platform == "win32"
 def _copy_assets(repo_root: Path, dest: Path) -> None:
     src_scripts = repo_root / "scripts"
     (dest / "scripts").mkdir(parents=True, exist_ok=True)
-    # secrets-scan.sh is copied alongside verify-skills-mirror.sh because
-    # bootstrap registers both pre-commit hooks; if either script is
-    # missing the hook chain won't even start.
-    for n in ("bootstrap.sh", "verify-skills-mirror.sh", "secrets-scan.sh"):
+    # Every script the pre-commit chain invokes must be present, or the
+    # hook aborts before its guard even runs. Keep this list in sync with
+    # .githooks/pre-commit (skills-mirror, secrets-scan, lint-staged).
+    for n in (
+        "bootstrap.sh",
+        "verify-skills-mirror.sh",
+        "secrets-scan.sh",
+        "lint-staged.sh",
+    ):
         s = src_scripts / n
         if s.exists():
             shutil.copy(s, dest / "scripts" / n)
