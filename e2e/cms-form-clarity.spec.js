@@ -104,7 +104,8 @@ const PROD_HINTS = {
   },
   projects: {
     title: null,
-    technology: "e.g. 'Python · LangChain · FastAPI' — shown as the accent label",
+    technology:
+      "e.g. 'Python · LangChain · FastAPI' — shown as the accent label",
     url_link: "Live URL or GitHub repo link",
     featured: "Featured projects appear on the homepage",
     images: "Upload screenshots or demo images",
@@ -208,33 +209,34 @@ test.describe(
   // playwright.config.js for the matrix routing contract.
   { tag: ["@admin-read"] },
   () => {
-  test.describe.configure({ mode: "serial" });
+    test.describe.configure({ mode: "serial" });
 
-  for (const { file, label, expected } of FIXTURES) {
-    test(`${label}: every locked hint matches its expected literal`, () => {
-      const yml = readConfig(file);
-      const mismatches = [];
-      for (const [collection, fields] of Object.entries(expected)) {
-        for (const [field, expectedHint] of Object.entries(fields)) {
-          const actual = hintFor(yml, collection, field);
-          if (actual !== expectedHint) {
-            mismatches.push({
-              path: `${collection}.${field}`,
-              expected: expectedHint,
-              actual,
-            });
+    for (const { file, label, expected } of FIXTURES) {
+      test(`${label}: every locked hint matches its expected literal`, () => {
+        const yml = readConfig(file);
+        const mismatches = [];
+        for (const [collection, fields] of Object.entries(expected)) {
+          for (const [field, expectedHint] of Object.entries(fields)) {
+            const actual = hintFor(yml, collection, field);
+            if (actual !== expectedHint) {
+              mismatches.push({
+                path: `${collection}.${field}`,
+                expected: expectedHint,
+                actual,
+              });
+            }
           }
         }
-      }
-      expect(
-        mismatches,
-        `Hint drift in ${label}:\n${mismatches
-          .map(
-            (m) =>
-              `  - ${m.path}\n      expected: ${JSON.stringify(m.expected)}\n      actual:   ${JSON.stringify(m.actual)}`,
-          )
-          .join("\n")}`,
-      ).toEqual([]);
-    });
-  }
-});
+        expect(
+          mismatches,
+          `Hint drift in ${label}:\n${mismatches
+            .map(
+              (m) =>
+                `  - ${m.path}\n      expected: ${JSON.stringify(m.expected)}\n      actual:   ${JSON.stringify(m.actual)}`,
+            )
+            .join("\n")}`,
+        ).toEqual([]);
+      });
+    }
+  },
+);

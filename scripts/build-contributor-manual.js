@@ -30,7 +30,9 @@ function readAllRecords() {
   for (const name of fs.readdirSync(CAPTURE_DIR)) {
     if (!name.endsWith(".json")) continue;
     try {
-      const records = JSON.parse(fs.readFileSync(path.join(CAPTURE_DIR, name), "utf8"));
+      const records = JSON.parse(
+        fs.readFileSync(path.join(CAPTURE_DIR, name), "utf8"),
+      );
       if (Array.isArray(records)) out.push(...records);
     } catch (_) {
       // skip — malformed files shouldn't break the doc build.
@@ -40,7 +42,8 @@ function readAllRecords() {
 }
 
 function readOverrides() {
-  if (!fs.existsSync(OVERRIDES_FILE)) return { section_order: [], section_intros: {} };
+  if (!fs.existsSync(OVERRIDES_FILE))
+    return { section_order: [], section_intros: {} };
   try {
     const yaml = fs.readFileSync(OVERRIDES_FILE, "utf8");
     return parseSimpleYaml(yaml);
@@ -151,7 +154,9 @@ function sortSections(sectionNames, sectionOrder) {
 
 function sortSteps(records) {
   return [...records].sort((a, b) => {
-    const cmp = String(a.step).localeCompare(String(b.step), undefined, { numeric: true });
+    const cmp = String(a.step).localeCompare(String(b.step), undefined, {
+      numeric: true,
+    });
     if (cmp !== 0) return cmp;
     return String(a.title).localeCompare(String(b.title));
   });
@@ -159,7 +164,8 @@ function sortSteps(records) {
 
 function relPath(p) {
   // Resolve a path relative to docs/ so the manual links from inside docs/.
-  return path.relative(path.dirname(OUT_FILE), path.join(REPO_ROOT, p))
+  return path
+    .relative(path.dirname(OUT_FILE), path.join(REPO_ROOT, p))
     .split(path.sep)
     .join("/");
 }
@@ -189,7 +195,10 @@ function renderRecord(record) {
 
 function buildManual(records, overrides) {
   const groups = groupBySection(records);
-  const sectionNames = sortSections([...groups.keys()], overrides.section_order || []);
+  const sectionNames = sortSections(
+    [...groups.keys()],
+    overrides.section_order || [],
+  );
 
   const intro = [
     "# Contributor Manual",
@@ -204,7 +213,9 @@ function buildManual(records, overrides) {
     "",
     "## Sections",
     "",
-    ...sectionNames.map((name, idx) => `${idx + 1}. [${name}](#${slugifyAnchor(name)})`),
+    ...sectionNames.map(
+      (name, idx) => `${idx + 1}. [${name}](#${slugifyAnchor(name)})`,
+    ),
     "",
   ];
 
@@ -224,15 +235,25 @@ function buildManual(records, overrides) {
   }
 
   if (sectionNames.length === 0) {
-    body.push("> _No captured steps yet. The manual will populate as more `captureStep(...)` calls are added to e2e specs._");
+    body.push(
+      "> _No captured steps yet. The manual will populate as more `captureStep(...)` calls are added to e2e specs._",
+    );
     body.push("");
   }
 
-  return [...intro, ...body].join("\n").replace(/\n{3,}/g, "\n\n").trimEnd() + "\n";
+  return (
+    [...intro, ...body]
+      .join("\n")
+      .replace(/\n{3,}/g, "\n\n")
+      .trimEnd() + "\n"
+  );
 }
 
 function slugifyAnchor(s) {
-  return String(s).toLowerCase().replace(/[^a-z0-9]+/g, "-").replace(/^-+|-+$/g, "");
+  return String(s)
+    .toLowerCase()
+    .replace(/[^a-z0-9]+/g, "-")
+    .replace(/^-+|-+$/g, "");
 }
 
 function main() {
@@ -241,7 +262,9 @@ function main() {
   const manual = buildManual(records, overrides);
   fs.mkdirSync(path.dirname(OUT_FILE), { recursive: true });
   fs.writeFileSync(OUT_FILE, manual);
-  process.stdout.write(`Wrote ${OUT_FILE} (${records.length} step record(s) across ${new Set(records.map((r) => r.section)).size} section(s))\n`);
+  process.stdout.write(
+    `Wrote ${OUT_FILE} (${records.length} step record(s) across ${new Set(records.map((r) => r.section)).size} section(s))\n`,
+  );
 }
 
 if (require.main === module) main();

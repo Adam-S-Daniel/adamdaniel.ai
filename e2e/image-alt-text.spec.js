@@ -109,65 +109,65 @@ test.describe(
   // webkit-iphone16. See playwright.config.js.
   { tag: ["@admin-read"] },
   () => {
-  test.beforeEach(({ page }, testInfo) => {
-  });
+    test.beforeEach(() => {});
 
-  test("every <img> on every sitemap URL has alt, role=presentation, or aria-hidden", async ({
-    page,
-  }) => {
-    const xml = readSitemap();
-    const allUrls = parseSitemapUrls(xml).map(toLocalPath);
-    expect(
-      allUrls.length,
-      "sitemap.xml should advertise at least one URL",
-    ).toBeGreaterThan(0);
-
-    const urls = allUrls.filter((u) => !shouldSkip(u, TARGET));
-
-    // Accumulate every violation across every page rather than failing
-    // on the first one — gives the editor a complete picture in CI logs
-    // when a content sweep drops alts in multiple places at once.
-    const allViolations = [];
-
-    for (const url of urls) {
-      const response = await page.goto(url, { waitUntil: "networkidle" });
-      // Sitemap should not advertise broken URLs; surface 404s here as
-      // their own failure shape so they don't masquerade as alt-text
-      // violations.
+    test("every <img> on every sitemap URL has alt, role=presentation, or aria-hidden", async ({
+      page,
+    }) => {
+      const xml = readSitemap();
+      const allUrls = parseSitemapUrls(xml).map(toLocalPath);
       expect(
-        response && response.status(),
-        `expected 200 from ${url}, got ${response && response.status()}`,
-      ).toBe(200);
+        allUrls.length,
+        "sitemap.xml should advertise at least one URL",
+      ).toBeGreaterThan(0);
 
-      const violations = await page.$$eval("img", (imgs) =>
-        imgs
-          .filter(
-            (img) =>
-              !img.alt &&
-              img.getAttribute("role") !== "presentation" &&
-              img.getAttribute("aria-hidden") !== "true",
-          )
-          .map((img) => ({
-            src: img.src,
-            parent: img.parentElement && img.parentElement.tagName,
-          })),
-      );
+      const urls = allUrls.filter((u) => !shouldSkip(u, TARGET));
 
-      for (const v of violations) {
-        allViolations.push({ url, ...v });
+      // Accumulate every violation across every page rather than failing
+      // on the first one — gives the editor a complete picture in CI logs
+      // when a content sweep drops alts in multiple places at once.
+      const allViolations = [];
+
+      for (const url of urls) {
+        const response = await page.goto(url, { waitUntil: "networkidle" });
+        // Sitemap should not advertise broken URLs; surface 404s here as
+        // their own failure shape so they don't masquerade as alt-text
+        // violations.
+        expect(
+          response && response.status(),
+          `expected 200 from ${url}, got ${response && response.status()}`,
+        ).toBe(200);
+
+        const violations = await page.$$eval("img", (imgs) =>
+          imgs
+            .filter(
+              (img) =>
+                !img.alt &&
+                img.getAttribute("role") !== "presentation" &&
+                img.getAttribute("aria-hidden") !== "true",
+            )
+            .map((img) => ({
+              src: img.src,
+              parent: img.parentElement && img.parentElement.tagName,
+            })),
+        );
+
+        for (const v of violations) {
+          allViolations.push({ url, ...v });
+        }
       }
-    }
 
-    expect(
-      allViolations,
-      "Every <img> must have a non-empty alt, role=\"presentation\", or " +
-        "aria-hidden=\"true\". Violations:\n" +
-        allViolations
-          .map(
-            (v) =>
-              `  - ${v.url}: <img src="${v.src}"> (parent: ${v.parent || "?"})`,
-          )
-          .join("\n"),
-    ).toEqual([]);
-  });
-});
+      expect(
+        allViolations,
+        'Every <img> must have a non-empty alt, role="presentation", or ' +
+          'aria-hidden="true". Violations:\n' +
+          allViolations
+            .map(
+              (v) =>
+                `  - ${v.url}: <img src="${v.src}"> (parent: ${v.parent || "?"})`,
+            )
+            .join("\n"),
+      ).toEqual([]);
+    });
+  },
+);

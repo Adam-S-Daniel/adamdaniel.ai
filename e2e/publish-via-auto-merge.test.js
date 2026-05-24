@@ -38,7 +38,9 @@ function bootShim() {
       headers,
       json: () => Promise.resolve(JSON.parse(text || "null")),
       text: () => Promise.resolve(text),
-      clone() { return makeResponse(text, init); },
+      clone() {
+        return makeResponse(text, init);
+      },
     };
   }
 
@@ -130,7 +132,10 @@ test.describe("publish-via-auto-merge.js (unit)", () => {
   test("non-targeted requests pass through untouched", async () => {
     const { fetch, queueResponse, calls } = bootShim();
     queueResponse({ ok: 1 }, { status: 200 });
-    const res = await fetch("https://api.github.com/repos/Adam-S-Daniel/adamdaniel.ai/contents/_posts/x.md", { method: "GET" });
+    const res = await fetch(
+      "https://api.github.com/repos/Adam-S-Daniel/adamdaniel.ai/contents/_posts/x.md",
+      { method: "GET" },
+    );
     expect(res.status).toBe(200);
     expect(calls).toHaveLength(1);
     expect(calls[0].method).toBe("GET");
@@ -149,7 +154,10 @@ test.describe("publish-via-auto-merge.js (unit)", () => {
     // didn't supply init.
     const { fetch, queueResponse, calls } = bootShim();
     queueResponse({ tree: [] }, { status: 200 });
-    const request = { url: "https://api.github.com/repos/Adam-S-Daniel/adamdaniel.ai/git/trees/main?recursive=1", method: "GET" };
+    const request = {
+      url: "https://api.github.com/repos/Adam-S-Daniel/adamdaniel.ai/git/trees/main?recursive=1",
+      method: "GET",
+    };
     const res = await fetch(request);
     expect(res.status).toBe(200);
     expect(calls).toHaveLength(1);
@@ -169,7 +177,10 @@ test.describe("publish-via-auto-merge.js (unit)", () => {
 
   test("PR merge 422 with rule-violations triggers cms/ready label add + synthetic merged response", async () => {
     const { fetch, queueResponse, calls } = bootShim();
-    queueResponse({ message: "Repository rule violations found" }, { status: 422 });
+    queueResponse(
+      { message: "Repository rule violations found" },
+      { status: 422 },
+    );
     queueResponse({ id: 1 }, { status: 200 }); // labels response
     const res = await fetch(
       "https://api.github.com/repos/Adam-S-Daniel/adamdaniel.ai/pulls/42/merge",
@@ -191,7 +202,10 @@ test.describe("publish-via-auto-merge.js (unit)", () => {
 
   test("PR merge 422 with non-ruleset message does NOT recover", async () => {
     const { fetch, queueResponse, calls } = bootShim();
-    queueResponse({ message: "Pull request is in unstable state" }, { status: 422 });
+    queueResponse(
+      { message: "Pull request is in unstable state" },
+      { status: 422 },
+    );
     const res = await fetch(
       "https://api.github.com/repos/Adam-S-Daniel/adamdaniel.ai/pulls/42/merge",
       { method: "PUT", headers: { Authorization: "Bearer t" } },
@@ -202,7 +216,10 @@ test.describe("publish-via-auto-merge.js (unit)", () => {
 
   test("PR merge 422 + label-add fails → original error propagates", async () => {
     const { fetch, queueResponse, calls } = bootShim();
-    queueResponse({ message: "Repository rule violations found" }, { status: 422 });
+    queueResponse(
+      { message: "Repository rule violations found" },
+      { status: 422 },
+    );
     queueResponse({ message: "Bad credentials" }, { status: 401 });
     const res = await fetch(
       "https://api.github.com/repos/Adam-S-Daniel/adamdaniel.ai/pulls/42/merge",
@@ -219,7 +236,10 @@ test.describe("publish-via-auto-merge.js (unit)", () => {
     // so query strings would slip through. This test pins that
     // behaviour so a future refactor knows what was intentional.
     const { fetch, queueResponse, calls } = bootShim();
-    queueResponse({ message: "Repository rule violations found" }, { status: 422 });
+    queueResponse(
+      { message: "Repository rule violations found" },
+      { status: 422 },
+    );
     const res = await fetch(
       "https://api.github.com/repos/Adam-S-Daniel/adamdaniel.ai/pulls/42/merge?foo=bar",
       { method: "PUT", headers: { Authorization: "Bearer t" } },
@@ -230,12 +250,20 @@ test.describe("publish-via-auto-merge.js (unit)", () => {
 
   test("Authorization header is forwarded as-is to the recovery call (Headers instance variant)", async () => {
     const { fetch, queueResponse, calls } = bootShim();
-    queueResponse({ message: "Repository rule violations found" }, { status: 422 });
+    queueResponse(
+      { message: "Repository rule violations found" },
+      { status: 422 },
+    );
     queueResponse({ id: 1 }, { status: 200 });
     // Pass a Headers-like object exposing .get(...).
     const headers = {
-      _store: { authorization: "token gho_xyz", "x-github-api-version": "2022-11-28" },
-      get(k) { return this._store[k.toLowerCase()] || null; },
+      _store: {
+        authorization: "token gho_xyz",
+        "x-github-api-version": "2022-11-28",
+      },
+      get(k) {
+        return this._store[k.toLowerCase()] || null;
+      },
     };
     await fetch(
       "https://api.github.com/repos/Adam-S-Daniel/adamdaniel.ai/pulls/7/merge",

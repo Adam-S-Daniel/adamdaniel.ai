@@ -4,7 +4,6 @@
  */
 const test = require("node:test");
 const assert = require("node:assert/strict");
-const path = require("node:path");
 const {
   buildManual,
   groupBySection,
@@ -76,7 +75,10 @@ test("sortSections honours section_order then alphabetises the rest", () => {
 });
 
 test("buildManual emits sections in order and embeds screenshots", () => {
-  const md = buildManual(sample, { section_order: ["Logging in", "Editing"], section_intros: {} });
+  const md = buildManual(sample, {
+    section_order: ["Logging in", "Editing"],
+    section_intros: {},
+  });
   // Section ordering by header position
   const lp = md.indexOf("## Logging in");
   const ep = md.indexOf("## Editing");
@@ -89,7 +91,9 @@ test("buildManual emits sections in order and embeds screenshots", () => {
   assert.ok(md.includes("manual-screenshots/logging-in/1.1-open-admin.png"));
   // Browser URL captured at screenshot time is shown beneath the image as a clickable link
   assert.ok(
-    md.includes("<sub>URL: [https://preview-pr123.adamdaniel.ai/admin/](https://preview-pr123.adamdaniel.ai/admin/)</sub>"),
+    md.includes(
+      "<sub>URL: [https://preview-pr123.adamdaniel.ai/admin/](https://preview-pr123.adamdaniel.ai/admin/)</sub>",
+    ),
   );
   // Footer with spec + test reference
   assert.ok(md.includes("`e2e/cms-publish-loop.spec.js`"));

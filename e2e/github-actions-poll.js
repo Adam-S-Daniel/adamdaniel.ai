@@ -92,14 +92,20 @@ async function waitForCmsPullRequest({
   autoLabelTest = true,
 } = {}) {
   if (!canaryMarker) {
-    throw new Error("waitForCmsPullRequest needs a canaryMarker to disambiguate the PR.");
+    throw new Error(
+      "waitForCmsPullRequest needs a canaryMarker to disambiguate the PR.",
+    );
   }
   if (!filePath) {
-    throw new Error("waitForCmsPullRequest needs a filePath to identify the right cms/... PR.");
+    throw new Error(
+      "waitForCmsPullRequest needs a filePath to identify the right cms/... PR.",
+    );
   }
   const deadline = Date.now() + timeoutMs;
   while (Date.now() < deadline) {
-    const prs = await gh(`/repos/${repo}/pulls?state=open&base=${encodeURIComponent(base)}&per_page=50`);
+    const prs = await gh(
+      `/repos/${repo}/pulls?state=open&base=${encodeURIComponent(base)}&per_page=50`,
+    );
     const candidates = prs.filter(
       (pr) =>
         pr.head &&
@@ -107,7 +113,9 @@ async function waitForCmsPullRequest({
         pr.head.ref.startsWith(headBranchPrefix),
     );
     for (const pr of candidates) {
-      const files = await gh(`/repos/${repo}/pulls/${pr.number}/files?per_page=100`);
+      const files = await gh(
+        `/repos/${repo}/pulls/${pr.number}/files?per_page=100`,
+      );
       const hit = files.find(
         (f) =>
           f.filename === filePath &&
@@ -117,7 +125,11 @@ async function waitForCmsPullRequest({
       if (hit) {
         if (autoLabelTest) {
           try {
-            await addLabel({ repo, prNumber: pr.number, label: "automated-test" });
+            await addLabel({
+              repo,
+              prNumber: pr.number,
+              label: "automated-test",
+            });
           } catch (e) {
             console.warn(
               `[waitForCmsPullRequest] could not label PR #${pr.number} automated-test: ${e && e.message}`,
@@ -176,7 +188,11 @@ async function waitForMerge({
   }
   throw await augmentTimeoutError(
     new Error(`Timed out waiting for PR #${prNumber} to merge.`),
-    { waitingFor: `PR #${prNumber} to merge`, kind: "merge", waitPrNumber: prNumber },
+    {
+      waitingFor: `PR #${prNumber} to merge`,
+      kind: "merge",
+      waitPrNumber: prNumber,
+    },
   );
 }
 
@@ -198,7 +214,9 @@ async function waitForAutoMergeEnabled({
     await sleep(pollMs);
   }
   throw await augmentTimeoutError(
-    new Error(`Timed out waiting for auto-merge to be enabled on PR #${prNumber}.`),
+    new Error(
+      `Timed out waiting for auto-merge to be enabled on PR #${prNumber}.`,
+    ),
     {
       waitingFor: `auto-merge to be enabled on PR #${prNumber}`,
       kind: "auto-merge-enabled",
@@ -235,7 +253,9 @@ async function waitForWorkflowRun({
     if (branch) params.set("branch", branch);
     if (headSha) params.set("head_sha", headSha);
     params.set("per_page", "20");
-    const data = await gh(`/repos/${repo}/actions/workflows/${workflow}/runs?${params}`);
+    const data = await gh(
+      `/repos/${repo}/actions/workflows/${workflow}/runs?${params}`,
+    );
     const runs = data.workflow_runs || [];
     if (runs.length > 0) {
       // Don't just look at runs[0]. When two runs have the same
@@ -257,7 +277,6 @@ async function waitForWorkflowRun({
           // Newer run hopefully on the way. Record the ID so we don't
           // spin on the same cancelled run forever, then keep polling.
           cancelledSeen.add(lastSeen.id);
-          // eslint-disable-next-line no-console
           console.info(
             `[waitForWorkflowRun] ${workflow} run ${lastSeen.id} on ${branch || headSha} was cancelled — waiting for a newer run to land.`,
           );
@@ -291,7 +310,10 @@ async function waitForWorkflowRun({
   );
 }
 
-async function fetchPublicUrl(url, { timeoutMs = 240_000, pollMs = 6_000, expectContent } = {}) {
+async function fetchPublicUrl(
+  url,
+  { timeoutMs = 240_000, pollMs = 6_000, expectContent } = {},
+) {
   const deadline = Date.now() + timeoutMs;
   while (Date.now() < deadline) {
     try {
@@ -300,7 +322,9 @@ async function fetchPublicUrl(url, { timeoutMs = 240_000, pollMs = 6_000, expect
         const body = await res.text();
         if (!expectContent || body.includes(expectContent)) return body;
       }
-    } catch (_) { /* network blip — keep polling */ }
+    } catch (_) {
+      /* network blip — keep polling */
+    }
     await sleep(pollMs);
   }
   throw await augmentTimeoutError(
@@ -314,8 +338,13 @@ async function fetchPublicUrl(url, { timeoutMs = 240_000, pollMs = 6_000, expect
   );
 }
 
-async function getDefaultBranchHeadSha({ repo = HOST_REPO, branch = "main" } = {}) {
-  const ref = await gh(`/repos/${repo}/git/refs/heads/${encodeURIComponent(branch)}`);
+async function getDefaultBranchHeadSha({
+  repo = HOST_REPO,
+  branch = "main",
+} = {}) {
+  const ref = await gh(
+    `/repos/${repo}/git/refs/heads/${encodeURIComponent(branch)}`,
+  );
   return ref.object && ref.object.sha;
 }
 

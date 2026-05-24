@@ -36,62 +36,68 @@ test.describe(
   // webkit-iphone16. See playwright.config.js.
   { tag: ["@admin-read"] },
   () => {
-  test.describe.configure({ mode: "serial", timeout: 180_000 });
+    test.describe.configure({ mode: "serial", timeout: 180_000 });
 
-  test.beforeEach(async ({ page }, testInfo) => {
-  });
+    test.beforeEach(async () => {});
 
-  test("typing the sentinel into the Body widget saves it to the body, leaves excerpt empty", async ({
-    page,
-  }) => {
-    await loadTestAdmin(page);
-    await page.goto(
-      `/admin/index-test.html#/collections/posts/entries/${SEED_POST_SLUG}`,
-    );
+    test("typing the sentinel into the Body widget saves it to the body, leaves excerpt empty", async ({
+      page,
+    }) => {
+      await loadTestAdmin(page);
+      await page.goto(
+        `/admin/index-test.html#/collections/posts/entries/${SEED_POST_SLUG}`,
+      );
 
-    const titleField = page.getByLabel(/^Title$/);
-    await expect(titleField).toBeVisible({ timeout: 60_000 });
+      const titleField = page.getByLabel(/^Title$/);
+      await expect(titleField).toBeVisible({ timeout: 60_000 });
 
-    // Same locator pattern cms-publish-flow.spec.js uses — the markdown
-    // widget's editing surface is a contenteditable role=textbox.
-    const bodyEditor = page
-      .locator('[role="textbox"][contenteditable="true"]')
-      .last();
-    await bodyEditor.waitFor({ timeout: 30_000 });
-    await bodyEditor.click();
-    await bodyEditor.fill(SENTINEL);
+      // Same locator pattern cms-publish-flow.spec.js uses — the markdown
+      // widget's editing surface is a contenteditable role=textbox.
+      const bodyEditor = page
+        .locator('[role="textbox"][contenteditable="true"]')
+        .last();
+      await bodyEditor.waitFor({ timeout: 30_000 });
+      await bodyEditor.click();
+      await bodyEditor.fill(SENTINEL);
 
-    await page.getByRole("button", { name: /^save$/i }).first().click();
+      await page
+        .getByRole("button", { name: /^save$/i })
+        .first()
+        .click();
 
-    let saved = null;
-    await expect
-      .poll(
-        async () => {
-          saved = await readDraftContent(page, {
-            collection: "posts",
-            slug: SEED_POST_SLUG,
-          });
-          return saved && saved.includes(SENTINEL);
-        },
-        { timeout: 30_000 },
-      )
-      .toBe(true);
+      let saved = null;
+      await expect
+        .poll(
+          async () => {
+            saved = await readDraftContent(page, {
+              collection: "posts",
+              slug: SEED_POST_SLUG,
+            });
+            return saved && saved.includes(SENTINEL);
+          },
+          { timeout: 30_000 },
+        )
+        .toBe(true);
 
-    const { frontMatter, body } = splitFrontMatter(saved);
+      const { frontMatter, body } = splitFrontMatter(saved);
 
-    expect(
-      body,
-      `Body block (after the second ---) should contain the typed sentinel. Saved content was:\n${saved}`,
-    ).toContain(SENTINEL);
+      expect(
+        body,
+        `Body block (after the second ---) should contain the typed sentinel. Saved content was:\n${saved}`,
+      ).toContain(SENTINEL);
 
-    const excerptLine = frontMatter
-      .split(/\r?\n/)
-      .find((l) => /^excerpt:/.test(l));
-    expect(excerptLine, "excerpt front-matter line should exist").toBeDefined();
-    // Acceptable shapes for "empty": `excerpt:`, `excerpt: ''`, `excerpt: ""`.
-    expect(
-      excerptLine.replace(/^excerpt:\s*/, "").trim(),
-      `excerpt should remain empty — the body sentinel must not have leaked into the excerpt field. excerpt line was: ${excerptLine}`,
-    ).toMatch(/^(''|""|)$/);
-  });
-});
+      const excerptLine = frontMatter
+        .split(/\r?\n/)
+        .find((l) => /^excerpt:/.test(l));
+      expect(
+        excerptLine,
+        "excerpt front-matter line should exist",
+      ).toBeDefined();
+      // Acceptable shapes for "empty": `excerpt:`, `excerpt: ''`, `excerpt: ""`.
+      expect(
+        excerptLine.replace(/^excerpt:\s*/, "").trim(),
+        `excerpt should remain empty — the body sentinel must not have leaked into the excerpt field. excerpt line was: ${excerptLine}`,
+      ).toMatch(/^(''|""|)$/);
+    });
+  },
+);

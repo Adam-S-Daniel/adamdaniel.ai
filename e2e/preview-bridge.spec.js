@@ -53,87 +53,86 @@ test.describe(
   // webkit-iphone16. See playwright.config.js.
   { tag: ["@admin-read"] },
   () => {
-  test.beforeEach(async ({}, testInfo) => {
-  });
+    test.beforeEach(async () => {});
 
-  test("registers a postSave event listener with Decap", async ({ page }) => {
-    await loadBridgeHarness(page);
-    const registered = await page.evaluate(() =>
-      Object.keys(window.__capturedListeners),
-    );
-    expect(registered).toContain("postSave");
-  });
+    test("registers a postSave event listener with Decap", async ({ page }) => {
+      await loadBridgeHarness(page);
+      const registered = await page.evaluate(() =>
+        Object.keys(window.__capturedListeners),
+      );
+      expect(registered).toContain("postSave");
+    });
 
-  test("postSave broadcasts entry data on the shared BroadcastChannel", async ({
-    page,
-    context,
-  }) => {
-    await loadBridgeHarness(page);
+    test("postSave broadcasts entry data on the shared BroadcastChannel", async ({
+      page,
+      context,
+    }) => {
+      await loadBridgeHarness(page);
 
-    // Open a listener tab on the same channel. Install the listener
-    // SYNCHRONOUSLY and store the resolution Promise on window so there's
-    // no race between channel-open and the sender's broadcast.
-    const listener = await context.newPage();
-    await listener.goto("/preview/");
-    await listener.evaluate(() => {
-      window.__ch = new BroadcastChannel("adamdaniel-cms-preview");
-      window.__received = new Promise((resolve) => {
-        window.__ch.addEventListener("message", (e) => {
-          if (e.data?.type === "cms-preview-update") resolve(e.data);
+      // Open a listener tab on the same channel. Install the listener
+      // SYNCHRONOUSLY and store the resolution Promise on window so there's
+      // no race between channel-open and the sender's broadcast.
+      const listener = await context.newPage();
+      await listener.goto("/preview/");
+      await listener.evaluate(() => {
+        window.__ch = new BroadcastChannel("adamdaniel-cms-preview");
+        window.__received = new Promise((resolve) => {
+          window.__ch.addEventListener("message", (e) => {
+            if (e.data?.type === "cms-preview-update") resolve(e.data);
+          });
         });
       });
+
+      // Simulate a save via the captured handler. The `entry` arg mirrors
+      // Decap's shape: an Immutable-like Map with .get()/.getIn()/.toJS().
+      await page.evaluate(() => {
+        const mockEntry = {
+          data: {
+            title: "Broadcast me",
+            body: "A draft body.",
+            slug: "broadcast-me",
+          },
+          collection: "posts",
+          get(key) {
+            if (key === "data") {
+              return {
+                toJS: () => mockEntry.data,
+              };
+            }
+            if (key === "collection") return mockEntry.collection;
+            return undefined;
+          },
+        };
+        window.__capturedListeners.postSave({ entry: mockEntry });
+      });
+
+      const msg = await listener.evaluate(() => window.__received);
+      expect(msg.type).toBe("cms-preview-update");
+      expect(msg.collection).toBe("posts");
+      expect(msg.fields.title).toBe("Broadcast me");
+      expect(msg.fields.body).toBe("A draft body.");
+      await captureStep(listener, {
+        section: "Real-layout preview",
+        step: "4.1",
+        title: "Live preview tab receives an edit",
+        body: "Open `/preview/` in a second tab while editing. The bridge in `admin/preview-bridge.js` forwards every Save (or in-progress edit) over a same-origin BroadcastChannel; the preview tab renders the draft using the real Jekyll layout, so what you see matches the published post by construction.",
+      });
+      await listener.close();
     });
 
-    // Simulate a save via the captured handler. The `entry` arg mirrors
-    // Decap's shape: an Immutable-like Map with .get()/.getIn()/.toJS().
-    await page.evaluate(() => {
-      const mockEntry = {
-        data: {
-          title: "Broadcast me",
-          body: "A draft body.",
-          slug: "broadcast-me",
-        },
-        collection: "posts",
-        get(key) {
-          if (key === "data") {
-            return {
-              toJS: () => mockEntry.data,
-            };
-          }
-          if (key === "collection") return mockEntry.collection;
-          return undefined;
-        },
-      };
-      window.__capturedListeners.postSave({ entry: mockEntry });
+    test("exposes a helper that builds the preview URL for a collection", async ({
+      page,
+    }) => {
+      await loadBridgeHarness(page);
+      const url = await page.evaluate(() =>
+        window.adamdaniel_cms_preview_url("posts"),
+      );
+      expect(url).toMatch(/\/preview\/\?collection=posts$/);
+
+      const pagesUrl = await page.evaluate(() =>
+        window.adamdaniel_cms_preview_url("pages"),
+      );
+      expect(pagesUrl).toMatch(/\/preview\/\?collection=pages$/);
     });
-
-    const msg = await listener.evaluate(() => window.__received);
-    expect(msg.type).toBe("cms-preview-update");
-    expect(msg.collection).toBe("posts");
-    expect(msg.fields.title).toBe("Broadcast me");
-    expect(msg.fields.body).toBe("A draft body.");
-    await captureStep(listener, {
-      section: "Real-layout preview",
-      step: "4.1",
-      title: "Live preview tab receives an edit",
-      body:
-        "Open `/preview/` in a second tab while editing. The bridge in `admin/preview-bridge.js` forwards every Save (or in-progress edit) over a same-origin BroadcastChannel; the preview tab renders the draft using the real Jekyll layout, so what you see matches the published post by construction.",
-    });
-    await listener.close();
-  });
-
-  test("exposes a helper that builds the preview URL for a collection", async ({
-    page,
-  }) => {
-    await loadBridgeHarness(page);
-    const url = await page.evaluate(() =>
-      window.adamdaniel_cms_preview_url("posts"),
-    );
-    expect(url).toMatch(/\/preview\/\?collection=posts$/);
-
-    const pagesUrl = await page.evaluate(() =>
-      window.adamdaniel_cms_preview_url("pages"),
-    );
-    expect(pagesUrl).toMatch(/\/preview\/\?collection=pages$/);
-  });
-});
+  },
+);

@@ -110,7 +110,8 @@ async function composeCanaryFile(bodyText) {
   const current = await fetchCanaryFromMain();
   const decoded = Buffer.from(current.content, "base64").toString("utf8");
   const fmEnd = decoded.indexOf("\n---\n", 4);
-  if (fmEnd < 0) throw new Error("Canary file is missing closing front-matter delimiter.");
+  if (fmEnd < 0)
+    throw new Error("Canary file is missing closing front-matter delimiter.");
   const frontMatter = decoded.slice(0, fmEnd + 5);
   return `${frontMatter}\n${bodyText}\n`;
 }
@@ -129,167 +130,173 @@ async function writeCanaryViaPr({ runId, bodyText, message }) {
 test(
   "@lane:real CMS preview-PR-mimicry harness — cms/<slug> branch lifecycle",
   { tag: ["@admin-write"] },
-  async ({
-  page,
-}, testInfo) => {
-  test.skip(
-    PROD_CANARY,
-    "PROD_CANARY=1 — daily canary probe is read-only; this spec mutates state.",
-  );
-  test.skip(
-    !getPat(),
-    "CMS_E2E_PAT not set — spike harness disabled. (Forks and Dependabot are expected to land here.)",
-  );
-  test.skip(
-    process.env.RUN_HOST_REPO_PUBLISH_LOOP !== "1",
-    "RUN_HOST_REPO_PUBLISH_LOOP not set — spike harness is opt-in (avoids cms/* PR self-recursion in PR-time CI).",
-  );
+  async ({ page }) => {
+    test.skip(
+      PROD_CANARY,
+      "PROD_CANARY=1 — daily canary probe is read-only; this spec mutates state.",
+    );
+    test.skip(
+      !getPat(),
+      "CMS_E2E_PAT not set — spike harness disabled. (Forks and Dependabot are expected to land here.)",
+    );
+    test.skip(
+      process.env.RUN_HOST_REPO_PUBLISH_LOOP !== "1",
+      "RUN_HOST_REPO_PUBLISH_LOOP not set — spike harness is opt-in (avoids cms/* PR self-recursion in PR-time CI).",
+    );
 
-  const runId = Date.now();
-  const marker = makeMarker(`spike-${CANARY.id}`, runId);
-  const baselineBody = CANARY.baseline;
+    const runId = Date.now();
+    const marker = makeMarker(`spike-${CANARY.id}`, runId);
+    const baselineBody = CANARY.baseline;
 
-  // ── 0. Reset canary baseline before driving admin ────────────────
-  await test.step("Reset canary to baseline via labelled PR", async () => {
-    const current = await fetchCanaryFromMain();
-    const currentBody = Buffer.from(current.content, "base64").toString("utf8");
-    if (!currentBody.includes(baselineBody)) {
-      await writeCanaryViaPr({
-        runId: `spike-setup-${runId}`,
-        bodyText: `${baselineBody}\n\nSpike harness baseline — see e2e/cms-preview-pr-self-contained.spec.js.\n`,
-        message: "test(spike): reset canary baseline before spike-harness run",
+    // ── 0. Reset canary baseline before driving admin ────────────────
+    await test.step("Reset canary to baseline via labelled PR", async () => {
+      const current = await fetchCanaryFromMain();
+      const currentBody = Buffer.from(current.content, "base64").toString(
+        "utf8",
+      );
+      if (!currentBody.includes(baselineBody)) {
+        await writeCanaryViaPr({
+          runId: `spike-setup-${runId}`,
+          bodyText: `${baselineBody}\n\nSpike harness baseline — see e2e/cms-preview-pr-self-contained.spec.js.\n`,
+          message:
+            "test(spike): reset canary baseline before spike-harness run",
+        });
+      }
+    });
+
+    await test.step("Confirm baseline is live before driving admin", async () => {
+      await fetchPublicUrl(PUBLIC_URL, {
+        expectContent: baselineBody,
+        timeoutMs: 6 * 60 * 1000,
       });
-    }
-  });
-
-  await test.step("Confirm baseline is live before driving admin", async () => {
-    await fetchPublicUrl(PUBLIC_URL, {
-      expectContent: baselineBody,
-      timeoutMs: 6 * 60 * 1000,
     });
-  });
 
-  // ── 1. Pre-seed Decap auth, load admin ──────────────────────────
-  await seedDecapAuth(page);
-  await test.step("Load production admin", async () => {
-    await page.goto(PROD_ADMIN, { waitUntil: "domcontentloaded" });
-    await expect(page.getByRole("link", { name: /^Posts$/i })).toBeVisible({
-      timeout: 60_000,
+    // ── 1. Pre-seed Decap auth, load admin ──────────────────────────
+    await seedDecapAuth(page);
+    await test.step("Load production admin", async () => {
+      await page.goto(PROD_ADMIN, { waitUntil: "domcontentloaded" });
+      await expect(page.getByRole("link", { name: /^Posts$/i })).toBeVisible({
+        timeout: 60_000,
+      });
     });
-  });
 
-  // ── 2. Open canary entry, edit body, Save ───────────────────────
-  await test.step("Navigate to canary entry", async () => {
-    await page.goto(
-      `${PROD_ADMIN}#/collections/${CANARY.cmsCollection}/entries/${CANARY.slug}`,
-      { waitUntil: "domcontentloaded" },
-    );
-    await expect(page.getByRole("textbox", { name: /^Title$/i })).toBeVisible({
-      timeout: 30_000,
+    // ── 2. Open canary entry, edit body, Save ───────────────────────
+    await test.step("Navigate to canary entry", async () => {
+      await page.goto(
+        `${PROD_ADMIN}#/collections/${CANARY.cmsCollection}/entries/${CANARY.slug}`,
+        { waitUntil: "domcontentloaded" },
+      );
+      await expect(page.getByRole("textbox", { name: /^Title$/i })).toBeVisible(
+        {
+          timeout: 30_000,
+        },
+      );
     });
-  });
 
-  await test.step("Insert run marker into body and Save", async () => {
-    const body = page.locator('[role="textbox"][contenteditable="true"]').last();
-    await body.click();
-    await body.press("End");
-    await body.pressSequentially(`\n\n${marker}\n`);
-    pendingMarker = marker;
-    await page.getByRole("button", { name: /^Save$/i }).click();
-    await expect(page.getByText(/Changes saved/i).first()).toBeVisible({
-      timeout: 60_000,
+    await test.step("Insert run marker into body and Save", async () => {
+      const body = page
+        .locator('[role="textbox"][contenteditable="true"]')
+        .last();
+      await body.click();
+      await body.press("End");
+      await body.pressSequentially(`\n\n${marker}\n`);
+      pendingMarker = marker;
+      await page.getByRole("button", { name: /^Save$/i }).click();
+      await expect(page.getByText(/Changes saved/i).first()).toBeVisible({
+        timeout: 60_000,
+      });
     });
-  });
 
-  // ── 3. Find the cms/<col>/<slug> PR Decap opened ────────────────
-  let pr;
-  await test.step("Wait for Decap to open the cms/<col>/<slug> PR", async () => {
-    pr = await waitForCmsPullRequest({
-      base: "main",
-      filePath: CANARY.path,
-      canaryMarker: marker,
-      timeoutMs: 5 * 60 * 1000,
+    // ── 3. Find the cms/<col>/<slug> PR Decap opened ────────────────
+    let pr;
+    await test.step("Wait for Decap to open the cms/<col>/<slug> PR", async () => {
+      pr = await waitForCmsPullRequest({
+        base: "main",
+        filePath: CANARY.path,
+        canaryMarker: marker,
+        timeoutMs: 5 * 60 * 1000,
+      });
+      expect(pr.number, "Decap PR number").toBeGreaterThan(0);
+      expect(pr.head.ref, "Decap branch is cms/<col>/<slug>-shaped").toMatch(
+        /^cms\//,
+      );
     });
-    expect(pr.number, "Decap PR number").toBeGreaterThan(0);
-    expect(pr.head.ref, "Decap branch is cms/<col>/<slug>-shaped").toMatch(
-      /^cms\//,
-    );
-  });
 
-  // [TODO step 3a — preview-pr-mimicry rollout] Once the per-slug
-  // preview env exists, assert a subdomain like
-  // `https://preview-cms-<slug>.adamdaniel.ai/<canary publicPath>`
-  // is reachable and serves the in-progress edit (the marker). This
-  // is the assertion that distinguishes the new model from today's
-  // single-PR-preview approach.
-  //
-  //   const previewSlug = pr.head.ref.replace(/^cms\//, "").replace(/\//g, "-");
-  //   const cmsPreviewUrl = `https://preview-cms-${previewSlug}.adamdaniel.ai${CANARY.publicPath}`;
-  //   await test.step("Per-slug preview env serves the in-progress edit", async () => {
-  //     await fetchPublicUrl(cmsPreviewUrl, { expectContent: marker, timeoutMs: 8 * 60 * 1000 });
-  //   });
+    // [TODO step 3a — preview-pr-mimicry rollout] Once the per-slug
+    // preview env exists, assert a subdomain like
+    // `https://preview-cms-<slug>.adamdaniel.ai/<canary publicPath>`
+    // is reachable and serves the in-progress edit (the marker). This
+    // is the assertion that distinguishes the new model from today's
+    // single-PR-preview approach.
+    //
+    //   const previewSlug = pr.head.ref.replace(/^cms\//, "").replace(/\//g, "-");
+    //   const cmsPreviewUrl = `https://preview-cms-${previewSlug}.adamdaniel.ai${CANARY.publicPath}`;
+    //   await test.step("Per-slug preview env serves the in-progress edit", async () => {
+    //     await fetchPublicUrl(cmsPreviewUrl, { expectContent: marker, timeoutMs: 8 * 60 * 1000 });
+    //   });
 
-  // ── 4. validate-content passes ──────────────────────────────────
-  await test.step("Wait for validate-content to succeed", async () => {
-    await waitForWorkflowRun({
-      workflow: "cms-editorial-workflow.yml",
-      headSha: pr.head.sha,
-      branch: pr.head.ref,
-      timeoutMs: 6 * 60 * 1000,
+    // ── 4. validate-content passes ──────────────────────────────────
+    await test.step("Wait for validate-content to succeed", async () => {
+      await waitForWorkflowRun({
+        workflow: "cms-editorial-workflow.yml",
+        headSha: pr.head.sha,
+        branch: pr.head.ref,
+        timeoutMs: 6 * 60 * 1000,
+      });
     });
-  });
 
-  // [TODO step 4a — preview-pr-mimicry rollout] Assert the
-  // cms-content-branches ruleset (drafted at
-  // .github/rulesets/cms-content-branches.json) blocks branch
-  // deletion while this PR is open. Sketch:
-  //
-  //   await test.step("cms/<slug> branch is delete-protected", async () => {
-  //     const res = await fetch(
-  //       `https://api.github.com/repos/${HOST_REPO}/git/refs/heads/${pr.head.ref}`,
-  //       { method: "DELETE", headers: { Authorization: `Bearer ${getPat()}` } },
-  //     );
-  //     expect(res.status).toBe(422); // ruleset rejection
-  //   });
+    // [TODO step 4a — preview-pr-mimicry rollout] Assert the
+    // cms-content-branches ruleset (drafted at
+    // .github/rulesets/cms-content-branches.json) blocks branch
+    // deletion while this PR is open. Sketch:
+    //
+    //   await test.step("cms/<slug> branch is delete-protected", async () => {
+    //     const res = await fetch(
+    //       `https://api.github.com/repos/${HOST_REPO}/git/refs/heads/${pr.head.ref}`,
+    //       { method: "DELETE", headers: { Authorization: `Bearer ${getPat()}` } },
+    //     );
+    //     expect(res.status).toBe(422); // ruleset rejection
+    //   });
 
-  // ── 5. Status → Ready (drives the UI dropdown, exercising the
-  // decap-cms/ready ↔ cms/ready synonym contract) ──────────────────
-  await test.step("Set Status: Ready via UI dropdown", async () => {
-    await page.getByRole("button", { name: /^Status:\s*Draft$/i }).click();
-    await page.getByRole("menuitem", { name: /^Ready$/i }).click();
-    await expect(
-      page.getByRole("button", { name: /^Status:\s*Ready$/i }),
-    ).toBeVisible({ timeout: 30_000 });
-  });
+    // ── 5. Status → Ready (drives the UI dropdown, exercising the
+    // decap-cms/ready ↔ cms/ready synonym contract) ──────────────────
+    await test.step("Set Status: Ready via UI dropdown", async () => {
+      await page.getByRole("button", { name: /^Status:\s*Draft$/i }).click();
+      await page.getByRole("menuitem", { name: /^Ready$/i }).click();
+      await expect(
+        page.getByRole("button", { name: /^Status:\s*Ready$/i }),
+      ).toBeVisible({ timeout: 30_000 });
+    });
 
-  await test.step("Wait for auto-merge to be enabled", async () => {
-    await waitForAutoMergeEnabled({ prNumber: pr.number });
-  });
+    await test.step("Wait for auto-merge to be enabled", async () => {
+      await waitForAutoMergeEnabled({ prNumber: pr.number });
+    });
 
-  // [TODO step 5a — preview-pr-mimicry rollout] If the per-slug
-  // preview redeploys on the cms/<slug> head's `synchronize` event,
-  // assert the redeployed preview surfaces the marker too. Mirrors
-  // how cms-publish-loop-preview.spec.js asserts deploy-preview.yml
-  // ran on PR_HEAD_REF.
+    // [TODO step 5a — preview-pr-mimicry rollout] If the per-slug
+    // preview redeploys on the cms/<slug> head's `synchronize` event,
+    // assert the redeployed preview surfaces the marker too. Mirrors
+    // how cms-publish-loop-preview.spec.js asserts deploy-preview.yml
+    // ran on PR_HEAD_REF.
 
-  // ── 6. PR merges ────────────────────────────────────────────────
-  await test.step("Wait for PR to merge into main", async () => {
-    await waitForMerge({ prNumber: pr.number });
-  });
+    // ── 6. PR merges ────────────────────────────────────────────────
+    await test.step("Wait for PR to merge into main", async () => {
+      await waitForMerge({ prNumber: pr.number });
+    });
 
-  // [TODO step 7a — preview-pr-mimicry rollout] After merge, assert
-  // the per-slug preview env is torn down (subdomain returns
-  // 404/CloudFront-error, matching how deploy-preview.yml's
-  // teardown-preview job cleans up after code PRs today).
+    // [TODO step 7a — preview-pr-mimicry rollout] After merge, assert
+    // the per-slug preview env is torn down (subdomain returns
+    // 404/CloudFront-error, matching how deploy-preview.yml's
+    // teardown-preview job cleans up after code PRs today).
 
-  // ── 7. Cleanup: the cms/<slug> PR's merge IS the cleanup. The
-  // spike's mutation is a marker insert; the merge lands the body
-  // verbatim back on main with the marker, so the next run's baseline
-  // check finds the marker and forces a fresh reset via the spec's
-  // step-0 setup. The afterAll harness below is the safety net for the
-  // (rare) case where the spike crashed mid-flow before merge.
-  pendingMarker = null;
-});
+    // ── 7. Cleanup: the cms/<slug> PR's merge IS the cleanup. The
+    // spike's mutation is a marker insert; the merge lands the body
+    // verbatim back on main with the marker, so the next run's baseline
+    // check finds the marker and forces a fresh reset via the spec's
+    // step-0 setup. The afterAll harness below is the safety net for the
+    // (rare) case where the spike crashed mid-flow before merge.
+    pendingMarker = null;
+  },
+);
 
 // Safety-net harness: when the spec body crashes after marker insert
 // but before the cms/<slug> PR merges, the canary on main still
@@ -325,6 +332,7 @@ test.afterAll(async () => {
   await writeCanaryViaPr({
     runId: `spike-harness-cleanup-${Date.now()}`,
     bodyText: `${baselineBody}\n\nSpike harness baseline — see e2e/cms-preview-pr-self-contained.spec.js.\n`,
-    message: "test(spike): harness safety-net reset of canary baseline (marker remained on main)",
+    message:
+      "test(spike): harness safety-net reset of canary baseline (marker remained on main)",
   });
 });

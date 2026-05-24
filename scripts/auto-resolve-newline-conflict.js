@@ -222,7 +222,7 @@ function formatCloseComment(idemKey, paths) {
     "",
     "Decap CMS's markdown widget used to round-trip bodies through Slate, which doubled every soft line wrap on save (`\\n` → `\\n\\n`, `\\n\\n` → `\\n\\n\\n\\n`, blank-after-`---` eaten). The publish-loop spec's UI cleanup typed the canonical baseline body through that field, so the published file disagreed with the API-path baseline that the harness safety-net writes — leaving conflicting `cms/e2e/canary-*` PRs (PR #882).",
     "",
-    "The primary fix switched the e2e collection body to `widget: text` (plain textarea, no round-trip). This resolver is belt-and-suspenders for the wider CMS path allowlist: any future regression that produces a pure-newline diff degrades to \"auto-close\" instead of \"perpetually stuck\".",
+    'The primary fix switched the e2e collection body to `widget: text` (plain textarea, no round-trip). This resolver is belt-and-suspenders for the wider CMS path allowlist: any future regression that produces a pure-newline diff degrades to "auto-close" instead of "perpetually stuck".',
     "",
     "If this close was incorrect, reopen the PR and add a comment explaining the intent.",
     "",
@@ -248,7 +248,9 @@ async function run({ repo, prNumber, dryRun, log }) {
     return { outcome: "skip", reason: "mergeable_state=unknown" };
   }
   if (pr.mergeable_state !== "dirty") {
-    log(`skip: mergeable_state is ${pr.mergeable_state} (only resolving dirty)`);
+    log(
+      `skip: mergeable_state is ${pr.mergeable_state} (only resolving dirty)`,
+    );
     return { outcome: "skip", reason: `mergeable_state=${pr.mergeable_state}` };
   }
   if (!isHeadRefAllowed(pr.head.ref)) {
@@ -275,9 +277,7 @@ async function run({ repo, prNumber, dryRun, log }) {
   // page; CMS-managed PRs almost always touch one file. If we ever see
   // a CMS PR with >300 files, abort — that's outside this resolver's
   // remit.
-  const files = await gh(
-    `/repos/${repo}/pulls/${prNumber}/files?per_page=300`,
-  );
+  const files = await gh(`/repos/${repo}/pulls/${prNumber}/files?per_page=300`);
   if (files.length >= 300) {
     const reasons = [
       "PR has 300+ changed files (this resolver only handles small CMS edits)",

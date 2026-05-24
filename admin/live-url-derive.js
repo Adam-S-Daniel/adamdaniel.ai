@@ -37,13 +37,13 @@
   "use strict";
 
   function getCollection() {
-    var m = /#\/collections\/([^\/]+)/.exec(window.location.hash || "");
+    var m = /#\/collections\/([^/]+)/.exec(window.location.hash || "");
     return m ? m[1] : null;
   }
 
   function readField(name) {
     var el = document.querySelector(
-      'input[id^="' + name + '-field"], textarea[id^="' + name + '-field"]'
+      'input[id^="' + name + '-field"], textarea[id^="' + name + '-field"]',
     );
     return el ? el.value : null;
   }

@@ -34,64 +34,65 @@ test.describe(
   // webkit-iphone16. See playwright.config.js.
   { tag: ["@admin-read"] },
   () => {
-  test.describe.configure({ timeout: 120_000 });
+    test.describe.configure({ timeout: 120_000 });
 
-  test.beforeEach(async ({ page }, testInfo) => {
-    page.on("pageerror", (err) =>
-      console.log(`[pageerror] ${err.name}: ${err.message}`),
-    );
-  });
-
-  test("runtime decap-cms version major.minor matches admin/index.html pin", async ({
-    page,
-  }) => {
-    const pinned = readPinnedVersion();
-
-    // Decap announces its version via `console.log("decap-cms X.Y.Z")`
-    // when the bundle bootstraps. There's no stable `CMS.VERSION`
-    // property on the global as of 3.12.x, so the console message
-    // is the most reliable runtime probe. Capture it before navigating
-    // so we don't race the script's first log call.
-    const versionMessages = [];
-    page.on("console", (msg) => {
-      const text = msg.text();
-      if (/^decap-cms\s+\d+\.\d+\.\d+/.test(text)) versionMessages.push(text);
+    test.beforeEach(async ({ page }) => {
+      page.on("pageerror", (err) =>
+        console.log(`[pageerror] ${err.name}: ${err.message}`),
+      );
     });
 
-    await page.goto("/admin/index.html", { waitUntil: "domcontentloaded" });
-    // Wait for the announce log to land. The bundle pushes it shortly
-    // after the script tag parses, well before any backend call.
-    await page.waitForFunction(
-      () => !!(window.CMS || window.decapCms || window.DecapCms),
-      null,
-      { timeout: 60_000 },
-    );
-    // Console events flush asynchronously — give the announce line a
-    // beat to arrive before reading.
-    await page.waitForTimeout(2000);
+    test("runtime decap-cms version major.minor matches admin/index.html pin", async ({
+      page,
+    }) => {
+      const pinned = readPinnedVersion();
 
-    const announce = versionMessages.find((m) =>
-      /^decap-cms\s+\d+\.\d+\.\d+/.test(m),
-    );
-    expect(
-      announce,
-      `Decap should announce its version on the console at startup; got: ${JSON.stringify(versionMessages)}`,
-    ).toBeDefined();
-    const runtime = announce.match(/^decap-cms\s+(\d+\.\d+\.\d+)/)[1];
+      // Decap announces its version via `console.log("decap-cms X.Y.Z")`
+      // when the bundle bootstraps. There's no stable `CMS.VERSION`
+      // property on the global as of 3.12.x, so the console message
+      // is the most reliable runtime probe. Capture it before navigating
+      // so we don't race the script's first log call.
+      const versionMessages = [];
+      page.on("console", (msg) => {
+        const text = msg.text();
+        if (/^decap-cms\s+\d+\.\d+\.\d+/.test(text)) versionMessages.push(text);
+      });
 
-    expect(
-      runtime,
-      "Decap should expose a runtime VERSION on the CMS global",
-    ).toMatch(/^\d+\.\d+\.\d+/);
+      await page.goto("/admin/index.html", { waitUntil: "domcontentloaded" });
+      // Wait for the announce log to land. The bundle pushes it shortly
+      // after the script tag parses, well before any backend call.
+      await page.waitForFunction(
+        () => !!(window.CMS || window.decapCms || window.DecapCms),
+        null,
+        { timeout: 60_000 },
+      );
+      // Console events flush asynchronously — give the announce line a
+      // beat to arrive before reading.
+      await page.waitForTimeout(2000);
 
-    // Loose comparison: the pinned tag and the resolved bundle must
-    // agree on major.minor. Patch releases are intentionally allowed
-    // to land via unpkg cache rotation without breaking this check —
-    // the static-pin spec (admin-pin-invariant.test.js) handles the
-    // exact-version requirement at the source.
-    expect(
-      majorMinor(runtime),
-      `Runtime Decap VERSION ${runtime} should match the pinned ${pinned} on major.minor`,
-    ).toBe(majorMinor(pinned));
-  });
-});
+      const announce = versionMessages.find((m) =>
+        /^decap-cms\s+\d+\.\d+\.\d+/.test(m),
+      );
+      expect(
+        announce,
+        `Decap should announce its version on the console at startup; got: ${JSON.stringify(versionMessages)}`,
+      ).toBeDefined();
+      const runtime = announce.match(/^decap-cms\s+(\d+\.\d+\.\d+)/)[1];
+
+      expect(
+        runtime,
+        "Decap should expose a runtime VERSION on the CMS global",
+      ).toMatch(/^\d+\.\d+\.\d+/);
+
+      // Loose comparison: the pinned tag and the resolved bundle must
+      // agree on major.minor. Patch releases are intentionally allowed
+      // to land via unpkg cache rotation without breaking this check —
+      // the static-pin spec (admin-pin-invariant.test.js) handles the
+      // exact-version requirement at the source.
+      expect(
+        majorMinor(runtime),
+        `Runtime Decap VERSION ${runtime} should match the pinned ${pinned} on major.minor`,
+      ).toBe(majorMinor(pinned));
+    });
+  },
+);

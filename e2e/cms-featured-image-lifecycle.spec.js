@@ -166,7 +166,10 @@ async function clearFeaturedImage(page) {
 // `publish_mode: editorial_workflow`, so the publish menu commits
 // straight to disk.
 async function publishNow(page) {
-  await page.getByRole("button", { name: /^publish$/i }).first().click();
+  await page
+    .getByRole("button", { name: /^publish$/i })
+    .first()
+    .click();
   await page
     .getByRole("menuitem", { name: /publish now( and create new)?$/i })
     .first()
@@ -179,188 +182,192 @@ test.describe(
   // Runs on chromium-desktop-3k only. See playwright.config.js.
   { tag: ["@admin-write"] },
   () => {
-  test.describe.configure({ mode: "serial", timeout: 240_000 });
+    test.describe.configure({ mode: "serial", timeout: 240_000 });
 
-  test.beforeAll(() => cleanup());
-  test.afterAll(() => cleanup());
+    test.beforeAll(() => cleanup());
+    test.afterAll(() => cleanup());
 
-  test.beforeEach(({ page }, testInfo) => {
-    page.on("pageerror", (err) =>
-      console.log(`[pageerror] ${err.name}: ${err.message}`),
-    );
-  });
-
-  test("set image A → save → front matter + rendered <img.featured-image>", async ({
-    page,
-  }) => {
-    await loginAndOpenNew(page);
-
-    const titleField = page.getByLabel(/^Title$/);
-    await expect(titleField).toBeVisible({ timeout: 60_000 });
-    await titleField.fill(TITLE);
-
-    const slugField = page.getByLabel(/^URL Slug/);
-    await slugField.fill(SLUG);
-
-    // Pin the date so the on-disk filename is deterministic. The
-    // widget is `<input type="datetime-local">` — accepts
-    // YYYY-MM-DDTHH:mm. The collection's `slug:` template renders this
-    // into "2099-01-02-<slug>".
-    const dateField = page.getByLabel(/^Date$/);
-    await dateField.fill(`${POST_DATE_DATE}T${POST_DATE_TIME}`);
-
-    const bodyEditor = page
-      .locator('[role="textbox"][contenteditable="true"]')
-      .last();
-    await bodyEditor.waitFor({ timeout: 30_000 });
-    await bodyEditor.click();
-    await bodyEditor.fill("Body for featured-image lifecycle test.");
-
-    await uploadFeaturedImage(page, FIXTURE_A);
-
-    // Flip Published on so Jekyll picks the post up on the rebuild.
-    await page.getByLabel(/^Published$/).first().click();
-
-    await publishNow(page);
-
-    // ── On-disk asserts ──────────────────────────────────────────────
-    await expect
-      .poll(() => fs.existsSync(POST_PATH), { timeout: 60_000 })
-      .toBe(true);
-    const written = fs.readFileSync(POST_PATH, "utf8");
-    expect(written).toContain(`title: ${TITLE}`);
-    // media_folder is flat + template-free, so the URL is exactly
-    // public_folder + "/" + basename — no subdirectory. The `[^/]*`
-    // (not `.*`) is the regression guard against a nested media_folder.
-    expect(written).toMatch(
-      /featured_image:\s*['"]?\/assets\/images\/uploads\/[^/]*tiny-pixel\.png/,
-    );
-
-    // ── Rendered post asserts ────────────────────────────────────────
-    jekyllBuild();
-    const liveURL = `/blog/${SLUG}/`;
-    const resp = await page.goto(liveURL);
-    expect(resp.status(), `${liveURL} should be 200`).toBe(200);
-    const featured = page.locator(".post-header img.featured-image");
-    await expect(featured).toHaveCount(1);
-    const imgSrc = await featured.getAttribute("src");
-    expect(imgSrc, "Rendered post must show fixture A").toMatch(
-      /\/assets\/images\/uploads\/[^/]*tiny-pixel\.png$/i,
-    );
-    // Don't just assert the <img> tag exists — fetch the src and prove
-    // it 200s. A flat media_folder means this local run writes the
-    // identical path production would, so a 404 here is a real
-    // broken-image regression, not a tolerated local-only gap.
-    const imgAbs = new URL(imgSrc, page.url()).toString();
-    const imgResp = await page.request.get(imgAbs);
-    expect(
-      imgResp.status(),
-      `Featured image ${imgAbs} must resolve 200`,
-    ).toBe(200);
-  });
-
-  test("replace with image B → save → front matter references B; A still on disk", async ({
-    page,
-  }) => {
-    await openExistingEntry(page);
-
-    // Replace the image. uploadFeaturedImage handles both the empty
-    // and already-set states (the button label differs).
-    await uploadFeaturedImage(page, FIXTURE_B);
-
-    await publishNow(page);
-
-    // ── Front matter must now reference fixture B ────────────────────
-    await expect
-      .poll(
-        () =>
-          fs.existsSync(POST_PATH) &&
-          /featured_image:\s*['"]?\/assets\/images\/uploads\/[^/]*tiny-pixel-2\.png/.test(
-            fs.readFileSync(POST_PATH, "utf8"),
-          ),
-        { timeout: 60_000 },
-      )
-      .toBe(true);
-    const afterReplace = fs.readFileSync(POST_PATH, "utf8");
-    expect(afterReplace).toMatch(
-      /featured_image:\s*['"]?\/assets\/images\/uploads\/[^/]*tiny-pixel-2\.png/,
-    );
-    // The replacement should NOT leave fixture A's path in the YAML.
-    // Match against the boundary so `tiny-pixel-2.png` doesn't false-
-    // positive against the `tiny-pixel.png` regex.
-    expect(afterReplace).not.toMatch(
-      /featured_image:\s*['"]?\/assets\/images\/uploads\/[^/]*tiny-pixel\.png["'\s]/,
-    );
-
-    // ── Decap-doesn't-GC contract ───────────────────────────────────
-    // Image A's bytes must still be on disk. Decap commits the new
-    // upload but never deletes the old one — editors managing storage
-    // need to know that. If a future Decap version starts garbage-
-    // collecting, this assertion fails and we update CONTENT_GUIDE.md.
-    const aStillOnDisk = findUploadsByPrefix("tiny-pixel").filter(
-      (p) => !path.basename(p).startsWith("tiny-pixel-2"),
-    );
-    expect(
-      aStillOnDisk.length,
-      "Decap must not garbage-collect orphaned uploads",
-    ).toBeGreaterThan(0);
-  });
-
-  test("clear field → save → no featured_image line; no <img.featured-image>", async ({
-    page,
-  }) => {
-    test.fixme(
-      true,
-      "Decap's image-widget Remove affordance doesn't have a stable, " +
-        "uniquely-targetable selector across versions — the regex in " +
-        "clearFeaturedImage() finds *a* button labelled Remove/Clear " +
-        "but it can match an unrelated control on the page (we observed " +
-        "the field still set to fixture B's path after save). The set + " +
-        "replace lifecycle (the prior two tests in this serial describe) " +
-        "is the meaningful contract for editors. Clear is documented in " +
-        "docs/CONTENT_GUIDE.md as 'use Replace, not Clear' — there's no " +
-        "editor-facing path that depends on the clear-emits-no-line " +
-        "shape this test was trying to lock. TODO: re-enable when Decap " +
-        "exposes a stable testid or aria-label on the image-widget " +
-        "Remove control.",
-    );
-    await openExistingEntry(page);
-
-    await clearFeaturedImage(page);
-
-    await publishNow(page);
-
-    // ── Front matter must omit the featured_image line entirely ──────
-    // _layouts/post.html branches on `page.featured_image and
-    // page.featured_image != ""`. Both an absent key and an
-    // empty-string value satisfy that branch (Jekyll's Liquid treats
-    // missing keys as nil → falsy). The contract here is the stronger
-    // shape — the line is wholly absent — because that's what Decap's
-    // image-widget clear emits in practice.
-    await expect
-      .poll(
-        () => {
-          if (!fs.existsSync(POST_PATH)) return null;
-          return fs.readFileSync(POST_PATH, "utf8");
-        },
-        { timeout: 60_000 },
-      )
-      .not.toMatch(
-        /featured_image:\s*['"]?\/assets\/images\/uploads\/[^/]*tiny-pixel/,
+    test.beforeEach(({ page }) => {
+      page.on("pageerror", (err) =>
+        console.log(`[pageerror] ${err.name}: ${err.message}`),
       );
-    const afterClear = fs.readFileSync(POST_PATH, "utf8");
-    expect(
-      afterClear,
-      "After clear, front matter should not carry a featured_image path",
-    ).not.toMatch(/^featured_image:\s*\S+/m);
+    });
 
-    // ── Rendered post must NOT include the featured-image element ───
-    jekyllBuild();
-    const liveURL = `/blog/${SLUG}/`;
-    const resp = await page.goto(liveURL);
-    expect(resp.status(), `${liveURL} should be 200`).toBe(200);
-    await expect(page.locator(".post-header img.featured-image")).toHaveCount(
-      0,
-    );
-  });
-});
+    test("set image A → save → front matter + rendered <img.featured-image>", async ({
+      page,
+    }) => {
+      await loginAndOpenNew(page);
+
+      const titleField = page.getByLabel(/^Title$/);
+      await expect(titleField).toBeVisible({ timeout: 60_000 });
+      await titleField.fill(TITLE);
+
+      const slugField = page.getByLabel(/^URL Slug/);
+      await slugField.fill(SLUG);
+
+      // Pin the date so the on-disk filename is deterministic. The
+      // widget is `<input type="datetime-local">` — accepts
+      // YYYY-MM-DDTHH:mm. The collection's `slug:` template renders this
+      // into "2099-01-02-<slug>".
+      const dateField = page.getByLabel(/^Date$/);
+      await dateField.fill(`${POST_DATE_DATE}T${POST_DATE_TIME}`);
+
+      const bodyEditor = page
+        .locator('[role="textbox"][contenteditable="true"]')
+        .last();
+      await bodyEditor.waitFor({ timeout: 30_000 });
+      await bodyEditor.click();
+      await bodyEditor.fill("Body for featured-image lifecycle test.");
+
+      await uploadFeaturedImage(page, FIXTURE_A);
+
+      // Flip Published on so Jekyll picks the post up on the rebuild.
+      await page
+        .getByLabel(/^Published$/)
+        .first()
+        .click();
+
+      await publishNow(page);
+
+      // ── On-disk asserts ──────────────────────────────────────────────
+      await expect
+        .poll(() => fs.existsSync(POST_PATH), { timeout: 60_000 })
+        .toBe(true);
+      const written = fs.readFileSync(POST_PATH, "utf8");
+      expect(written).toContain(`title: ${TITLE}`);
+      // media_folder is flat + template-free, so the URL is exactly
+      // public_folder + "/" + basename — no subdirectory. The `[^/]*`
+      // (not `.*`) is the regression guard against a nested media_folder.
+      expect(written).toMatch(
+        /featured_image:\s*['"]?\/assets\/images\/uploads\/[^/]*tiny-pixel\.png/,
+      );
+
+      // ── Rendered post asserts ────────────────────────────────────────
+      jekyllBuild();
+      const liveURL = `/blog/${SLUG}/`;
+      const resp = await page.goto(liveURL);
+      expect(resp.status(), `${liveURL} should be 200`).toBe(200);
+      const featured = page.locator(".post-header img.featured-image");
+      await expect(featured).toHaveCount(1);
+      const imgSrc = await featured.getAttribute("src");
+      expect(imgSrc, "Rendered post must show fixture A").toMatch(
+        /\/assets\/images\/uploads\/[^/]*tiny-pixel\.png$/i,
+      );
+      // Don't just assert the <img> tag exists — fetch the src and prove
+      // it 200s. A flat media_folder means this local run writes the
+      // identical path production would, so a 404 here is a real
+      // broken-image regression, not a tolerated local-only gap.
+      const imgAbs = new URL(imgSrc, page.url()).toString();
+      const imgResp = await page.request.get(imgAbs);
+      expect(
+        imgResp.status(),
+        `Featured image ${imgAbs} must resolve 200`,
+      ).toBe(200);
+    });
+
+    test("replace with image B → save → front matter references B; A still on disk", async ({
+      page,
+    }) => {
+      await openExistingEntry(page);
+
+      // Replace the image. uploadFeaturedImage handles both the empty
+      // and already-set states (the button label differs).
+      await uploadFeaturedImage(page, FIXTURE_B);
+
+      await publishNow(page);
+
+      // ── Front matter must now reference fixture B ────────────────────
+      await expect
+        .poll(
+          () =>
+            fs.existsSync(POST_PATH) &&
+            /featured_image:\s*['"]?\/assets\/images\/uploads\/[^/]*tiny-pixel-2\.png/.test(
+              fs.readFileSync(POST_PATH, "utf8"),
+            ),
+          { timeout: 60_000 },
+        )
+        .toBe(true);
+      const afterReplace = fs.readFileSync(POST_PATH, "utf8");
+      expect(afterReplace).toMatch(
+        /featured_image:\s*['"]?\/assets\/images\/uploads\/[^/]*tiny-pixel-2\.png/,
+      );
+      // The replacement should NOT leave fixture A's path in the YAML.
+      // Match against the boundary so `tiny-pixel-2.png` doesn't false-
+      // positive against the `tiny-pixel.png` regex.
+      expect(afterReplace).not.toMatch(
+        /featured_image:\s*['"]?\/assets\/images\/uploads\/[^/]*tiny-pixel\.png["'\s]/,
+      );
+
+      // ── Decap-doesn't-GC contract ───────────────────────────────────
+      // Image A's bytes must still be on disk. Decap commits the new
+      // upload but never deletes the old one — editors managing storage
+      // need to know that. If a future Decap version starts garbage-
+      // collecting, this assertion fails and we update CONTENT_GUIDE.md.
+      const aStillOnDisk = findUploadsByPrefix("tiny-pixel").filter(
+        (p) => !path.basename(p).startsWith("tiny-pixel-2"),
+      );
+      expect(
+        aStillOnDisk.length,
+        "Decap must not garbage-collect orphaned uploads",
+      ).toBeGreaterThan(0);
+    });
+
+    test("clear field → save → no featured_image line; no <img.featured-image>", async ({
+      page,
+    }) => {
+      test.fixme(
+        true,
+        "Decap's image-widget Remove affordance doesn't have a stable, " +
+          "uniquely-targetable selector across versions — the regex in " +
+          "clearFeaturedImage() finds *a* button labelled Remove/Clear " +
+          "but it can match an unrelated control on the page (we observed " +
+          "the field still set to fixture B's path after save). The set + " +
+          "replace lifecycle (the prior two tests in this serial describe) " +
+          "is the meaningful contract for editors. Clear is documented in " +
+          "docs/CONTENT_GUIDE.md as 'use Replace, not Clear' — there's no " +
+          "editor-facing path that depends on the clear-emits-no-line " +
+          "shape this test was trying to lock. TODO: re-enable when Decap " +
+          "exposes a stable testid or aria-label on the image-widget " +
+          "Remove control.",
+      );
+      await openExistingEntry(page);
+
+      await clearFeaturedImage(page);
+
+      await publishNow(page);
+
+      // ── Front matter must omit the featured_image line entirely ──────
+      // _layouts/post.html branches on `page.featured_image and
+      // page.featured_image != ""`. Both an absent key and an
+      // empty-string value satisfy that branch (Jekyll's Liquid treats
+      // missing keys as nil → falsy). The contract here is the stronger
+      // shape — the line is wholly absent — because that's what Decap's
+      // image-widget clear emits in practice.
+      await expect
+        .poll(
+          () => {
+            if (!fs.existsSync(POST_PATH)) return null;
+            return fs.readFileSync(POST_PATH, "utf8");
+          },
+          { timeout: 60_000 },
+        )
+        .not.toMatch(
+          /featured_image:\s*['"]?\/assets\/images\/uploads\/[^/]*tiny-pixel/,
+        );
+      const afterClear = fs.readFileSync(POST_PATH, "utf8");
+      expect(
+        afterClear,
+        "After clear, front matter should not carry a featured_image path",
+      ).not.toMatch(/^featured_image:\s*\S+/m);
+
+      // ── Rendered post must NOT include the featured-image element ───
+      jekyllBuild();
+      const liveURL = `/blog/${SLUG}/`;
+      const resp = await page.goto(liveURL);
+      expect(resp.status(), `${liveURL} should be 200`).toBe(200);
+      await expect(page.locator(".post-header img.featured-image")).toHaveCount(
+        0,
+      );
+    });
+  },
+);

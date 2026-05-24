@@ -10,12 +10,7 @@
 const fs = require("node:fs");
 const path = require("node:path");
 
-const WORKFLOW_DIR = path.resolve(
-  __dirname,
-  "..",
-  ".github",
-  "workflows",
-);
+const WORKFLOW_DIR = path.resolve(__dirname, "..", ".github", "workflows");
 
 function workflowPath(name) {
   return path.join(WORKFLOW_DIR, name);

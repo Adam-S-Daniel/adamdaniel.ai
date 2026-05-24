@@ -163,7 +163,9 @@ test.describe("LiveFailuresReporter gating", () => {
     expect(fetchCalls.length).toBeGreaterThanOrEqual(1);
     const post = fetchCalls.find((c) => c.method === "POST");
     expect(post, "expected a POST to the comments endpoint").toBeTruthy();
-    expect(post.url).toContain("/repos/Adam-S-Daniel/adamdaniel.ai/issues/1209/comments");
+    expect(post.url).toContain(
+      "/repos/Adam-S-Daniel/adamdaniel.ai/issues/1209/comments",
+    );
   });
 
   test("posts on final timedOut attempt", async () => {

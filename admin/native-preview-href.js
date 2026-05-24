@@ -87,7 +87,7 @@
     var seen = Object.create(null);
     for (var i = 0; i < toolbars.length; i++) {
       var as = toolbars[i].querySelectorAll(
-        'a[target="_blank"][rel*="noopener"][href]'
+        'a[target="_blank"][rel*="noopener"][href]',
       );
       for (var j = 0; j < as.length; j++) {
         var a = as[j];
@@ -130,7 +130,7 @@
       if (!alreadyMarked) {
         a.setAttribute(HIDDEN_ATTR, "1");
         console.info(
-          "[native-preview-href] hid redundant native View Live anchor"
+          "[native-preview-href] hid redundant native View Live anchor",
         );
       }
     }

@@ -53,9 +53,15 @@ test.describe("Issue #1042 — admin posts UI", () => {
   // ── 1. Live-URL banner restored + correctly ordered ──────────────
   test("admin/live-url-banner.js exists and renders the testable anchor", () => {
     const p = path.join(ADMIN, "live-url-banner.js");
-    expect(fs.existsSync(p), "admin/live-url-banner.js must exist (it was deleted in #184; #1042 restores it)").toBe(true);
+    expect(
+      fs.existsSync(p),
+      "admin/live-url-banner.js must exist (it was deleted in #184; #1042 restores it)",
+    ).toBe(true);
     const src = read(p);
-    expect(/\(\s*function\s*\(\s*\)\s*\{[\s\S]+\}\s*\)\s*\(\s*\)\s*;?/.test(src), "must be a self-contained IIFE").toBe(true);
+    expect(
+      /\(\s*function\s*\(\s*\)\s*\{[\s\S]+\}\s*\)\s*\(\s*\)\s*;?/.test(src),
+      "must be a self-contained IIFE",
+    ).toBe(true);
     expect(src).toContain('id="cms-live-url-banner-link"');
     expect(src).toContain('data-testid="cms-live-url-banner-link"');
     // It must consume the single source of truth, not re-derive URLs.
@@ -71,14 +77,29 @@ test.describe("Issue #1042 — admin posts UI", () => {
       const override = scriptIdx(html, "native-preview-href.js");
       const enhance = scriptIdx(html, "posts-list-enhance.js");
       expect(derive, `${rel} must load live-url-derive.js`).toBeGreaterThan(-1);
-      expect(banner, `${rel} must load live-url-banner.js (restored #1042)`).toBeGreaterThan(-1);
-      expect(override, `${rel} must load native-preview-href.js`).toBeGreaterThan(-1);
-      expect(enhance, `${rel} must load posts-list-enhance.js (#1042)`).toBeGreaterThan(-1);
+      expect(
+        banner,
+        `${rel} must load live-url-banner.js (restored #1042)`,
+      ).toBeGreaterThan(-1);
+      expect(
+        override,
+        `${rel} must load native-preview-href.js`,
+      ).toBeGreaterThan(-1);
+      expect(
+        enhance,
+        `${rel} must load posts-list-enhance.js (#1042)`,
+      ).toBeGreaterThan(-1);
       // derive defines window.LiveURL; the banner consumes it on first
       // render — derive MUST precede the banner, banner MUST precede the
       // native override (the historical, now-locked, load order).
-      expect(derive < banner, `${rel}: live-url-derive.js must load before live-url-banner.js`).toBe(true);
-      expect(banner < override, `${rel}: live-url-banner.js must load before native-preview-href.js`).toBe(true);
+      expect(
+        derive < banner,
+        `${rel}: live-url-derive.js must load before live-url-banner.js`,
+      ).toBe(true);
+      expect(
+        banner < override,
+        `${rel}: live-url-banner.js must load before native-preview-href.js`,
+      ).toBe(true);
     });
   }
 
@@ -92,15 +113,19 @@ test.describe("Issue #1042 — admin posts UI", () => {
   // ── 2. posts-list-enhance.js contract ────────────────────────────
   test("posts-list-enhance.js augments in place and hides fixtures non-destructively", () => {
     const src = read(path.join(ADMIN, "posts-list-enhance.js"));
-    expect(/\(\s*function\s*\(\s*\)\s*\{[\s\S]+\}\s*\)\s*\(\s*\)\s*;?/.test(src), "must be a self-contained IIFE").toBe(true);
+    expect(
+      /\(\s*function\s*\(\s*\)\s*\{[\s\S]+\}\s*\)\s*\(\s*\)\s*;?/.test(src),
+      "must be a self-contained IIFE",
+    ).toBe(true);
     expect(src).toMatch(/__postsListEnhanceInstalled/);
     // AUGMENT, not replace: it must select Decap's entry anchors (so
     // every existing `a[href*="…/entries/"]` spec selector still works)
     // and must NOT remove cards from the DOM.
     expect(src).toContain('a[href*="#/collections/posts/entries/"]');
-    expect(src, "must not removeChild/remove() entry cards — Decap re-mount fight + breaks .first()-click specs").not.toMatch(
-      /\.(removeChild|remove)\(/,
-    );
+    expect(
+      src,
+      "must not removeChild/remove() entry cards — Decap re-mount fight + breaks .first()-click specs",
+    ).not.toMatch(/\.(removeChild|remove)\(/);
     // Non-destructive default-hide = reorder fixtures to the end.
     expect(src).toMatch(/data-cms-ple-fixture/);
     expect(src).toMatch(/appendChild/);
@@ -122,7 +147,10 @@ test.describe("Issue #1042 — admin posts UI", () => {
       "2099-01-01-e2e-mutation-canary",
       "2099-01-03-e2e-media-roundtrip",
     ]) {
-      expect(FIXTURE_SLUG_RE.test(slug), `${slug} must be detected as a fixture`).toBe(true);
+      expect(
+        FIXTURE_SLUG_RE.test(slug),
+        `${slug} must be detected as a fixture`,
+      ).toBe(true);
     }
     expect(
       FIXTURE_SLUG_RE.test("2026-05-12-introducing-gha-bench"),
@@ -139,10 +167,13 @@ test.describe("Issue #1042 — admin posts UI", () => {
     test(`${rel}: INVALID-DATE fix + Automated tests filter + test_fixture field`, () => {
       const yml = read(cfg);
       // The dayjs `date(...)` summary filter is the INVALID DATE bug.
-      expect(yml, `${rel} must not reintroduce the date(...) summary filter`).not.toMatch(
-        /summary:.*date\(/,
+      expect(
+        yml,
+        `${rel} must not reintroduce the date(...) summary filter`,
+      ).not.toMatch(/summary:.*date\(/);
+      expect(yml).toMatch(
+        /summary:\s*"\{\{title\}\} \(\{\{year\}\}-\{\{month\}\}-\{\{day\}\}\)/,
       );
-      expect(yml).toMatch(/summary:\s*"\{\{title\}\} \(\{\{year\}\}-\{\{month\}\}-\{\{day\}\}\)/);
       // `Automated tests` view_filter keyed off test_fixture.
       expect(yml).toMatch(/-\s*label:\s*Automated tests/);
       expect(yml).toMatch(/field:\s*test_fixture/);
@@ -159,16 +190,14 @@ test.describe("Issue #1042 — admin posts UI", () => {
       "2099-01-03-e2e-media-roundtrip.md",
     ]) {
       const fm = read(path.join(postsDir, f));
-      expect(fm, `${f} must be flagged test_fixture: true so the Automated tests filter and the list default-hide catch it`).toMatch(
-        /^test_fixture:\s*true\s*$/m,
-      );
+      expect(
+        fm,
+        `${f} must be flagged test_fixture: true so the Automated tests filter and the list default-hide catch it`,
+      ).toMatch(/^test_fixture:\s*true\s*$/m);
     }
     // Spot-check a real post is not falsely flagged (guards a future
     // copy-paste of the canary frontmatter into a real post).
-    const real = path.join(
-      postsDir,
-      "2026-05-12-introducing-gha-bench.md",
-    );
+    const real = path.join(postsDir, "2026-05-12-introducing-gha-bench.md");
     if (fs.existsSync(real)) {
       expect(read(real)).not.toMatch(/^test_fixture:\s*true\s*$/m);
     }
@@ -207,8 +236,13 @@ test.describe("Admin preview/PR links + Check-for-Preview fix", () => {
     expect(src).toContain("view published changes");
     // Old bare labels gone (distinctive source fragments) so a
     // regression can't silently restore them.
-    expect(src, 'the bare "preview-pr<N>" link label was renamed').not.toContain(">preview-pr");
-    expect(src, 'the bare "PR #<N>" link label was renamed').not.toContain(">PR #");
+    expect(
+      src,
+      'the bare "preview-pr<N>" link label was renamed',
+    ).not.toContain(">preview-pr");
+    expect(src, 'the bare "PR #<N>" link label was renamed').not.toContain(
+      ">PR #",
+    );
     // Both change links resolve to the GitHub Files-changed diff.
     expect(src, "draft-changes link must be the PR /files diff").toMatch(
       /esc\(pr\.url\)[\s\S]{0,40}\/files/,
@@ -265,11 +299,14 @@ test.describe("Admin preview/PR links + Check-for-Preview fix", () => {
     expect(wf).toMatch(/context:\s*['"]deploy\/preview['"]/);
     expect(wf).toMatch(/state:\s*['"]success['"]/);
     // Needs the statuses:write scope to post it.
-    expect(wf, "statuses:write scope is required to set a commit status").toMatch(
-      /^\s*statuses:\s*write\s*$/m,
-    );
+    expect(
+      wf,
+      "statuses:write scope is required to set a commit status",
+    ).toMatch(/^\s*statuses:\s*write\s*$/m);
     // Set on the PR head SHA (the ref Decap's getStatuses queries).
-    expect(wf).toMatch(/PR_HEAD_SHA:\s*\$\{\{\s*github\.event\.pull_request\.head\.sha/);
+    expect(wf).toMatch(
+      /PR_HEAD_SHA:\s*\$\{\{\s*github\.event\.pull_request\.head\.sha/,
+    );
   });
 
   for (const cfg of CONFIGS) {

@@ -87,10 +87,7 @@ const {
 } = require("./github-actions-poll");
 const { waitForChangeReflected } = require("./deploy-pill");
 const { previewTarget } = require("./cms-host");
-const {
-  readPublishedFlag,
-  sanitizeToBaseline,
-} = require("./fixture-baseline");
+const { readPublishedFlag, sanitizeToBaseline } = require("./fixture-baseline");
 
 const FIXTURE_PATH = "_posts/2099-01-01-e2e-mutation-canary.md";
 const FIXTURE_SLUG = "e2e-mutation-canary";
@@ -221,7 +218,7 @@ function todayUtcIso() {
 test(
   "CMS publish loop — preview env, prod-mutation parity (real _posts/ entry)",
   { tag: ["@admin-write"] },
-  async ({ page }, testInfo) => {
+  async ({ page }) => {
     test.skip(
       !getPat(),
       "CMS_E2E_PAT not set — preview prod-mutation parity disabled.",
@@ -273,14 +270,19 @@ test(
     // that crashed past Save can leave a non-Draft labelled PR;
     // closing it lets Decap open a fresh draft on the next Save.
     await test.step("Close any stale Decap PR on the cms/posts/<slug> branch", async () => {
-      const fileSlug = FIXTURE_PATH.replace(/^_posts\//, "").replace(/\.md$/, "");
+      const fileSlug = FIXTURE_PATH.replace(/^_posts\//, "").replace(
+        /\.md$/,
+        "",
+      );
       await closeStaleDecapPrOnBranch({ branch: `cms/posts/${fileSlug}` });
     });
 
     // ── 0b. Reset the fixture to a clean baseline on the PR head ────
     await test.step("Reset fixture to baseline (published: false) on the PR head branch", async () => {
       const current = await fetchFixtureFromBranch(PR_HEAD_REF);
-      const remoteBody = Buffer.from(current.content, "base64").toString("utf8");
+      const remoteBody = Buffer.from(current.content, "base64").toString(
+        "utf8",
+      );
       if (remoteBody !== baselineFileText) {
         await writeFixtureOnBranch({
           branch: PR_HEAD_REF,
@@ -316,9 +318,9 @@ test(
     await seedDecapAuth(page);
     await test.step("Load preview admin", async () => {
       await page.goto(PREVIEW_ADMIN, { waitUntil: "domcontentloaded" });
-      await expect(
-        page.getByRole("link", { name: /^Posts$/i }),
-      ).toBeVisible({ timeout: 60_000 });
+      await expect(page.getByRole("link", { name: /^Posts$/i })).toBeVisible({
+        timeout: 60_000,
+      });
     });
 
     // ── 3. Open the post, append marker, toggle Published, Save ─────
@@ -327,10 +329,16 @@ test(
       // hides automated-test fixtures from the Posts list by DEFAULT
       // (#1042); navigate to the canary directly (same pattern as the
       // steps below and cms-unpublish-republish.spec.js).
-      const fileSlug = FIXTURE_PATH.replace(/^_posts\//, "").replace(/\.md$/, "");
-      await page.goto(`${PREVIEW_ADMIN}#/collections/posts/entries/${fileSlug}`, {
-        waitUntil: "domcontentloaded",
-      });
+      const fileSlug = FIXTURE_PATH.replace(/^_posts\//, "").replace(
+        /\.md$/,
+        "",
+      );
+      await page.goto(
+        `${PREVIEW_ADMIN}#/collections/posts/entries/${fileSlug}`,
+        {
+          waitUntil: "domcontentloaded",
+        },
+      );
       const titleBox = page.getByRole("textbox", { name: /^Title$/i });
       await expect(titleBox).toBeVisible({ timeout: 30_000 });
       // Confirm we deep-linked to the right canary.
@@ -355,9 +363,7 @@ test(
       // (NOT checkbox); state is exposed via aria-checked. PR #407
       // burned a run on getByRole("checkbox") — use the switch role
       // consistently.
-      const toggle = page
-        .getByRole("switch", { name: /^Published$/i })
-        .first();
+      const toggle = page.getByRole("switch", { name: /^Published$/i }).first();
       await expect(toggle).toBeVisible({ timeout: 15_000 });
       const ariaChecked = await toggle.getAttribute("aria-checked");
       if (ariaChecked !== "true") await toggle.click();
@@ -371,9 +377,9 @@ test(
       // In editorial_workflow mode Save stays disabled after the save
       // completes — the toolbar swaps in status pills. Wait for the
       // "Changes saved" status text instead of toBeEnabled.
-      await expect(
-        page.getByText(/Changes saved/i).first(),
-      ).toBeVisible({ timeout: 60_000 });
+      await expect(page.getByText(/Changes saved/i).first()).toBeVisible({
+        timeout: 60_000,
+      });
     });
 
     // ── 4. Find the cms/... PR Decap opened against the PR head ─────
@@ -423,20 +429,21 @@ test(
       // run #26006678919 surfaced in the model spec). Close any stale
       // branch/PR server-side, then force a full document reload so
       // Decap re-reads the entry's editorial status from GitHub.
-      const fileSlug = FIXTURE_PATH.replace(/^_posts\//, "").replace(/\.md$/, "");
+      const fileSlug = FIXTURE_PATH.replace(/^_posts\//, "").replace(
+        /\.md$/,
+        "",
+      );
       await closeStaleDecapPrOnBranch({ branch: `cms/posts/${fileSlug}` });
       await page.goto(
         `${PREVIEW_ADMIN}#/collections/posts/entries/${fileSlug}`,
         { waitUntil: "domcontentloaded" },
       );
       await page.reload({ waitUntil: "domcontentloaded" });
-      await expect(
-        page.getByRole("textbox", { name: /^Title$/i }),
-      ).toBeVisible({ timeout: 30_000 });
+      await expect(page.getByRole("textbox", { name: /^Title$/i })).toBeVisible(
+        { timeout: 30_000 },
+      );
 
-      const toggle = page
-        .getByRole("switch", { name: /^Published$/i })
-        .first();
+      const toggle = page.getByRole("switch", { name: /^Published$/i }).first();
       await expect(toggle).toBeVisible({ timeout: 30_000 });
       const ariaChecked = await toggle.getAttribute("aria-checked");
       if (ariaChecked !== "false") await toggle.click();
@@ -453,9 +460,9 @@ test(
       await body.pressSequentially(BASELINE_BODY.trim() + "\n");
 
       await page.getByRole("button", { name: /^Save$/i }).click();
-      await expect(
-        page.getByText(/Changes saved/i).first(),
-      ).toBeVisible({ timeout: 60_000 });
+      await expect(page.getByText(/Changes saved/i).first()).toBeVisible({
+        timeout: 60_000,
+      });
 
       // Match on the forward run's unique marker, not BASELINE_SENTINEL.
       // The cleanup commit REMOVES the marker the forward leg appended,

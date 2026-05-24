@@ -125,7 +125,10 @@ function formatUnexpectedDelta(label, change) {
 }
 
 test.describe("scripts/patch-preview-config.sh delta lock", () => {
-  test.skip(os.platform() === "win32", "patch-preview-config.sh requires bash + GNU sed");
+  test.skip(
+    os.platform() === "win32",
+    "patch-preview-config.sh requires bash + GNU sed",
+  );
 
   test.describe.configure({ mode: "serial" });
 

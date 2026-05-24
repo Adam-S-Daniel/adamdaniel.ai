@@ -32,7 +32,12 @@ const path = require("node:path");
 const os = require("node:os");
 const { spawnSync } = require("node:child_process");
 
-const SCRUB_SCRIPT = path.resolve(__dirname, "..", "scripts", "scrub-secrets.js");
+const SCRUB_SCRIPT = path.resolve(
+  __dirname,
+  "..",
+  "scripts",
+  "scrub-secrets.js",
+);
 
 // PR_NUMBER fallback: pull_request triggers set GITHUB_REF =
 // `refs/pull/<N>/merge`. Picking it out here keeps the workflow YAML
@@ -63,9 +68,13 @@ function readHeadSha(env) {
 // comment doesn't blow past GitHub's body limit (~65k char) when
 // stacked with other failures.
 function scrubSync(text) {
-  const truncated = text.length > 3000 ? text.slice(0, 3000) + "\n…(truncated)…" : text;
+  const truncated =
+    text.length > 3000 ? text.slice(0, 3000) + "\n…(truncated)…" : text;
   try {
-    const inPath = path.join(os.tmpdir(), `live-failure-${process.pid}-${Date.now()}.txt`);
+    const inPath = path.join(
+      os.tmpdir(),
+      `live-failure-${process.pid}-${Date.now()}.txt`,
+    );
     const outPath = inPath + ".scrubbed";
     fs.writeFileSync(inPath, truncated);
     const r = spawnSync("node", [SCRUB_SCRIPT, inPath, outPath], {
@@ -164,14 +173,18 @@ class LiveFailuresReporter {
     // judge whether the failure is terminal.
 
     const fullTitle = test.titlePath().filter(Boolean).join(" › ");
-    const file = test.location && test.location.file
-      ? path.relative(process.cwd(), test.location.file).replace(/\\/g, "/")
+    const file =
+      test.location && test.location.file
+        ? path.relative(process.cwd(), test.location.file).replace(/\\/g, "/")
+        : "";
+    const line = test.location
+      ? `${test.location.line}:${test.location.column}`
       : "";
-    const line = test.location ? `${test.location.line}:${test.location.column}` : "";
     const isFinal = result.retry === test.retries;
-    const attemptLabel = test.retries > 0
-      ? ` (attempt ${result.retry + 1} of ${test.retries + 1}${isFinal ? ", final" : ""})`
-      : "";
+    const attemptLabel =
+      test.retries > 0
+        ? ` (attempt ${result.retry + 1} of ${test.retries + 1}${isFinal ? ", final" : ""})`
+        : "";
     // Stderr log so the workflow log shows whether the reporter
     // fired at all. Stays out of stdout / the `list` reporter's
     // formatted output.
@@ -179,7 +192,8 @@ class LiveFailuresReporter {
       `[live-failures-reporter] ${fullTitle}${attemptLabel} — posting…\n`,
     );
     // Unique marker — survives reporter retries and parallel shards.
-    const testId = test.id || `${file}:${fullTitle}`.replace(/[^A-Za-z0-9_:./-]/g, "_");
+    const testId =
+      test.id || `${file}:${fullTitle}`.replace(/[^A-Za-z0-9_:./-]/g, "_");
     const marker = `<!-- live-failure:${this.runId}:${testId}:${result.retry} -->`;
 
     // Skip if a prior shard / retry already posted the same failure.
@@ -190,12 +204,16 @@ class LiveFailuresReporter {
       return;
     }
 
-    const errMsg = (result.error && (result.error.message || result.error.value)) || "(no error message)";
+    const errMsg =
+      (result.error && (result.error.message || result.error.value)) ||
+      "(no error message)";
     const scrubbed = scrubSync(String(errMsg));
-    const project = (test.parent && test.parent.project && test.parent.project()?.name) || "";
-    const attemptHeader = test.retries > 0
-      ? `❌ live failure on \`${this.sha.slice(0, 7)}\` — attempt ${result.retry + 1}/${test.retries + 1}${isFinal ? " (final)" : ""}`
-      : `❌ live failure on \`${this.sha.slice(0, 7)}\``;
+    const project =
+      (test.parent && test.parent.project && test.parent.project()?.name) || "";
+    const attemptHeader =
+      test.retries > 0
+        ? `❌ live failure on \`${this.sha.slice(0, 7)}\` — attempt ${result.retry + 1}/${test.retries + 1}${isFinal ? " (final)" : ""}`
+        : `❌ live failure on \`${this.sha.slice(0, 7)}\``;
 
     const lines = [
       `## ${attemptHeader}`,
@@ -216,9 +234,7 @@ class LiveFailuresReporter {
     const ok = await this.postComment(marker, lines.join("\n"));
     if (ok) {
       this.posted++;
-      process.stderr.write(
-        `[live-failures-reporter] ${fullTitle} — posted.\n`,
-      );
+      process.stderr.write(`[live-failures-reporter] ${fullTitle} — posted.\n`);
     } else {
       process.stderr.write(
         `[live-failures-reporter] ${fullTitle} — POST failed (token / permission?).\n`,

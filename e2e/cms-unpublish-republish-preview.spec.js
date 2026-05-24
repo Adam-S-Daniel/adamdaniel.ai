@@ -176,7 +176,7 @@ async function url4xxs(page) {
 test(
   "CMS unpublish + re-publish — preview env, target PR head branch",
   { tag: ["@admin-write"] },
-  async ({ page }, testInfo) => {
+  async ({ page }) => {
     test.skip(
       !getPat(),
       "CMS_E2E_PAT not set — preview unpublish/re-publish disabled.",
@@ -207,6 +207,7 @@ test(
       } catch (e) {
         throw new Error(
           `Fixture ${FIXTURE_PATH} is missing on ${PR_HEAD_REF} (${e && e.message}). It ships on main; restore it or re-cut the PR branch.`,
+          { cause: e },
         );
       }
       const remoteBody = Buffer.from(current.content, "base64").toString(
@@ -247,9 +248,9 @@ test(
     await seedDecapAuth(page);
     await test.step("Load preview admin", async () => {
       await page.goto(PREVIEW_ADMIN, { waitUntil: "domcontentloaded" });
-      await expect(
-        page.getByRole("link", { name: /^Posts$/i }),
-      ).toBeVisible({ timeout: 60_000 });
+      await expect(page.getByRole("link", { name: /^Posts$/i })).toBeVisible({
+        timeout: 60_000,
+      });
     });
 
     await test.step("Navigate to the unpublish-canary post entry", async () => {
@@ -283,13 +284,10 @@ test(
       // Decap renders the boolean Published widget as role="switch"
       // (NOT checkbox); state via aria-checked. PR #407's first run
       // failed on getByRole("checkbox") — use switch consistently.
-      const toggle = page
-        .getByRole("switch", { name: /^Published$/i })
-        .first();
-      await expect(
-        toggle,
-        "Published toggle should be visible",
-      ).toBeVisible({ timeout: 30_000 });
+      const toggle = page.getByRole("switch", { name: /^Published$/i }).first();
+      await expect(toggle, "Published toggle should be visible").toBeVisible({
+        timeout: 30_000,
+      });
       await expect(
         toggle,
         "Published toggle should reflect baseline (aria-checked=false)",
@@ -298,9 +296,7 @@ test(
 
     // ── 3. Re-publish leg: toggle ON → Save → cms PR → URL 200 ──────
     await test.step("Toggle Published → ON via UI", async () => {
-      const toggle = page
-        .getByRole("switch", { name: /^Published$/i })
-        .first();
+      const toggle = page.getByRole("switch", { name: /^Published$/i }).first();
       const ariaChecked = await toggle.getAttribute("aria-checked");
       if (ariaChecked !== "true") await toggle.click();
       await expect(toggle).toHaveAttribute("aria-checked", "true", {
@@ -310,9 +306,9 @@ test(
 
     await test.step("Save → wait for cms PR → label cms/ready (re-publish)", async () => {
       await page.getByRole("button", { name: /^Save$/i }).click();
-      await expect(
-        page.getByText(/Changes saved/i).first(),
-      ).toBeVisible({ timeout: 60_000 });
+      await expect(page.getByText(/Changes saved/i).first()).toBeVisible({
+        timeout: 60_000,
+      });
       // The diff for this leg flips `-published: false` /
       // `+published: true`. The previous leg's PR (none yet — this is
       // the first) can't collide; waitForCmsPullRequest only
@@ -355,9 +351,9 @@ test(
         { waitUntil: "domcontentloaded" },
       );
       await page.reload({ waitUntil: "domcontentloaded" });
-      await expect(
-        page.getByRole("textbox", { name: /^Title$/i }),
-      ).toBeVisible({ timeout: 60_000 });
+      await expect(page.getByRole("textbox", { name: /^Title$/i })).toBeVisible(
+        { timeout: 60_000 },
+      );
       // After the re-publish chain landed, the editor should now read
       // the toggle as ON; assert it so the OFF flip below is a real
       // state transition (not a no-op on a stale view).
@@ -367,9 +363,7 @@ test(
     });
 
     await test.step("Toggle Published → OFF via UI", async () => {
-      const toggle = page
-        .getByRole("switch", { name: /^Published$/i })
-        .first();
+      const toggle = page.getByRole("switch", { name: /^Published$/i }).first();
       const ariaChecked = await toggle.getAttribute("aria-checked");
       if (ariaChecked !== "false") await toggle.click();
       await expect(toggle).toHaveAttribute("aria-checked", "false", {
@@ -379,9 +373,9 @@ test(
 
     await test.step("Save → wait for cms PR → label cms/ready (unpublish)", async () => {
       await page.getByRole("button", { name: /^Save$/i }).click();
-      await expect(
-        page.getByText(/Changes saved/i).first(),
-      ).toBeVisible({ timeout: 60_000 });
+      await expect(page.getByText(/Changes saved/i).first()).toBeVisible({
+        timeout: 60_000,
+      });
       // The re-publish leg's PR is merged (the URL-200 wait only
       // resolves once it landed on the head branch and deploy-preview
       // ran), so waitForCmsPullRequest's state=open filter excludes

@@ -163,7 +163,7 @@ test.afterAll(async () => {
 test(
   "CMS — tags lifecycle, preview env (target PR head branch)",
   { tag: ["@admin-write"] },
-  async ({ page }, testInfo) => {
+  async ({ page }) => {
     test.skip(
       !getPat(),
       "CMS_E2E_PAT not set — preview tags-lifecycle disabled.",
@@ -184,9 +184,9 @@ test(
     await seedDecapAuth(page);
     await test.step("Load preview admin", async () => {
       await page.goto(PREVIEW_ADMIN, { waitUntil: "domcontentloaded" });
-      await expect(
-        page.getByRole("link", { name: /^Posts$/i }),
-      ).toBeVisible({ timeout: 60_000 });
+      await expect(page.getByRole("link", { name: /^Posts$/i })).toBeVisible({
+        timeout: 60_000,
+      });
     });
 
     // ── 2. CYCLE 1: create the Tags entry via Decap UI ──────────────
@@ -194,9 +194,9 @@ test(
       await page.goto(`${PREVIEW_ADMIN}#/collections/tags/new`, {
         waitUntil: "domcontentloaded",
       });
-      await expect(
-        page.getByRole("textbox", { name: /^Name$/i }),
-      ).toBeVisible({ timeout: 30_000 });
+      await expect(page.getByRole("textbox", { name: /^Name$/i })).toBeVisible({
+        timeout: 30_000,
+      });
     });
 
     await test.step("Fill Name and Save", async () => {
@@ -211,9 +211,9 @@ test(
       // `_plugins_test/auto_tag_pages_test.rb` + `tags.spec.js`.
 
       await page.getByRole("button", { name: /^Save$/i }).click();
-      await expect(
-        page.getByText(/Changes saved/i).first(),
-      ).toBeVisible({ timeout: 60_000 });
+      await expect(page.getByText(/Changes saved/i).first()).toBeVisible({
+        timeout: 60_000,
+      });
     });
 
     await test.step("Wait for the cms/tags/<slug> PR → label cms/ready", async () => {
@@ -266,9 +266,9 @@ test(
         { waitUntil: "domcontentloaded" },
       );
       await page.reload({ waitUntil: "domcontentloaded" });
-      await expect(
-        page.getByRole("textbox", { name: /^Name$/i }),
-      ).toBeVisible({ timeout: 60_000 });
+      await expect(page.getByRole("textbox", { name: /^Name$/i })).toBeVisible({
+        timeout: 60_000,
+      });
     });
 
     await test.step("Click Delete published entry — confirms via dialog handler", async () => {

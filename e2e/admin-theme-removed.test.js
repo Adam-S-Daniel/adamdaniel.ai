@@ -61,8 +61,10 @@ test.describe("admin theme — removal invariants", () => {
     // (cobalt / theme / preview) so a future contributor reading top-down
     // sees why this admin shell is minimal.
     const firstComment = html.match(/<!--([\s\S]*?)-->/);
-    expect(firstComment, "Expected a leading HTML comment in admin/index.html")
-      .not.toBeNull();
+    expect(
+      firstComment,
+      "Expected a leading HTML comment in admin/index.html",
+    ).not.toBeNull();
     expect(firstComment[1]).toMatch(/cobalt|theme|preview/i);
   });
 });

@@ -189,7 +189,10 @@ test.describe("changed-files recursion gate wiring (run 26108485428)", () => {
       // <before> <sha>` can't resolve and the gate always fails OPEN,
       // silently defeating the skip.
       const checkout = steps.find(
-        (s) => s && typeof s.uses === "string" && s.uses.startsWith("actions/checkout@"),
+        (s) =>
+          s &&
+          typeof s.uses === "string" &&
+          s.uses.startsWith("actions/checkout@"),
       );
       expect(
         checkout,

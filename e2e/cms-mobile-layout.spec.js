@@ -25,20 +25,6 @@ const IPHONE_16 = { width: 393, height: 852 };
 const DESKTOP = { width: 1400, height: 900 };
 
 const SEED_POST_SLUG = "2026-04-25-replacement-test-post-1";
-const SEED_POST_CONTENT = `---
-title: Replacement test post 1
-slug: ''
-date: 2026-04-25 16:33:00 -0400
-excerpt: ''
-tags: []
-featured_image: ''
-published: true
-publish_date: ''
-reading_time: null
----
-
-Wow, a post
-`;
 
 async function login(page) {
   await page.addInitScript(() => {
@@ -196,7 +182,10 @@ test.describe(
           box.x + box.width,
           `Toolbar control ${name} is clipped off the right edge`,
         ).toBeLessThanOrEqual(vw + 1);
-        expect(box.x, `Toolbar control ${name} is off the left edge`).toBeGreaterThanOrEqual(-1);
+        expect(
+          box.x,
+          `Toolbar control ${name} is off the left edge`,
+        ).toBeGreaterThanOrEqual(-1);
       }
     });
 

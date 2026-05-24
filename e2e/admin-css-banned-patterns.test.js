@@ -53,7 +53,10 @@ function collectSources() {
     const full = path.join(ADMIN_DIR, name);
     if (!fs.statSync(full).isFile()) continue;
     if (name.endsWith(".css")) {
-      sources.push({ label: `admin/${name}`, css: fs.readFileSync(full, "utf8") });
+      sources.push({
+        label: `admin/${name}`,
+        css: fs.readFileSync(full, "utf8"),
+      });
     } else if (/^index.*\.html$/.test(name)) {
       const html = fs.readFileSync(full, "utf8");
       const inline = extractInlineStyles(html);

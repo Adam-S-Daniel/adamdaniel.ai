@@ -33,7 +33,10 @@ function makeMockFetch(scenarios) {
       const s = scenarios[key];
       const headers = new Map([
         ["x-ratelimit-remaining", String(s.rateLimitRemaining ?? 5000)],
-        ["x-ratelimit-reset", String(s.rateLimitReset ?? Math.floor(Date.now() / 1000) + 3600)],
+        [
+          "x-ratelimit-reset",
+          String(s.rateLimitReset ?? Math.floor(Date.now() / 1000) + 3600),
+        ],
       ]);
       return {
         ok: s.status >= 200 && s.status < 300,
@@ -42,7 +45,8 @@ function makeMockFetch(scenarios) {
           get: (k) => headers.get(k.toLowerCase()) || null,
         },
         json: async () => s.body,
-        text: async () => (typeof s.body === "string" ? s.body : JSON.stringify(s.body)),
+        text: async () =>
+          typeof s.body === "string" ? s.body : JSON.stringify(s.body),
       };
     },
   };
@@ -53,10 +57,9 @@ function withMockFetch(scenarios, fn) {
   const orig = globalThis.fetch;
   globalThis.fetch = mock.fetch;
   process.env.GH_TOKEN = "test-token";
-  return Promise.resolve(fn(mock))
-    .finally(() => {
-      globalThis.fetch = orig;
-    });
+  return Promise.resolve(fn(mock)).finally(() => {
+    globalThis.fetch = orig;
+  });
 }
 
 test("shouldCheckDeployQueue() — true for URL-class waits", () => {
@@ -87,16 +90,30 @@ test("classifyPr() — dirty PR with newline-only collapse → resolver hint", a
   const scenarios = {
     [`/repos/o/r/pulls/882/files?per_page=50`]: {
       status: 200,
-      body: [{ filename: "_e2e/canary-post.md", status: "modified", changes: 12, patch: "@@..." }],
+      body: [
+        {
+          filename: "_e2e/canary-post.md",
+          status: "modified",
+          changes: 12,
+          patch: "@@...",
+        },
+      ],
     },
     [`/repos/o/r/contents/_e2e/canary-post.md?ref=${baseRef}`]: {
       status: 200,
-      body: { type: "file", content: Buffer.from("a\nb\n", "utf8").toString("base64") },
+      body: {
+        type: "file",
+        content: Buffer.from("a\nb\n", "utf8").toString("base64"),
+      },
     },
-    [`/repos/o/r/contents/_e2e/canary-post.md?ref=${encodeURIComponent(headRef)}`]: {
-      status: 200,
-      body: { type: "file", content: Buffer.from("a\n\n\nb\n", "utf8").toString("base64") },
-    },
+    [`/repos/o/r/contents/_e2e/canary-post.md?ref=${encodeURIComponent(headRef)}`]:
+      {
+        status: 200,
+        body: {
+          type: "file",
+          content: Buffer.from("a\n\n\nb\n", "utf8").toString("base64"),
+        },
+      },
   };
   await withMockFetch(scenarios, async () => {
     const lines = await classifyPr(
@@ -125,15 +142,28 @@ test("classifyPr() — dirty PR with non-newline diff → 'not auto-resolvable'"
   const scenarios = {
     [`/repos/o/r/pulls/200/files?per_page=50`]: {
       status: 200,
-      body: [{ filename: "_posts/foo.md", status: "modified", changes: 2, patch: "@@..." }],
+      body: [
+        {
+          filename: "_posts/foo.md",
+          status: "modified",
+          changes: 2,
+          patch: "@@...",
+        },
+      ],
     },
     [`/repos/o/r/contents/_posts/foo.md?ref=${baseRef}`]: {
       status: 200,
-      body: { type: "file", content: Buffer.from("hello world\n", "utf8").toString("base64") },
+      body: {
+        type: "file",
+        content: Buffer.from("hello world\n", "utf8").toString("base64"),
+      },
     },
     [`/repos/o/r/contents/_posts/foo.md?ref=${encodeURIComponent(headRef)}`]: {
       status: 200,
-      body: { type: "file", content: Buffer.from("goodbye world\n", "utf8").toString("base64") },
+      body: {
+        type: "file",
+        content: Buffer.from("goodbye world\n", "utf8").toString("base64"),
+      },
     },
   };
   await withMockFetch(scenarios, async () => {
@@ -161,9 +191,23 @@ test("classifyPr() — blocked PR lists failing checks", async () => {
       status: 200,
       body: {
         check_runs: [
-          { name: "validate-content", conclusion: "failure", status: "completed", html_url: "https://example/c1" },
-          { name: "e2e (1)", conclusion: "success", status: "completed", html_url: "https://example/c2" },
-          { name: "deploy-preview", status: "in_progress", html_url: "https://example/c3" },
+          {
+            name: "validate-content",
+            conclusion: "failure",
+            status: "completed",
+            html_url: "https://example/c1",
+          },
+          {
+            name: "e2e (1)",
+            conclusion: "success",
+            status: "completed",
+            html_url: "https://example/c2",
+          },
+          {
+            name: "deploy-preview",
+            status: "in_progress",
+            html_url: "https://example/c3",
+          },
         ],
       },
     },
@@ -221,7 +265,9 @@ test("classifyPr() — clean PR with auto-merge enabled → 'merging when checks
       },
       Date.now() + 25_000,
     );
-    assert.ok(lines.join("\n").includes("auto-merge enabled by @Adam-S-Daniel"));
+    assert.ok(
+      lines.join("\n").includes("auto-merge enabled by @Adam-S-Daniel"),
+    );
   });
 });
 
@@ -246,7 +292,11 @@ test("buildReport() — happy path includes target PR, open CMS PR list, and dep
       body: {
         number: 882,
         title: "Update E2E Canary canary-post",
-        head: { ref: "cms/e2e/canary-post", sha: "h", repo: { full_name: "o/r" } },
+        head: {
+          ref: "cms/e2e/canary-post",
+          sha: "h",
+          repo: { full_name: "o/r" },
+        },
         base: { ref: "main" },
         mergeable_state: "dirty",
         html_url: "https://github.com/o/r/pull/882",
@@ -254,16 +304,30 @@ test("buildReport() — happy path includes target PR, open CMS PR list, and dep
     },
     [`/repos/o/r/pulls/882/files?per_page=50`]: {
       status: 200,
-      body: [{ filename: "_e2e/canary-post.md", status: "modified", changes: 12, patch: "@@..." }],
+      body: [
+        {
+          filename: "_e2e/canary-post.md",
+          status: "modified",
+          changes: 12,
+          patch: "@@...",
+        },
+      ],
     },
     [`/repos/o/r/contents/_e2e/canary-post.md?ref=main`]: {
       status: 200,
-      body: { type: "file", content: Buffer.from("a\nb\n", "utf8").toString("base64") },
+      body: {
+        type: "file",
+        content: Buffer.from("a\nb\n", "utf8").toString("base64"),
+      },
     },
-    [`/repos/o/r/contents/_e2e/canary-post.md?ref=${encodeURIComponent("cms/e2e/canary-post")}`]: {
-      status: 200,
-      body: { type: "file", content: Buffer.from("a\n\nb\n", "utf8").toString("base64") },
-    },
+    [`/repos/o/r/contents/_e2e/canary-post.md?ref=${encodeURIComponent("cms/e2e/canary-post")}`]:
+      {
+        status: 200,
+        body: {
+          type: "file",
+          content: Buffer.from("a\n\nb\n", "utf8").toString("base64"),
+        },
+      },
     [`/repos/o/r/pulls?state=open&per_page=100`]: {
       status: 200,
       body: [
@@ -325,7 +389,10 @@ test("buildReport() — no waitPrNumber, no deploy-queue check on non-URL kind",
     });
     assert.ok(md.includes("### Stuck-PR diagnostic"));
     assert.ok(md.includes("Open CMS PRs (0)"));
-    assert.ok(!md.includes("deploy-production.yml"), "should skip deploy-queue for pr-open kind");
+    assert.ok(
+      !md.includes("deploy-production.yml"),
+      "should skip deploy-queue for pr-open kind",
+    );
   });
 });
 

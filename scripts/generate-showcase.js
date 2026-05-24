@@ -17,7 +17,10 @@ const fs = require("fs");
 const path = require("path");
 
 const AFTER_DIR = path.join(
-  __dirname, "..", "e2e", "visual-regression.spec.js-snapshots",
+  __dirname,
+  "..",
+  "e2e",
+  "visual-regression.spec.js-snapshots",
 );
 const BEFORE_DIR = AFTER_DIR + "-before";
 const OUTPUT_DIR = path.join(__dirname, "..", "recordings");
@@ -118,16 +121,23 @@ function singleSlide({ label, imgB64, index, total }) {
 // ── Main ────────────────────────────────────────────────────────────
 
 (async () => {
-  const afterFiles = fs.readdirSync(AFTER_DIR).filter(f => f.endsWith(".png")).sort();
+  const afterFiles = fs
+    .readdirSync(AFTER_DIR)
+    .filter((f) => f.endsWith(".png"))
+    .sort();
 
   if (afterFiles.length === 0) {
-    console.error("No snapshots found. Run tests with --update-snapshots first.");
+    console.error(
+      "No snapshots found. Run tests with --update-snapshots first.",
+    );
     process.exit(1);
   }
 
   const hasBefore = fs.existsSync(BEFORE_DIR);
   const mode = hasBefore ? "before/after comparison" : "current baselines";
-  console.log(`Found ${afterFiles.length} snapshots (${mode}). Recording showcase...`);
+  console.log(
+    `Found ${afterFiles.length} snapshots (${mode}). Recording showcase...`,
+  );
 
   const browser = await chromium.launch();
   const context = await browser.newContext({
@@ -163,8 +173,11 @@ function singleSlide({ label, imgB64, index, total }) {
   const dest = "visual-regression-showcase.webm";
   const recordings = fs
     .readdirSync(OUTPUT_DIR)
-    .filter(f => f.endsWith(".webm") && f !== dest)
-    .map(f => ({ name: f, mtime: fs.statSync(path.join(OUTPUT_DIR, f)).mtimeMs }))
+    .filter((f) => f.endsWith(".webm") && f !== dest)
+    .map((f) => ({
+      name: f,
+      mtime: fs.statSync(path.join(OUTPUT_DIR, f)).mtimeMs,
+    }))
     .sort((a, b) => b.mtime - a.mtime);
 
   if (recordings.length > 0) {

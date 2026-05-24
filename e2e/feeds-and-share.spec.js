@@ -175,7 +175,10 @@ test.describe("Feed-link icons surface the feeds in the UI", () => {
     page,
   }) => {
     const tags = await discoverTags(page);
-    test.skip(tags.length === 0, "no tags on the site — no per-tag header to assert");
+    test.skip(
+      tags.length === 0,
+      "no tags on the site — no per-tag header to assert",
+    );
     const slug = tags[0].slug;
     await page.goto(`/tags/${slug}/`);
 
@@ -239,7 +242,10 @@ test.describe("Share row on a post", () => {
     page,
   }) => {
     const post = await discoverPost(page);
-    test.skip(!post, "no published posts on the site — share row has no host page");
+    test.skip(
+      !post,
+      "no published posts on the site — share row has no host page",
+    );
     await page.goto(post.url);
 
     const row = page.locator(".share-row");

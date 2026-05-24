@@ -56,9 +56,13 @@ function readPathsList() {
   // Extract the `paths:` block under the pull_request trigger. The
   // workflow uses workflow-level `on.pull_request.paths` only — there
   // is no second `paths:` elsewhere — so a single regex match is safe.
-  const match = yml.match(/^\s{4}paths:\s*\n((?:\s{6}- [^\n]*\n|\s*#[^\n]*\n|\s*\n)+)/m);
+  const match = yml.match(
+    /^\s{4}paths:\s*\n((?:\s{6}- [^\n]*\n|\s*#[^\n]*\n|\s*\n)+)/m,
+  );
   if (!match) {
-    throw new Error("could not locate the `paths:` block in visual-regression.yml");
+    throw new Error(
+      "could not locate the `paths:` block in visual-regression.yml",
+    );
   }
   const block = match[1];
   return block
@@ -74,7 +78,10 @@ function readPathsList() {
       // quoted value, were that ever a thing here, would survive).
       const hashIdx = v.indexOf(" #");
       if (hashIdx !== -1) v = v.slice(0, hashIdx).trim();
-      if ((v.startsWith("'") && v.endsWith("'")) || (v.startsWith('"') && v.endsWith('"'))) {
+      if (
+        (v.startsWith("'") && v.endsWith("'")) ||
+        (v.startsWith('"') && v.endsWith('"'))
+      ) {
         return v.slice(1, -1);
       }
       return v;
@@ -85,18 +92,20 @@ test.describe("visual-regression workflow: content-only PRs are skipped", () => 
   test("no CMS-managed content path appears in the trigger list", () => {
     const paths = readPathsList();
     for (const forbidden of FORBIDDEN_PATHS) {
-      expect(paths, `forbidden path "${forbidden}" is present in visual-regression.yml's paths: list — content-only PRs would re-trigger the regression video`).not.toContain(
-        forbidden,
-      );
+      expect(
+        paths,
+        `forbidden path "${forbidden}" is present in visual-regression.yml's paths: list — content-only PRs would re-trigger the regression video`,
+      ).not.toContain(forbidden);
     }
   });
 
   test("template/styling paths are still in the trigger list", () => {
     const paths = readPathsList();
     for (const required of REQUIRED_PATHS) {
-      expect(paths, `required path "${required}" is missing from visual-regression.yml's paths: list — the workflow would no longer fire on template/styling changes`).toContain(
-        required,
-      );
+      expect(
+        paths,
+        `required path "${required}" is missing from visual-regression.yml's paths: list — the workflow would no longer fire on template/styling changes`,
+      ).toContain(required);
     }
   });
 
@@ -114,7 +123,10 @@ test.describe("visual-regression workflow: content-only PRs are skipped", () => 
     while ((m = folderRe.exec(cfg)) !== null) {
       folders.push(m[1]);
     }
-    expect(folders.length, "admin/config.yml has at least one collection folder").toBeGreaterThan(0);
+    expect(
+      folders.length,
+      "admin/config.yml has at least one collection folder",
+    ).toBeGreaterThan(0);
     for (const folder of folders) {
       const expected = `${folder}/**`;
       expect(

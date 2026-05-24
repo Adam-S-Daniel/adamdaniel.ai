@@ -86,120 +86,131 @@ test.describe(
   // Runs on chromium-desktop-3k only. See playwright.config.js.
   { tag: ["@admin-write"] },
   () => {
-  test.describe.configure({ mode: "serial", timeout: 240_000 });
+    test.describe.configure({ mode: "serial", timeout: 240_000 });
 
-  test.beforeAll(() => cleanup());
-  test.afterAll(() => cleanup());
+    test.beforeAll(() => cleanup());
+    test.afterAll(() => cleanup());
 
-  test.beforeEach(({ page }, testInfo) => {
-    page.on("pageerror", (err) =>
-      console.log(`[pageerror] ${err.name}: ${err.message}`),
-    );
-  });
-
-  test("create post with inline image markdown → renders <img> with reachable src", async ({
-    page,
-  }) => {
-    // ── Plant the upload fixture ─────────────────────────────────────
-    // Mirrors a real upload via the markdown widget's image button: the
-    // file lands directly in the flat media_folder with the
-    // byte-identical public URL Decap would emit.
-    const uploadDirAbs = uploadDir();
-    fs.mkdirSync(uploadDirAbs, { recursive: true });
-    fs.copyFileSync(FIXTURE_PNG, path.join(uploadDirAbs, "inline-image.png"));
-    const inlineImageMd = `![inline image](${uploadPublicPath()})`;
-
-    // ── Drive the admin: open New Post, fill Title / Slug / Body ─────
-    await page.goto("/admin/index-local.html");
-    await page.getByRole("button", { name: /login/i }).click();
-    await page.getByRole("link", { name: /^posts$/i }).waitFor({ timeout: 30_000 });
-    await page.goto("/admin/index-local.html#/collections/posts/new");
-
-    const titleField = page.getByLabel(/^Title$/);
-    await expect(titleField).toBeVisible({ timeout: 60_000 });
-    await titleField.fill(SMOKE_TITLE);
-
-    const slugField = page.getByLabel(/^URL Slug/);
-    await slugField.fill(SMOKE_SLUG);
-
-    // The body widget supports two modes (`admin/config.yml`:
-    // `body.modes: [rich_text, raw]`). Rich-text mode treats typed text
-    // through the WYSIWYG editor and escapes markdown-special chars on
-    // serialize — `!` typed before `[` round-trips as literal `!\[`,
-    // which kramdown then renders as text, not an `<img>`. Switching to
-    // raw / Markdown mode would preserve the typed markdown atom, but
-    // the mode-toggle's selector isn't a stable Decap contract across
-    // minor versions (per the spec's own header note: "the widget's
-    // source-mode toggle and image-button selectors aren't a stable
-    // contract"). So we type only plain text here, then patch the saved
-    // file with the inline-image markdown post-save — that exercises
-    // the same render-pipeline contract (kramdown → <img>; uploads
-    // pipeline serves the asset; layout doesn't strip the leading /)
-    // without depending on the unstable WYSIWYG mode-toggle.
-    const bodyEditor = page
-      .locator('[role="textbox"][contenteditable="true"]')
-      .last();
-    await bodyEditor.waitFor({ timeout: 30_000 });
-    await bodyEditor.click();
-    await bodyEditor.pressSequentially("Body for inline-image test.\n");
-
-    // Flip Published on so Jekyll picks the post up on the rebuild.
-    await page.getByLabel(/^Published$/).first().click();
-
-    // Save (split publish menu — same pattern as cms-image-upload).
-    await page.getByRole("button", { name: /^publish$/i }).first().click();
-    await page
-      .getByRole("menuitem", { name: /publish now/i })
-      .first()
-      .click();
-
-    // ── On-disk asserts ──────────────────────────────────────────────
-    await expect
-      .poll(() => findSmokePostFile() !== null, { timeout: 60_000 })
-      .toBe(true);
-    const postPath = findSmokePostFile();
-
-    // Patch the saved body to append the inline-image markdown atom.
-    // See the bodyEditor comment above — this bypasses Decap's
-    // unstable mode-toggle while still exercising the kramdown render
-    // path the spec was designed to lock.
-    const original = fs.readFileSync(postPath, "utf8");
-    const patched = original.replace(/\s*$/, "") + `\n\n${inlineImageMd}\n`;
-    fs.writeFileSync(postPath, patched);
-
-    const written = fs.readFileSync(postPath, "utf8");
-    expect(written).toContain(`title: ${SMOKE_TITLE}`);
-    // Inline-image markdown atom must be present on disk — that's what
-    // kramdown reads to emit the <img> tag in the rendered HTML.
-    expect(written).toMatch(
-      /!\[inline image\]\(\/assets\/images\/uploads\/[^/]*inline-image\.png\)/,
-    );
-
-    // ── Rendered post asserts ────────────────────────────────────────
-    execFileSync("bundle", ["exec", "jekyll", "build", "--quiet"], {
-      cwd: REPO_ROOT,
-      stdio: "inherit",
+    test.beforeEach(({ page }) => {
+      page.on("pageerror", (err) =>
+        console.log(`[pageerror] ${err.name}: ${err.message}`),
+      );
     });
-    const liveURL = `/blog/${SMOKE_SLUG}/`;
-    const resp = await page.goto(liveURL);
-    expect(resp.status(), `${liveURL} should be 200`).toBe(200);
 
-    // Inline images live in `.post-content` (rendered from the body
-    // markdown). Featured images live in `.post-header > img.featured-image`,
-    // a different parent — so locating inside `.post-content` is unambiguous.
-    const inlineImg = page.locator(".post-content img").first();
-    await expect(inlineImg).toBeVisible({ timeout: 10_000 });
-    const imgSrc = await inlineImg.getAttribute("src");
-    const imgAlt = await inlineImg.getAttribute("alt");
-    expect(imgSrc, "Inline <img> must reference uploads path").toMatch(
-      /\/assets\/images\/uploads\/[^/]*inline-image\.png$/,
-    );
-    expect(imgAlt, "Inline <img> alt must be non-empty").toBeTruthy();
+    test("create post with inline image markdown → renders <img> with reachable src", async ({
+      page,
+    }) => {
+      // ── Plant the upload fixture ─────────────────────────────────────
+      // Mirrors a real upload via the markdown widget's image button: the
+      // file lands directly in the flat media_folder with the
+      // byte-identical public URL Decap would emit.
+      const uploadDirAbs = uploadDir();
+      fs.mkdirSync(uploadDirAbs, { recursive: true });
+      fs.copyFileSync(FIXTURE_PNG, path.join(uploadDirAbs, "inline-image.png"));
+      const inlineImageMd = `![inline image](${uploadPublicPath()})`;
 
-    // HEAD-fetch the src on the same origin so the test catches a
-    // build-time path drift (e.g. relative_url stripping the leading /).
-    const srcAbs = imgSrc.startsWith("http") ? imgSrc : new URL(imgSrc, page.url()).toString();
-    const head = await page.request.fetch(srcAbs, { method: "HEAD" });
-    expect(head.status(), `${srcAbs} should be 200`).toBe(200);
-  });
-});
+      // ── Drive the admin: open New Post, fill Title / Slug / Body ─────
+      await page.goto("/admin/index-local.html");
+      await page.getByRole("button", { name: /login/i }).click();
+      await page
+        .getByRole("link", { name: /^posts$/i })
+        .waitFor({ timeout: 30_000 });
+      await page.goto("/admin/index-local.html#/collections/posts/new");
+
+      const titleField = page.getByLabel(/^Title$/);
+      await expect(titleField).toBeVisible({ timeout: 60_000 });
+      await titleField.fill(SMOKE_TITLE);
+
+      const slugField = page.getByLabel(/^URL Slug/);
+      await slugField.fill(SMOKE_SLUG);
+
+      // The body widget supports two modes (`admin/config.yml`:
+      // `body.modes: [rich_text, raw]`). Rich-text mode treats typed text
+      // through the WYSIWYG editor and escapes markdown-special chars on
+      // serialize — `!` typed before `[` round-trips as literal `!\[`,
+      // which kramdown then renders as text, not an `<img>`. Switching to
+      // raw / Markdown mode would preserve the typed markdown atom, but
+      // the mode-toggle's selector isn't a stable Decap contract across
+      // minor versions (per the spec's own header note: "the widget's
+      // source-mode toggle and image-button selectors aren't a stable
+      // contract"). So we type only plain text here, then patch the saved
+      // file with the inline-image markdown post-save — that exercises
+      // the same render-pipeline contract (kramdown → <img>; uploads
+      // pipeline serves the asset; layout doesn't strip the leading /)
+      // without depending on the unstable WYSIWYG mode-toggle.
+      const bodyEditor = page
+        .locator('[role="textbox"][contenteditable="true"]')
+        .last();
+      await bodyEditor.waitFor({ timeout: 30_000 });
+      await bodyEditor.click();
+      await bodyEditor.pressSequentially("Body for inline-image test.\n");
+
+      // Flip Published on so Jekyll picks the post up on the rebuild.
+      await page
+        .getByLabel(/^Published$/)
+        .first()
+        .click();
+
+      // Save (split publish menu — same pattern as cms-image-upload).
+      await page
+        .getByRole("button", { name: /^publish$/i })
+        .first()
+        .click();
+      await page
+        .getByRole("menuitem", { name: /publish now/i })
+        .first()
+        .click();
+
+      // ── On-disk asserts ──────────────────────────────────────────────
+      await expect
+        .poll(() => findSmokePostFile() !== null, { timeout: 60_000 })
+        .toBe(true);
+      const postPath = findSmokePostFile();
+
+      // Patch the saved body to append the inline-image markdown atom.
+      // See the bodyEditor comment above — this bypasses Decap's
+      // unstable mode-toggle while still exercising the kramdown render
+      // path the spec was designed to lock.
+      const original = fs.readFileSync(postPath, "utf8");
+      const patched = original.replace(/\s*$/, "") + `\n\n${inlineImageMd}\n`;
+      fs.writeFileSync(postPath, patched);
+
+      const written = fs.readFileSync(postPath, "utf8");
+      expect(written).toContain(`title: ${SMOKE_TITLE}`);
+      // Inline-image markdown atom must be present on disk — that's what
+      // kramdown reads to emit the <img> tag in the rendered HTML.
+      expect(written).toMatch(
+        /!\[inline image\]\(\/assets\/images\/uploads\/[^/]*inline-image\.png\)/,
+      );
+
+      // ── Rendered post asserts ────────────────────────────────────────
+      execFileSync("bundle", ["exec", "jekyll", "build", "--quiet"], {
+        cwd: REPO_ROOT,
+        stdio: "inherit",
+      });
+      const liveURL = `/blog/${SMOKE_SLUG}/`;
+      const resp = await page.goto(liveURL);
+      expect(resp.status(), `${liveURL} should be 200`).toBe(200);
+
+      // Inline images live in `.post-content` (rendered from the body
+      // markdown). Featured images live in `.post-header > img.featured-image`,
+      // a different parent — so locating inside `.post-content` is unambiguous.
+      const inlineImg = page.locator(".post-content img").first();
+      await expect(inlineImg).toBeVisible({ timeout: 10_000 });
+      const imgSrc = await inlineImg.getAttribute("src");
+      const imgAlt = await inlineImg.getAttribute("alt");
+      expect(imgSrc, "Inline <img> must reference uploads path").toMatch(
+        /\/assets\/images\/uploads\/[^/]*inline-image\.png$/,
+      );
+      expect(imgAlt, "Inline <img> alt must be non-empty").toBeTruthy();
+
+      // HEAD-fetch the src on the same origin so the test catches a
+      // build-time path drift (e.g. relative_url stripping the leading /).
+      const srcAbs = imgSrc.startsWith("http")
+        ? imgSrc
+        : new URL(imgSrc, page.url()).toString();
+      const head = await page.request.fetch(srcAbs, { method: "HEAD" });
+      expect(head.status(), `${srcAbs} should be 200`).toBe(200);
+    });
+  },
+);

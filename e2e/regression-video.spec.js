@@ -3,8 +3,7 @@ const { test } = require("@playwright/test");
 const fs = require("fs");
 const path = require("path");
 
-const changesPath =
-  process.env.PAGE_CHANGES_PATH || "/tmp/page-changes.json";
+const changesPath = process.env.PAGE_CHANGES_PATH || "/tmp/page-changes.json";
 
 let changes;
 try {

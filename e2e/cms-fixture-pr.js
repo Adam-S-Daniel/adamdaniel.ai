@@ -159,7 +159,7 @@ async function addReadyLabel({ repo, prNumber }) {
  */
 async function closeStaleDecapPrOnBranch({ repo = HOST_REPO, branch }) {
   if (!branch) return;
-  let prs = [];
+  let prs;
   try {
     const owner = repo.split("/")[0];
     prs = await gh(

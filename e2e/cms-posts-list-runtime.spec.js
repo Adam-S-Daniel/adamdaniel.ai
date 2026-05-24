@@ -84,9 +84,8 @@ test.describe(
       expect(after).toBe(!before);
 
       // The hide-class is the user-visible side effect of the toggle.
-      const bodyClassFlipped = await page.evaluate(
-        () =>
-          document.body.classList.contains("cms-ple-hide-fixtures"),
+      const bodyClassFlipped = await page.evaluate(() =>
+        document.body.classList.contains("cms-ple-hide-fixtures"),
       );
       // checkbox checked ⇔ fixtures shown ⇔ hide-class absent
       expect(bodyClassFlipped).toBe(!after);

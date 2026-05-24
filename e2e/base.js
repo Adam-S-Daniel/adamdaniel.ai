@@ -72,6 +72,7 @@ function resolvePreviewBaseURL() {
     throw new Error(
       `TARGET=preview: failed to query GitHub for the latest open PR (${err.message}). ` +
         `Ensure 'gh' is on PATH and authenticated, or run with TARGET=local.`,
+      { cause: err },
     );
   }
   let pulls;
@@ -80,6 +81,7 @@ function resolvePreviewBaseURL() {
   } catch (err) {
     throw new Error(
       `TARGET=preview: GitHub API returned non-JSON: ${raw.slice(0, 200)}`,
+      { cause: err },
     );
   }
   if (!Array.isArray(pulls) || pulls.length === 0) {

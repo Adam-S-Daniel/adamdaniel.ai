@@ -42,7 +42,8 @@ test.describe("compute-visual-diffs", () => {
   });
 
   test("pixelDiffRatio: 50% of pixels differ → ratio ≈ 0.5", () => {
-    const w = 10, h = 10;
+    const w = 10,
+      h = 10;
     const a = makePNG(w, h, [0, 0, 0, 255]);
     const b = makePNG(w, h, [0, 0, 0, 255]);
     // Flip half the pixels in `b` to white.
@@ -89,20 +90,35 @@ test.describe("compute-visual-diffs", () => {
     };
 
     // Same → identical
-    writePNG(makePNG(8, 8, [0, 0, 0, 255]), prDir,
-      `${safeFileName("/blog/post-a/")}.png`);
-    writePNG(makePNG(8, 8, [0, 0, 0, 255]), prodDir,
-      `${safeFileName("/blog/post-a/")}.png`);
+    writePNG(
+      makePNG(8, 8, [0, 0, 0, 255]),
+      prDir,
+      `${safeFileName("/blog/post-a/")}.png`,
+    );
+    writePNG(
+      makePNG(8, 8, [0, 0, 0, 255]),
+      prodDir,
+      `${safeFileName("/blog/post-a/")}.png`,
+    );
 
     // Different → different
-    writePNG(makePNG(8, 8, [0, 0, 0, 255]), prDir,
-      `${safeFileName("/blog/post-b/")}.png`);
-    writePNG(makePNG(8, 8, [255, 255, 255, 255]), prodDir,
-      `${safeFileName("/blog/post-b/")}.png`);
+    writePNG(
+      makePNG(8, 8, [0, 0, 0, 255]),
+      prDir,
+      `${safeFileName("/blog/post-b/")}.png`,
+    );
+    writePNG(
+      makePNG(8, 8, [255, 255, 255, 255]),
+      prodDir,
+      `${safeFileName("/blog/post-b/")}.png`,
+    );
 
     // Missing prod image (simulates a NEW page) → "new"
-    writePNG(makePNG(8, 8, [0, 0, 0, 255]), prDir,
-      `${safeFileName("/blog/post-c/")}.png`);
+    writePNG(
+      makePNG(8, 8, [0, 0, 0, 255]),
+      prDir,
+      `${safeFileName("/blog/post-c/")}.png`,
+    );
 
     const out = path.join(tmp, "diffs.json");
     const summary = computeAll({

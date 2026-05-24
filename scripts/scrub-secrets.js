@@ -41,10 +41,7 @@ if (!fs.existsSync(inputFile)) {
   process.exit(0);
 }
 
-const reportFile = path.join(
-  os.tmpdir(),
-  `gitleaks-report-${Date.now()}.json`,
-);
+const reportFile = path.join(os.tmpdir(), `gitleaks-report-${Date.now()}.json`);
 
 let findings = [];
 try {

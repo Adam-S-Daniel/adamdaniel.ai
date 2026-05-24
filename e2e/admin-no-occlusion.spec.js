@@ -68,7 +68,9 @@ test.describe(
   () => {
     test.describe.configure({ mode: "serial", timeout: 180_000 });
 
-    test("collection list — New button and nav are reachable", async ({ page }) => {
+    test("collection list — New button and nav are reachable", async ({
+      page,
+    }) => {
       await login(page);
       await expectReachable(
         page,
@@ -82,7 +84,9 @@ test.describe(
       );
     });
 
-    test("entry editor — Save / Publish / Delete are reachable", async ({ page }) => {
+    test("entry editor — Save / Publish / Delete are reachable", async ({
+      page,
+    }) => {
       await login(page);
       await page.goto(
         `/admin/index-test.html#/collections/posts/entries/${SEED_POST_SLUG}`,
@@ -133,7 +137,10 @@ test.describe(
       page,
     }) => {
       await login(page);
-      await page.getByRole("button", { name: "Media", exact: true }).first().click();
+      await page
+        .getByRole("button", { name: "Media", exact: true })
+        .first()
+        .click();
       const libraryTop = page.locator('[class*="LibraryTop"]').first();
       await expect(libraryTop).toBeVisible({ timeout: 30_000 });
       // The selection-dependent controls (Copy Path / Download / Delete
@@ -210,7 +217,9 @@ test.describe(
         const region = sm && sm.children[1]; // [0] = header, [1] = asset area
         return {
           display: sm ? getComputedStyle(sm).display : null,
-          regionH: region ? Math.round(region.getBoundingClientRect().height) : 0,
+          regionH: region
+            ? Math.round(region.getBoundingClientRect().height)
+            : 0,
         };
       });
       expect(

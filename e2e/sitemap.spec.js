@@ -136,7 +136,10 @@ test.describe("sitemap structure @parity", () => {
   test("every published _posts/*.md appears as a <loc> entry @parity", () => {
     const locs = readSitemapLocs();
     const posts = listMarkdownFiles(POSTS_DIR);
-    expect(posts.length, "expected at least one post in _posts/").toBeGreaterThan(0);
+    expect(
+      posts.length,
+      "expected at least one post in _posts/",
+    ).toBeGreaterThan(0);
 
     const missing = [];
     for (const file of posts) {

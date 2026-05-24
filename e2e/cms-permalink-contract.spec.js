@@ -160,7 +160,10 @@ test.describe("CMS permalink contract — Decap two-pass vs Jekyll", () => {
       const adminYml = readText(ADMIN_CONFIG);
       const jekyllYml = readText(JEKYLL_CONFIG);
       const chunk = findCollection(adminYml, name);
-      expect(chunk, `admin/config.yml must define collection "${name}"`).not.toBeNull();
+      expect(
+        chunk,
+        `admin/config.yml must define collection "${name}"`,
+      ).not.toBeNull();
 
       const slugTemplate = readKey(chunk, "slug") || "{{slug}}";
       const previewPath = readKey(chunk, "preview_path");

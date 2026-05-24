@@ -71,7 +71,8 @@ function removeDraft() {
   // be served by `npx serve` even though the source post is gone.
   const rendered = path.join(SITE_DIR, "blog", DRAFT_SLUG);
   // @parity-lint-allow: only invoked from afterAll's IS_LOCAL branch (G3).
-  if (fs.existsSync(rendered)) fs.rmSync(rendered, { recursive: true, force: true });
+  if (fs.existsSync(rendered))
+    fs.rmSync(rendered, { recursive: true, force: true });
 }
 
 test.describe(
@@ -80,93 +81,94 @@ test.describe(
   // Runs on chromium-desktop-3k only. See playwright.config.js.
   { tag: ["@admin-write"] },
   () => {
-  test.describe.configure({ mode: "serial", timeout: 240_000 });
+    test.describe.configure({ mode: "serial", timeout: 240_000 });
 
-  test.beforeAll(() => {
-    if (!IS_LOCAL) {
-      // Read-only path: TARGET=preview/prod just exercises the public
-      // surface assertions against the deployed site. Skip the file
-      // write + rebuild — we cannot mutate a remote target from here.
-      return;
-    }
-    // Defensive cleanup in case a previous failed run left the file.
-    removeDraft();
-    writeDraft();
-    jekyllBuild();
-  });
+    test.beforeAll(() => {
+      if (!IS_LOCAL) {
+        // Read-only path: TARGET=preview/prod just exercises the public
+        // surface assertions against the deployed site. Skip the file
+        // write + rebuild — we cannot mutate a remote target from here.
+        return;
+      }
+      // Defensive cleanup in case a previous failed run left the file.
+      removeDraft();
+      writeDraft();
+      jekyllBuild();
+    });
 
-  test.afterAll(() => {
-    if (!IS_LOCAL) return;
-    removeDraft();
-    // Rebuild so subsequent specs in the same run don't see a half-
-    // cleaned `_site/`. Cheap (~1s) and keeps the tree tidy.
-    jekyllBuild();
-  });
+    test.afterAll(() => {
+      if (!IS_LOCAL) return;
+      removeDraft();
+      // Rebuild so subsequent specs in the same run don't see a half-
+      // cleaned `_site/`. Cheap (~1s) and keeps the tree tidy.
+      jekyllBuild();
+    });
 
-  test.beforeEach(({ page }, testInfo) => {
-    page.on("pageerror", (err) =>
-      console.log(`[pageerror] ${err.name}: ${err.message}`),
-    );
-  });
+    test.beforeEach(({ page }) => {
+      page.on("pageerror", (err) =>
+        console.log(`[pageerror] ${err.name}: ${err.message}`),
+      );
+    });
 
-  test("rendered draft URL responds 404 @parity", async ({ page }) => {
-    const response = await page.request.get(DRAFT_URL_PATH);
-    expect(
-      response.status(),
-      `${DRAFT_URL_PATH} should 404 — drafts must not be reachable.`,
-    ).toBe(404);
-  });
+    test("rendered draft URL responds 404 @parity", async ({ page }) => {
+      const response = await page.request.get(DRAFT_URL_PATH);
+      expect(
+        response.status(),
+        `${DRAFT_URL_PATH} should 404 — drafts must not be reachable.`,
+      ).toBe(404);
+    });
 
-  test("draft URL absent from sitemap.xml @parity", () => {
-    // Local target: read the freshly built `_site/sitemap.xml`. For
-    // remote targets, G3 will swap this for an HTTP fetch of the
-    // deployed sitemap. The assertion shape is identical either way.
-    const sitemapPath = path.join(SITE_DIR, "sitemap.xml");
-    if (!IS_LOCAL) {
-      // Remote read-only path placeholder — wire up via G3's TARGET=.
-      test.skip(true, "Remote sitemap fetch lands with G3.");
-      return;
-    }
-    expect(
-      fs.existsSync(sitemapPath),
-      "Expected _site/sitemap.xml to exist after Jekyll build.",
-    ).toBe(true);
-    const xml = fs.readFileSync(sitemapPath, "utf8");
-    expect(
-      xml.includes(DRAFT_SLUG),
-      `Draft slug "${DRAFT_SLUG}" leaked into sitemap.xml — drafts must be excluded.`,
-    ).toBe(false);
-  });
+    test("draft URL absent from sitemap.xml @parity", () => {
+      // Local target: read the freshly built `_site/sitemap.xml`. For
+      // remote targets, G3 will swap this for an HTTP fetch of the
+      // deployed sitemap. The assertion shape is identical either way.
+      const sitemapPath = path.join(SITE_DIR, "sitemap.xml");
+      if (!IS_LOCAL) {
+        // Remote read-only path placeholder — wire up via G3's TARGET=.
+        test.skip(true, "Remote sitemap fetch lands with G3.");
+        return;
+      }
+      expect(
+        fs.existsSync(sitemapPath),
+        "Expected _site/sitemap.xml to exist after Jekyll build.",
+      ).toBe(true);
+      const xml = fs.readFileSync(sitemapPath, "utf8");
+      expect(
+        xml.includes(DRAFT_SLUG),
+        `Draft slug "${DRAFT_SLUG}" leaked into sitemap.xml — drafts must be excluded.`,
+      ).toBe(false);
+    });
 
-  test("draft URL absent from feed.xml @parity", () => {
-    const feedPath = path.join(SITE_DIR, "feed.xml");
-    if (!IS_LOCAL) {
-      test.skip(true, "Remote feed fetch lands with G3.");
-      return;
-    }
-    expect(
-      fs.existsSync(feedPath),
-      "Expected _site/feed.xml to exist after Jekyll build.",
-    ).toBe(true);
-    const xml = fs.readFileSync(feedPath, "utf8");
-    expect(
-      xml.includes(DRAFT_SLUG),
-      `Draft slug "${DRAFT_SLUG}" leaked into feed.xml — drafts must be excluded.`,
-    ).toBe(false);
-  });
+    test("draft URL absent from feed.xml @parity", () => {
+      const feedPath = path.join(SITE_DIR, "feed.xml");
+      if (!IS_LOCAL) {
+        test.skip(true, "Remote feed fetch lands with G3.");
+        return;
+      }
+      expect(
+        fs.existsSync(feedPath),
+        "Expected _site/feed.xml to exist after Jekyll build.",
+      ).toBe(true);
+      const xml = fs.readFileSync(feedPath, "utf8");
+      expect(
+        xml.includes(DRAFT_SLUG),
+        `Draft slug "${DRAFT_SLUG}" leaked into feed.xml — drafts must be excluded.`,
+      ).toBe(false);
+    });
 
-  test("homepage carries no link to the draft @parity", async ({ page }) => {
-    await page.goto("/");
-    // Any anchor whose href contains the draft slug is a leak. Catches
-    // recent-posts widgets, archive lists, and any future homepage
-    // surface that iterates the post collection without a published
-    // filter.
-    const leaks = await page
-      .locator(`a[href*="${DRAFT_SLUG}"]`)
-      .evaluateAll((els) => els.map((el) => el.getAttribute("href")));
-    expect(
-      leaks,
-      `Homepage links reference the draft: ${JSON.stringify(leaks, null, 2)}`,
-    ).toEqual([]);
-  });
-});
+    test("homepage carries no link to the draft @parity", async ({ page }) => {
+      await page.goto("/");
+      // Any anchor whose href contains the draft slug is a leak. Catches
+      // recent-posts widgets, archive lists, and any future homepage
+      // surface that iterates the post collection without a published
+      // filter.
+      const leaks = await page
+        .locator(`a[href*="${DRAFT_SLUG}"]`)
+        .evaluateAll((els) => els.map((el) => el.getAttribute("href")));
+      expect(
+        leaks,
+        `Homepage links reference the draft: ${JSON.stringify(leaks, null, 2)}`,
+      ).toEqual([]);
+    });
+  },
+);

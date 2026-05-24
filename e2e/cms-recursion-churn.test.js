@@ -80,10 +80,9 @@ test.describe("cms-recursion-churn decision logic", () => {
     ];
     for (const loop of Object.keys(SELF_CHURN)) {
       for (const real of realChanges) {
-        expect(
-          shouldRunLoop(loop, [real]),
-          `${loop}: [${real}] must RUN`,
-        ).toBe(true);
+        expect(shouldRunLoop(loop, [real]), `${loop}: [${real}] must RUN`).toBe(
+          true,
+        );
         // Mixed: a real machinery change rides alongside canary churn.
         expect(
           shouldRunLoop(loop, [...SPEC_FIXTURES[loop], real]),
@@ -103,13 +102,13 @@ test.describe("cms-recursion-churn decision logic", () => {
     expect(
       isSelfChurn("media", "assets/images/uploads/e2e-media-roundtrip-9.png"),
     ).toBe(true);
-    expect(
-      isSelfChurn("media", "assets/images/uploads/nested/x-9.png"),
-    ).toBe(false);
-    // A host fixture is not a media/prod fixture (sets are disjoint).
-    expect(isSelfChurn("prod", "_posts/2024-01-02-e2e-unpublish-canary.md")).toBe(
+    expect(isSelfChurn("media", "assets/images/uploads/nested/x-9.png")).toBe(
       false,
     );
+    // A host fixture is not a media/prod fixture (sets are disjoint).
+    expect(
+      isSelfChurn("prod", "_posts/2024-01-02-e2e-unpublish-canary.md"),
+    ).toBe(false);
   });
 
   test("guards: unknown loop and empty/invalid changed set throw", () => {

@@ -64,7 +64,11 @@ const path = require("node:path");
 const { test, expect } = require("./base");
 const { seedDecapAuth, getPat, HOST_REPO } = require("./decap-pat");
 const { closeStaleDecapPrOnBranch } = require("./cms-fixture-pr");
-const { addLabel, gh, waitForCmsPullRequest } = require("./github-actions-poll");
+const {
+  addLabel,
+  gh,
+  waitForCmsPullRequest,
+} = require("./github-actions-poll");
 const { waitForChangeReflected } = require("./deploy-pill");
 const { resolveCmsTarget } = require("./cms-host");
 const {
@@ -116,7 +120,11 @@ const PROD_CANARY = process.env.PROD_CANARY === "1";
 // mutates real prod; a retry just re-runs the same broken chain.
 const TEST_TIMEOUT_MS = 55 * 60 * 1000;
 
-test.describe.configure({ mode: "serial", timeout: TEST_TIMEOUT_MS, retries: 0 });
+test.describe.configure({
+  mode: "serial",
+  timeout: TEST_TIMEOUT_MS,
+  retries: 0,
+});
 
 function toContentBase64(text) {
   return Buffer.from(text, "utf8").toString("base64");
@@ -361,9 +369,9 @@ test(
     await seedDecapAuth(page);
     await test.step("Load production admin", async () => {
       await page.goto(PROD_ADMIN, { waitUntil: "domcontentloaded" });
-      await expect(
-        page.getByRole("link", { name: /^Posts$/i }),
-      ).toBeVisible({ timeout: 60_000 });
+      await expect(page.getByRole("link", { name: /^Posts$/i })).toBeVisible({
+        timeout: 60_000,
+      });
     });
 
     // ── 3. Open the post entry ────────────────────────────────────
@@ -421,9 +429,7 @@ test(
 
     // ── 5. Publish (toggle on, Save, Status → Ready) ──────────────
     await test.step("Toggle Published → ON", async () => {
-      const toggle = page
-        .getByRole("switch", { name: /^Published$/i })
-        .first();
+      const toggle = page.getByRole("switch", { name: /^Published$/i }).first();
       await expect(toggle).toBeVisible({ timeout: 15_000 });
       if ((await toggle.getAttribute("aria-checked")) !== "true") {
         await toggle.click();
@@ -435,12 +441,10 @@ test(
 
     await test.step("Save → Status: Ready (engages auto-merge)", async () => {
       await page.getByRole("button", { name: /^Save$/i }).click();
-      await expect(
-        page.getByText(/Changes saved/i).first(),
-      ).toBeVisible({ timeout: 60_000 });
-      await page
-        .getByRole("button", { name: /^Status:\s*Draft$/i })
-        .click();
+      await expect(page.getByText(/Changes saved/i).first()).toBeVisible({
+        timeout: 60_000,
+      });
+      await page.getByRole("button", { name: /^Status:\s*Draft$/i }).click();
       await page.getByRole("menuitem", { name: /^Ready$/i }).click();
       await expect(
         page.getByRole("button", { name: /^Status:\s*Ready$/i }),
@@ -501,13 +505,12 @@ test(
 
     // ── 9. Remove the image from the post + unpublish, publish ────
     await test.step("Remove the image from the post, unpublish, Save → Ready", async () => {
-      await page.goto(
-        `${PROD_ADMIN}#/collections/posts/entries/${FILE_SLUG}`,
-        { waitUntil: "domcontentloaded" },
+      await page.goto(`${PROD_ADMIN}#/collections/posts/entries/${FILE_SLUG}`, {
+        waitUntil: "domcontentloaded",
+      });
+      await expect(page.getByRole("textbox", { name: /^Title$/i })).toBeVisible(
+        { timeout: 30_000 },
       );
-      await expect(
-        page.getByRole("textbox", { name: /^Title$/i }),
-      ).toBeVisible({ timeout: 30_000 });
 
       // Clear the Featured Image widget. Decap renders a remove/clear
       // control next to the chosen-image preview. We click it, then
@@ -531,9 +534,7 @@ test(
         )
         .toBe(false);
 
-      const toggle = page
-        .getByRole("switch", { name: /^Published$/i })
-        .first();
+      const toggle = page.getByRole("switch", { name: /^Published$/i }).first();
       await expect(toggle).toBeVisible({ timeout: 15_000 });
       if ((await toggle.getAttribute("aria-checked")) === "true") {
         await toggle.click();
@@ -543,12 +544,10 @@ test(
       });
 
       await page.getByRole("button", { name: /^Save$/i }).click();
-      await expect(
-        page.getByText(/Changes saved/i).first(),
-      ).toBeVisible({ timeout: 60_000 });
-      await page
-        .getByRole("button", { name: /^Status:\s*Draft$/i })
-        .click();
+      await expect(page.getByText(/Changes saved/i).first()).toBeVisible({
+        timeout: 60_000,
+      });
+      await page.getByRole("button", { name: /^Status:\s*Draft$/i }).click();
       await page.getByRole("menuitem", { name: /^Ready$/i }).click();
       await expect(
         page.getByRole("button", { name: /^Status:\s*Ready$/i }),
@@ -646,7 +645,7 @@ test(
         );
         let labelled = false;
         for (const pr of cmsPrs) {
-          let files = [];
+          let files;
           try {
             files = await gh(
               `/repos/${HOST_REPO}/pulls/${pr.number}/files?per_page=100`,
@@ -678,13 +677,12 @@ test(
     await test.step("Wait for the image URL to 404 on adamdaniel.ai", async () => {
       // Back to the entry editor so the deploy-status pill is mounted
       // (the /media route has no toolbar/pill).
-      await page.goto(
-        `${PROD_ADMIN}#/collections/posts/entries/${FILE_SLUG}`,
-        { waitUntil: "domcontentloaded" },
+      await page.goto(`${PROD_ADMIN}#/collections/posts/entries/${FILE_SLUG}`, {
+        waitUntil: "domcontentloaded",
+      });
+      await expect(page.getByRole("textbox", { name: /^Title$/i })).toBeVisible(
+        { timeout: 30_000 },
       );
-      await expect(
-        page.getByRole("textbox", { name: /^Title$/i }),
-      ).toBeVisible({ timeout: 30_000 });
       await waitForChangeReflected({
         page,
         pillId: PILL_PROD,

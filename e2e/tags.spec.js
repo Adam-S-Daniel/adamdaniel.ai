@@ -111,7 +111,10 @@ test.describe("Homepage tag cloud", () => {
       return;
     }
 
-    expect(sectionVisible, "homepage should show .tag-cloud-section when tags exist").toBe(true);
+    expect(
+      sectionVisible,
+      "homepage should show .tag-cloud-section when tags exist",
+    ).toBe(true);
     await expect(section.locator('a[href$="/tags/"]')).toBeVisible();
 
     const cloud = section.locator(".tag-cloud");

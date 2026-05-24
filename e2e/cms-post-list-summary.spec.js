@@ -93,37 +93,38 @@ test.describe(
   // webkit-iphone16 only. See playwright.config.js.
   { tag: ["@admin-read"] },
   () => {
-  test.describe.configure({ mode: "serial" });
+    test.describe.configure({ mode: "serial" });
 
-  for (const configPath of CONFIGS) {
-    const label = path.relative(REPO_ROOT, configPath);
+    for (const configPath of CONFIGS) {
+      const label = path.relative(REPO_ROOT, configPath);
 
-    test(`${label}: posts.summary line equals the locked template verbatim`, () => {
-      const yml = readConfig(configPath);
-      const posts = findCollection(yml, "posts");
-      expect(posts, "posts collection must exist").not.toBeNull();
-      const summary = findSummaryLine(posts);
-      expect(
-        summary,
-        "posts collection must declare a summary template",
-      ).not.toBeNull();
-      // The literal template is shared across all three configs — drift
-      // between them would mean the local / test runs render a different
-      // list label than production.
-      expect(summary).toBe(EXPECTED_SUMMARY);
-    });
+      test(`${label}: posts.summary line equals the locked template verbatim`, () => {
+        const yml = readConfig(configPath);
+        const posts = findCollection(yml, "posts");
+        expect(posts, "posts collection must exist").not.toBeNull();
+        const summary = findSummaryLine(posts);
+        expect(
+          summary,
+          "posts collection must declare a summary template",
+        ).not.toBeNull();
+        // The literal template is shared across all three configs — drift
+        // between them would mean the local / test runs render a different
+        // list label than production.
+        expect(summary).toBe(EXPECTED_SUMMARY);
+      });
 
-    test(`${label}: posts.summary surfaces both DRAFT and Scheduled states`, () => {
-      const yml = readConfig(configPath);
-      const posts = findCollection(yml, "posts");
-      const summary = findSummaryLine(posts);
-      // The DRAFT clause is the new contribution (D3) — `published: false`
-      // appends " — DRAFT" so editors see the state at a glance in the
-      // Posts list. The Scheduled clause was already there; locking both
-      // together prevents a future edit from regressing one in passing
-      // while landing the other.
-      expect(summary).toContain(DRAFT_CLAUSE);
-      expect(summary).toContain(SCHEDULED_CLAUSE);
-    });
-  }
-});
+      test(`${label}: posts.summary surfaces both DRAFT and Scheduled states`, () => {
+        const yml = readConfig(configPath);
+        const posts = findCollection(yml, "posts");
+        const summary = findSummaryLine(posts);
+        // The DRAFT clause is the new contribution (D3) — `published: false`
+        // appends " — DRAFT" so editors see the state at a glance in the
+        // Posts list. The Scheduled clause was already there; locking both
+        // together prevents a future edit from regressing one in passing
+        // while landing the other.
+        expect(summary).toContain(DRAFT_CLAUSE);
+        expect(summary).toContain(SCHEDULED_CLAUSE);
+      });
+    }
+  },
+);

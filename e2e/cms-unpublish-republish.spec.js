@@ -60,14 +60,22 @@ const path = require("node:path");
 const fs = require("node:fs");
 const { test, expect } = require("./base");
 const { seedDecapAuth, getPat, HOST_REPO } = require("./decap-pat");
-const { fetchPublicUrl, gh } = require("./github-actions-poll");
-const { waitForChangeReflected, PILL_PROD } = require("./deploy-pill");
-const { readPublishedFlag, forcePublishedFalse } = require("./fixture-baseline");
+const { gh } = require("./github-actions-poll");
+const { waitForChangeReflected } = require("./deploy-pill");
+const { prodTarget } = require("./cms-host");
+const {
+  readPublishedFlag,
+  forcePublishedFalse,
+} = require("./fixture-baseline");
 
-const PROD_HOST = "https://adamdaniel.ai";
-const PROD_ADMIN = `${PROD_HOST}/admin/`;
+// Prod host triplet resolved through the shared cms-host SSOT (byte-identical
+// to the old hardcoded literals) so prod/preview surfaces can't drift.
+const {
+  host: PROD_HOST,
+  adminUrl: PROD_ADMIN,
+  pillId: PILL_PROD,
+} = prodTarget();
 const FIXTURE_PATH = "_posts/2024-01-02-e2e-unpublish-canary.md";
-const FIXTURE_TITLE = "E2E Unpublish Canary";
 const FIXTURE_SLUG = "e2e-unpublish-canary";
 const PUBLIC_URL = `${PROD_HOST}/blog/${FIXTURE_SLUG}/`;
 const PROD_CANARY = process.env.PROD_CANARY === "1";
@@ -136,172 +144,178 @@ async function url404s(page) {
 test(
   "CMS unpublish + re-publish — flip published flag toggles URL visibility",
   { tag: ["@admin-write"] },
-  async ({
-  page,
-}, testInfo) => {
-  test.skip(!getPat(), "CMS_E2E_PAT not set — host-repo unpublish spec disabled.");
-  test.skip(
-    process.env.RUN_HOST_REPO_PUBLISH_LOOP !== "1",
-    "RUN_HOST_REPO_PUBLISH_LOOP not set — opt-in via the cms-publish-loop-host workflow.",
-  );
-
-  // Persistent dialog handler — Decap uses native window.confirm()
-  // for the publish-now confirmation in some flows; without this
-  // listener Playwright auto-dismisses the dialog and Decap reads
-  // it as "user cancelled," silently aborting the chain. See
-  // AGENTS.md "Test-Driven Design" section.
-  page.on("dialog", (d) => d.accept());
-
-  // ── 0. Confirm baseline before driving admin ────────────────────
-  // Read the source fixture from main and verify it asserts
-  // `published: false` — this is the baseline the spec restores in
-  // cleanup, and a spec body that started against a different
-  // baseline would corrupt the next run. UI-driven assertion below
-  // confirms the editor agrees.
-  await test.step("Confirm fixture file's baseline is published: false on main", async () => {
-    const text = fs.readFileSync(
-      path.join(__dirname, "..", FIXTURE_PATH),
-      "utf8",
+  async ({ page }) => {
+    test.skip(
+      !getPat(),
+      "CMS_E2E_PAT not set — host-repo unpublish spec disabled.",
     );
-    if (!/^published:\s*false\s*$/m.test(text)) {
-      throw new Error(
-        `${FIXTURE_PATH} on main is not at baseline (published: false). Reset before running this spec.`,
+    test.skip(
+      process.env.RUN_HOST_REPO_PUBLISH_LOOP !== "1",
+      "RUN_HOST_REPO_PUBLISH_LOOP not set — opt-in via the cms-publish-loop-host workflow.",
+    );
+
+    // Persistent dialog handler — Decap uses native window.confirm()
+    // for the publish-now confirmation in some flows; without this
+    // listener Playwright auto-dismisses the dialog and Decap reads
+    // it as "user cancelled," silently aborting the chain. See
+    // AGENTS.md "Test-Driven Design" section.
+    page.on("dialog", (d) => d.accept());
+
+    // ── 0. Confirm baseline before driving admin ────────────────────
+    // Read the source fixture from main and verify it asserts
+    // `published: false` — this is the baseline the spec restores in
+    // cleanup, and a spec body that started against a different
+    // baseline would corrupt the next run. UI-driven assertion below
+    // confirms the editor agrees.
+    await test.step("Confirm fixture file's baseline is published: false on main", async () => {
+      const text = fs.readFileSync(
+        path.join(__dirname, "..", FIXTURE_PATH),
+        "utf8",
       );
-    }
-  });
-
-  await test.step("Confirm public URL 4xxs before driving admin", async () => {
-    const ok404 = await url404s(page);
-    expect(ok404, `${PUBLIC_URL} should 4xx at baseline`).toBe(true);
-  });
-
-  // ── 1. Open admin, navigate to the unpublish-canary entry ──────
-  await seedDecapAuth(page);
-  await test.step("Load production admin", async () => {
-    await page.goto(PROD_ADMIN, { waitUntil: "domcontentloaded" });
-    await expect(page.getByRole("link", { name: /^Posts$/i })).toBeVisible({
-      timeout: 60_000,
-    });
-  });
-
-  await test.step("Navigate to the unpublish-canary post entry", async () => {
-    // Direct URL nav is deterministic and bypasses any
-    // collection-list ordering quirks.
-    //
-    // Decap's hash-route entry mount is occasionally slow on cold
-    // CDN cache (especially right after a deploy-production), and
-    // the failure mode is a stuck Title field. Two-attempt retry:
-    // navigate → wait up to 60s for Title → on timeout, reload
-    // (forcing a fresh asset fetch) and try once more. 60s per
-    // leg, so worst-case ~120s before this step fails.
-    const titleLocator = page.getByRole("textbox", { name: /^Title$/i });
-    const targetUrl = `${PROD_ADMIN}#/collections/posts/entries/2024-01-02-${FIXTURE_SLUG}`;
-    let lastErr;
-    for (let attempt = 1; attempt <= 2; attempt++) {
-      try {
-        if (attempt === 1) {
-          await page.goto(targetUrl, { waitUntil: "domcontentloaded" });
-        } else {
-          console.warn(
-            `[unpublish-republish] Title field didn't appear within 60s on attempt 1; reloading and retrying`,
-          );
-          await page.reload({ waitUntil: "domcontentloaded" });
-        }
-        await expect(titleLocator).toBeVisible({ timeout: 60_000 });
-        lastErr = null;
-        break;
-      } catch (err) {
-        lastErr = err;
+      if (!/^published:\s*false\s*$/m.test(text)) {
+        throw new Error(
+          `${FIXTURE_PATH} on main is not at baseline (published: false). Reset before running this spec.`,
+        );
       }
-    }
-    if (lastErr) throw lastErr;
-  });
-
-  await test.step("Verify the editor reads Published toggle as OFF (baseline)", async () => {
-    // Decap renders the boolean Published widget as `role="switch"`
-    // (not `checkbox`); state is exposed via `aria-checked`. PR #407's
-    // first run failed here on `getByRole("checkbox")` — same lesson
-    // prod-mutate already learned, see its toggle step.
-    const toggle = page.getByRole("switch", { name: /^Published$/i }).first();
-    await expect(toggle, "Published toggle should be visible").toBeVisible({
-      timeout: 30_000,
     });
-    await expect(
-      toggle,
-      "Published toggle should reflect baseline (aria-checked=false)",
-    ).toHaveAttribute("aria-checked", "false", { timeout: 5_000 });
-  });
 
-  // ── 2. Re-publish leg: toggle ON, Save, drive workflow → URL 200 ──
-  await test.step("Toggle Published → ON via UI", async () => {
-    const toggle = page.getByRole("switch", { name: /^Published$/i }).first();
-    // Belt-and-suspenders: only click if it's not already on (e.g. an
-    // earlier abort left it ON), so we don't toggle the wrong direction.
-    const ariaChecked = await toggle.getAttribute("aria-checked");
-    if (ariaChecked !== "true") await toggle.click();
-    await expect(toggle).toHaveAttribute("aria-checked", "true", { timeout: 5_000 });
-  });
-
-  await test.step("Save → Status:Ready → Publish Now (re-publish)", async () => {
-    await page.getByRole("button", { name: /^Save$/i }).click();
-    await expect(page.getByText(/Changes saved/i).first()).toBeVisible({
-      timeout: 60_000,
+    await test.step("Confirm public URL 4xxs before driving admin", async () => {
+      const ok404 = await url404s(page);
+      expect(ok404, `${PUBLIC_URL} should 4xx at baseline`).toBe(true);
     });
-    await page.getByRole("button", { name: /^Status:\s*Draft$/i }).click();
-    await page.getByRole("menuitem", { name: /^Ready$/i }).click();
-    await expect(
-      page.getByRole("button", { name: /^Status:\s*Ready$/i }),
-    ).toBeVisible({ timeout: 30_000 });
-    await page.getByRole("button", { name: /^Publish$/i }).click();
-    await page
-      .getByRole("menuitem", { name: /publish now/i })
-      .first()
-      .click();
-  });
 
-  await test.step("Wait for /blog/e2e-unpublish-canary/ to serve (URL 200)", async () => {
-    await waitForChangeReflected({
-      page,
-      pillId: PILL_PROD,
-      urlCheck: async () => urlServesPost(page),
-      urlTimeoutMs: 15 * 60 * 1000,
+    // ── 1. Open admin, navigate to the unpublish-canary entry ──────
+    await seedDecapAuth(page);
+    await test.step("Load production admin", async () => {
+      await page.goto(PROD_ADMIN, { waitUntil: "domcontentloaded" });
+      await expect(page.getByRole("link", { name: /^Posts$/i })).toBeVisible({
+        timeout: 60_000,
+      });
     });
-  });
 
-  // ── 3. Unpublish leg: toggle OFF, Save, drive workflow → URL 404 ──
-  await test.step("Toggle Published → OFF via UI", async () => {
-    const toggle = page.getByRole("switch", { name: /^Published$/i }).first();
-    const ariaChecked = await toggle.getAttribute("aria-checked");
-    if (ariaChecked !== "false") await toggle.click();
-    await expect(toggle).toHaveAttribute("aria-checked", "false", { timeout: 5_000 });
-  });
-
-  await test.step("Save → Status:Ready → Publish Now (unpublish)", async () => {
-    await page.getByRole("button", { name: /^Save$/i }).click();
-    await expect(page.getByText(/Changes saved/i).first()).toBeVisible({
-      timeout: 60_000,
+    await test.step("Navigate to the unpublish-canary post entry", async () => {
+      // Direct URL nav is deterministic and bypasses any
+      // collection-list ordering quirks.
+      //
+      // Decap's hash-route entry mount is occasionally slow on cold
+      // CDN cache (especially right after a deploy-production), and
+      // the failure mode is a stuck Title field. Two-attempt retry:
+      // navigate → wait up to 60s for Title → on timeout, reload
+      // (forcing a fresh asset fetch) and try once more. 60s per
+      // leg, so worst-case ~120s before this step fails.
+      const titleLocator = page.getByRole("textbox", { name: /^Title$/i });
+      const targetUrl = `${PROD_ADMIN}#/collections/posts/entries/2024-01-02-${FIXTURE_SLUG}`;
+      let lastErr;
+      for (let attempt = 1; attempt <= 2; attempt++) {
+        try {
+          if (attempt === 1) {
+            await page.goto(targetUrl, { waitUntil: "domcontentloaded" });
+          } else {
+            console.warn(
+              `[unpublish-republish] Title field didn't appear within 60s on attempt 1; reloading and retrying`,
+            );
+            await page.reload({ waitUntil: "domcontentloaded" });
+          }
+          await expect(titleLocator).toBeVisible({ timeout: 60_000 });
+          lastErr = null;
+          break;
+        } catch (err) {
+          lastErr = err;
+        }
+      }
+      if (lastErr) throw lastErr;
     });
-    await page.getByRole("button", { name: /^Status:\s*Draft$/i }).click();
-    await page.getByRole("menuitem", { name: /^Ready$/i }).click();
-    await expect(
-      page.getByRole("button", { name: /^Status:\s*Ready$/i }),
-    ).toBeVisible({ timeout: 30_000 });
-    await page.getByRole("button", { name: /^Publish$/i }).click();
-    await page
-      .getByRole("menuitem", { name: /publish now/i })
-      .first()
-      .click();
-  });
 
-  await test.step("Wait for /blog/e2e-unpublish-canary/ to 4xx (URL hidden)", async () => {
-    await waitForChangeReflected({
-      page,
-      pillId: PILL_PROD,
-      urlCheck: async () => url404s(page),
-      urlTimeoutMs: 15 * 60 * 1000,
+    await test.step("Verify the editor reads Published toggle as OFF (baseline)", async () => {
+      // Decap renders the boolean Published widget as `role="switch"`
+      // (not `checkbox`); state is exposed via `aria-checked`. PR #407's
+      // first run failed here on `getByRole("checkbox")` — same lesson
+      // prod-mutate already learned, see its toggle step.
+      const toggle = page.getByRole("switch", { name: /^Published$/i }).first();
+      await expect(toggle, "Published toggle should be visible").toBeVisible({
+        timeout: 30_000,
+      });
+      await expect(
+        toggle,
+        "Published toggle should reflect baseline (aria-checked=false)",
+      ).toHaveAttribute("aria-checked", "false", { timeout: 5_000 });
     });
-  });
-});
+
+    // ── 2. Re-publish leg: toggle ON, Save, drive workflow → URL 200 ──
+    await test.step("Toggle Published → ON via UI", async () => {
+      const toggle = page.getByRole("switch", { name: /^Published$/i }).first();
+      // Belt-and-suspenders: only click if it's not already on (e.g. an
+      // earlier abort left it ON), so we don't toggle the wrong direction.
+      const ariaChecked = await toggle.getAttribute("aria-checked");
+      if (ariaChecked !== "true") await toggle.click();
+      await expect(toggle).toHaveAttribute("aria-checked", "true", {
+        timeout: 5_000,
+      });
+    });
+
+    await test.step("Save → Status:Ready → Publish Now (re-publish)", async () => {
+      await page.getByRole("button", { name: /^Save$/i }).click();
+      await expect(page.getByText(/Changes saved/i).first()).toBeVisible({
+        timeout: 60_000,
+      });
+      await page.getByRole("button", { name: /^Status:\s*Draft$/i }).click();
+      await page.getByRole("menuitem", { name: /^Ready$/i }).click();
+      await expect(
+        page.getByRole("button", { name: /^Status:\s*Ready$/i }),
+      ).toBeVisible({ timeout: 30_000 });
+      await page.getByRole("button", { name: /^Publish$/i }).click();
+      await page
+        .getByRole("menuitem", { name: /publish now/i })
+        .first()
+        .click();
+    });
+
+    await test.step("Wait for /blog/e2e-unpublish-canary/ to serve (URL 200)", async () => {
+      await waitForChangeReflected({
+        page,
+        pillId: PILL_PROD,
+        urlCheck: async () => urlServesPost(page),
+        urlTimeoutMs: 15 * 60 * 1000,
+      });
+    });
+
+    // ── 3. Unpublish leg: toggle OFF, Save, drive workflow → URL 404 ──
+    await test.step("Toggle Published → OFF via UI", async () => {
+      const toggle = page.getByRole("switch", { name: /^Published$/i }).first();
+      const ariaChecked = await toggle.getAttribute("aria-checked");
+      if (ariaChecked !== "false") await toggle.click();
+      await expect(toggle).toHaveAttribute("aria-checked", "false", {
+        timeout: 5_000,
+      });
+    });
+
+    await test.step("Save → Status:Ready → Publish Now (unpublish)", async () => {
+      await page.getByRole("button", { name: /^Save$/i }).click();
+      await expect(page.getByText(/Changes saved/i).first()).toBeVisible({
+        timeout: 60_000,
+      });
+      await page.getByRole("button", { name: /^Status:\s*Draft$/i }).click();
+      await page.getByRole("menuitem", { name: /^Ready$/i }).click();
+      await expect(
+        page.getByRole("button", { name: /^Status:\s*Ready$/i }),
+      ).toBeVisible({ timeout: 30_000 });
+      await page.getByRole("button", { name: /^Publish$/i }).click();
+      await page
+        .getByRole("menuitem", { name: /publish now/i })
+        .first()
+        .click();
+    });
+
+    await test.step("Wait for /blog/e2e-unpublish-canary/ to 4xx (URL hidden)", async () => {
+      await waitForChangeReflected({
+        page,
+        pillId: PILL_PROD,
+        urlCheck: async () => url404s(page),
+        urlTimeoutMs: 15 * 60 * 1000,
+      });
+    });
+  },
+);
 
 // Safety-net harness: the spec body's last leg flips Published OFF and
 // waits for the URL to 404, so a passing run already lands at baseline.
@@ -361,6 +375,7 @@ test.afterAll(async () => {
   );
   await writeFixtureOnMain({
     fileText: baselineFileText,
-    message: "test(unpublish): harness safety-net reset to published: false (UI cleanup left mutation)",
+    message:
+      "test(unpublish): harness safety-net reset to published: false (UI cleanup left mutation)",
   });
 });

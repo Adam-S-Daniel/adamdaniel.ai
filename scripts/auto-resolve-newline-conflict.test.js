@@ -178,10 +178,7 @@ test("idempotencyKey() — encodes both SHAs deterministically", () => {
   const k = idempotencyKey("abc123", "def456");
   assert.equal(k, "<!-- key:abc123:def456 -->");
   // Order matters — different SHA pairs produce different keys
-  assert.notEqual(
-    idempotencyKey("abc", "def"),
-    idempotencyKey("def", "abc"),
-  );
+  assert.notEqual(idempotencyKey("abc", "def"), idempotencyKey("def", "abc"));
 });
 
 test("formatAbortComment() — embeds marker and key, lists reasons", () => {
@@ -218,13 +215,16 @@ function makeMockFetch(scenarios) {
       const key = `${(opts.method || "GET").toUpperCase()} ${url.replace("https://api.github.com", "")}`;
       calls.push({ key, body: opts.body });
       if (!(key in scenarios)) {
-        throw new Error(`unexpected call: ${key} (scenarios: ${Object.keys(scenarios).join(", ")})`);
+        throw new Error(
+          `unexpected call: ${key} (scenarios: ${Object.keys(scenarios).join(", ")})`,
+        );
       }
       const s = scenarios[key];
       return {
         ok: s.status >= 200 && s.status < 300,
         status: s.status,
-        text: async () => (typeof s.body === "string" ? s.body : JSON.stringify(s.body)),
+        text: async () =>
+          typeof s.body === "string" ? s.body : JSON.stringify(s.body),
         json: async () => s.body,
       };
     },
@@ -234,45 +234,82 @@ function makeMockFetch(scenarios) {
 test("run() — closes a pure-newline-mangling PR (#882-style case)", async () => {
   const baseSha = "deadbeef";
   const headSha = "feedface";
-  const main = "Adam Daniel — E2E canary post (do not edit by hand).\n\nThis URL exists so the automated end-to-end publish-loop tests have a stable\ntarget to assert against on both preview-pr<N>.adamdaniel.ai and\nadamdaniel.ai. The body is replaced during a test run and reset to this\nbaseline in cleanup, so the public URL always renders innocuous content\nbetween runs.\n\nIf this is the only thing you can see, no test is currently in progress.\n";
-  const mangled = "Adam Daniel — E2E canary post (do not edit by hand).\n\n\n\nThis URL exists so the automated end-to-end publish-loop tests have a stable\n\ntarget to assert against on both preview-pr<N>.adamdaniel.ai and\n\nadamdaniel.ai. The body is replaced during a test run and reset to this\n\nbaseline in cleanup, so the public URL always renders innocuous content\n\nbetween runs.\n\n\n\nIf this is the only thing you can see, no test is currently in progress.\n";
+  const main =
+    "Adam Daniel — E2E canary post (do not edit by hand).\n\nThis URL exists so the automated end-to-end publish-loop tests have a stable\ntarget to assert against on both preview-pr<N>.adamdaniel.ai and\nadamdaniel.ai. The body is replaced during a test run and reset to this\nbaseline in cleanup, so the public URL always renders innocuous content\nbetween runs.\n\nIf this is the only thing you can see, no test is currently in progress.\n";
+  const mangled =
+    "Adam Daniel — E2E canary post (do not edit by hand).\n\n\n\nThis URL exists so the automated end-to-end publish-loop tests have a stable\n\ntarget to assert against on both preview-pr<N>.adamdaniel.ai and\n\nadamdaniel.ai. The body is replaced during a test run and reset to this\n\nbaseline in cleanup, so the public URL always renders innocuous content\n\nbetween runs.\n\n\n\nIf this is the only thing you can see, no test is currently in progress.\n";
   const mock = makeMockFetch({
     "GET /repos/owner/r/pulls/123": {
       status: 200,
       body: {
         state: "open",
         mergeable_state: "dirty",
-        head: { ref: "cms/e2e/canary-post", sha: headSha, repo: { full_name: "owner/r" } },
+        head: {
+          ref: "cms/e2e/canary-post",
+          sha: headSha,
+          repo: { full_name: "owner/r" },
+        },
         base: { ref: "main", sha: baseSha },
         user: { login: "Adam-S-Daniel" },
       },
     },
-    "GET /repos/owner/r/issues/123/comments?per_page=100": { status: 200, body: [] },
+    "GET /repos/owner/r/issues/123/comments?per_page=100": {
+      status: 200,
+      body: [],
+    },
     "GET /repos/owner/r/pulls/123/files?per_page=300": {
       status: 200,
-      body: [{ filename: "_e2e/canary-post.md", status: "modified", changes: 12, patch: "@@..." }],
+      body: [
+        {
+          filename: "_e2e/canary-post.md",
+          status: "modified",
+          changes: 12,
+          patch: "@@...",
+        },
+      ],
     },
     "GET /repos/owner/r/contents/_e2e/canary-post.md?ref=main": {
       status: 200,
-      body: { type: "file", content: Buffer.from(main, "utf8").toString("base64") },
+      body: {
+        type: "file",
+        content: Buffer.from(main, "utf8").toString("base64"),
+      },
     },
-    "GET /repos/owner/r/contents/_e2e/canary-post.md?ref=cms%2Fe2e%2Fcanary-post": {
-      status: 200,
-      body: { type: "file", content: Buffer.from(mangled, "utf8").toString("base64") },
-    },
+    "GET /repos/owner/r/contents/_e2e/canary-post.md?ref=cms%2Fe2e%2Fcanary-post":
+      {
+        status: 200,
+        body: {
+          type: "file",
+          content: Buffer.from(mangled, "utf8").toString("base64"),
+        },
+      },
     "POST /repos/owner/r/issues/123/comments": { status: 201, body: { id: 1 } },
-    "PATCH /repos/owner/r/pulls/123": { status: 200, body: { state: "closed" } },
+    "PATCH /repos/owner/r/pulls/123": {
+      status: 200,
+      body: { state: "closed" },
+    },
   });
   const origFetch = globalThis.fetch;
   globalThis.fetch = mock.fetch;
   process.env.GH_TOKEN = "test";
   try {
-    const result = await run({ repo: "owner/r", prNumber: 123, dryRun: false, log: () => {} });
+    const result = await run({
+      repo: "owner/r",
+      prNumber: 123,
+      dryRun: false,
+      log: () => {},
+    });
     assert.equal(result.outcome, "closed");
     assert.deepEqual(result.paths, ["_e2e/canary-post.md"]);
     // Verify we posted the close-comment AND patched state to closed
-    assert.ok(mock.calls.some((c) => c.key === "POST /repos/owner/r/issues/123/comments"));
-    assert.ok(mock.calls.some((c) => c.key === "PATCH /repos/owner/r/pulls/123"));
+    assert.ok(
+      mock.calls.some(
+        (c) => c.key === "POST /repos/owner/r/issues/123/comments",
+      ),
+    );
+    assert.ok(
+      mock.calls.some((c) => c.key === "PATCH /repos/owner/r/pulls/123"),
+    );
   } finally {
     globalThis.fetch = origFetch;
   }
@@ -285,23 +322,43 @@ test("run() — aborts when a non-newline diff is detected (real content change)
       body: {
         state: "open",
         mergeable_state: "dirty",
-        head: { ref: "cms/posts/foo", sha: "h", repo: { full_name: "owner/r" } },
+        head: {
+          ref: "cms/posts/foo",
+          sha: "h",
+          repo: { full_name: "owner/r" },
+        },
         base: { ref: "main", sha: "b" },
         user: { login: "Adam-S-Daniel" },
       },
     },
-    "GET /repos/owner/r/issues/124/comments?per_page=100": { status: 200, body: [] },
+    "GET /repos/owner/r/issues/124/comments?per_page=100": {
+      status: 200,
+      body: [],
+    },
     "GET /repos/owner/r/pulls/124/files?per_page=300": {
       status: 200,
-      body: [{ filename: "_posts/2026-foo.md", status: "modified", changes: 2, patch: "@@..." }],
+      body: [
+        {
+          filename: "_posts/2026-foo.md",
+          status: "modified",
+          changes: 2,
+          patch: "@@...",
+        },
+      ],
     },
     "GET /repos/owner/r/contents/_posts/2026-foo.md?ref=main": {
       status: 200,
-      body: { type: "file", content: Buffer.from("Hello world\n", "utf8").toString("base64") },
+      body: {
+        type: "file",
+        content: Buffer.from("Hello world\n", "utf8").toString("base64"),
+      },
     },
     "GET /repos/owner/r/contents/_posts/2026-foo.md?ref=cms%2Fposts%2Ffoo": {
       status: 200,
-      body: { type: "file", content: Buffer.from("Goodbye world\n", "utf8").toString("base64") },
+      body: {
+        type: "file",
+        content: Buffer.from("Goodbye world\n", "utf8").toString("base64"),
+      },
     },
     "POST /repos/owner/r/issues/124/comments": { status: 201, body: { id: 1 } },
   });
@@ -309,12 +366,27 @@ test("run() — aborts when a non-newline diff is detected (real content change)
   globalThis.fetch = mock.fetch;
   process.env.GH_TOKEN = "test";
   try {
-    const result = await run({ repo: "owner/r", prNumber: 124, dryRun: false, log: () => {} });
+    const result = await run({
+      repo: "owner/r",
+      prNumber: 124,
+      dryRun: false,
+      log: () => {},
+    });
     assert.equal(result.outcome, "abort");
-    assert.ok(result.reasons.some((r) => r.includes("canonical-collapse mismatch")));
+    assert.ok(
+      result.reasons.some((r) => r.includes("canonical-collapse mismatch")),
+    );
     // We posted an abort-comment but did NOT close the PR
-    assert.ok(mock.calls.some((c) => c.key === "POST /repos/owner/r/issues/124/comments"));
-    assert.equal(mock.calls.filter((c) => c.key === "PATCH /repos/owner/r/pulls/124").length, 0);
+    assert.ok(
+      mock.calls.some(
+        (c) => c.key === "POST /repos/owner/r/issues/124/comments",
+      ),
+    );
+    assert.equal(
+      mock.calls.filter((c) => c.key === "PATCH /repos/owner/r/pulls/124")
+        .length,
+      0,
+    );
   } finally {
     globalThis.fetch = origFetch;
   }
@@ -327,15 +399,29 @@ test("run() — aborts on non-allowlisted path", async () => {
       body: {
         state: "open",
         mergeable_state: "dirty",
-        head: { ref: "cms/e2e/canary-post", sha: "h", repo: { full_name: "owner/r" } },
+        head: {
+          ref: "cms/e2e/canary-post",
+          sha: "h",
+          repo: { full_name: "owner/r" },
+        },
         base: { ref: "main", sha: "b" },
         user: { login: "Adam-S-Daniel" },
       },
     },
-    "GET /repos/owner/r/issues/125/comments?per_page=100": { status: 200, body: [] },
+    "GET /repos/owner/r/issues/125/comments?per_page=100": {
+      status: 200,
+      body: [],
+    },
     "GET /repos/owner/r/pulls/125/files?per_page=300": {
       status: 200,
-      body: [{ filename: "admin/config.yml", status: "modified", changes: 1, patch: "@@..." }],
+      body: [
+        {
+          filename: "admin/config.yml",
+          status: "modified",
+          changes: 1,
+          patch: "@@...",
+        },
+      ],
     },
     "POST /repos/owner/r/issues/125/comments": { status: 201, body: { id: 1 } },
   });
@@ -343,7 +429,12 @@ test("run() — aborts on non-allowlisted path", async () => {
   globalThis.fetch = mock.fetch;
   process.env.GH_TOKEN = "test";
   try {
-    const result = await run({ repo: "owner/r", prNumber: 125, dryRun: false, log: () => {} });
+    const result = await run({
+      repo: "owner/r",
+      prNumber: 125,
+      dryRun: false,
+      log: () => {},
+    });
     assert.equal(result.outcome, "abort");
     assert.ok(result.reasons.some((r) => r.includes("PATH_ALLOWLIST")));
   } finally {
@@ -358,7 +449,11 @@ test("run() — skips when head ref is not allowlisted", async () => {
       body: {
         state: "open",
         mergeable_state: "dirty",
-        head: { ref: "feat/something", sha: "h", repo: { full_name: "owner/r" } },
+        head: {
+          ref: "feat/something",
+          sha: "h",
+          repo: { full_name: "owner/r" },
+        },
         base: { ref: "main", sha: "b" },
         user: { login: "Adam-S-Daniel" },
       },
@@ -368,7 +463,12 @@ test("run() — skips when head ref is not allowlisted", async () => {
   globalThis.fetch = mock.fetch;
   process.env.GH_TOKEN = "test";
   try {
-    const result = await run({ repo: "owner/r", prNumber: 126, dryRun: false, log: () => {} });
+    const result = await run({
+      repo: "owner/r",
+      prNumber: 126,
+      dryRun: false,
+      log: () => {},
+    });
     assert.equal(result.outcome, "skip");
     assert.equal(result.reason, "head-ref=feat/something");
     // No comments, no PATCH
@@ -389,7 +489,11 @@ test("run() — skips when already resolved at the same (base,head) SHA pair (id
       body: {
         state: "open",
         mergeable_state: "dirty",
-        head: { ref: "cms/e2e/canary-post", sha: headSha, repo: { full_name: "owner/r" } },
+        head: {
+          ref: "cms/e2e/canary-post",
+          sha: headSha,
+          repo: { full_name: "owner/r" },
+        },
         base: { ref: "main", sha: baseSha },
         user: { login: "Adam-S-Daniel" },
       },
@@ -403,7 +507,12 @@ test("run() — skips when already resolved at the same (base,head) SHA pair (id
   globalThis.fetch = mock.fetch;
   process.env.GH_TOKEN = "test";
   try {
-    const result = await run({ repo: "owner/r", prNumber: 127, dryRun: false, log: () => {} });
+    const result = await run({
+      repo: "owner/r",
+      prNumber: 127,
+      dryRun: false,
+      log: () => {},
+    });
     assert.equal(result.outcome, "skip");
     assert.equal(result.reason, "idempotent-already-resolved");
   } finally {
@@ -418,7 +527,11 @@ test("run() — skips fork PRs", async () => {
       body: {
         state: "open",
         mergeable_state: "dirty",
-        head: { ref: "cms/e2e/canary-post", sha: "h", repo: { full_name: "attacker/r" } },
+        head: {
+          ref: "cms/e2e/canary-post",
+          sha: "h",
+          repo: { full_name: "attacker/r" },
+        },
         base: { ref: "main", sha: "b" },
         user: { login: "Adam-S-Daniel" },
       },
@@ -428,7 +541,12 @@ test("run() — skips fork PRs", async () => {
   globalThis.fetch = mock.fetch;
   process.env.GH_TOKEN = "test";
   try {
-    const result = await run({ repo: "owner/r", prNumber: 128, dryRun: false, log: () => {} });
+    const result = await run({
+      repo: "owner/r",
+      prNumber: 128,
+      dryRun: false,
+      log: () => {},
+    });
     assert.equal(result.outcome, "skip");
     assert.equal(result.reason, "fork-pr");
   } finally {
@@ -447,30 +565,55 @@ test("run() — dry_run does NOT close or comment", async () => {
       body: {
         state: "open",
         mergeable_state: "dirty",
-        head: { ref: "cms/posts/x", sha: headSha, repo: { full_name: "owner/r" } },
+        head: {
+          ref: "cms/posts/x",
+          sha: headSha,
+          repo: { full_name: "owner/r" },
+        },
         base: { ref: "main", sha: baseSha },
         user: { login: "Adam-S-Daniel" },
       },
     },
-    "GET /repos/owner/r/issues/129/comments?per_page=100": { status: 200, body: [] },
+    "GET /repos/owner/r/issues/129/comments?per_page=100": {
+      status: 200,
+      body: [],
+    },
     "GET /repos/owner/r/pulls/129/files?per_page=300": {
       status: 200,
-      body: [{ filename: "_posts/2026-x.md", status: "modified", changes: 2, patch: "@@..." }],
+      body: [
+        {
+          filename: "_posts/2026-x.md",
+          status: "modified",
+          changes: 2,
+          patch: "@@...",
+        },
+      ],
     },
     "GET /repos/owner/r/contents/_posts/2026-x.md?ref=main": {
       status: 200,
-      body: { type: "file", content: Buffer.from(main, "utf8").toString("base64") },
+      body: {
+        type: "file",
+        content: Buffer.from(main, "utf8").toString("base64"),
+      },
     },
     "GET /repos/owner/r/contents/_posts/2026-x.md?ref=cms%2Fposts%2Fx": {
       status: 200,
-      body: { type: "file", content: Buffer.from(mangled, "utf8").toString("base64") },
+      body: {
+        type: "file",
+        content: Buffer.from(mangled, "utf8").toString("base64"),
+      },
     },
   });
   const origFetch = globalThis.fetch;
   globalThis.fetch = mock.fetch;
   process.env.GH_TOKEN = "test";
   try {
-    const result = await run({ repo: "owner/r", prNumber: 129, dryRun: true, log: () => {} });
+    const result = await run({
+      repo: "owner/r",
+      prNumber: 129,
+      dryRun: true,
+      log: () => {},
+    });
     assert.equal(result.outcome, "would-close");
     assert.deepEqual(result.paths, ["_posts/2026-x.md"]);
     // dry_run: NO comment POST and NO state PATCH
@@ -490,31 +633,57 @@ test("run() — code-fence guard aborts", async () => {
       body: {
         state: "open",
         mergeable_state: "dirty",
-        head: { ref: "cms/posts/codefence", sha: "h", repo: { full_name: "owner/r" } },
+        head: {
+          ref: "cms/posts/codefence",
+          sha: "h",
+          repo: { full_name: "owner/r" },
+        },
         base: { ref: "main", sha: "b" },
         user: { login: "Adam-S-Daniel" },
       },
     },
-    "GET /repos/owner/r/issues/130/comments?per_page=100": { status: 200, body: [] },
+    "GET /repos/owner/r/issues/130/comments?per_page=100": {
+      status: 200,
+      body: [],
+    },
     "GET /repos/owner/r/pulls/130/files?per_page=300": {
       status: 200,
-      body: [{ filename: "_posts/2026-cf.md", status: "modified", changes: 2, patch: "@@..." }],
+      body: [
+        {
+          filename: "_posts/2026-cf.md",
+          status: "modified",
+          changes: 2,
+          patch: "@@...",
+        },
+      ],
     },
     "GET /repos/owner/r/contents/_posts/2026-cf.md?ref=main": {
       status: 200,
-      body: { type: "file", content: Buffer.from(main, "utf8").toString("base64") },
+      body: {
+        type: "file",
+        content: Buffer.from(main, "utf8").toString("base64"),
+      },
     },
-    "GET /repos/owner/r/contents/_posts/2026-cf.md?ref=cms%2Fposts%2Fcodefence": {
-      status: 200,
-      body: { type: "file", content: Buffer.from(mangled, "utf8").toString("base64") },
-    },
+    "GET /repos/owner/r/contents/_posts/2026-cf.md?ref=cms%2Fposts%2Fcodefence":
+      {
+        status: 200,
+        body: {
+          type: "file",
+          content: Buffer.from(mangled, "utf8").toString("base64"),
+        },
+      },
     "POST /repos/owner/r/issues/130/comments": { status: 201, body: { id: 1 } },
   });
   const origFetch = globalThis.fetch;
   globalThis.fetch = mock.fetch;
   process.env.GH_TOKEN = "test";
   try {
-    const result = await run({ repo: "owner/r", prNumber: 130, dryRun: false, log: () => {} });
+    const result = await run({
+      repo: "owner/r",
+      prNumber: 130,
+      dryRun: false,
+      log: () => {},
+    });
     assert.equal(result.outcome, "abort");
     assert.ok(result.reasons.some((r) => r.includes("markdown code fence")));
   } finally {

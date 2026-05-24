@@ -99,7 +99,10 @@ function baseDeps(log, overrides = {}) {
   };
 }
 
-const TARGET = { adminUrl: "https://preview-pr9.adamdaniel.ai/admin/", pillId: "cms-preview-build-pill" };
+const TARGET = {
+  adminUrl: "https://preview-pr9.adamdaniel.ai/admin/",
+  pillId: "cms-preview-build-pill",
+};
 
 test.describe("run-cms-loop spine", () => {
   test("exports the ready-strategy allow-list", () => {
@@ -128,7 +131,8 @@ test.describe("run-cms-loop spine", () => {
         filePath: "_e2e/canary-delete-preview-1.md",
         canaryMarker: "e2e-delete-preview:1",
         ready: "label",
-        beforeReflect: async (p) => p.goto("ADMIN#/collections/e2e/entries/canary-page"),
+        beforeReflect: async (p) =>
+          p.goto("ADMIN#/collections/e2e/entries/canary-page"),
         assertReflected: async () => true,
         urlTimeoutMs: 123,
       },
@@ -151,8 +155,8 @@ test.describe("run-cms-loop spine", () => {
     expect(order).toEqual([
       "dep.seedDecapAuth",
       "page.goto(ADMIN#/collections/e2e/new)",
-      "dep.waitForCmsPullRequest({\"base\":\"feat/x\",\"filePath\":\"_e2e/canary-delete-preview-1.md\",\"canaryMarker\":\"e2e-delete-preview:1\",\"timeoutMs\":300000})",
-      "dep.addLabel({\"prNumber\":4242,\"label\":\"cms/ready\"})",
+      'dep.waitForCmsPullRequest({"base":"feat/x","filePath":"_e2e/canary-delete-preview-1.md","canaryMarker":"e2e-delete-preview:1","timeoutMs":300000})',
+      'dep.addLabel({"prNumber":4242,"label":"cms/ready"})',
       "page.goto(ADMIN#/collections/e2e/entries/canary-page)",
       "dep.waitForChangeReflected(pill=cms-preview-build-pill,urlTimeoutMs=123)",
     ]);
@@ -298,6 +302,8 @@ test.describe("run-cms-loop spine", () => {
         },
         baseDeps(log),
       ),
-    ).rejects.toThrow(/ready:'label' requires base \+ filePath \+ canaryMarker/);
+    ).rejects.toThrow(
+      /ready:'label' requires base \+ filePath \+ canaryMarker/,
+    );
   });
 });

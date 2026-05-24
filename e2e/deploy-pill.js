@@ -77,7 +77,9 @@ async function waitForChangeReflected({
   pillTerminalTimeoutMs = 120_000,
 }) {
   if (typeof urlCheck !== "function") {
-    throw new Error("waitForChangeReflected requires an async urlCheck() function.");
+    throw new Error(
+      "waitForChangeReflected requires an async urlCheck() function.",
+    );
   }
 
   const deadline = Date.now() + urlTimeoutMs;
@@ -129,7 +131,10 @@ async function waitForChangeReflected({
       if (!el) return true;
       if (el.innerHTML && el.innerHTML.includes("failed")) {
         throw new Error(
-          "deploy-status-pill (#" + id + ") flipped to failure after URL change — see " + el.href,
+          "deploy-status-pill (#" +
+            id +
+            ") flipped to failure after URL change — see " +
+            el.href,
         );
       }
       return el.style.display === "none";
@@ -152,7 +157,9 @@ async function expectDeployPillHidden({ page, pillId, timeoutMs = 90_000 }) {
       if (!el) return true;
       if (el.innerHTML && el.innerHTML.includes("failed")) {
         throw new Error(
-          "deploy-status-pill (#" + id + ") is in failure state — clear it before driving the next action",
+          "deploy-status-pill (#" +
+            id +
+            ") is in failure state — clear it before driving the next action",
         );
       }
       return el.style.display === "none";

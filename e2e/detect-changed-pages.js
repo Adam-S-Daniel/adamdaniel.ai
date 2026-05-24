@@ -55,8 +55,11 @@ function discoverAllPages() {
   if (useSiteScan) {
     const htmlFiles = execSync(
       `find ${siteDir} -name 'index.html' -not -path '*/admin/*' -not -path '*/preview/*'`,
-      { encoding: "utf-8" }
-    ).trim().split("\n").filter(Boolean);
+      { encoding: "utf-8" },
+    )
+      .trim()
+      .split("\n")
+      .filter(Boolean);
 
     for (const f of htmlFiles) {
       const rel = f.replace(siteDir, "").replace(/index\.html$/, "");
@@ -172,7 +175,11 @@ function mapFileToUrls(filePath) {
 //
 // `fileExistsOnMain` is injected so tests don't need a real `origin/main`.
 // In CI the production binding queries git; tests pass a pure stub.
-function classifyPages({ allPages, changedFiles, fileExistsOnMain = () => true }) {
+function classifyPages({
+  allPages,
+  changedFiles,
+  fileExistsOnMain = () => true,
+}) {
   const directlyChanged = new Set();
   const newPages = new Set();
   let globalChange = false;

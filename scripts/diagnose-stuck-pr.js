@@ -93,13 +93,18 @@ async function gh(endpoint, { headers = {}, deadline } = {}) {
       ...headers,
     },
   });
-  const remaining = parseInt(res.headers.get("x-ratelimit-remaining") || "9999", 10);
+  const remaining = parseInt(
+    res.headers.get("x-ratelimit-remaining") || "9999",
+    10,
+  );
   if (remaining < RATE_LIMIT_FLOOR) {
     throw new RateLimitedError(remaining, res.headers.get("x-ratelimit-reset"));
   }
   if (!res.ok) {
     const body = await res.text();
-    const err = new Error(`GH API ${endpoint} → ${res.status}: ${body.slice(0, 200)}`);
+    const err = new Error(
+      `GH API ${endpoint} → ${res.status}: ${body.slice(0, 200)}`,
+    );
     err.status = res.status;
     throw err;
   }
@@ -114,7 +119,10 @@ async function tryCanonicalCollapse(repo, pr, deadline) {
   //   "real-conflict"  — manual rebase or content fix needed
   //   "indeterminate"  — couldn't decide (binary, timebox, etc.)
   try {
-    const files = await gh(`/repos/${repo}/pulls/${pr.number}/files?per_page=50`, { deadline });
+    const files = await gh(
+      `/repos/${repo}/pulls/${pr.number}/files?per_page=50`,
+      { deadline },
+    );
     if (!files || files.length === 0) return "indeterminate";
     for (const f of files.slice(0, 5)) {
       if (f.status !== "modified") return "real-conflict";
@@ -127,7 +135,12 @@ async function tryCanonicalCollapse(repo, pr, deadline) {
         `/repos/${repo}/contents/${encodeURI(f.filename)}?ref=${encodeURIComponent(pr.head.ref)}`,
         { deadline },
       );
-      if (!baseRes || !headRes || baseRes.type !== "file" || headRes.type !== "file") {
+      if (
+        !baseRes ||
+        !headRes ||
+        baseRes.type !== "file" ||
+        headRes.type !== "file"
+      ) {
         return "indeterminate";
       }
       const base = Buffer.from(baseRes.content, "base64").toString("utf8");
@@ -135,7 +148,7 @@ async function tryCanonicalCollapse(repo, pr, deadline) {
       if (canonical(base) !== canonical(head)) return "real-conflict";
     }
     return "newline-only";
-  } catch (e) {
+  } catch {
     return "indeterminate";
   }
 }
@@ -155,9 +168,13 @@ async function classifyPr(repo, pr, deadline) {
           "` to resolve now)",
       );
     } else if (verdict === "real-conflict") {
-      out.push(`  - merge conflict — **not auto-resolvable** (non-newline diff); needs manual rebase`);
+      out.push(
+        `  - merge conflict — **not auto-resolvable** (non-newline diff); needs manual rebase`,
+      );
     } else {
-      out.push(`  - merge conflict — auto-resolver shape unverifiable (timebox or binary diff); inspect manually`);
+      out.push(
+        `  - merge conflict — auto-resolver shape unverifiable (timebox or binary diff); inspect manually`,
+      );
     }
   } else if (pr.mergeable_state === "blocked") {
     try {
@@ -166,28 +183,51 @@ async function classifyPr(repo, pr, deadline) {
         { deadline },
       );
       const runs = (checks && checks.check_runs) || [];
-      const failing = runs.filter((c) => c.conclusion === "failure" || c.conclusion === "cancelled" || c.conclusion === "timed_out");
-      const pending = runs.filter((c) => c.status === "in_progress" || c.status === "queued");
-      out.push(`  - blocked: ${failing.length} failing, ${pending.length} pending check(s)`);
+      const failing = runs.filter(
+        (c) =>
+          c.conclusion === "failure" ||
+          c.conclusion === "cancelled" ||
+          c.conclusion === "timed_out",
+      );
+      const pending = runs.filter(
+        (c) => c.status === "in_progress" || c.status === "queued",
+      );
+      out.push(
+        `  - blocked: ${failing.length} failing, ${pending.length} pending check(s)`,
+      );
       for (const c of failing.slice(0, MAX_CHECKS_SHOWN)) {
-        out.push(`    - ⛔ ${c.name} (${c.conclusion}) → <${c.html_url || c.details_url || ""}>`);
+        out.push(
+          `    - ⛔ ${c.name} (${c.conclusion}) → <${c.html_url || c.details_url || ""}>`,
+        );
       }
       for (const c of pending.slice(0, MAX_CHECKS_SHOWN)) {
-        out.push(`    - ⏳ ${c.name} (${c.status}) → <${c.html_url || c.details_url || ""}>`);
+        out.push(
+          `    - ⏳ ${c.name} (${c.status}) → <${c.html_url || c.details_url || ""}>`,
+        );
       }
     } catch (e) {
-      out.push(`  - blocked: couldn't fetch check details (${e.message.slice(0, 100)})`);
+      out.push(
+        `  - blocked: couldn't fetch check details (${e.message.slice(0, 100)})`,
+      );
     }
   } else if (pr.mergeable_state === "unstable") {
     out.push(`  - unstable: a non-required check failed; auto-merge holding`);
   } else if (pr.mergeable_state === "behind") {
-    out.push(`  - behind: PR head is behind its base; needs a base-update or rebase to merge`);
+    out.push(
+      `  - behind: PR head is behind its base; needs a base-update or rebase to merge`,
+    );
   } else if (pr.auto_merge && pr.auto_merge.enabled_by) {
-    out.push(`  - auto-merge enabled by @${pr.auto_merge.enabled_by.login}; merging when checks pass`);
+    out.push(
+      `  - auto-merge enabled by @${pr.auto_merge.enabled_by.login}; merging when checks pass`,
+    );
   } else if (pr.mergeable_state === "clean") {
-    out.push(`  - clean: no merge conflict, but no \`cms/ready\`-class label or auto-merge intent (label-race candidate)`);
+    out.push(
+      `  - clean: no merge conflict, but no \`cms/ready\`-class label or auto-merge intent (label-race candidate)`,
+    );
   } else if (pr.mergeable_state === "unknown") {
-    out.push(`  - unknown: GitHub still computing mergeability; this run started too soon after a push`);
+    out.push(
+      `  - unknown: GitHub still computing mergeability; this run started too soon after a push`,
+    );
   }
   return out;
 }
@@ -212,10 +252,9 @@ async function diagnoseSpecificPr(repo, prNumber, deadline) {
 async function diagnoseOpenCmsPrs(repo, deadline) {
   const lines = [];
   try {
-    const prs = await gh(
-      `/repos/${repo}/pulls?state=open&per_page=100`,
-      { deadline },
-    );
+    const prs = await gh(`/repos/${repo}/pulls?state=open&per_page=100`, {
+      deadline,
+    });
     const candidates = (prs || []).filter((p) =>
       HEAD_REF_ALLOWLIST.some((r) => r.test(p.head.ref)),
     );
@@ -228,7 +267,9 @@ async function diagnoseOpenCmsPrs(repo, deadline) {
     const shown = candidates.slice(0, MAX_PRS);
     for (const pr of shown) {
       if (Date.now() > deadline) {
-        lines.push(`  _(timebox exceeded; ${candidates.length - shown.indexOf(pr)} PRs elided)_`);
+        lines.push(
+          `  _(timebox exceeded; ${candidates.length - shown.indexOf(pr)} PRs elided)_`,
+        );
         break;
       }
       lines.push(...(await classifyPr(repo, pr, deadline)));
@@ -257,17 +298,23 @@ async function diagnoseDeployQueue(repo, deadline) {
       .slice(0, 3);
     lines.push(`#### \`deploy-production.yml\` queue`);
     lines.push(``);
-    lines.push(`- in-flight: ${inflight.length}, queued: ${queued.length}, recent-failed: ${recentFailed.length}`);
+    lines.push(
+      `- in-flight: ${inflight.length}, queued: ${queued.length}, recent-failed: ${recentFailed.length}`,
+    );
     for (const r of [...inflight, ...queued].slice(0, MAX_DEPLOY_RUNS_SHOWN)) {
       lines.push(
         `  - ${r.status === "in_progress" ? "🏃" : "🧊"} run #${r.id} — ${r.head_branch}@${r.head_sha.slice(0, 7)} → <${r.html_url}>`,
       );
     }
     for (const r of recentFailed) {
-      lines.push(`  - 💥 run #${r.id} (${r.conclusion}) — ${r.head_branch}@${r.head_sha.slice(0, 7)} → <${r.html_url}>`);
+      lines.push(
+        `  - 💥 run #${r.id} (${r.conclusion}) — ${r.head_branch}@${r.head_sha.slice(0, 7)} → <${r.html_url}>`,
+      );
     }
   } catch (e) {
-    lines.push(`_couldn't fetch deploy-production runs: ${e.message.slice(0, 200)}_`);
+    lines.push(
+      `_couldn't fetch deploy-production runs: ${e.message.slice(0, 200)}_`,
+    );
   }
   return lines;
 }
@@ -281,10 +328,12 @@ function shouldCheckDeployQueue(waitingFor, kind) {
   if (kind === "url") return true;
   if (kind === "merge") return true; // merging blocked on required checks blocked on deploy
   if (!waitingFor) return true; // default-on; one extra API call
-  return /url|public|deploy|fetchPublicUrl|reflected|live|baseline/i.test(waitingFor);
+  return /url|public|deploy|fetchPublicUrl|reflected|live|baseline/i.test(
+    waitingFor,
+  );
 }
 
-async function buildReport({ repo, waitingFor, waitPrNumber, kind, log }) {
+async function buildReport({ repo, waitingFor, waitPrNumber, kind }) {
   const deadline = nowDeadline();
   const lines = [];
   lines.push(`### Stuck-PR diagnostic`);
@@ -292,7 +341,9 @@ async function buildReport({ repo, waitingFor, waitPrNumber, kind, log }) {
   lines.push(`**Was waiting for:** ${waitingFor || "(unspecified)"}`);
   if (kind) lines.push(`**Wait kind:** ${kind}`);
   lines.push(``);
-  lines.push(`_This is a HEURISTIC summary. Each "verdict" cites the underlying \`mergeable_state\` and check list — audit those, not the verdict._`);
+  lines.push(
+    `_This is a HEURISTIC summary. Each "verdict" cites the underlying \`mergeable_state\` and check list — audit those, not the verdict._`,
+  );
   lines.push(``);
   if (waitPrNumber) {
     lines.push(...(await diagnoseSpecificPr(repo, waitPrNumber, deadline)));
@@ -308,18 +359,27 @@ async function buildReport({ repo, waitingFor, waitPrNumber, kind, log }) {
 async function main() {
   const repo = process.env.GH_REPO;
   if (!repo) {
-    process.stdout.write(`### Stuck-PR diagnostic\n\n_GH_REPO unavailable; diagnostic skipped._\n`);
+    process.stdout.write(
+      `### Stuck-PR diagnostic\n\n_GH_REPO unavailable; diagnostic skipped._\n`,
+    );
     process.exit(0);
   }
   if (!process.env.GH_TOKEN) {
-    process.stdout.write(`### Stuck-PR diagnostic\n\n_GH_TOKEN unavailable; diagnostic skipped (read-only mode)._\n`);
+    process.stdout.write(
+      `### Stuck-PR diagnostic\n\n_GH_TOKEN unavailable; diagnostic skipped (read-only mode)._\n`,
+    );
     process.exit(0);
   }
   const waitingFor = process.env.WAITING_FOR || "";
   const waitPrNumber = process.env.WAIT_PR_NUMBER || null;
   const kind = process.env.WAITING_FOR_KIND || "";
   try {
-    const md = await buildReport({ repo, waitingFor, waitPrNumber, kind, log: console.error });
+    const md = await buildReport({
+      repo,
+      waitingFor,
+      waitPrNumber,
+      kind,
+    });
     process.stdout.write(md + "\n");
   } catch (e) {
     process.stdout.write(

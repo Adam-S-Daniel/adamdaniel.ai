@@ -53,10 +53,16 @@ const {
   closeStaleDecapPrOnBranch,
   fixtureBranchName,
 } = require("./cms-fixture-pr");
-const { waitForChangeReflected, PILL_PROD } = require("./deploy-pill");
+const { waitForChangeReflected } = require("./deploy-pill");
+const { prodTarget } = require("./cms-host");
 
-const PROD_HOST = "https://adamdaniel.ai";
-const PROD_ADMIN = `${PROD_HOST}/admin/`;
+// Prod host triplet resolved through the shared cms-host SSOT (byte-identical
+// to the old hardcoded literals) so prod/preview surfaces can't drift.
+const {
+  host: PROD_HOST,
+  adminUrl: PROD_ADMIN,
+  pillId: PILL_PROD,
+} = prodTarget();
 const PROD_CANARY = process.env.PROD_CANARY === "1";
 
 // Runtime-unique slug + name avoid race with concurrent runs and stale
@@ -178,148 +184,152 @@ test.afterAll(async () => {
 test(
   "CMS — tags lifecycle (host repo, target main)",
   { tag: ["@admin-write"] },
-  async ({ page }, testInfo) => {
-  test.skip(
-    PROD_CANARY,
-    "PROD_CANARY=1 — daily canary probe doesn't run mutation specs.",
-  );
-  test.skip(
-    !getPat(),
-    "CMS_E2E_PAT not set — host-repo tags-lifecycle disabled. (Forks and Dependabot are expected to land here.)",
-  );
-  test.skip(
-    process.env.RUN_HOST_REPO_PUBLISH_LOOP !== "1",
-    "RUN_HOST_REPO_PUBLISH_LOOP not set — host-repo tags-lifecycle is opt-in (avoids cms/* PR self-recursion in PR-time CI).",
-  );
+  async ({ page }) => {
+    test.skip(
+      PROD_CANARY,
+      "PROD_CANARY=1 — daily canary probe doesn't run mutation specs.",
+    );
+    test.skip(
+      !getPat(),
+      "CMS_E2E_PAT not set — host-repo tags-lifecycle disabled. (Forks and Dependabot are expected to land here.)",
+    );
+    test.skip(
+      process.env.RUN_HOST_REPO_PUBLISH_LOOP !== "1",
+      "RUN_HOST_REPO_PUBLISH_LOOP not set — host-repo tags-lifecycle is opt-in (avoids cms/* PR self-recursion in PR-time CI).",
+    );
 
-  // ── 0. Close any stale Decap PR on this run's branch ──────────────
-  // Slug is run-unique here, so collisions are impossible — but this
-  // guard is cheap and matches cms-publish-loop's pattern.
-  await test.step("Close any stale Decap PR on the cms/tags/<slug> branch", async () => {
-    await closeStaleDecapPrOnBranch({
-      branch: `cms/tags/${TAG_SLUG}`,
+    // ── 0. Close any stale Decap PR on this run's branch ──────────────
+    // Slug is run-unique here, so collisions are impossible — but this
+    // guard is cheap and matches cms-publish-loop's pattern.
+    await test.step("Close any stale Decap PR on the cms/tags/<slug> branch", async () => {
+      await closeStaleDecapPrOnBranch({
+        branch: `cms/tags/${TAG_SLUG}`,
+      });
     });
-  });
 
-  // ── 1. Pre-seed Decap auth and open the prod admin ────────────────
-  await seedDecapAuth(page);
-  await test.step("Load production admin", async () => {
-    await page.goto(PROD_ADMIN, { waitUntil: "domcontentloaded" });
-    await expect(
-      page.getByRole("link", { name: /^Posts$/i }),
-    ).toBeVisible({ timeout: 60_000 });
-  });
-
-  // ── 2. CYCLE 1: create the Tags-collection entry via Decap UI ─────
-  await test.step("Navigate to new Tags entry editor", async () => {
-    await page.goto(`${PROD_ADMIN}#/collections/tags/new`, {
-      waitUntil: "domcontentloaded",
+    // ── 1. Pre-seed Decap auth and open the prod admin ────────────────
+    await seedDecapAuth(page);
+    await test.step("Load production admin", async () => {
+      await page.goto(PROD_ADMIN, { waitUntil: "domcontentloaded" });
+      await expect(page.getByRole("link", { name: /^Posts$/i })).toBeVisible({
+        timeout: 60_000,
+      });
     });
-    await expect(
-      page.getByRole("textbox", { name: /^Name$/i }),
-    ).toBeVisible({ timeout: 30_000 });
-  });
 
-  await test.step("Fill Name and Save", async () => {
-    await page.getByRole("textbox", { name: /^Name$/i }).fill(TAG_NAME);
-
-    // INTENTIONALLY skipping the Description field. Decap's
-    // label-to-textarea wiring for the `text` widget (which
-    // Description uses) varies across Decap versions — see
-    // cms-smoke.spec.js's identical decision: "Description is
-    // required: false and its label-to-textarea wiring varies
-    // enough across Decap versions to be a flake source." Two
-    // failing runs here (#25582963426 with role=textbox by name,
-    // #25583283581 with role=textbox+contenteditable selector)
-    // both confirmed the field doesn't match either pattern in
-    // the current prod admin. The lifecycle assertion still
-    // works without it: an entry with just Name is enough to
-    // drive `cms/tags/<slug>` PR → auto-merge → deploy-production
-    // → auto_tag_pages → /tags/<slug>/ rendering. Description
-    // RENDERING is a separate, Jekyll-build-time concern covered
-    // by `_plugins_test/auto_tag_pages_test.rb` and read-only
-    // structural specs in `tags.spec.js`.
-
-    await page.getByRole("button", { name: /^Save$/i }).click();
-    await expect(page.getByText(/Changes saved/i).first()).toBeVisible({
-      timeout: 60_000,
+    // ── 2. CYCLE 1: create the Tags-collection entry via Decap UI ─────
+    await test.step("Navigate to new Tags entry editor", async () => {
+      await page.goto(`${PROD_ADMIN}#/collections/tags/new`, {
+        waitUntil: "domcontentloaded",
+      });
+      await expect(page.getByRole("textbox", { name: /^Name$/i })).toBeVisible({
+        timeout: 30_000,
+      });
     });
-  });
 
-  await test.step("Drive Status: Draft → Ready", async () => {
-    await page.getByRole("button", { name: /^Status:\s*Draft$/i }).click();
-    await page.getByRole("menuitem", { name: /^Ready$/i }).click();
-    await expect(
-      page.getByRole("button", { name: /^Status:\s*Ready$/i }),
-    ).toBeVisible({ timeout: 30_000 });
-  });
+    await test.step("Fill Name and Save", async () => {
+      await page.getByRole("textbox", { name: /^Name$/i }).fill(TAG_NAME);
 
-  await test.step("Click Publish → Publish Now", async () => {
-    await page.getByRole("button", { name: /^Publish$/i }).click();
-    await page.getByRole("menuitem", { name: /publish now/i }).first().click();
-  });
+      // INTENTIONALLY skipping the Description field. Decap's
+      // label-to-textarea wiring for the `text` widget (which
+      // Description uses) varies across Decap versions — see
+      // cms-smoke.spec.js's identical decision: "Description is
+      // required: false and its label-to-textarea wiring varies
+      // enough across Decap versions to be a flake source." Two
+      // failing runs here (#25582963426 with role=textbox by name,
+      // #25583283581 with role=textbox+contenteditable selector)
+      // both confirmed the field doesn't match either pattern in
+      // the current prod admin. The lifecycle assertion still
+      // works without it: an entry with just Name is enough to
+      // drive `cms/tags/<slug>` PR → auto-merge → deploy-production
+      // → auto_tag_pages → /tags/<slug>/ rendering. Description
+      // RENDERING is a separate, Jekyll-build-time concern covered
+      // by `_plugins_test/auto_tag_pages_test.rb` and read-only
+      // structural specs in `tags.spec.js`.
 
-  // ── 3. Wait for the chain to publish /tags/<slug>/ (chain complete)
-  await test.step("Wait for /tags/<slug>/ to be served (status 200, chain complete)", async () => {
-    await waitForChangeReflected({
-      page,
-      pillId: PILL_PROD,
-      urlCheck: async () => {
-        // Tags-collection entries with no posts tagging them still
-        // get an archive page from auto_tag_pages — see tags.spec.js's
-        // "tag with no matching posts shows the empty-state placeholder"
-        // assertion. So a fresh `_tags/<slug>.md` with just a Name field
-        // gets a 200 page after the chain runs (with the empty-state
-        // placeholder body, since no post tags `e2e-tags-canary-<runId>`).
-        const res = await page.request.get(ARCHIVE_PUBLIC_URL, {
-          failOnStatusCode: false,
-        });
-        return res.status() === 200;
-      },
-      // 15 min covers cms-editorial-workflow + auto-merge + required
-      // checks + deploy-production + CloudFront propagation under
-      // runner contention. Matches cms-publish-loop / prod-mutate.
-      urlTimeoutMs: 15 * 60 * 1000,
+      await page.getByRole("button", { name: /^Save$/i }).click();
+      await expect(page.getByText(/Changes saved/i).first()).toBeVisible({
+        timeout: 60_000,
+      });
     });
-  });
 
-  // ── 4. CYCLE 2: delete the Tags entry via Decap UI ───────────────
-  await test.step("Navigate back to the Tags entry editor", async () => {
-    await page.goto(`${PROD_ADMIN}#/collections/tags/entries/${TAG_SLUG}`, {
-      waitUntil: "domcontentloaded",
+    await test.step("Drive Status: Draft → Ready", async () => {
+      await page.getByRole("button", { name: /^Status:\s*Draft$/i }).click();
+      await page.getByRole("menuitem", { name: /^Ready$/i }).click();
+      await expect(
+        page.getByRole("button", { name: /^Status:\s*Ready$/i }),
+      ).toBeVisible({ timeout: 30_000 });
     });
-    await expect(
-      page.getByRole("textbox", { name: /^Name$/i }),
-    ).toBeVisible({ timeout: 30_000 });
-  });
 
-  await test.step("Click Delete published entry — confirms via dialog handler", async () => {
-    // Prod backend is editorial-workflow mode, but the Delete button
-    // is still exposed directly on a published entry. Persistent
-    // dialog handler from beforeEach accepts the confirm().
-    await page
-      .getByRole("button", { name: /^delete (entry|published entry)$/i })
-      .first()
-      .click({ timeout: 30_000 });
-  });
-
-  // ── 5. Wait for the chain to remove /tags/<slug>/ (chain complete)
-  await test.step("Wait for /tags/<slug>/ to 404 (chain complete)", async () => {
-    await waitForChangeReflected({
-      page,
-      pillId: PILL_PROD,
-      urlCheck: async () => {
-        const res = await page.request.get(ARCHIVE_PUBLIC_URL, {
-          failOnStatusCode: false,
-        });
-        // After the Tags entry is deleted AND no post tags this
-        // run-unique slug (none does — the slug is per-run and only
-        // the Tags entry creates it), auto_tag_pages skips the page
-        // entirely and CloudFront serves 404. That's the chain-
-        // complete signal.
-        return res.status() === 404;
-      },
-      urlTimeoutMs: 15 * 60 * 1000,
+    await test.step("Click Publish → Publish Now", async () => {
+      await page.getByRole("button", { name: /^Publish$/i }).click();
+      await page
+        .getByRole("menuitem", { name: /publish now/i })
+        .first()
+        .click();
     });
-  });
-});
+
+    // ── 3. Wait for the chain to publish /tags/<slug>/ (chain complete)
+    await test.step("Wait for /tags/<slug>/ to be served (status 200, chain complete)", async () => {
+      await waitForChangeReflected({
+        page,
+        pillId: PILL_PROD,
+        urlCheck: async () => {
+          // Tags-collection entries with no posts tagging them still
+          // get an archive page from auto_tag_pages — see tags.spec.js's
+          // "tag with no matching posts shows the empty-state placeholder"
+          // assertion. So a fresh `_tags/<slug>.md` with just a Name field
+          // gets a 200 page after the chain runs (with the empty-state
+          // placeholder body, since no post tags `e2e-tags-canary-<runId>`).
+          const res = await page.request.get(ARCHIVE_PUBLIC_URL, {
+            failOnStatusCode: false,
+          });
+          return res.status() === 200;
+        },
+        // 15 min covers cms-editorial-workflow + auto-merge + required
+        // checks + deploy-production + CloudFront propagation under
+        // runner contention. Matches cms-publish-loop / prod-mutate.
+        urlTimeoutMs: 15 * 60 * 1000,
+      });
+    });
+
+    // ── 4. CYCLE 2: delete the Tags entry via Decap UI ───────────────
+    await test.step("Navigate back to the Tags entry editor", async () => {
+      await page.goto(`${PROD_ADMIN}#/collections/tags/entries/${TAG_SLUG}`, {
+        waitUntil: "domcontentloaded",
+      });
+      await expect(page.getByRole("textbox", { name: /^Name$/i })).toBeVisible({
+        timeout: 30_000,
+      });
+    });
+
+    await test.step("Click Delete published entry — confirms via dialog handler", async () => {
+      // Prod backend is editorial-workflow mode, but the Delete button
+      // is still exposed directly on a published entry. Persistent
+      // dialog handler from beforeEach accepts the confirm().
+      await page
+        .getByRole("button", { name: /^delete (entry|published entry)$/i })
+        .first()
+        .click({ timeout: 30_000 });
+    });
+
+    // ── 5. Wait for the chain to remove /tags/<slug>/ (chain complete)
+    await test.step("Wait for /tags/<slug>/ to 404 (chain complete)", async () => {
+      await waitForChangeReflected({
+        page,
+        pillId: PILL_PROD,
+        urlCheck: async () => {
+          const res = await page.request.get(ARCHIVE_PUBLIC_URL, {
+            failOnStatusCode: false,
+          });
+          // After the Tags entry is deleted AND no post tags this
+          // run-unique slug (none does — the slug is per-run and only
+          // the Tags entry creates it), auto_tag_pages skips the page
+          // entirely and CloudFront serves 404. That's the chain-
+          // complete signal.
+          return res.status() === 404;
+        },
+        urlTimeoutMs: 15 * 60 * 1000,
+      });
+    });
+  },
+);

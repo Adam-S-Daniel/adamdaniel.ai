@@ -106,10 +106,16 @@ test.describe("HTML Embed renders as HTML on the live post", () => {
     await bodyEditor.pressSequentially("Body filler before the embed.\n");
 
     // Flip Published on so Jekyll picks the post up on the rebuild.
-    await page.getByLabel(/^Published$/).first().click();
+    await page
+      .getByLabel(/^Published$/)
+      .first()
+      .click();
 
     // Save via the split publish menu (same pattern as cms-inline-image).
-    await page.getByRole("button", { name: /^publish$/i }).first().click();
+    await page
+      .getByRole("button", { name: /^publish$/i })
+      .first()
+      .click();
     await page
       .getByRole("menuitem", { name: /publish now/i })
       .first()
@@ -155,9 +161,7 @@ test.describe("HTML Embed renders as HTML on the live post", () => {
     // markup lands inside `.post-content` as-is.
     const embed = page.locator(".post-content .post-embed");
     await expect(embed).toBeVisible({ timeout: 10_000 });
-    const inner = page.locator(
-      `.post-content .post-embed #${EMBED_INNER_ID}`,
-    );
+    const inner = page.locator(`.post-content .post-embed #${EMBED_INNER_ID}`);
     await expect(inner).toBeVisible();
     await expect(inner).toHaveText(EMBED_INNER_TEXT);
 

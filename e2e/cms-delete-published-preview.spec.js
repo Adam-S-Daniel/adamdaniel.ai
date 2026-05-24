@@ -50,7 +50,7 @@
  *   - Runs once on chromium-desktop-3k only.
  */
 const { test, expect } = require("./base");
-const { seedDecapAuth, getPat, HOST_REPO } = require("./decap-pat");
+const { getPat, HOST_REPO } = require("./decap-pat");
 const { addLabel, gh } = require("./github-actions-poll");
 const { previewTarget } = require("./cms-host");
 const { runCmsLoop } = require("./run-cms-loop");
@@ -105,10 +105,6 @@ test.describe.configure({
 // the throw-away fixture from the head branch so the next run starts
 // clean.
 let pendingFixture = null;
-
-function toContentBase64(text) {
-  return Buffer.from(text, "utf8").toString("base64");
-}
 
 async function fileShaOnBranch(filePath, branch) {
   try {
@@ -233,9 +229,9 @@ test(
         await p.goto(`${PREVIEW_ADMIN}#/collections/e2e/new`, {
           waitUntil: "domcontentloaded",
         });
-        await expect(
-          p.getByRole("textbox", { name: /^Title$/i }),
-        ).toBeVisible({ timeout: 30_000 });
+        await expect(p.getByRole("textbox", { name: /^Title$/i })).toBeVisible({
+          timeout: 30_000,
+        });
       },
       mutate: async (p) => {
         await p.getByRole("textbox", { name: /^Title$/i }).fill(title);
@@ -263,9 +259,9 @@ test(
           `${PREVIEW_ADMIN}#/collections/e2e/entries/${PILL_MOUNT_SLUG}`,
           { waitUntil: "domcontentloaded" },
         );
-        await expect(
-          p.getByRole("textbox", { name: /^Title$/i }),
-        ).toBeVisible({ timeout: 60_000 });
+        await expect(p.getByRole("textbox", { name: /^Title$/i })).toBeVisible({
+          timeout: 60_000,
+        });
       },
       assertReflected: async () => {
         const res = await page.request.get(publicUrl, {
@@ -291,13 +287,12 @@ test(
       prNumber: PR_NUMBER,
       seedAuth: false,
       openEntry: async (p) => {
-        await p.goto(
-          `${PREVIEW_ADMIN}#/collections/e2e/entries/${slug}`,
-          { waitUntil: "domcontentloaded" },
-        );
-        await expect(
-          p.getByRole("textbox", { name: /^Title$/i }),
-        ).toBeVisible({ timeout: 30_000 });
+        await p.goto(`${PREVIEW_ADMIN}#/collections/e2e/entries/${slug}`, {
+          waitUntil: "domcontentloaded",
+        });
+        await expect(p.getByRole("textbox", { name: /^Title$/i })).toBeVisible({
+          timeout: 30_000,
+        });
       },
       mutate: async (p) => {
         // Decap renders delete either as a top-level button or behind
@@ -309,11 +304,7 @@ test(
         const trigger = p
           .getByRole("button", { name: /delete (published )?entry/i })
           .first();
-        if (
-          await trigger
-            .isVisible({ timeout: 5_000 })
-            .catch(() => false)
-        ) {
+        if (await trigger.isVisible({ timeout: 5_000 }).catch(() => false)) {
           await trigger.click({ timeout: 30_000 });
         } else {
           await p
@@ -381,7 +372,7 @@ test(
               pr.head.ref.startsWith("cms/"),
           );
           for (const pr of cmsPrs) {
-            let files = [];
+            let files;
             try {
               files = await gh(
                 `/repos/${HOST_REPO}/pulls/${pr.number}/files?per_page=100`,
@@ -427,9 +418,9 @@ test(
           `${PREVIEW_ADMIN}#/collections/e2e/entries/${PILL_MOUNT_SLUG}`,
           { waitUntil: "domcontentloaded" },
         );
-        await expect(
-          p.getByRole("textbox", { name: /^Title$/i }),
-        ).toBeVisible({ timeout: 60_000 });
+        await expect(p.getByRole("textbox", { name: /^Title$/i })).toBeVisible({
+          timeout: 60_000,
+        });
       },
       assertReflected: async () => {
         const res = await page.request.get(publicUrl, {
@@ -502,9 +493,7 @@ test.afterAll(async () => {
       PR_HEAD_REF,
       `test(canary): harness safety-net delete of throw-away preview fixture ${slug} (run ${runId})`,
     );
-    console.warn(
-      `[cleanup-harness] removed ${filePath} from ${PR_HEAD_REF}`,
-    );
+    console.warn(`[cleanup-harness] removed ${filePath} from ${PR_HEAD_REF}`);
   } catch (e) {
     console.warn(
       `[cleanup-harness] could not remove ${filePath} from ${PR_HEAD_REF}: ${

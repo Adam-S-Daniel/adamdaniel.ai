@@ -58,7 +58,11 @@ function pixelDiffRatio(a, b) {
     const dr = Math.abs(a.data[i + 0] - b.data[i + 0]);
     const dg = Math.abs(a.data[i + 1] - b.data[i + 1]);
     const db = Math.abs(a.data[i + 2] - b.data[i + 2]);
-    if (dr > PER_CHANNEL_TOLERANCE || dg > PER_CHANNEL_TOLERANCE || db > PER_CHANNEL_TOLERANCE) {
+    if (
+      dr > PER_CHANNEL_TOLERANCE ||
+      dg > PER_CHANNEL_TOLERANCE ||
+      db > PER_CHANNEL_TOLERANCE
+    ) {
       diff++;
     }
   }

@@ -14,7 +14,9 @@ test.describe("Canary content invariants", () => {
       // cleanup step writes it back after each test run, so a drift
       // here means the canary doesn't reset to the same content the
       // descriptor claims.
-      expect(src, `${c.path} body must contain the baseline string`).toContain(c.baseline);
+      expect(src, `${c.path} body must contain the baseline string`).toContain(
+        c.baseline,
+      );
       // The FULL canonical body (title sentence + explanatory paragraphs
       // + footer) must also match the checked-in file byte-for-byte.
       // Without this assertion the canary file could drift gradually —
@@ -23,8 +25,14 @@ test.describe("Canary content invariants", () => {
       // mangled cms/e2e/* PR that disagrees with the API-path setup
       // reset, leaving conflicting PRs in their wake.
       const fmEnd = src.indexOf("\n---\n", 4);
-      expect(fmEnd, `${c.path} must have a closing front-matter delimiter`).toBeGreaterThan(0);
-      const fileBody = src.slice(fmEnd + 5).replace(/^\n+/, "").replace(/\n+$/, "");
+      expect(
+        fmEnd,
+        `${c.path} must have a closing front-matter delimiter`,
+      ).toBeGreaterThan(0);
+      const fileBody = src
+        .slice(fmEnd + 5)
+        .replace(/^\n+/, "")
+        .replace(/\n+$/, "");
       expect(
         fileBody,
         `${c.path} body must match the canonical buildBaselineBody() output verbatim — newline drift (often from a Decap markdown-widget round-trip) breaks the publish-loop cleanup contract`,
@@ -92,6 +100,7 @@ test.describe("Canary content invariants", () => {
     // `widget: text`, but a misindented `widget: markdown` could
     // theoretically slip through; this makes the intent loud.)
     const e2eBody = e2eBlock.match(
+      // eslint-disable-next-line no-useless-escape -- `\Z` is a literal end-of-input fallback in the lookahead alternation; kept verbatim to preserve the existing match behavior of this YAML-structure scan.
       /^\s{6}- name: body\s*\n(?:\s{6,}.+\n)+?(?=\s{0,6}-|\s{0,4}- name|\Z)/m,
     );
     if (e2eBody) {
@@ -100,7 +109,10 @@ test.describe("Canary content invariants", () => {
   });
 
   test("_config.yml registers the e2e collection with the right permalink", () => {
-    const cfg = fs.readFileSync(path.join(__dirname, "..", "_config.yml"), "utf8");
+    const cfg = fs.readFileSync(
+      path.join(__dirname, "..", "_config.yml"),
+      "utf8",
+    );
     // Without `output: true` Jekyll won't render an HTML file; the
     // publish-loop's "assert it shows up at the public URL" step would
     // never satisfy.

@@ -194,9 +194,9 @@ async function runCmsLoop(
       // swaps in Status pills + Publish); the "Changes saved" toast is
       // the canonical "the cms PR was opened" signal. Mirrors
       // cms-publish-loop*.spec.js step 3.
-      await expect(
-        page.getByText(/Changes saved/i).first(),
-      ).toBeVisible({ timeout: 60_000 });
+      await expect(page.getByText(/Changes saved/i).first()).toBeVisible({
+        timeout: 60_000,
+      });
     });
   }
 
@@ -223,29 +223,26 @@ async function runCmsLoop(
       await addLabel({ prNumber: pr.number, label: "cms/ready" });
     });
   } else if (ready === "ui-publish") {
-    await step(
-      `runCmsLoop: Status:Ready → Publish Now${tag}`,
-      async () => {
-        // Mirrors the prod publish-loop / delete-published seed leg
-        // exactly so behaviour is preserved for opt-in callers.
-        await page
-          .getByRole("button", { name: /^Status:\s*Draft$/i })
-          .click({ timeout: 30_000 });
-        await page
-          .getByRole("menuitem", { name: /^Ready$/i })
-          .click({ timeout: 30_000 });
-        await expect(
-          page.getByRole("button", { name: /^Status:\s*Ready$/i }),
-        ).toBeVisible({ timeout: 30_000 });
-        await page
-          .getByRole("button", { name: /^Publish$/i })
-          .click({ timeout: 30_000 });
-        await page
-          .getByRole("menuitem", { name: /publish now/i })
-          .first()
-          .click({ timeout: 30_000 });
-      },
-    );
+    await step(`runCmsLoop: Status:Ready → Publish Now${tag}`, async () => {
+      // Mirrors the prod publish-loop / delete-published seed leg
+      // exactly so behaviour is preserved for opt-in callers.
+      await page
+        .getByRole("button", { name: /^Status:\s*Draft$/i })
+        .click({ timeout: 30_000 });
+      await page
+        .getByRole("menuitem", { name: /^Ready$/i })
+        .click({ timeout: 30_000 });
+      await expect(
+        page.getByRole("button", { name: /^Status:\s*Ready$/i }),
+      ).toBeVisible({ timeout: 30_000 });
+      await page
+        .getByRole("button", { name: /^Publish$/i })
+        .click({ timeout: 30_000 });
+      await page
+        .getByRole("menuitem", { name: /publish now/i })
+        .first()
+        .click({ timeout: 30_000 });
+    });
   }
 
   if (typeof beforeReflect === "function") {
@@ -262,9 +259,7 @@ async function runCmsLoop(
         pillId: target.pillId,
         urlCheck: assertReflected,
         urlTimeoutMs,
-        ...(pillTerminalTimeoutMs
-          ? { pillTerminalTimeoutMs }
-          : {}),
+        ...(pillTerminalTimeoutMs ? { pillTerminalTimeoutMs } : {}),
       });
     },
   );

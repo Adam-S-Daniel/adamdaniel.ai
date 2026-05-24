@@ -4,7 +4,6 @@ const fs = require("node:fs");
 const os = require("node:os");
 const path = require("node:path");
 const {
-  buildBucketedCombinedVideos,
   buildFrameBannerLines,
   bucketFor,
   bucketForEntry,
@@ -13,7 +12,6 @@ const {
   frameStepLabel,
   hostFromUrl,
   sanitizeBannerText,
-  writeManifest,
   BANNER_MAX_CHARS,
   BUCKETS,
 } = require("./generate-test-videos");
@@ -195,7 +193,8 @@ test.describe("generate-test-videos helpers", () => {
   });
 
   test("frameStepLabel: data: / blob: URLs are truncated with ellipsis", () => {
-    const longData = "data:image/png;base64,iVBORw0KGgoAAAANSU" + "x".repeat(500);
+    const longData =
+      "data:image/png;base64,iVBORw0KGgoAAAANSU" + "x".repeat(500);
     const out = frameStepLabel({ url: longData });
     expect(out.length).toBeLessThan(longData.length);
     expect(out.endsWith("…")).toBe(true);
@@ -257,9 +256,7 @@ test.describe("generate-test-videos helpers", () => {
       projectName: "chromium-desktop",
       endTime: new Date("2026-05-05T18:30:00Z"),
     });
-    expect(lines[1]).toBe(
-      "Step 4 of 7: Click the login button · passed",
-    );
+    expect(lines[1]).toBe("Step 4 of 7: Click the login button · passed");
     const i1 = lines[1].indexOf("Step 4 of 7");
     const i2 = lines[1].indexOf("Click the login button");
     const i3 = lines[1].indexOf("passed");
@@ -353,9 +350,7 @@ test.describe("generate-test-videos helpers", () => {
       projectName: "chromium-desktop",
       endTime: new Date("2026-05-05T18:30:00Z"),
     });
-    expect(lines[1]).toBe(
-      "Step 1 of 1: Open the Posts collection · passed",
-    );
+    expect(lines[1]).toBe("Step 1 of 1: Open the Posts collection · passed");
     expect(lines[1]).not.toContain("adamdaniel.ai");
   });
 
@@ -752,34 +747,28 @@ test.describe("buildBucketedCombinedVideos: per-bucket assembly", () => {
       mod = require(modPath);
       const emitted = mod.buildBucketedCombinedVideos(records);
       // Three non-empty buckets emit, `other` is skipped.
-      expect(Object.keys(emitted).sort()).toEqual([
-        "local",
-        "preview",
-        "prod",
-      ]);
-      expect(emitted.local).toBe(
-        path.join(videosRoot, "_combined-local.mp4"),
-      );
+      expect(Object.keys(emitted).sort()).toEqual(["local", "preview", "prod"]);
+      expect(emitted.local).toBe(path.join(videosRoot, "_combined-local.mp4"));
       expect(emitted.preview).toBe(
         path.join(videosRoot, "_combined-preview.mp4"),
       );
-      expect(emitted.prod).toBe(
-        path.join(videosRoot, "_combined-prod.mp4"),
-      );
+      expect(emitted.prod).toBe(path.join(videosRoot, "_combined-prod.mp4"));
       // No `other` mp4 (zero records there → silently omitted).
       expect(fs.existsSync(path.join(videosRoot, "_combined-other.mp4"))).toBe(
         false,
       );
       // No master `_combined.mp4` is produced.
-      expect(fs.existsSync(path.join(videosRoot, "_combined.mp4"))).toBe(
-        false,
-      );
+      expect(fs.existsSync(path.join(videosRoot, "_combined.mp4"))).toBe(false);
 
       // Manifest lists each test under its bucket header.
       const manifestPath = mod.writeManifest(records, "143", emitted);
       const manifest = fs.readFileSync(manifestPath, "utf8");
-      expect(manifest).toContain("Bucket local → _combined-local.mp4 (3 tests)");
-      expect(manifest).toContain("Bucket preview → _combined-preview.mp4 (1 test)");
+      expect(manifest).toContain(
+        "Bucket local → _combined-local.mp4 (3 tests)",
+      );
+      expect(manifest).toContain(
+        "Bucket preview → _combined-preview.mp4 (1 test)",
+      );
       expect(manifest).toContain("Bucket prod → _combined-prod.mp4 (2 tests)");
       // `other` is empty — manifest should explicitly note that.
       expect(manifest).toContain(

@@ -93,7 +93,6 @@ const FRAME_RATE = "2/3";
 const BANNER_HEIGHT = 96;
 const CANVAS_WIDTH = 1920;
 const CANVAS_HEIGHT = 1080;
-const TOTAL_HEIGHT = CANVAS_HEIGHT + BANNER_HEIGHT;
 
 // Monospace font baked into the Playwright noble image. LiberationMono
 // is a Helvetica-compatible alternative to DejaVuSansMono and is the
@@ -303,7 +302,10 @@ const BUCKETS = ["local", "preview", "prod", "other"];
 
 function bucketFor(host) {
   if (host === "localhost" || host === "127.0.0.1") return "local";
-  if (typeof host === "string" && /^preview-pr\d+\.adamdaniel\.ai$/.test(host)) {
+  if (
+    typeof host === "string" &&
+    /^preview-pr\d+\.adamdaniel\.ai$/.test(host)
+  ) {
     return "preview";
   }
   if (host === "adamdaniel.ai") return "prod";
@@ -328,9 +330,10 @@ function hostFromUrl(url) {
 // captured frame's URL; tests with no frames (zero-navigation specs)
 // fall through to `other`.
 function bucketForEntry(entry) {
-  const frames = entry && entry.meta && Array.isArray(entry.meta.frames)
-    ? entry.meta.frames
-    : [];
+  const frames =
+    entry && entry.meta && Array.isArray(entry.meta.frames)
+      ? entry.meta.frames
+      : [];
   const firstUrl = frames.length > 0 ? frames[0].url : "";
   return bucketFor(hostFromUrl(firstUrl));
 }
@@ -357,7 +360,11 @@ function buildFrameBannerLines({
     `Step ${stepIndex} of ${stepCount}: ${stepLabel} · ${status || "unknown"}`,
   );
   const easternTime = formatEastern(
-    endTime instanceof Date ? endTime : endTime ? new Date(endTime) : new Date(),
+    endTime instanceof Date
+      ? endTime
+      : endTime
+        ? new Date(endTime)
+        : new Date(),
   );
   const line3 = sanitizeBannerText(
     `project: ${projectName || "unknown-project"} · ${easternTime}`,
@@ -435,12 +442,8 @@ function composeFrame({ inputFrame, outputFrame, fontFile, lines }) {
   // We position each line's baseline at:
   //   topPad + (i+1)*pointsize + i*spacing
   const N = lines.length;
-  const totalLineHeight =
-    N * BANNER_FONT_SIZE + (N - 1) * BANNER_LINE_SPACING;
-  const topPad = Math.max(
-    4,
-    Math.floor((BANNER_HEIGHT - totalLineHeight) / 2),
-  );
+  const totalLineHeight = N * BANNER_FONT_SIZE + (N - 1) * BANNER_LINE_SPACING;
+  const topPad = Math.max(4, Math.floor((BANNER_HEIGHT - totalLineHeight) / 2));
 
   // Build two convert sub-commands chained via the parenthesis
   // syntax (`(` `)` ImageMagick image stack). The first parenthesised

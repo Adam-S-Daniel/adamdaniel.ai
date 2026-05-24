@@ -206,8 +206,18 @@ test.describe("Decap CMS config invariants", () => {
     test(`${label}: posts collection exposes title, date, body, tags, featured_image`, () => {
       const yml = readConfig(configPath);
       const posts = findCollection(yml, "posts");
-      for (const f of ["title", "date", "body", "tags", "featured_image", "published"]) {
-        expect(findField(posts, f), `posts.${f} field must exist`).not.toBeNull();
+      for (const f of [
+        "title",
+        "date",
+        "body",
+        "tags",
+        "featured_image",
+        "published",
+      ]) {
+        expect(
+          findField(posts, f),
+          `posts.${f} field must exist`,
+        ).not.toBeNull();
       }
       const featured = findField(posts, "featured_image");
       expect(featured).toMatch(/widget:\s*image/);
@@ -229,7 +239,10 @@ test.describe("Decap CMS config invariants", () => {
       const yml = readConfig(configPath);
       const tags = findCollection(yml, "tags");
       expect(findField(tags, "name"), "tags.name must exist").not.toBeNull();
-      expect(findField(tags, "description"), "tags.description must exist").not.toBeNull();
+      expect(
+        findField(tags, "description"),
+        "tags.description must exist",
+      ).not.toBeNull();
     });
 
     test(`${label}: pages collection exposes title, body, permalink, published`, () => {
@@ -278,25 +291,6 @@ test.describe("Decap CMS config invariants", () => {
   // PER-ENTRY permalink convention enforced by admin/config.yml's
   // `pages.permalink.pattern` default ("/pages/<slug>/").
 
-  function permalinkFor(jekyllConfig, collection) {
-    // Top-level posts permalink lives at root; collection permalinks
-    // live nested under `collections: <name>: permalink:`. Trivial
-    // string parse — yaml is sufficiently regular for this single key.
-    if (collection === "posts") {
-      const m = jekyllConfig.match(/^permalink:\s*(\S+)\s*$/m);
-      return m ? m[1] : null;
-    }
-    // Match the collection block, then the permalink within it.
-    const re = new RegExp(
-      `^\\s{2}${collection}:\\s*$([\\s\\S]*?)(?=^\\S|^\\s{2}\\S)`,
-      "m",
-    );
-    const block = jekyllConfig.match(re);
-    if (!block) return null;
-    const m = block[1].match(/^\s+permalink:\s*(\S+)\s*$/m);
-    return m ? m[1] : null;
-  }
-
   function previewPathFor(yml, collection) {
     const chunk = findCollection(yml, collection);
     if (!chunk) return null;
@@ -326,7 +320,10 @@ test.describe("Decap CMS config invariants", () => {
     const decapPreviewURL = previewPath.replace(/\{\{slug\}\}/g, "foo-bar");
     expect(decapPreviewURL).toBe("/pages/foo-bar/");
 
-    const permalinkField = findField(findCollection(adminYml, "pages"), "permalink");
+    const permalinkField = findField(
+      findCollection(adminYml, "pages"),
+      "permalink",
+    );
     const defaultMatch = permalinkField.match(
       /^\s+default:\s*['"]?([^'"\n]+?)['"]?\s*$/m,
     );
