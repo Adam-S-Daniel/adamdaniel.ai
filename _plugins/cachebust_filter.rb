@@ -1,4 +1,5 @@
 # frozen_string_literal: true
+
 #
 # Liquid filter `cachebust` — appends a short content-hash query string
 # to a site-relative asset path so browsers re-fetch when the file's
@@ -24,6 +25,7 @@ module Jekyll
   module CachebustFilter
     def cachebust(input)
       return input if input.nil? || input.empty?
+
       site = @context.registers[:site]
       base = site.config['baseurl'].to_s
       # Strip baseurl + leading slash to resolve against the source tree.
@@ -31,6 +33,7 @@ module Jekyll
       file_path = File.join(site.source, relative)
       url = File.join(base, '/', relative)
       return url unless File.file?(file_path)
+
       digest = Digest::SHA1.hexdigest(File.read(file_path))[0, 8]
       "#{url}?v=#{digest}"
     end

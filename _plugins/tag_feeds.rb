@@ -1,4 +1,5 @@
 # frozen_string_literal: true
+
 #
 # Emit an Atom feed at /tags/<slug>/feed.xml for every tag referenced by
 # any post. Mirrors jekyll-feed's shape so the same readers parse both.
@@ -43,7 +44,7 @@ if defined?(Jekyll::Generator)
 
         def generate(site)
           curated = (site.collections['tags']&.docs || [])
-                    .map { |d| d.data['name'] }.compact
+                    .filter_map { |d| d.data['name'] }
           from_posts = site.posts.docs.flat_map { |p| Array(p.data['tags']) }.compact
           (curated + from_posts).uniq.each do |name|
             site.pages << FeedPage.new(site, name)

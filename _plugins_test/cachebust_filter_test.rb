@@ -1,4 +1,5 @@
 # frozen_string_literal: true
+
 #
 # Unit tests for _plugins/cachebust_filter.rb. Run with:
 #
@@ -29,6 +30,7 @@ FakeSite = Struct.new(:source, :config)
 # `@context.registers[:site]`.
 class FakeContext
   attr_reader :registers
+
   def initialize(site)
     @registers = { site: site }
   end
@@ -70,16 +72,16 @@ Dir.mktmpdir('cachebust-test') do |root|
     b = filter.cachebust('/assets/css/main.css')
     check(a == b, "expected stable, got #{a.inspect} vs #{b.inspect}")
     check(a =~ %r{^/assets/css/main\.css\?v=[0-9a-f]{8}$},
-          "expected /assets/css/main.css?v=<8 hex>, got #{a.inspect}")
+          "expected /assets/css/main.css?v=<8 hex>, got #{a.inspect}",)
   end
 
   # ── Mutating: byte change → hash changes ────────────────────────────
   run('mutating: edited bytes yield different hash') do
     before = filter.cachebust('/assets/css/main.css')
     File.write(css_path, 'body { color: blue; }')
-    after  = filter.cachebust('/assets/css/main.css')
+    after = filter.cachebust('/assets/css/main.css')
     check(before != after,
-          "expected hash to change after edit, got #{before.inspect} both times")
+          "expected hash to change after edit, got #{before.inspect} both times",)
   end
 
   # ── Edge: missing file → bare path, no `?v=` ───────────────────────
@@ -88,18 +90,18 @@ Dir.mktmpdir('cachebust-test') do |root|
   run('missing file: returns bare path, no query string') do
     out = filter.cachebust('/assets/css/does-not-exist.css')
     check(out == '/assets/css/does-not-exist.css',
-          "expected '/assets/css/does-not-exist.css', got #{out.inspect}")
+          "expected '/assets/css/does-not-exist.css', got #{out.inspect}",)
   end
 
   # ── Edge: nil / empty input passes through ─────────────────────────
   run('nil input: passed through') do
     check(filter.cachebust(nil).nil?,
-          'expected nil for nil input')
+          'expected nil for nil input',)
   end
 
   run('empty input: passed through') do
     check(filter.cachebust('') == '',
-          'expected empty string for empty input')
+          'expected empty string for empty input',)
   end
 
   # ── Edge: respects configured baseurl ──────────────────────────────
@@ -107,7 +109,7 @@ Dir.mktmpdir('cachebust-test') do |root|
     f = build_filter(source: root, baseurl: '/site')
     out = f.cachebust('/site/assets/css/main.css')
     check(out =~ %r{^/site/assets/css/main\.css\?v=[0-9a-f]{8}$},
-          "expected baseurl-prefixed URL with hash, got #{out.inspect}")
+          "expected baseurl-prefixed URL with hash, got #{out.inspect}",)
   end
 end
 

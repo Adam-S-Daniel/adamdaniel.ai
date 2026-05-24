@@ -1,4 +1,5 @@
 # frozen_string_literal: true
+
 #
 # Workflow-shape lint: assert that the `finalize` job in
 # `.github/workflows/e2e-tests.yml` and its presence in
@@ -52,26 +53,26 @@ end
 # psych (Ruby's YAML) is YAML 1.1, which parses bare `on:` as the boolean
 # true. We don't read `on:` here, but the same shape may apply to other
 # truthy bare keys — read everything via String fetches to be safe.
-yaml = YAML.safe_load(File.read(WORKFLOW), aliases: true)
+yaml = YAML.safe_load_file(WORKFLOW, aliases: true)
 
 jobs = yaml.fetch('jobs')
-finalize = jobs['finalize'] or fail("e2e-tests.yml: missing `finalize` job")
+finalize = jobs['finalize'] or fail('e2e-tests.yml: missing `finalize` job')
 
 if finalize
   # ─── job-level invariants ─────────────────────────────────────────
   unless finalize['if'].to_s.include?('!cancelled()')
-    fail("finalize: top-level `if:` must contain `!cancelled()` " \
-         "(otherwise GHA skips the job when any shard fails, and the " \
+    fail('finalize: top-level `if:` must contain `!cancelled()` ' \
+         '(otherwise GHA skips the job when any shard fails, and the ' \
          "merge gate evaporates). Got: #{finalize['if'].inspect}")
   end
 
   needs = [finalize['needs']].flatten.compact
   %w[e2e e2e-admin].each do |dep|
-    unless needs.include?(dep)
-      fail("finalize: `needs:` must include `#{dep}` so the matrix's " \
-           "result is observable via `needs.#{dep}.result`. Got: " \
-           "#{needs.inspect}")
-    end
+    next if needs.include?(dep)
+
+    fail("finalize: `needs:` must include `#{dep}` so the matrix's " \
+         "result is observable via `needs.#{dep}.result`. Got: " \
+         "#{needs.inspect}")
   end
 
   # ─── failure-propagation step ─────────────────────────────────────
@@ -99,6 +100,7 @@ if finalize
     # merge gate as broken.
     next false unless s['if'].to_s.include?("needs.e2e.result == 'failure'") ||
                       s['if'].to_s.include?("needs.e2e-admin.result == 'failure'")
+
     s['run'].to_s.match?(/(^|\n)\s*exit\s+[1-9]\d*\s*$/m)
   end
 
@@ -107,23 +109,23 @@ if finalize
          "(or any step gated on `needs.e2e.result == 'failure'` / " \
          "`needs.e2e-admin.result == 'failure'`). Without it, " \
          "public shards 2-4 and admin failures don't propagate to " \
-         "finalize and the merge gate is open for them.")
+         'finalize and the merge gate is open for them.')
   else
     if_clause = fail_step['if'].to_s
     %w[e2e e2e-admin].each do |dep|
-      unless if_clause.include?("needs.#{dep}.result == 'failure'")
-        fail("finalize: the failure-propagation step's `if:` must " \
-             "reference `needs.#{dep}.result == 'failure'` so a " \
-             "failure in that matrix blocks the merge. Got: " \
-             "#{fail_step['if'].inspect}")
-      end
+      next if if_clause.include?("needs.#{dep}.result == 'failure'")
+
+      fail("finalize: the failure-propagation step's `if:` must " \
+           "reference `needs.#{dep}.result == 'failure'` so a " \
+           'failure in that matrix blocks the merge. Got: ' \
+           "#{fail_step['if'].inspect}")
     end
 
     run_body = fail_step['run'].to_s
     unless run_body.match?(/^\s*exit\s+[1-9]\d*\s*$/m)
       fail("finalize: the failure-propagation step's `run:` must " \
-           "execute `exit <non-zero>` so the job fails. Got run body:\n" \
-           "  #{run_body.lines.map(&:rstrip).join("\n  ")}")
+           "execute `exit <non-zero>` so the job fails. Got run body:\n  " \
+           "#{run_body.lines.map(&:rstrip).join("\n  ")}")
     end
   end
 end
@@ -134,35 +136,33 @@ required_checks_rule = ruleset.fetch('rules').find do |r|
   r['type'] == 'required_status_checks'
 end
 
-if required_checks_rule.nil?
-  fail("rulesets/main.json: no `required_status_checks` rule found")
-else
-  contexts = required_checks_rule.dig('parameters', 'required_status_checks').to_a
-                                  .map { |c| c['context'] }
-  unless contexts.include?('finalize')
-    fail("rulesets/main.json: required_status_checks must include " \
-         "'finalize' — it's the gate for shards 2-4 of the e2e matrix. " \
-         "Currently: #{contexts.inspect}")
-  end
-  unless contexts.include?('e2e (1)')
-    fail("rulesets/main.json: required_status_checks must include " \
-         "'e2e (1)' — shard 1 always exists per pickShardCount() and " \
-         "is the explicit shard-1-required gate. Currently: #{contexts.inspect}")
-  end
-  unless contexts.include?('e2e-admin')
-    fail("rulesets/main.json: required_status_checks must include " \
-         "'e2e-admin' — single-shard admin matrix that always spawns " \
-         "when scope != skip. Currently: #{contexts.inspect}")
-  end
+fail('rulesets/main.json: no `required_status_checks` rule found') if required_checks_rule.nil?
+
+contexts = required_checks_rule.dig('parameters', 'required_status_checks').to_a
+                               .map { |c| c['context'] }
+unless contexts.include?('finalize')
+  fail('rulesets/main.json: required_status_checks must include ' \
+       "'finalize' — it's the gate for shards 2-4 of the e2e matrix. " \
+       "Currently: #{contexts.inspect}")
+end
+unless contexts.include?('e2e (1)')
+  fail('rulesets/main.json: required_status_checks must include ' \
+       "'e2e (1)' — shard 1 always exists per pickShardCount() and " \
+       "is the explicit shard-1-required gate. Currently: #{contexts.inspect}")
+end
+unless contexts.include?('e2e-admin')
+  fail('rulesets/main.json: required_status_checks must include ' \
+       "'e2e-admin' — single-shard admin matrix that always spawns " \
+       "when scope != skip. Currently: #{contexts.inspect}")
 end
 
 if @failures.empty?
-  puts "[ok] finalize gate is intact (job shape + failure-propagation step + ruleset entry)"
+  puts '[ok] finalize gate is intact (job shape + failure-propagation step + ruleset entry)'
 else
   warn @failures.map { |m| "FAIL: #{m}" }.join("\n\n")
   warn ''
-  warn "If you intentionally restructured the matrix-failure propagation " \
-       "(e.g. moved it to a separate `gate:` job), update this lint in the " \
-       "same PR and explain in the commit message."
+  warn 'If you intentionally restructured the matrix-failure propagation ' \
+       '(e.g. moved it to a separate `gate:` job), update this lint in the ' \
+       'same PR and explain in the commit message.'
   exit 1
 end
