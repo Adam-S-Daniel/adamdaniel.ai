@@ -70,8 +70,12 @@ if paths_ignore != paths
   missing_in_stub = paths_ignore - paths
   extra_in_stub = paths - paths_ignore
   msg = +"e2e-tests.yml#paths-ignore and required-check-stubs.yml#paths drifted.\n"
-  msg << "  In e2e-tests but missing from stubs: #{missing_in_stub.inspect}\n" unless missing_in_stub.empty?
-  msg << "  In stubs but missing from e2e-tests: #{extra_in_stub.inspect}\n" unless extra_in_stub.empty?
+  unless missing_in_stub.empty?
+    msg << "  In e2e-tests but missing from stubs: #{missing_in_stub.inspect}\n"
+  end
+  unless extra_in_stub.empty?
+    msg << "  In stubs but missing from e2e-tests: #{extra_in_stub.inspect}\n"
+  end
   msg << "  Keep them byte-for-byte identical (in the same order) so doc-only PRs\n"
   msg << "  always satisfy the required-status-checks rule. See the comment block\n"
   msg << '  at the top of required-check-stubs.yml for the rationale.'

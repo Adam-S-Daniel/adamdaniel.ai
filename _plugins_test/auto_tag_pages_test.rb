@@ -94,7 +94,8 @@ run('description carries through from curated entry') do
   check(py['description'] == 'Programming language',
         "expected Python description from curated entry, got #{py['description'].inspect}",)
   check(ai['description'].nil?,
-        "expected AI Engineering description=nil (no curated entry), got #{ai['description'].inspect}",)
+        'expected AI Engineering description=nil (no curated entry), ' \
+        "got #{ai['description'].inspect}",)
 end
 
 run('url uses slugified name regardless of case/punctuation') do

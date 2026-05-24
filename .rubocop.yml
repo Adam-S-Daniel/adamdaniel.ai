@@ -4,7 +4,8 @@
 # narrow and the generated _site/, vendored gems, and node_modules are
 # excluded outright.
 #
-# CI runs:  bundle exec rubocop
+# CI runs:  rubocop  (standalone, NOT bundle exec — RuboCop is kept out
+# of the site Gemfile; see AGENTS.md → "Code quality").
 
 plugins:
   - rubocop-performance
@@ -22,6 +23,13 @@ AllCops:
     - 'node_modules/**/*'
     - '_site/**/*'
     - '.bundle/**/*'
+
+# ── Layout ───────────────────────────────────────────────────────────────
+# 100-column house style, matching Prettier (`printWidth: 100`) and Ruff
+# (`line-length = 100`). RuboCop already exempts un-splittable long lines
+# (URLs, long string literals) by default. See AGENTS.md → "Code quality".
+Layout/LineLength:
+  Max: 100
 
 # ── Style ────────────────────────────────────────────────────────────────
 
