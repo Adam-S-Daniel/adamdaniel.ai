@@ -43,9 +43,9 @@ if [[ -d "$MIRROR_DIR" && ! -L "$MIRROR_DIR" ]]; then
     err "ERROR: Both $AGENTS_DIR and $MIRROR_DIR contain content."
     err "Cannot auto-merge — please consolidate manually."
     err "  $AGENTS_DIR contains:"
-    ls "$AGENTS_DIR" | sed 's/^/    /' >&2
+    find "$AGENTS_DIR" -mindepth 1 -maxdepth 1 -exec basename {} \; | sed 's/^/    /' >&2
     err "  $MIRROR_DIR contains:"
-    ls "$MIRROR_DIR" | sed 's/^/    /' >&2
+    find "$MIRROR_DIR" -mindepth 1 -maxdepth 1 -exec basename {} \; | sed 's/^/    /' >&2
     exit 2
   fi
 

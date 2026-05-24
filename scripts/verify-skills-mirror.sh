@@ -7,7 +7,7 @@ set -uo pipefail
 
 SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 REPO_ROOT="$(cd "$SCRIPT_DIR/.." && pwd)"
-cd "$REPO_ROOT"
+cd "$REPO_ROOT" || exit 1
 
 STAGED=0
 if [[ "${1:-}" == "--staged" ]]; then
@@ -24,8 +24,8 @@ elif [[ ! -L .claude/skills ]]; then
   echo "      Run scripts/bootstrap.sh to repair." >&2
   errors=$((errors + 1))
 else
-  actual="$(cd .claude/skills 2>/dev/null && pwd -P || true)"
-  expected="$(cd .agents/skills 2>/dev/null && pwd -P || true)"
+  actual="$(if cd .claude/skills 2>/dev/null; then pwd -P; fi)"
+  expected="$(if cd .agents/skills 2>/dev/null; then pwd -P; fi)"
   if [[ -z "$actual" || -z "$expected" || "$actual" != "$expected" ]]; then
     echo "FAIL: .claude/skills does not resolve to .agents/skills" >&2
     echo "      actual:   ${actual:-<unresolved>}" >&2
@@ -58,6 +58,7 @@ if ((STAGED)); then
       done)"
     if [[ -n "$bad" ]]; then
       echo "FAIL: staged regular files under .claude/skills/. Edit .agents/skills/ instead:" >&2
+      # shellcheck disable=SC2001  # per-line indent of a multiline var; sed is clearest here
       echo "$bad" | sed 's/^/  /' >&2
       errors=$((errors + 1))
     fi
