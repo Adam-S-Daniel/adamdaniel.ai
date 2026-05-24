@@ -1,4 +1,5 @@
 # frozen_string_literal: true
+
 #
 # Unit tests for _plugins/normalize_empty_slug.rb. Run with:
 #
@@ -17,6 +18,7 @@ require_relative '../_plugins/normalize_empty_slug'
 # `.data` (a Hash) and `.relative_path` (a String).
 class FakeDoc
   attr_reader :data, :relative_path
+
   def initialize(data:, relative_path: '_posts/2026-04-21-fixture.md')
     @data = data
     @relative_path = relative_path
@@ -44,7 +46,7 @@ run('empty-string slug → derived from filename (date stripped)') do
   )
   Jekyll::NormalizeEmptySlug.apply(doc)
   check(doc.data['slug'] == 'test-1',
-        "expected 'test-1', got #{doc.data['slug'].inspect}")
+        "expected 'test-1', got #{doc.data['slug'].inspect}",)
 end
 
 run('whitespace-only slug → derived from filename') do
@@ -54,35 +56,35 @@ run('whitespace-only slug → derived from filename') do
   )
   Jekyll::NormalizeEmptySlug.apply(doc)
   check(doc.data['slug'] == 'test-cms-workflow',
-        "expected 'test-cms-workflow', got #{doc.data['slug'].inspect}")
+        "expected 'test-cms-workflow', got #{doc.data['slug'].inspect}",)
 end
 
 run('concrete slug preserved') do
   doc = FakeDoc.new(data: { 'slug' => 'my-custom-slug' })
   Jekyll::NormalizeEmptySlug.apply(doc)
   check(doc.data['slug'] == 'my-custom-slug',
-        "expected preserved, got #{doc.data['slug'].inspect}")
+        "expected preserved, got #{doc.data['slug'].inspect}",)
 end
 
 run('absent slug preserved') do
   doc = FakeDoc.new(data: { 'title' => 'No slug key' })
   Jekyll::NormalizeEmptySlug.apply(doc)
   check(!doc.data.key?('slug'),
-        'absent slug: key should stay absent')
+        'absent slug: key should stay absent',)
 end
 
 run('nil slug preserved (Jekyll already falls back)') do
   doc = FakeDoc.new(data: { 'slug' => nil })
   Jekyll::NormalizeEmptySlug.apply(doc)
   check(doc.data.key?('slug') && doc.data['slug'].nil?,
-        "expected nil preserved, got #{doc.data.inspect}")
+        "expected nil preserved, got #{doc.data.inspect}",)
 end
 
 run('non-string slug preserved (let Jekyll raise)') do
   doc = FakeDoc.new(data: { 'slug' => 123 })
   Jekyll::NormalizeEmptySlug.apply(doc)
   check(doc.data['slug'] == 123,
-        "expected 123 preserved, got #{doc.data['slug'].inspect}")
+        "expected 123 preserved, got #{doc.data['slug'].inspect}",)
 end
 
 run('non-dated filename: date-strip regex is a no-op') do
@@ -94,7 +96,7 @@ run('non-dated filename: date-strip regex is a no-op') do
   )
   Jekyll::NormalizeEmptySlug.apply(doc)
   check(doc.data['slug'] == 'about',
-        "expected 'about', got #{doc.data['slug'].inspect}")
+        "expected 'about', got #{doc.data['slug'].inspect}",)
 end
 
 run('empty slug and pathological filename → key deleted, Jekyll fallback wins') do
@@ -107,7 +109,7 @@ run('empty slug and pathological filename → key deleted, Jekyll fallback wins'
   )
   Jekyll::NormalizeEmptySlug.apply(doc)
   check(!doc.data.key?('slug'),
-        "expected key deleted, got #{doc.data.inspect}")
+        "expected key deleted, got #{doc.data.inspect}",)
 end
 
 run('object without .data is a no-op (StaticFile et al.)') do

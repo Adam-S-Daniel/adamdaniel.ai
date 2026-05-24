@@ -26,9 +26,7 @@ async function fetchText(page, url) {
 }
 
 test.describe("Atom feeds", () => {
-  test("/feed.xml exists, is Atom, and contains the right metadata", async ({
-    page,
-  }) => {
+  test("/feed.xml exists, is Atom, and contains the right metadata", async ({ page }) => {
     const { response, body } = await fetchText(page, "/feed.xml");
     const ct = (response.headers()["content-type"] || "").toLowerCase();
     expect(ct).toMatch(/xml/);
@@ -44,20 +42,13 @@ test.describe("Atom feeds", () => {
     page,
   }) => {
     const tags = await discoverTags(page);
-    test.skip(
-      tags.length === 0,
-      "no tags exist on the site — no per-tag feeds to assert against",
-    );
+    test.skip(tags.length === 0, "no tags exist on the site — no per-tag feeds to assert against");
     for (const { slug } of tags) {
       const { body } = await fetchText(page, `/tags/${slug}/feed.xml`);
-      expect(body, `/tags/${slug}/feed.xml lacks Atom namespace`).toContain(
-        ATOM_NS,
-      );
+      expect(body, `/tags/${slug}/feed.xml lacks Atom namespace`).toContain(ATOM_NS);
       expect(body).toMatch(/<feed\b/);
       expect(body).toMatch(
-        new RegExp(
-          `<link[^>]+href="[^"]*/tags/${slug}/feed\\.xml"[^>]+rel="self"`,
-        ),
+        new RegExp(`<link[^>]+href="[^"]*/tags/${slug}/feed\\.xml"[^>]+rel="self"`),
       );
       // Subtitle scopes the feed to the tag.
       expect(body).toMatch(/Posts tagged/);
@@ -72,29 +63,22 @@ test.describe("Atom feeds", () => {
     // post's frontmatter from the feed input. Structure-only tests
     // above pass even when the feed is empty.
     const post = await discoverPost(page);
-    test.skip(
-      !post,
-      "no published posts to verify against — skipping feed-content check",
-    );
+    test.skip(!post, "no published posts to verify against — skipping feed-content check");
     const { body } = await fetchText(page, "/feed.xml");
     // Each post's permalink ends with /blog/<slug>/. The feed's
     // <entry><link href="…"/> should reference the canonical URL.
-    expect(
-      body,
-      `feed.xml should reference ${post.url} (the discovered post)`,
-    ).toMatch(new RegExp(`href="[^"]*${post.url.replace(/\//g, "\\/")}"`));
+    expect(body, `feed.xml should reference ${post.url} (the discovered post)`).toMatch(
+      new RegExp(`href="[^"]*${post.url.replace(/\//g, "\\/")}"`),
+    );
     // The post's title should appear in an <entry><title>…</title>.
     // Escape any regex special chars in the title.
     const escapedTitle = post.title.replace(/[.*+?^${}()|[\]\\]/g, "\\$&");
-    expect(
-      body,
-      `feed.xml should contain the post title "${post.title}"`,
-    ).toMatch(new RegExp(`<title[^>]*>[^<]*${escapedTitle}`));
+    expect(body, `feed.xml should contain the post title "${post.title}"`).toMatch(
+      new RegExp(`<title[^>]*>[^<]*${escapedTitle}`),
+    );
   });
 
-  test("per-tag feed isolation: contains only posts with that tag", async ({
-    page,
-  }) => {
+  test("per-tag feed isolation: contains only posts with that tag", async ({ page }) => {
     // The crucial contract for /tags/<slug>/feed.xml: it MUST contain
     // only the posts tagged with <slug>, NOT every post. If the
     // _plugins/tag_feeds.rb plugin's filter regresses, a tag's feed
@@ -104,10 +88,7 @@ test.describe("Atom feeds", () => {
     // tag's feed has at most as many <entry> elements as the tag
     // says it has (count discovered from /tags/).
     const tags = await discoverTags(page);
-    test.skip(
-      tags.length === 0,
-      "no tags exist — no per-tag feeds to isolate-check",
-    );
+    test.skip(tags.length === 0, "no tags exist — no per-tag feeds to isolate-check");
     const { body: globalBody } = await fetchText(page, "/feed.xml");
     for (const { slug, count } of tags) {
       const { body } = await fetchText(page, `/tags/${slug}/feed.xml`);
@@ -123,19 +104,14 @@ test.describe("Atom feeds", () => {
         body.matchAll(/<entry\b[\s\S]*?<link[^>]*href="([^"]+)"/g),
       ).map((m) => m[1]);
       for (const href of tagEntryHrefs) {
-        expect(
-          globalBody,
-          `tag-feed href ${href} should also be in /feed.xml`,
-        ).toContain(href);
+        expect(globalBody, `tag-feed href ${href} should also be in /feed.xml`).toContain(href);
       }
     }
   });
 });
 
 test.describe("Feed-link icons surface the feeds in the UI", () => {
-  test('homepage "Latest Posts" header links to /feed.xml', async ({
-    page,
-  }) => {
+  test('homepage "Latest Posts" header links to /feed.xml', async ({ page }) => {
     // The homepage .feed-link icon is rendered alongside the "Latest
     // Posts" header, which only appears when at least one post is
     // published. Skip when the site has no posts (the feed itself
@@ -160,10 +136,7 @@ test.describe("Feed-link icons surface the feeds in the UI", () => {
     // to list. Without posts, /blog/ may render an empty-state body
     // and no feed-link.
     const post = await discoverPost(page);
-    test.skip(
-      !post,
-      "no published posts → /blog/ page-header + feed-link don't render",
-    );
+    test.skip(!post, "no published posts → /blog/ page-header + feed-link don't render");
 
     await page.goto("/blog/");
     const link = page.locator(".page-header .feed-link").first();
@@ -181,10 +154,7 @@ test.describe("Feed-link icons surface the feeds in the UI", () => {
 
     const link = page.locator(".page-header .feed-link").first();
     await expect(link).toBeVisible();
-    await expect(link).toHaveAttribute(
-      "href",
-      new RegExp(`/tags/${slug}/feed\\.xml$`),
-    );
+    await expect(link).toHaveAttribute("href", new RegExp(`/tags/${slug}/feed\\.xml$`));
 
     // Browser-discoverable feed in <head>.
     const alt = page.locator(
@@ -200,10 +170,7 @@ test.describe("Feed-link icon survives CSS load failure (webkit)", () => {
   // element. Without `assets/css/main.css`, the RSS icon shouldn't blow
   // up to that default. We exercise this on webkit projects because it's
   // the engine that surfaced the regression originally.
-  test("RSS icon stays icon-sized when main.css fails to load", async ({
-    page,
-    browserName,
-  }) => {
+  test("RSS icon stays icon-sized when main.css fails to load", async ({ page, browserName }) => {
     test.skip(browserName !== "webkit", "webkit-only regression case");
     // Same homepage gating as above — the .feed-link only renders
     // when the "Latest Posts" section has at least one post.
@@ -235,9 +202,7 @@ test.describe("Share row on a post", () => {
   // _posts/ is empty or only contains a future-dated canary), every
   // test in this group skips with a clear reason.
 
-  test("renders an understated share row at the bottom of the post", async ({
-    page,
-  }) => {
+  test("renders an understated share row at the bottom of the post", async ({ page }) => {
     const post = await discoverPost(page);
     test.skip(!post, "no published posts on the site — share row has no host page");
     await page.goto(post.url);
@@ -254,9 +219,7 @@ test.describe("Share row on a post", () => {
     await expect(row.locator(".share-row-label")).toHaveText(/share/i);
   });
 
-  test("LinkedIn / X / Bluesky intents carry the post URL and title", async ({
-    page,
-  }) => {
+  test("LinkedIn / X / Bluesky intents carry the post URL and title", async ({ page }) => {
     const post = await discoverPost(page);
     test.skip(!post, "no published posts on the site");
     await page.goto(post.url);
@@ -284,14 +247,9 @@ test.describe("Share row on a post", () => {
     // without depending on a specific fixture's exact phrasing.
     const firstWord = post.title.split(/\s+/).find((w) => w.length > 0);
     if (firstWord) {
-      const wordRe = new RegExp(
-        firstWord.replace(/[.*+?^${}()|[\]\\]/g, "\\$&"),
-        "i",
-      );
+      const wordRe = new RegExp(firstWord.replace(/[.*+?^${}()|[\]\\]/g, "\\$&"), "i");
       expect(xHref, "X intent URL is missing the post title").toMatch(wordRe);
-      expect(bskyHref, "Bluesky intent URL is missing the post title").toMatch(
-        wordRe,
-      );
+      expect(bskyHref, "Bluesky intent URL is missing the post title").toMatch(wordRe);
     }
   });
 
@@ -339,9 +297,7 @@ test.describe("Share row on a post", () => {
 
     await expect(copy).toHaveClass(/share-copied/);
 
-    const clipboardText = await page.evaluate(() =>
-      navigator.clipboard.readText(),
-    );
+    const clipboardText = await page.evaluate(() => navigator.clipboard.readText());
     expect(clipboardText).toMatch(new RegExp(`/blog/${post.slug}/?$`));
   });
 });

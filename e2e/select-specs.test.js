@@ -21,11 +21,7 @@ test.describe("select-specs", () => {
   });
 
   test("only docs → skip with baseline", () => {
-    const r = selectSpecs([
-      "README.md",
-      "AGENTS.md",
-      "docs/CONTENT_GUIDE.md",
-    ]);
+    const r = selectSpecs(["README.md", "AGENTS.md", "docs/CONTENT_GUIDE.md"]);
     expect(r.scope).toBe("skip");
   });
 
@@ -93,14 +89,10 @@ test.describe("select-specs", () => {
   });
 
   test("infrastructure change → cloudfront specs only", () => {
-    const r = selectSpecs([
-      "infrastructure/bootstrap/template.yaml",
-    ]);
+    const r = selectSpecs(["infrastructure/bootstrap/template.yaml"]);
     expect(r.scope).toBe("subset");
     expect(r.files).toContain("e2e/cloudfront-preview-router.spec.js");
-    expect(r.files).toContain(
-      "e2e/cloudfront-preview-location-fixer.spec.js",
-    );
+    expect(r.files).toContain("e2e/cloudfront-preview-location-fixer.spec.js");
     expect(r.files).not.toContain("e2e/admin-cms.spec.js");
   });
 
@@ -123,10 +115,7 @@ test.describe("select-specs", () => {
   });
 
   test("mixed: tag + post change → CMS smoke + blog/tags page specs", () => {
-    const r = selectSpecs([
-      "_tags/python.md",
-      "_posts/2026-01-01-hi.md",
-    ]);
+    const r = selectSpecs(["_tags/python.md", "_posts/2026-01-01-hi.md"]);
     expect(r.scope).toBe("subset");
     expect(r.files).toContain("e2e/cms-smoke.spec.js");
     expect(r.files).toContain("e2e/blog-post.spec.js");
@@ -214,10 +203,7 @@ test.describe("select-specs", () => {
   });
 
   test("its dedicated workflow change selects the preview delete spec (lane=real)", () => {
-    const r = selectSpecs(
-      [".github/workflows/cms-delete-published-preview.yml"],
-      { lane: "real" },
-    );
+    const r = selectSpecs([".github/workflows/cms-delete-published-preview.yml"], { lane: "real" });
     expect(r.scope).toBe("subset");
     expect(r.files).toContain("e2e/cms-delete-published-preview.spec.js");
   });
@@ -242,12 +228,8 @@ test.describe("select-specs", () => {
       lane: "real",
     });
     expect(r.scope).toBe("subset");
-    expect(r.files).not.toContain(
-      "e2e/cms-delete-published-preview.spec.js",
-    );
-    expect(r.skippedByDirective).toContain(
-      "e2e/cms-delete-published-preview.spec.js",
-    );
+    expect(r.files).not.toContain("e2e/cms-delete-published-preview.spec.js");
+    expect(r.skippedByDirective).toContain("e2e/cms-delete-published-preview.spec.js");
   });
 
   // ── Spec-header directives (Layer 3.A) ──────────────────────────────
@@ -479,12 +461,7 @@ test.describe("pickShardCount", () => {
   test("subset with 0-2 browser specs → 1 shard", () => {
     expect(pickShardCount("subset", [])).toBe(1);
     expect(pickShardCount("subset", ["e2e/blog-post.spec.js"])).toBe(1);
-    expect(
-      pickShardCount("subset", [
-        "e2e/blog-post.spec.js",
-        "e2e/tags.spec.js",
-      ]),
-    ).toBe(1);
+    expect(pickShardCount("subset", ["e2e/blog-post.spec.js", "e2e/tags.spec.js"])).toBe(1);
   });
 
   test("subset with 3-6 browser specs → 2 shards", () => {

@@ -11,11 +11,11 @@
 set -uo pipefail
 
 REPO_ROOT="$(git rev-parse --show-toplevel)"
-cd "$REPO_ROOT"
+cd "$REPO_ROOT" || exit 1
 
 if [[ "${SKIP_SECRETS_SCAN:-}" == "1" ]]; then
-    echo "secrets scan: SKIP_SECRETS_SCAN=1, skipping" >&2
-    exit 0
+  echo "secrets scan: SKIP_SECRETS_SCAN=1, skipping" >&2
+  exit 0
 fi
 
 # Single source of truth: parse the version pinned in the CI workflow so
@@ -23,13 +23,13 @@ fi
 WORKFLOW=".github/workflows/secrets-scan.yml"
 EXPECTED_VERSION=""
 if [[ -f "$WORKFLOW" ]]; then
-    EXPECTED_VERSION="$(grep -E "^[[:space:]]*GITLEAKS_VERSION:" "$WORKFLOW" \
-                       | head -1 \
-                       | sed -E "s/.*['\"]([0-9.]+)['\"].*/\1/")"
+  EXPECTED_VERSION="$(grep -E "^[[:space:]]*GITLEAKS_VERSION:" "$WORKFLOW" \
+    | head -1 \
+    | sed -E "s/.*['\"]([0-9.]+)['\"].*/\1/")"
 fi
 
 if ! command -v gitleaks >/dev/null 2>&1; then
-    cat >&2 <<EOF
+  cat >&2 <<EOF
 secrets scan: FAIL — gitleaks is not installed.
 
 Install it before committing:
@@ -43,16 +43,16 @@ avoids ruleset drift between the hook and the PR gate.
 To bypass for one commit (emergency only — CI will still scan the PR):
   SKIP_SECRETS_SCAN=1 git commit ...
 EOF
-    exit 1
+  exit 1
 fi
 
 # Soft-warn on version drift. Don't block: the local binary may be newer
 # than CI's pin, in which case the developer just sees stricter rules.
 if [[ -n "$EXPECTED_VERSION" ]]; then
-    actual_version="$(gitleaks version 2>/dev/null | head -1 | awk '{print $NF}' | sed 's/^v//')"
-    if [[ -n "$actual_version" && "$actual_version" != "$EXPECTED_VERSION" ]]; then
-        echo "secrets scan: warning — local gitleaks $actual_version != CI v$EXPECTED_VERSION" >&2
-    fi
+  actual_version="$(gitleaks version 2>/dev/null | head -1 | awk '{print $NF}' | sed 's/^v//')"
+  if [[ -n "$actual_version" && "$actual_version" != "$EXPECTED_VERSION" ]]; then
+    echo "secrets scan: warning — local gitleaks $actual_version != CI v$EXPECTED_VERSION" >&2
+  fi
 fi
 
 # `protect --staged` scans only what's about to be committed (index vs HEAD),
@@ -60,7 +60,7 @@ fi
 # the printed output so it doesn't leak into shell history or screenshots.
 # .gitleaks.toml at the repo root is auto-discovered.
 if ! gitleaks protect --staged --redact; then
-    cat >&2 <<'EOF'
+  cat >&2 <<'EOF'
 
 secrets scan: gitleaks found candidate secrets in your staged changes.
 
@@ -74,7 +74,7 @@ entries for the established pattern.
 To bypass for one commit (emergency only — CI will still scan the PR):
   SKIP_SECRETS_SCAN=1 git commit ...
 EOF
-    exit 1
+  exit 1
 fi
 
 echo "secrets scan: OK"

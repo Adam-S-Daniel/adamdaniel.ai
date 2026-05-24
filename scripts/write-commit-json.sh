@@ -21,7 +21,7 @@ JSON="{ \"sha\": \"${SHA}\", \"iso\": \"${ISO}\", \"branch\": \"${BRANCH}\" }"
 write() {
   local target="$1"
   mkdir -p "$(dirname "$target")"
-  printf '%s\n' "$JSON" > "$target"
+  printf '%s\n' "$JSON" >"$target"
   echo "Wrote $target"
 }
 

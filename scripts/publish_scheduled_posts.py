@@ -9,10 +9,11 @@ Scans _posts/*.md for files where:
 Sets published: true on those files. Writes changed=true/false and
 count=N to $GITHUB_OUTPUT when running in GitHub Actions.
 """
+
 import os
 import re
 import sys
-from datetime import datetime, timezone
+from datetime import UTC, datetime
 from pathlib import Path
 
 POSTS_DIR = Path("_posts")
@@ -33,7 +34,7 @@ def parse_publish_date(raw: str) -> datetime | None:
         try:
             dt = datetime.strptime(raw, fmt)
             if dt.tzinfo is None:
-                dt = dt.replace(tzinfo=timezone.utc)
+                dt = dt.replace(tzinfo=UTC)
             return dt
         except ValueError:
             continue
@@ -42,12 +43,12 @@ def parse_publish_date(raw: str) -> datetime | None:
 
 def write_output(key: str, value: str) -> None:
     if GITHUB_OUTPUT:
-        with open(GITHUB_OUTPUT, "a") as f:
+        with open(GITHUB_OUTPUT, "a", encoding="utf-8") as f:
             f.write(f"{key}={value}\n")
 
 
 def main() -> None:
-    now = datetime.now(timezone.utc)
+    now = datetime.now(UTC)
     print(f"Checking for scheduled posts due before {now.isoformat()} …")
 
     changed = []
@@ -72,9 +73,7 @@ def main() -> None:
 
         if pd <= now:
             print(f"  Publishing {filepath.name}  (scheduled: {pd.isoformat()})")
-            content = re.sub(
-                r"^published:\s*false", "published: true", content, flags=re.MULTILINE
-            )
+            content = re.sub(r"^published:\s*false", "published: true", content, flags=re.MULTILINE)
             filepath.write_text(content)
             changed.append(filepath.name)
         else:

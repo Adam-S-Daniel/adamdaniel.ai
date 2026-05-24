@@ -1,4 +1,5 @@
 # frozen_string_literal: true
+
 #
 # Workflow-shape lint with two invariants:
 #
@@ -50,8 +51,8 @@ ALWAYS_FIRE_CONTEXTS = %w[validate-content scan preview-media].freeze
 # Ruby's standard YAML loader doesn't accept the `on:` short form
 # without `permitted_classes`, but we're only reading scalars/arrays
 # under `on.pull_request.paths{,-ignore}`. `safe_load` is fine.
-e2e_yaml = YAML.safe_load(File.read(E2E_TESTS), aliases: true)
-stubs_yaml = YAML.safe_load(File.read(STUBS), aliases: true)
+e2e_yaml = YAML.safe_load_file(E2E_TESTS, aliases: true)
+stubs_yaml = YAML.safe_load_file(STUBS, aliases: true)
 
 # YAML parses `on:` as the boolean `true` (the YAML 1.1 booleans-trap).
 # The actual key is the literal string "on" only on YAML 1.2-only loaders;
@@ -69,11 +70,15 @@ if paths_ignore != paths
   missing_in_stub = paths_ignore - paths
   extra_in_stub = paths - paths_ignore
   msg = +"e2e-tests.yml#paths-ignore and required-check-stubs.yml#paths drifted.\n"
-  msg << "  In e2e-tests but missing from stubs: #{missing_in_stub.inspect}\n" unless missing_in_stub.empty?
-  msg << "  In stubs but missing from e2e-tests: #{extra_in_stub.inspect}\n" unless extra_in_stub.empty?
+  unless missing_in_stub.empty?
+    msg << "  In e2e-tests but missing from stubs: #{missing_in_stub.inspect}\n"
+  end
+  unless extra_in_stub.empty?
+    msg << "  In stubs but missing from e2e-tests: #{extra_in_stub.inspect}\n"
+  end
   msg << "  Keep them byte-for-byte identical (in the same order) so doc-only PRs\n"
   msg << "  always satisfy the required-status-checks rule. See the comment block\n"
-  msg << "  at the top of required-check-stubs.yml for the rationale."
+  msg << '  at the top of required-check-stubs.yml for the rationale.'
   @failures << msg
 end
 
@@ -104,13 +109,13 @@ unless missing_jobs.empty?
   msg << "  suffix) to required-check-stubs.yml, or, if the context now\n"
   msg << "  comes from an always-firing workflow, add it to\n"
   msg << "  ALWAYS_FIRE_CONTEXTS with a justification. Without the stub,\n"
-  msg << "  docs/tooling-only PRs block forever on that check."
+  msg << '  docs/tooling-only PRs block forever on that check.'
   @failures << msg
 end
 
 if @failures.empty?
-  puts "[ok] required-check-stubs.yml paths mirror e2e-tests.yml paths-ignore"
-  puts "[ok] every path-filtered required context has a stub job"
+  puts '[ok] required-check-stubs.yml paths mirror e2e-tests.yml paths-ignore'
+  puts '[ok] every path-filtered required context has a stub job'
 else
   warn @failures.join("\n\n")
   exit 1

@@ -66,8 +66,7 @@ module.exports = defineConfig({
   webServer: IS_LOCAL
     ? [
         {
-          command:
-            "bundle exec jekyll build --quiet && npx serve _site -l 4000 --no-clipboard",
+          command: "bundle exec jekyll build --quiet && npx serve _site -l 4000 --no-clipboard",
           port: 4000,
           reuseExistingServer: !process.env.CI,
         },

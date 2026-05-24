@@ -23,22 +23,15 @@ const { SEED_POST_SLUG, loadTestAdmin } = require("./cms-test-backend");
 //      shape of a future namespace divergence).
 
 const REPO_ROOT = path.join(__dirname, "..");
-const WORKFLOW = path.join(
-  REPO_ROOT,
-  ".github/workflows/cms-editorial-workflow.yml",
-);
+const WORKFLOW = path.join(REPO_ROOT, ".github/workflows/cms-editorial-workflow.yml");
 
 function readyLabelFromWorkflow(yml) {
-  const m = yml.match(
-    /github\.event\.label\.name\s*==\s*['"]([^'"]+)['"]/,
-  );
+  const m = yml.match(/github\.event\.label\.name\s*==\s*['"]([^'"]+)['"]/);
   return m ? m[1] : null;
 }
 
 function labelsCreatedByValidateContent(yml) {
-  return [...yml.matchAll(/createLabel\([^)]*name:\s*['"]([^'"]+)['"]/g)].map(
-    (m) => m[1],
-  );
+  return [...yml.matchAll(/createLabel\([^)]*name:\s*['"]([^'"]+)['"]/g)].map((m) => m[1]);
 }
 
 test.describe(
@@ -48,77 +41,78 @@ test.describe(
   // webkit-iphone16. See playwright.config.js.
   { tag: ["@admin-read"] },
   () => {
-  test.describe.configure({ timeout: 120_000 });
+    test.describe.configure({ timeout: 120_000 });
 
-  test("auto-merge listens for the same `cms/ready` label that validate-content creates", () => {
-    const yml = fs.readFileSync(WORKFLOW, "utf8");
-    const ready = readyLabelFromWorkflow(yml);
-    expect(
-      ready,
-      "cms-editorial-workflow.yml must contain a `github.event.label.name == '<X>'` guard",
-    ).not.toBeNull();
-    expect(ready).toBe("cms/ready");
-
-    const created = labelsCreatedByValidateContent(yml);
-    expect(created).toEqual(expect.arrayContaining(["cms/draft", "cms/ready"]));
-    expect(
-      created,
-      `auto-merge trigger label "${ready}" must be created by validate-content (got: ${JSON.stringify(created)})`,
-    ).toContain(ready);
-  });
-
-  test.describe("Runtime: Decap status namespace matches workflow listener", () => {
-    test.beforeEach(async ({ page }, testInfo) => {
-    });
-
-    test("Save → no `decap-cms/`-prefixed status string leaks into repoFilesUnpublished", async ({
-      page,
-    }) => {
-      await loadTestAdmin(page);
-      await page.goto(
-        `/admin/index-test.html#/collections/posts/entries/${SEED_POST_SLUG}`,
-      );
-      const titleField = page.getByLabel(/^Title$/);
-      await expect(titleField).toBeVisible({ timeout: 60_000 });
-      await titleField.fill("Replacement test post 1 — label-contract probe");
-
-      await page.getByRole("button", { name: /^save$/i }).first().click();
-
-      // Wait for the draft to materialise.
-      await expect
-        .poll(
-          () =>
-            page.evaluate((k) => {
-              const map = window.repoFilesUnpublished || {};
-              return map[k] ? "present" : null;
-            }, `posts/${SEED_POST_SLUG}`),
-          { timeout: 30_000 },
-        )
-        .toBe("present");
-
-      // Walk repoFilesUnpublished and collect every string value — the
-      // status token lives somewhere in here. Stringify-flatten is
-      // robust to test-repo shape drift across Decap versions.
-      const decapPrefixed = await page.evaluate(() => {
-        const out = [];
-        const seen = new WeakSet();
-        function walk(v) {
-          if (typeof v === "string") {
-            if (/^decap-cms\//.test(v)) out.push(v);
-            return;
-          }
-          if (!v || typeof v !== "object" || seen.has(v)) return;
-          seen.add(v);
-          for (const k of Object.keys(v)) walk(v[k]);
-        }
-        walk(window.repoFilesUnpublished);
-        return out;
-      });
-
+    test("auto-merge listens for the same `cms/ready` label that validate-content creates", () => {
+      const yml = fs.readFileSync(WORKFLOW, "utf8");
+      const ready = readyLabelFromWorkflow(yml);
       expect(
-        decapPrefixed,
-        `Decap must not write any "decap-cms/..." status string into repoFilesUnpublished — the workflow listens for the unprefixed "cms/<status>" namespace. Found: ${JSON.stringify(decapPrefixed)}`,
-      ).toEqual([]);
+        ready,
+        "cms-editorial-workflow.yml must contain a `github.event.label.name == '<X>'` guard",
+      ).not.toBeNull();
+      expect(ready).toBe("cms/ready");
+
+      const created = labelsCreatedByValidateContent(yml);
+      expect(created).toEqual(expect.arrayContaining(["cms/draft", "cms/ready"]));
+      expect(
+        created,
+        `auto-merge trigger label "${ready}" must be created by validate-content (got: ${JSON.stringify(created)})`,
+      ).toContain(ready);
     });
-  });
-});
+
+    test.describe("Runtime: Decap status namespace matches workflow listener", () => {
+      test.beforeEach(async () => {});
+
+      test("Save → no `decap-cms/`-prefixed status string leaks into repoFilesUnpublished", async ({
+        page,
+      }) => {
+        await loadTestAdmin(page);
+        await page.goto(`/admin/index-test.html#/collections/posts/entries/${SEED_POST_SLUG}`);
+        const titleField = page.getByLabel(/^Title$/);
+        await expect(titleField).toBeVisible({ timeout: 60_000 });
+        await titleField.fill("Replacement test post 1 — label-contract probe");
+
+        await page
+          .getByRole("button", { name: /^save$/i })
+          .first()
+          .click();
+
+        // Wait for the draft to materialise.
+        await expect
+          .poll(
+            () =>
+              page.evaluate((k) => {
+                const map = window.repoFilesUnpublished || {};
+                return map[k] ? "present" : null;
+              }, `posts/${SEED_POST_SLUG}`),
+            { timeout: 30_000 },
+          )
+          .toBe("present");
+
+        // Walk repoFilesUnpublished and collect every string value — the
+        // status token lives somewhere in here. Stringify-flatten is
+        // robust to test-repo shape drift across Decap versions.
+        const decapPrefixed = await page.evaluate(() => {
+          const out = [];
+          const seen = new WeakSet();
+          function walk(v) {
+            if (typeof v === "string") {
+              if (/^decap-cms\//.test(v)) out.push(v);
+              return;
+            }
+            if (!v || typeof v !== "object" || seen.has(v)) return;
+            seen.add(v);
+            for (const k of Object.keys(v)) walk(v[k]);
+          }
+          walk(window.repoFilesUnpublished);
+          return out;
+        });
+
+        expect(
+          decapPrefixed,
+          `Decap must not write any "decap-cms/..." status string into repoFilesUnpublished — the workflow listens for the unprefixed "cms/<status>" namespace. Found: ${JSON.stringify(decapPrefixed)}`,
+        ).toEqual([]);
+      });
+    });
+  },
+);

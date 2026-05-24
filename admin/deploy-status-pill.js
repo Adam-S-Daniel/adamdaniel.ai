@@ -109,7 +109,7 @@
       if (!raw) return null;
       var parsed = JSON.parse(raw);
       return parsed && parsed.token ? parsed.token : null;
-    } catch (e) {
+    } catch {
       return null;
     }
   }
@@ -126,34 +126,34 @@
     if (!res) return false;
     if (res.status !== 403 && res.status !== 429) return false;
     try {
-      var remaining = res.headers && res.headers.get
-        ? res.headers.get("X-RateLimit-Remaining")
-        : null;
+      var remaining =
+        res.headers && res.headers.get ? res.headers.get("X-RateLimit-Remaining") : null;
       // GitHub returns "X-RateLimit-Remaining: 0" with status 403 when
       // the primary rate limit trips. status 429 with no header is the
       // secondary/abuse limit; treat that as rate-limited too.
       if (res.status === 429) return true;
       return remaining === "0";
-    } catch (e) {
+    } catch {
       return false;
     }
   }
 
   function rateLimitResetSummary(res) {
     try {
-      var reset = res && res.headers && res.headers.get
-        ? res.headers.get("X-RateLimit-Reset")
-        : null;
+      var reset =
+        res && res.headers && res.headers.get ? res.headers.get("X-RateLimit-Reset") : null;
       if (!reset) return "unknown";
       var when = new Date(parseInt(reset, 10) * 1000);
       return when.toISOString();
-    } catch (e) {
+    } catch {
       return "unknown";
     }
   }
 
   function delay(ms) {
-    return new Promise(function (resolve) { setTimeout(resolve, ms); });
+    return new Promise(function (resolve) {
+      setTimeout(resolve, ms);
+    });
   }
 
   // Fetch wrapper with single retry on transient failure. On rate
@@ -174,9 +174,13 @@
         if (res.ok) return res;
         if (isRateLimited(res)) {
           console.warn(
-            "[deploy-status-pill] " + label + " rate-limited (status " +
-            res.status + "); waiting until reset (" +
-            rateLimitResetSummary(res) + ") — no retry."
+            "[deploy-status-pill] " +
+              label +
+              " rate-limited (status " +
+              res.status +
+              "); waiting until reset (" +
+              rateLimitResetSummary(res) +
+              ") — no retry.",
           );
           return null;
         }
@@ -186,8 +190,11 @@
           continue;
         }
         console.warn(
-          "[deploy-status-pill] " + label + " HTTP " + res.status +
-          " after retry — giving up for this tick."
+          "[deploy-status-pill] " +
+            label +
+            " HTTP " +
+            res.status +
+            " after retry — giving up for this tick.",
         );
         return null;
       } catch (err) {
@@ -199,8 +206,10 @@
       }
     }
     console.warn(
-      "[deploy-status-pill] " + label + " network error after retry: " +
-      (lastErr && lastErr.message ? lastErr.message : String(lastErr))
+      "[deploy-status-pill] " +
+        label +
+        " network error after retry: " +
+        (lastErr && lastErr.message ? lastErr.message : String(lastErr)),
     );
     return null;
   }
@@ -209,7 +218,7 @@
     var deplRes = await fetchWithRetry(
       API + "/deployments?environment=" + encodeURIComponent(environment) + "&per_page=1",
       { headers: ghHeaders(token) },
-      "deployments?environment=" + environment
+      "deployments?environment=" + environment,
     );
     if (!deplRes) return null;
     var deployments = await deplRes.json();
@@ -218,7 +227,7 @@
     var statRes = await fetchWithRetry(
       API + "/deployments/" + latest.id + "/statuses?per_page=1",
       { headers: ghHeaders(token) },
-      "deployments/" + latest.id + "/statuses"
+      "deployments/" + latest.id + "/statuses",
     );
     if (!statRes) return null;
     var statuses = await statRes.json();
@@ -234,7 +243,7 @@
     var deplRes = await fetchWithRetry(
       API + "/deployments?per_page=20",
       { headers: ghHeaders(token) },
-      "deployments (preview filter)"
+      "deployments (preview filter)",
     );
     if (!deplRes) return null;
     var deployments = await deplRes.json();
@@ -245,7 +254,7 @@
     var statRes = await fetchWithRetry(
       API + "/deployments/" + preview.id + "/statuses?per_page=1",
       { headers: ghHeaders(token) },
-      "deployments/" + preview.id + "/statuses"
+      "deployments/" + preview.id + "/statuses",
     );
     if (!statRes) return null;
     var statuses = await statRes.json();
@@ -264,24 +273,27 @@
       pill.style.display = "none";
       return;
     }
-    pill.href = logUrl ||
-      "https://github.com/" + REPO + "/actions";
+    pill.href = logUrl || "https://github.com/" + REPO + "/actions";
 
     if (state === "in_progress" || state === "queued" || state === "pending") {
       pill.style.color = "#0969da";
       pill.style.borderColor = "#0969da";
       pill.title = "Click to view the in-flight deploy run";
+      // eslint-disable-next-line no-unsanitized/property -- static SVG markup; `label` is a hardcoded constant ("Publishing" / "Preview build"), never user input.
       pill.innerHTML =
         '<svg width="10" height="10" viewBox="0 0 24 24" style="vertical-align:-1px;margin-right:0.4em" aria-hidden="true">' +
         '<circle cx="12" cy="12" r="10" stroke="currentColor" stroke-width="3" fill="none" stroke-dasharray="40 20" stroke-linecap="round">' +
         '<animateTransform attributeName="transform" type="rotate" from="0 12 12" to="360 12 12" dur="1.2s" repeatCount="indefinite"/>' +
         "</circle></svg>" +
-        "<span>" + label + "…</span>";
+        "<span>" +
+        label +
+        "…</span>";
       pill.style.display = "";
     } else if (state === "failure" || state === "error") {
       pill.style.color = "#cf222e";
       pill.style.borderColor = "#cf222e";
       pill.title = "Click to view the failed deploy run";
+      // eslint-disable-next-line no-unsanitized/property -- static markup; `label` is a hardcoded constant, never user input.
       pill.innerHTML = "<span>⚠ " + label + " failed — view logs</span>";
       pill.style.display = "";
     } else {
@@ -310,12 +322,18 @@
     pill.style.color = "#9a6700";
     pill.style.borderColor = "#d4a72c";
     pill.title =
-      "Polling for " + label + " status hasn't succeeded recently — " +
+      "Polling for " +
+      label +
+      " status hasn't succeeded recently — " +
       "the displayed state may be out of date. Click to view the last-known run.";
+    // eslint-disable-next-line no-unsanitized/property -- static markup; `label` is a hardcoded constant and `formatAgo` returns a numeric-derived time string, never user input.
     pill.innerHTML =
       '<span aria-hidden="true" style="margin-right:0.35em">⚠</span>' +
-      "<span>" + label + " (status stale — last poll " +
-      formatAgo(lastPollAt, nowMs) + ")</span>";
+      "<span>" +
+      label +
+      " (status stale — last poll " +
+      formatAgo(lastPollAt, nowMs) +
+      ")</span>";
     pill.style.display = "";
   }
 
@@ -342,23 +360,24 @@
     // `order:-1` is set so that even if Decap wraps children in a
     // flex container with arbitrary order values, the pill still
     // floats to the start of the row.
-    a.style.cssText = [
-      "display:none",
-      "order:-1",
-      "margin-right:0.5rem",
-      "padding:0.2rem 0.55rem",
-      "background:rgba(255,255,255,0.95)",
-      "border:1px solid #d0d7de",
-      "border-radius:3px",
-      "color:#57606a",
-      "font-family:ui-monospace,SFMono-Regular,Menlo,monospace",
-      "font-size:0.7rem",
-      "letter-spacing:0.03em",
-      "text-decoration:none",
-      "vertical-align:middle",
-      "cursor:pointer",
-      "transition:border-color 0.15s,color 0.15s",
-    ].join(";") + ";";
+    a.style.cssText =
+      [
+        "display:none",
+        "order:-1",
+        "margin-right:0.5rem",
+        "padding:0.2rem 0.55rem",
+        "background:rgba(255,255,255,0.95)",
+        "border:1px solid #d0d7de",
+        "border-radius:3px",
+        "color:#57606a",
+        "font-family:ui-monospace,SFMono-Regular,Menlo,monospace",
+        "font-size:0.7rem",
+        "letter-spacing:0.03em",
+        "text-decoration:none",
+        "vertical-align:middle",
+        "cursor:pointer",
+        "transition:border-color 0.15s,color 0.15s",
+      ].join(";") + ";";
     return a;
   }
 
@@ -469,8 +488,10 @@
       // unexpected (JSON parse failure, etc) — log it and treat as
       // permanent failure for this tick.
       console.warn(
-        "[deploy-status-pill] " + envLabel + " unexpected error: " +
-        (err && err.message ? err.message : String(err))
+        "[deploy-status-pill] " +
+          envLabel +
+          " unexpected error: " +
+          (err && err.message ? err.message : String(err)),
       );
       return null;
     }
@@ -483,8 +504,7 @@
       // Hide the pill and log a one-liner so devtools shows the
       // polling chain is alive even when the pill is invisible.
       console.info(
-        "[deploy-status-pill] no deployment yet for " + envLabel +
-        " — pill hidden, will re-poll."
+        "[deploy-status-pill] no deployment yet for " + envLabel + " — pill hidden, will re-poll.",
       );
       renderPill(pill, label, null, null);
       lastSeenStatusIds[kind] = null;

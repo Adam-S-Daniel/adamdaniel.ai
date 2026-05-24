@@ -78,11 +78,7 @@ function readPNG(file) {
 function computeAll({ changesPath, prDir, prodDir, outPath }) {
   const changes = JSON.parse(fs.readFileSync(changesPath, "utf8"));
   const newSet = new Set(changes.new || []);
-  const all = [
-    ...(changes.changed || []),
-    ...(changes.new || []),
-    ...(changes.unchanged || []),
-  ];
+  const all = [...(changes.changed || []), ...(changes.new || []), ...(changes.unchanged || [])];
 
   const pages = [];
   let identical = 0;
@@ -152,9 +148,7 @@ module.exports = {
 if (require.main === module) {
   const [, , changesPath, prDir, prodDir, outPath] = process.argv;
   if (!changesPath || !prDir || !prodDir || !outPath) {
-    console.error(
-      "usage: compute-visual-diffs.js <changes.json> <pr-dir> <prod-dir> <out.json>",
-    );
+    console.error("usage: compute-visual-diffs.js <changes.json> <pr-dir> <prod-dir> <out.json>");
     process.exit(2);
   }
   const summary = computeAll({ changesPath, prDir, prodDir, outPath });

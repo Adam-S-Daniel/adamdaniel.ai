@@ -77,13 +77,16 @@ async function seedDecapAuth(page, { token = getPat(), login = getLogin() } = {}
     );
   }
   const record = buildAuthRecord(token, login);
-  await page.addInitScript(({ key, value }) => {
-    try {
-      localStorage.setItem(key, JSON.stringify(value));
-    } catch (_) {
-      /* private mode etc — let Decap surface the resulting error */
-    }
-  }, { key: DECAP_CMS_USER_KEY, value: record });
+  await page.addInitScript(
+    ({ key, value }) => {
+      try {
+        localStorage.setItem(key, JSON.stringify(value));
+      } catch (_) {
+        /* private mode etc — let Decap surface the resulting error */
+      }
+    },
+    { key: DECAP_CMS_USER_KEY, value: record },
+  );
 }
 
 module.exports = {

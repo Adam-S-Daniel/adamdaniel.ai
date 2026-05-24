@@ -11,19 +11,13 @@ const { test, expect } = require("./base");
 const { readWorkflow, jobBlock, topBlock } = require("./workflow-yaml-utils");
 
 test("auto-merge-when-ready needs validate-content", () => {
-  const block = jobBlock(
-    readWorkflow("cms-editorial-workflow.yml"),
-    "auto-merge-when-ready",
-  );
+  const block = jobBlock(readWorkflow("cms-editorial-workflow.yml"), "auto-merge-when-ready");
   expect(block, "auto-merge-when-ready job not found").not.toBeNull();
   expect(block).toMatch(/needs:\s*validate-content/);
 });
 
 test("auto-merge-when-ready fires only on labeled cms/ready", () => {
-  const block = jobBlock(
-    readWorkflow("cms-editorial-workflow.yml"),
-    "auto-merge-when-ready",
-  );
+  const block = jobBlock(readWorkflow("cms-editorial-workflow.yml"), "auto-merge-when-ready");
   expect(block).not.toBeNull();
   expect(block).toMatch(/github\.event\.action\s*==\s*'labeled'/);
   expect(block).toMatch(/github\.event\.label\.name\s*==\s*'cms\/ready'/);
@@ -41,9 +35,7 @@ test("validate-content has no pull_request paths filter (required check must alw
   // Match `paths:` only at the indent level of the pull_request event
   // (4 spaces) — ignores `paths:` inside `paths-ignore:` or unrelated
   // nested keys.
-  const offendingLine = onBlock
-    .split(/\r?\n/)
-    .find((l) => /^\s{4}paths:\s*$/.test(l));
+  const offendingLine = onBlock.split(/\r?\n/).find((l) => /^\s{4}paths:\s*$/.test(l));
   expect(
     offendingLine,
     "cms-editorial-workflow.yml must NOT gate `validate-content` by paths — see comment block in the workflow.",

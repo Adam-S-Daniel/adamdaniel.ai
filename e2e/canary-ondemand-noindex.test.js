@@ -38,10 +38,7 @@ test("each canary URL renders with robots: noindex,nofollow", () => {
   for (const slug of CANARIES) {
     const file = path.join(SITE_DIR, "e2e", slug, "index.html");
     const html = readSite(file);
-    expect(
-      html,
-      `${slug}: missing or wrong robots meta`,
-    ).toMatch(
+    expect(html, `${slug}: missing or wrong robots meta`).toMatch(
       /<meta\s+name=["']robots["']\s+content=["']noindex\s*,\s*nofollow["']/i,
     );
   }

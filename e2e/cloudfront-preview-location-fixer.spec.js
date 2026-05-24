@@ -14,11 +14,7 @@ const { test, expect } = require("./base");
 // blog-slug-literal-lint: allowed: literal slug used for known fixture —
 // the `/blog/foo/` strings are synthetic redirect-fixer inputs.
 
-const TEMPLATE_PATH = path.join(
-  __dirname,
-  "..",
-  "infrastructure/bootstrap/template.yaml",
-);
+const TEMPLATE_PATH = path.join(__dirname, "..", "infrastructure/bootstrap/template.yaml");
 
 function loadHandler(functionName) {
   const template = fs.readFileSync(TEMPLATE_PATH, "utf8");
@@ -27,15 +23,11 @@ function loadHandler(functionName) {
   // Find the function resource declaration and walk forward to the
   // FunctionCode: | block scalar; capture only lines whose indentation
   // exceeds the block's introducer so we stop at the next sibling key.
-  const startIdx = lines.findIndex((l) =>
-    new RegExp(`^\\s*${functionName}:\\s*$`).test(l),
-  );
+  const startIdx = lines.findIndex((l) => new RegExp(`^\\s*${functionName}:\\s*$`).test(l));
   if (startIdx < 0) {
     throw new Error(`Could not locate resource ${functionName} in template`);
   }
-  const codeIdx = lines.findIndex(
-    (l, i) => i > startIdx && /^\s*FunctionCode:\s*\|\s*$/.test(l),
-  );
+  const codeIdx = lines.findIndex((l, i) => i > startIdx && /^\s*FunctionCode:\s*\|\s*$/.test(l));
   if (codeIdx < 0) {
     throw new Error(`No FunctionCode block under ${functionName}`);
   }
@@ -84,11 +76,7 @@ test.describe("CloudFront preview-location-fixer function", () => {
   });
 
   test("strips multi-digit /pr-N/ prefixes", () => {
-    const evt = response(
-      "preview-pr12345.adamdaniel.ai",
-      301,
-      "/pr-12345/blog/foo/",
-    );
+    const evt = response("preview-pr12345.adamdaniel.ai", 301, "/pr-12345/blog/foo/");
     handler(evt);
     expect(evt.response.headers.location.value).toBe("/blog/foo/");
   });
@@ -109,15 +97,9 @@ test.describe("CloudFront preview-location-fixer function", () => {
   });
 
   test("leaves absolute URLs (e.g. cross-origin redirects) untouched", () => {
-    const evt = response(
-      "preview-pr23.adamdaniel.ai",
-      302,
-      "https://example.com/somewhere",
-    );
+    const evt = response("preview-pr23.adamdaniel.ai", 302, "https://example.com/somewhere");
     handler(evt);
-    expect(evt.response.headers.location.value).toBe(
-      "https://example.com/somewhere",
-    );
+    expect(evt.response.headers.location.value).toBe("https://example.com/somewhere");
   });
 
   test("no-op on non-redirect responses", () => {
@@ -159,11 +141,7 @@ test.describe("CloudFront preview-location-fixer function", () => {
   });
 
   test("rewrites the bare /cms-<slug> to / so the root index doesn't 404", () => {
-    const evt = response(
-      "preview-cms-pages-about.adamdaniel.ai",
-      302,
-      "/cms-pages-about/",
-    );
+    const evt = response("preview-cms-pages-about.adamdaniel.ai", 302, "/cms-pages-about/");
     handler(evt);
     expect(evt.response.headers.location.value).toBe("/");
   });
@@ -171,33 +149,21 @@ test.describe("CloudFront preview-location-fixer function", () => {
   test("does not strip a /cms-<slug>/ that doesn't match the host's slug", () => {
     // A leak of the wrong slug's prefix on a different host should fail
     // visibly rather than silently route to the wrong S3 prefix.
-    const evt = response(
-      "preview-cms-posts-foo.adamdaniel.ai",
-      302,
-      "/cms-pages-about/",
-    );
+    const evt = response("preview-cms-posts-foo.adamdaniel.ai", 302, "/cms-pages-about/");
     handler(evt);
     expect(evt.response.headers.location.value).toBe("/cms-pages-about/");
   });
 
   test("does not cross-strip /pr-N/ on a cms-<slug> host", () => {
     // A pr-23 prefix on a cms-foo host is a misroute — leave it visible.
-    const evt = response(
-      "preview-cms-posts-foo.adamdaniel.ai",
-      302,
-      "/pr-23/admin/",
-    );
+    const evt = response("preview-cms-posts-foo.adamdaniel.ai", 302, "/pr-23/admin/");
     handler(evt);
     expect(evt.response.headers.location.value).toBe("/pr-23/admin/");
   });
 
   test("does not cross-strip /cms-<slug>/ on a pr-N host", () => {
     // Mirror: cms-foo prefix surfacing on a pr-23 host is also a misroute.
-    const evt = response(
-      "preview-pr23.adamdaniel.ai",
-      302,
-      "/cms-posts-foo/admin/",
-    );
+    const evt = response("preview-pr23.adamdaniel.ai", 302, "/cms-posts-foo/admin/");
     handler(evt);
     expect(evt.response.headers.location.value).toBe("/cms-posts-foo/admin/");
   });
@@ -213,17 +179,13 @@ test.describe("CloudFront preview-location-fixer function", () => {
     const evt = response("preview-pr23.adamdaniel.ai", 200);
     handler(evt);
     expect(evt.response.headers["x-robots-tag"]).toBeDefined();
-    expect(evt.response.headers["x-robots-tag"].value).toBe(
-      "noindex, nofollow",
-    );
+    expect(evt.response.headers["x-robots-tag"].value).toBe("noindex, nofollow");
   });
 
   test("adds X-Robots-Tag on a 302 Location response (alongside the strip)", () => {
     const evt = response("preview-pr23.adamdaniel.ai", 302, "/pr-23/admin/");
     handler(evt);
-    expect(evt.response.headers["x-robots-tag"].value).toBe(
-      "noindex, nofollow",
-    );
+    expect(evt.response.headers["x-robots-tag"].value).toBe("noindex, nofollow");
     // Strip still happened too.
     expect(evt.response.headers.location.value).toBe("/admin/");
   });
@@ -231,17 +193,13 @@ test.describe("CloudFront preview-location-fixer function", () => {
   test("adds X-Robots-Tag on a 404 too (covers asset misses)", () => {
     const evt = response("preview-pr23.adamdaniel.ai", 404);
     handler(evt);
-    expect(evt.response.headers["x-robots-tag"].value).toBe(
-      "noindex, nofollow",
-    );
+    expect(evt.response.headers["x-robots-tag"].value).toBe("noindex, nofollow");
   });
 
   test("adds X-Robots-Tag on cms-slug hosts", () => {
     const evt = response("preview-cms-posts-foo-bar.adamdaniel.ai", 200);
     handler(evt);
-    expect(evt.response.headers["x-robots-tag"].value).toBe(
-      "noindex, nofollow",
-    );
+    expect(evt.response.headers["x-robots-tag"].value).toBe("noindex, nofollow");
   });
 
   test("adds X-Robots-Tag even when the host header is missing", () => {
@@ -251,8 +209,6 @@ test.describe("CloudFront preview-location-fixer function", () => {
     // a stray missing-host case here doesn't accidentally noindex prod.)
     const evt = response(undefined, 200);
     handler(evt);
-    expect(evt.response.headers["x-robots-tag"].value).toBe(
-      "noindex, nofollow",
-    );
+    expect(evt.response.headers["x-robots-tag"].value).toBe("noindex, nofollow");
   });
 });

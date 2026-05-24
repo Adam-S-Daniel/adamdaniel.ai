@@ -24,15 +24,11 @@ test.describe("Blog post page", () => {
     await expect(titleElements).toHaveCount(1);
 
     // No other visible element should duplicate the title text.
-    const visibleTitles = page.locator(
-      `:visible:text-is("${post.title}"):not(title):not(meta)`,
-    );
+    const visibleTitles = page.locator(`:visible:text-is("${post.title}"):not(title):not(meta)`);
     await expect(visibleTitles).toHaveCount(1);
   });
 
-  test("does not render a featured image when featured_image is empty", async ({
-    page,
-  }) => {
+  test("does not render a featured image when featured_image is empty", async ({ page }) => {
     const post = await discoverPost(page);
     test.skip(!post, "no published posts on the site");
     await page.goto(post.url);

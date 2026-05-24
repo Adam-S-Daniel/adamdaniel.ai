@@ -23,13 +23,7 @@ const { test, expect } = require("./base");
 // The workflow-structure invariants are pure-text greps against the
 // workflow file; the slug-derivation invariants run the real script.
 
-const WORKFLOW = path.join(
-  __dirname,
-  "..",
-  ".github",
-  "workflows",
-  "deploy-preview.yml",
-);
+const WORKFLOW = path.join(__dirname, "..", ".github", "workflows", "deploy-preview.yml");
 
 const SLUG_SCRIPT = path.join(__dirname, "..", "scripts", "cms-preview-slug.sh");
 
@@ -48,8 +42,7 @@ test.describe("deploy-preview workflow: per-CMS-slug preview alias", () => {
     const yml = readWorkflow();
     // Exactly two call sites — one in deploy-preview, one in
     // teardown-preview — so they can never disagree on the slug shape.
-    const matches =
-      yml.match(/\.\/scripts\/cms-preview-slug\.sh/g) || [];
+    const matches = yml.match(/\.\/scripts\/cms-preview-slug\.sh/g) || [];
     expect(
       matches.length,
       `expected exactly two cms-preview-slug.sh call sites (deploy + teardown); found ${matches.length}`,
@@ -91,10 +84,7 @@ test.describe("deploy-preview workflow: per-CMS-slug preview alias", () => {
 
   test("deploy registers a `preview-cms-<slug>` GitHub Deployment", () => {
     const yml = readWorkflow();
-    expect(
-      yml,
-      "missing `environment: \\`preview-cms-${slug}\\`` deployment registration",
-    ).toMatch(
+    expect(yml, "missing `environment: \\`preview-cms-${slug}\\`` deployment registration").toMatch(
       /environment:\s*`preview-cms-\$\{slug\}`/,
     );
   });
@@ -111,9 +101,7 @@ test.describe("deploy-preview workflow: per-CMS-slug preview alias", () => {
     // Both deploy + teardown invalidation steps should add the
     // `/cms-${SLUG}/*` path only when SLUG is non-empty. Look for the
     // shared pattern.
-    const matches = yml.match(
-      /PATHS\+=\("\/cms-\$\{SLUG\}\/\*"\)/g,
-    ) || [];
+    const matches = yml.match(/PATHS\+=\("\/cms-\$\{SLUG\}\/\*"\)/g) || [];
     expect(
       matches.length,
       "expected both deploy + teardown to conditionally add the cms-slug path to the invalidation batch",
@@ -127,9 +115,7 @@ test.describe("deploy-preview workflow: per-CMS-slug preview alias", () => {
     expect(
       yml,
       "PR comment is missing the cms-slug alias row — editors won't see the stable URL",
-    ).toMatch(
-      /CMS slug alias[\s\S]{0,200}stable across draft cycles/,
-    );
+    ).toMatch(/CMS slug alias[\s\S]{0,200}stable across draft cycles/);
   });
 });
 
@@ -152,9 +138,7 @@ test.describe("cms-preview-slug.sh", () => {
 
   test("short slugs pass through unchanged", () => {
     expect(slug("cms/posts/foo-bar")).toBe("posts-foo-bar");
-    expect(slug("cms/posts/2099-01-01-foo-bar")).toBe(
-      "posts-2099-01-01-foo-bar",
-    );
+    expect(slug("cms/posts/2099-01-01-foo-bar")).toBe("posts-2099-01-01-foo-bar");
     expect(slug("cms/pages/about")).toBe("pages-about");
     expect(slug("cms/projects/category/item")).toBe("projects-category-item");
   });

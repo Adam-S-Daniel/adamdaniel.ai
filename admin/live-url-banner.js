@@ -74,7 +74,7 @@
       if (!raw) return null;
       var p = JSON.parse(raw);
       return p && p.token ? p.token : null;
-    } catch (e) {
+    } catch {
       return null;
     }
   }
@@ -86,7 +86,7 @@
       var c = JSON.parse(raw);
       if (!c || Date.now() - c.at > CACHE_TTL_MS) return null;
       return c;
-    } catch (e) {
+    } catch {
       return null;
     }
   }
@@ -95,13 +95,11 @@
   // hash route `#/collections/<col>/entries/<slug>`. null on the
   // "new entry" route (no PR can exist yet) and the list route.
   function currentEntrySlug() {
-    var m = /#\/collections\/[^/]+\/entries\/([^?#]+)/.exec(
-      window.location.hash || ""
-    );
+    var m = /#\/collections\/[^/]+\/entries\/([^?#]+)/.exec(window.location.hash || "");
     if (!m) return null;
     try {
       return decodeURIComponent(m[1]);
-    } catch (e) {
+    } catch {
       return m[1];
     }
   }
@@ -165,11 +163,8 @@
         }
         prBySlug = map;
         try {
-          sessionStorage.setItem(
-            PR_CACHE_KEY,
-            JSON.stringify({ at: Date.now(), data: map })
-          );
-        } catch (e) {
+          sessionStorage.setItem(PR_CACHE_KEY, JSON.stringify({ at: Date.now(), data: map }));
+        } catch {
           /* sessionStorage full/disabled — in-memory only */
         }
       })
@@ -202,7 +197,7 @@
       u.protocol = "https:";
       u.hostname = "preview-pr" + n + ".adamdaniel.ai";
       return u.toString();
-    } catch (e) {
+    } catch {
       return prodUrl;
     }
   }
@@ -224,20 +219,21 @@
 
     var b = document.createElement("div");
     b.id = BANNER_ID;
-    b.style.cssText = [
-      "padding:0.55rem 0.85rem",
-      "margin:0.75rem 5rem 1rem",
-      "border:1px solid #1a2a5e",
-      "border-radius:6px",
-      "background:#060d1f",
-      "font-family:'Helvetica Neue',Arial,sans-serif",
-      "font-size:0.78rem",
-      "color:#a8b3c8",
-      "display:flex",
-      "align-items:baseline",
-      "gap:0.5em",
-      "flex-wrap:wrap",
-    ].join(";") + ";";
+    b.style.cssText =
+      [
+        "padding:0.55rem 0.85rem",
+        "margin:0.75rem 5rem 1rem",
+        "border:1px solid #1a2a5e",
+        "border-radius:6px",
+        "background:#060d1f",
+        "font-family:'Helvetica Neue',Arial,sans-serif",
+        "font-size:0.78rem",
+        "color:#a8b3c8",
+        "display:flex",
+        "align-items:baseline",
+        "gap:0.5em",
+        "flex-wrap:wrap",
+      ].join(";") + ";";
     pane.insertBefore(b, pane.firstChild);
     return b;
   }
@@ -263,18 +259,16 @@
     // anchor. Color stays even on the anchor case (the outer anchor uses
     // `color:inherit` so children render their own colors).
     var labelHTML =
-      '<span style="font-weight:600;color:#8ab0e8;text-transform:uppercase;letter-spacing:0.08em;font-size:0.7rem;font-family:\'SF Mono\',\'Fira Code\',monospace;">View page on site:</span>';
+      "<span style=\"font-weight:600;color:#8ab0e8;text-transform:uppercase;letter-spacing:0.08em;font-size:0.7rem;font-family:'SF Mono','Fira Code',monospace;\">View page on site:</span>";
 
     var nextHTML;
     if (data.published === false) {
       // No destination → render plain spans, no anchor. An anchor with
       // no href would be misleading; the row is informational here.
-      nextHTML =
-        labelHTML + ' <span style="font-style:italic;">Not yet published.</span>';
+      nextHTML = labelHTML + ' <span style="font-style:italic;">Not yet published.</span>';
     } else if (!data.url) {
       nextHTML =
-        labelHTML +
-        ' <span style="font-style:italic;">Set a title or slug to see the URL.</span>';
+        labelHTML + ' <span style="font-style:italic;">Set a title or slug to see the URL.</span>';
     } else {
       // Live URL state: wrap the *entire row* in a single anchor so any
       // click in the banner opens the live URL. The URL span keeps the
@@ -293,13 +287,17 @@
         "</span>";
       nextHTML =
         '<a id="cms-live-url-banner-link" data-testid="cms-live-url-banner-link" ' +
-        'target="_blank" rel="noopener" href="' + safeURL + '" ' +
+        'target="_blank" rel="noopener" href="' +
+        safeURL +
+        '" ' +
         'style="display:flex;align-items:baseline;gap:0.5em;flex-wrap:wrap;color:inherit;text-decoration:none;width:100%;">' +
-        labelHTML + urlSpanHTML +
+        labelHTML +
+        urlSpanHTML +
         "</a>";
     }
 
     if (nextHTML !== lastHTML) {
+      // eslint-disable-next-line no-unsanitized/property -- the only dynamic value (the live URL) is HTML-entity-escaped into `safeURL` above; the rest of `nextHTML` is static markup.
       banner.innerHTML = nextHTML;
       lastHTML = nextHTML;
     }

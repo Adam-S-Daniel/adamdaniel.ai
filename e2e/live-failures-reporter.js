@@ -99,9 +99,7 @@ class LiveFailuresReporter {
     this.sha = env.GITHUB_SHA || readHeadSha(env);
     this.server = env.GITHUB_SERVER_URL || "https://github.com";
     this.runUrl =
-      this.runId && this.repo
-        ? `${this.server}/${this.repo}/actions/runs/${this.runId}`
-        : null;
+      this.runId && this.repo ? `${this.server}/${this.repo}/actions/runs/${this.runId}` : null;
     this.enabled = Boolean(this.repo && this.token && this.pr);
     this.posted = 0;
   }
@@ -164,38 +162,38 @@ class LiveFailuresReporter {
     // judge whether the failure is terminal.
 
     const fullTitle = test.titlePath().filter(Boolean).join(" › ");
-    const file = test.location && test.location.file
-      ? path.relative(process.cwd(), test.location.file).replace(/\\/g, "/")
-      : "";
+    const file =
+      test.location && test.location.file
+        ? path.relative(process.cwd(), test.location.file).replace(/\\/g, "/")
+        : "";
     const line = test.location ? `${test.location.line}:${test.location.column}` : "";
     const isFinal = result.retry === test.retries;
-    const attemptLabel = test.retries > 0
-      ? ` (attempt ${result.retry + 1} of ${test.retries + 1}${isFinal ? ", final" : ""})`
-      : "";
+    const attemptLabel =
+      test.retries > 0
+        ? ` (attempt ${result.retry + 1} of ${test.retries + 1}${isFinal ? ", final" : ""})`
+        : "";
     // Stderr log so the workflow log shows whether the reporter
     // fired at all. Stays out of stdout / the `list` reporter's
     // formatted output.
-    process.stderr.write(
-      `[live-failures-reporter] ${fullTitle}${attemptLabel} — posting…\n`,
-    );
+    process.stderr.write(`[live-failures-reporter] ${fullTitle}${attemptLabel} — posting…\n`);
     // Unique marker — survives reporter retries and parallel shards.
     const testId = test.id || `${file}:${fullTitle}`.replace(/[^A-Za-z0-9_:./-]/g, "_");
     const marker = `<!-- live-failure:${this.runId}:${testId}:${result.retry} -->`;
 
     // Skip if a prior shard / retry already posted the same failure.
     if (await this.commentExists(marker)) {
-      process.stderr.write(
-        `[live-failures-reporter] ${fullTitle} — duplicate marker, skipped.\n`,
-      );
+      process.stderr.write(`[live-failures-reporter] ${fullTitle} — duplicate marker, skipped.\n`);
       return;
     }
 
-    const errMsg = (result.error && (result.error.message || result.error.value)) || "(no error message)";
+    const errMsg =
+      (result.error && (result.error.message || result.error.value)) || "(no error message)";
     const scrubbed = scrubSync(String(errMsg));
     const project = (test.parent && test.parent.project && test.parent.project()?.name) || "";
-    const attemptHeader = test.retries > 0
-      ? `❌ live failure on \`${this.sha.slice(0, 7)}\` — attempt ${result.retry + 1}/${test.retries + 1}${isFinal ? " (final)" : ""}`
-      : `❌ live failure on \`${this.sha.slice(0, 7)}\``;
+    const attemptHeader =
+      test.retries > 0
+        ? `❌ live failure on \`${this.sha.slice(0, 7)}\` — attempt ${result.retry + 1}/${test.retries + 1}${isFinal ? " (final)" : ""}`
+        : `❌ live failure on \`${this.sha.slice(0, 7)}\``;
 
     const lines = [
       `## ${attemptHeader}`,
@@ -216,9 +214,7 @@ class LiveFailuresReporter {
     const ok = await this.postComment(marker, lines.join("\n"));
     if (ok) {
       this.posted++;
-      process.stderr.write(
-        `[live-failures-reporter] ${fullTitle} — posted.\n`,
-      );
+      process.stderr.write(`[live-failures-reporter] ${fullTitle} — posted.\n`);
     } else {
       process.stderr.write(
         `[live-failures-reporter] ${fullTitle} — POST failed (token / permission?).\n`,
@@ -230,9 +226,7 @@ class LiveFailuresReporter {
     if (this.enabled && this.posted > 0) {
       // Surface the count in the workflow log so a job-level scan
       // sees how many live comments fired without parsing the API.
-      process.stdout.write(
-        `\nlive-failures-reporter: posted ${this.posted} comment(s).\n`,
-      );
+      process.stdout.write(`\nlive-failures-reporter: posted ${this.posted} comment(s).\n`);
     }
   }
 }

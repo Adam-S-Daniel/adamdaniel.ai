@@ -126,9 +126,7 @@ function idempotencyKey(baseSha, headSha) {
 }
 
 async function gh(endpoint, opts = {}) {
-  const url = endpoint.startsWith("https://")
-    ? endpoint
-    : `https://api.github.com${endpoint}`;
+  const url = endpoint.startsWith("https://") ? endpoint : `https://api.github.com${endpoint}`;
   const res = await fetch(url, {
     ...opts,
     headers: {
@@ -153,9 +151,7 @@ async function gh(endpoint, opts = {}) {
 
 async function fetchFileAtRef(repo, ref, path) {
   try {
-    const r = await gh(
-      `/repos/${repo}/contents/${encodeURI(path)}?ref=${encodeURIComponent(ref)}`,
-    );
+    const r = await gh(`/repos/${repo}/contents/${encodeURI(path)}?ref=${encodeURIComponent(ref)}`);
     if (Array.isArray(r) || r.type !== "file") return null;
     return Buffer.from(r.content, "base64").toString("utf8");
   } catch (e) {
@@ -222,7 +218,7 @@ function formatCloseComment(idemKey, paths) {
     "",
     "Decap CMS's markdown widget used to round-trip bodies through Slate, which doubled every soft line wrap on save (`\\n` → `\\n\\n`, `\\n\\n` → `\\n\\n\\n\\n`, blank-after-`---` eaten). The publish-loop spec's UI cleanup typed the canonical baseline body through that field, so the published file disagreed with the API-path baseline that the harness safety-net writes — leaving conflicting `cms/e2e/canary-*` PRs (PR #882).",
     "",
-    "The primary fix switched the e2e collection body to `widget: text` (plain textarea, no round-trip). This resolver is belt-and-suspenders for the wider CMS path allowlist: any future regression that produces a pure-newline diff degrades to \"auto-close\" instead of \"perpetually stuck\".",
+    'The primary fix switched the e2e collection body to `widget: text` (plain textarea, no round-trip). This resolver is belt-and-suspenders for the wider CMS path allowlist: any future regression that produces a pure-newline diff degrades to "auto-close" instead of "perpetually stuck".',
     "",
     "If this close was incorrect, reopen the PR and add a comment explaining the intent.",
     "",
@@ -275,13 +271,9 @@ async function run({ repo, prNumber, dryRun, log }) {
   // page; CMS-managed PRs almost always touch one file. If we ever see
   // a CMS PR with >300 files, abort — that's outside this resolver's
   // remit.
-  const files = await gh(
-    `/repos/${repo}/pulls/${prNumber}/files?per_page=300`,
-  );
+  const files = await gh(`/repos/${repo}/pulls/${prNumber}/files?per_page=300`);
   if (files.length >= 300) {
-    const reasons = [
-      "PR has 300+ changed files (this resolver only handles small CMS edits)",
-    ];
+    const reasons = ["PR has 300+ changed files (this resolver only handles small CMS edits)"];
     log(`abort: ${reasons.join(", ")}`);
     if (!dryRun) {
       await postComment(repo, prNumber, formatAbortComment(idemKey, reasons));
@@ -296,9 +288,7 @@ async function run({ repo, prNumber, dryRun, log }) {
       continue;
     }
     if (f.status === "removed") {
-      reasons.push(
-        `\`${f.filename}\` was removed in this PR — resolver doesn't handle deletes`,
-      );
+      reasons.push(`\`${f.filename}\` was removed in this PR — resolver doesn't handle deletes`);
       continue;
     }
     if (f.status === "added") {
@@ -341,9 +331,7 @@ async function run({ repo, prNumber, dryRun, log }) {
       continue;
     }
     if (canonical(baseContent) !== canonical(headContent)) {
-      reasons.push(
-        `\`${f.filename}\` diff is not newline-only (canonical-collapse mismatch)`,
-      );
+      reasons.push(`\`${f.filename}\` diff is not newline-only (canonical-collapse mismatch)`);
       continue;
     }
     resolvedPaths.push(f.filename);
@@ -361,9 +349,7 @@ async function run({ repo, prNumber, dryRun, log }) {
   // already has the canonical content, so closing the PR loses no
   // intent.
   if (dryRun) {
-    log(
-      `dry-run: would close PR #${prNumber} (paths: ${resolvedPaths.join(", ")})`,
-    );
+    log(`dry-run: would close PR #${prNumber} (paths: ${resolvedPaths.join(", ")})`);
     return { outcome: "would-close", paths: resolvedPaths };
   }
 

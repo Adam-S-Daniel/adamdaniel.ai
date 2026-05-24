@@ -42,7 +42,7 @@ slug=$(printf '%s' "$BRANCH" | sed -E 's|^cms/||; s|/|-|g')
 # close/reopen draft cycles) and collision-resistant (two long titles sharing
 # a 42-char prefix still differ). 42 + 1 separator + 8 hex = 51.
 MAX_SLUG=51
-if (( ${#slug} > MAX_SLUG )); then
+if ((${#slug} > MAX_SLUG)); then
   hash=$(printf '%s' "$slug" | { sha256sum 2>/dev/null || shasum -a 256; } | cut -c1-8)
   prefix=$(printf '%s' "${slug:0:42}" | sed -E 's/-+$//')
   slug="${prefix}-${hash}"

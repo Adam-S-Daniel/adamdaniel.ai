@@ -20,7 +20,7 @@ list. For each check we apply the per-(check × scenario) rubric:
 
 ## Live required-status-checks (May 2026, post-#148)
 
-```
+```text
 validate-content   (cms-editorial-workflow.yml)
 scan               (secrets-scan.yml)
 select             (e2e-tests.yml)
@@ -33,7 +33,7 @@ finalize           (e2e-tests.yml — in-tree only; live `gh api -X PUT` pending
 ## PR scenarios considered
 
 | ID | Scenario | Example PR | Trigger shape |
-|---|---|---|---|
+| --- | --- | --- | --- |
 | S1 | Human PR with non-doc code change | #147 (ci/fix-firefox-home), #148 (ci/required-checks-review) | `pull_request`, head not `cms/*`, actor not `dependabot[bot]` |
 | S2 | Doc-only PR (entire diff is `paths-ignore`d by e2e-tests.yml) | #149 (docs/audit-after-ci-overhaul) | `pull_request`, head not `cms/*`, all changed paths in e2e-tests.yml's `paths-ignore` |
 | S3 | CMS-published PR | #131, #137, #142 (cms/posts/*, cms/e2e/*) | `pull_request`, head starts with `cms/` |
@@ -49,7 +49,7 @@ handled" without re-deriving it from the workflow YAML).
 ### `e2e-tests.yml` — non-required jobs
 
 | # | Check | Scenario | Fires? | Decision | Justification |
-|---|---|---|---|---|---|
+| --- | --- | --- | --- | --- | --- |
 | 1 | `e2e (2)` | S1 | only on subsets ≤6 / fanout brackets (per `pickShardCount`) | A | Shards 2-4 always reflect real coverage when present. Promoting any of them to required would block small subsets that collapse to `[1]` (the common case post-Layer-2). |
 | 2 | `e2e (3)` | S1 | as above | A | Same as #1. |
 | 3 | `e2e (4)` | S1 | as above | A | Same as #1. |
@@ -60,29 +60,29 @@ handled" without re-deriving it from the workflow YAML).
 ### `cms-editorial-workflow.yml` — non-required job
 
 | # | Check | Scenario | Fires? | Decision | Justification |
-|---|---|---|---|---|---|
+| --- | --- | --- | --- | --- | --- |
 | 7 | `auto-merge-when-ready` | S1 | only on `labeled` events with `cms/ready` or `decap-cms/ready`; PRs the label-add doesn't reach show "Skipped" | A | The `labeled` event is the trigger that DRIVES merge for the editorial workflow — it's the gate, not gated. Promoting it would self-deadlock. |
 | 8 | `auto-merge-when-ready` | S2/S3/S4 | same condition (any actor adding the label triggers it) | A | Same. |
 
 ### `cms-publish-loop-prod.yml`
 
 | # | Check | Scenario | Fires? | Decision | Justification |
-|---|---|---|---|---|---|
+| --- | --- | --- | --- | --- | --- |
 | 9–12 | `prod-mutate` | S1–S4 | **never on a PR** — the trigger moved from `pull_request` to `push` (main) with the same `paths:` allowlist (PR #1067). The spec drives a REAL prod mutation, so firing it per-PR raced the shared canary + the deploy-production queue and flaked; it now runs post-merge, serialized on pushes to `main`, plus `workflow_dispatch`. | A | Not a PR status context at all, so the missing-check trap is moot. Real prod-mutation coverage still runs (post-merge + manual); can't and need not be required. |
 
 ### `cms-publish-loop-host.yml`
 
 | # | Check | Scenario | Fires? | Decision | Justification |
-|---|---|---|---|---|---|
+| --- | --- | --- | --- | --- | --- |
 | 13 | `host-loop` | S1 | only when PR diff matches `paths:` allowlist | A | Path-filtered. Real end-to-end CMS publish-loop coverage when it fires; can't be required without converting to always-run + early-skip. |
 | 14 | `host-loop` | S3 | always SKIPPED via job-level `if: !startsWith(github.head_ref, 'cms/')` (recursion guard — the spec ITSELF opens cms/* PRs) | A | Recursion guard is correct: without it, a cms/* PR re-triggers this same workflow on its own PR, creating a publish-loop infinite recursion. The skip is a feature; the check shows up as Skipped in the PR list. |
 | 15 | `host-loop` | S2 | doesn't fire (paths) | A | Correct — nothing salient changed. |
-| 16 | `host-loop` | S4 | fires when Dependabot bumps allowlisted paths (workflows, package*.json, _config.yml, _layouts/{canary,default}.html); has run+failed historically (PR #135) | A | Path-filtered, can't be required. |
+| 16 | `host-loop` | S4 | fires when Dependabot bumps allowlisted paths (workflows, `package*.json`, `_config.yml`, `_layouts/{canary,default}.html`); has run+failed historically (PR #135) | A | Path-filtered, can't be required. |
 
 ### `deploy-preview.yml`
 
 | # | Check | Scenario | Fires? | Decision | Justification |
-|---|---|---|---|---|---|
+| --- | --- | --- | --- | --- | --- |
 | 17 | `deploy-preview` | S1 | fires unless diff is fully `paths-ignore`d (mostly the same negative-list as e2e-tests.yml) | A | Preview environment is a human-review aid, not a correctness gate. Build/deploy failures are visible in the PR's check list and the bot comment is missing — both adequate signals for a reviewer. Path-filtered → missing-check trap if promoted. |
 | 18 | `deploy-preview` | S2 | doesn't fire (`paths-ignore` matches docs) | A | Correct — a doc-only PR can't change preview output. |
 | 19 | `deploy-preview` | S3 | fires (cms PRs touch `_posts/`, `_projects/`, etc., none of which are in `paths-ignore`) | A | Same as S1. |
@@ -92,21 +92,21 @@ handled" without re-deriving it from the workflow YAML).
 ### `dependabot-auto-merge.yml`
 
 | # | Check | Scenario | Fires? | Decision | Justification |
-|---|---|---|---|---|---|
+| --- | --- | --- | --- | --- | --- |
 | 22 | `auto-merge` | S1/S2/S3 | always SKIPPED via job-level `if: github.actor == 'dependabot[bot]'` | A | The skip is correct; non-Dependabot PRs shouldn't auto-merge through this workflow. Promoting would block every non-Dependabot PR forever. |
 | 23 | `auto-merge` | S4 | fires; its purpose IS the merge gate (enables GH native auto-merge) | A | Self-deadlock if required: this check waits on every other required check, then enables auto-merge — but if `auto-merge` were itself required, it'd wait on itself. |
 
 ### `dependabot-comment-sync.yml` — `pull_request_target` workflow
 
 | # | Check | Scenario | Fires? | Decision | Justification |
-|---|---|---|---|---|---|
+| --- | --- | --- | --- | --- | --- |
 | 24 | `sync` | S1/S2/S3 | always SKIPPED via job-level `if: github.event.pull_request.user.login == 'dependabot[bot]'` | A | Correct — the workflow's whole point is refreshing version-comments on Dependabot bumps. Shouldn't fire on any other PR, and `pull_request_target` is the trigger we explicitly need (workflow-file push permissions). |
 | 25 | `sync` | S4 | fires; depends on `secrets.ADAMDANIELAI_WORKFLOW_SHA_COMMENT_PAT` being set; bails early with a notice when not | A | Path-filtered + secret-conditional + `pull_request_target` trigger — three independent conditions mean it can't be in the required list (any one of them missing creates the trap). The check is informational: it ensures action-pin comments stay in sync with the SHA Dependabot just bumped to. |
 
 ### `visual-regression.yml`
 
 | # | Check | Scenario | Fires? | Decision | Justification |
-|---|---|---|---|---|---|
+| --- | --- | --- | --- | --- | --- |
 | 26 | `generate` | S1 | fires when diff matches `paths:` (positive list of site-source + pipeline tools) | A | Generates the visual-diff video + PR comment. Path-filtered → missing-check trap if promoted. The signal is human-review-grade; the regression-review GH Environment is the actual merge gate when there ARE diffs. |
 | 27 | `generate` | S2 | doesn't fire (positive-list paths don't match) | A | Correct — a doc-only PR can't shift rendered output. |
 | 28 | `generate` | S3 | fires (cms PRs touch `_posts/`, `_projects/`, etc.) | A | Same as S1. |
@@ -116,13 +116,13 @@ handled" without re-deriving it from the workflow YAML).
 ### `secrets-scan.yml`
 
 | # | Check | Scenario | Fires? | Decision | Justification |
-|---|---|---|---|---|---|
-| (already required as `scan`; included here for completeness — no non-required jobs) ||||||
+| --- | --- | --- | --- | --- | --- |
+| (already required as `scan`; included here for completeness — no non-required jobs) | | | | | |
 
 ### `skills-mirror.yml`
 
 | # | Check | Scenario | Fires? | Decision | Justification |
-|---|---|---|---|---|---|
+| --- | --- | --- | --- | --- | --- |
 | 31 | `verify (ubuntu-latest)` | S1 | fires when diff matches `paths:` (skills, bootstrap scripts, the workflow itself) — narrow + recently-tightened (#122) | A | Verifies the skills-mirror invariant (`.agents/skills/` ↔ `.claude/skills/` symlink integrity). Path-filtered to only the files it covers; missing-check trap if promoted. The matrix entry pair gives Linux+Windows coverage; both should pass before merging the skills mirror but the verify itself is a structural lint, not site correctness. |
 | 32 | `verify (windows-latest)` | S1 | as above | A | Same as #31. |
 | 33 | `verify (*)` | S2 | doesn't fire when `docs/**` is the only diff but DOES fire when `tests/**` or workflow YAMLs change (PR #149 hit it because the diff included AGENTS.md + workflow YAMLs) | A | The `tests/**` + workflow path entries are correct: a workflow change should run the cross-platform verify. |
@@ -146,7 +146,7 @@ The `_comment` in `main.json` already calls this out: "the owner can override or
 Trade-off summary:
 
 | Option | Cost on doc PRs | Cost on code PRs | Risk |
-|---|---|---|---|
+| --- | --- | --- | --- |
 | Drop `paths-ignore` from e2e-tests.yml | ~20 min runner + Playwright bring-up | unchanged | low — just slower docs PRs |
 | Synthetic-success stub workflow | ~10 s | unchanged | medium — duplicate-name mechanism is non-obvious; needs an `_comment` and an AGENTS.md note. Future shard-rename in real e2e-tests.yml requires a paired stub-rename |
 | Status quo (admin override per doc PR) | 0 | unchanged | low/none for current owner-only repo, but breaks if a contributor opens a doc-only PR |

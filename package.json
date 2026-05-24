@@ -5,7 +5,13 @@
   "main": "index.js",
   "scripts": {
     "test": "npx playwright test",
-    "test:regression-video": "npx playwright test --config=playwright.regression.config.js"
+    "test:regression-video": "npx playwright test --config=playwright.regression.config.js",
+    "lint": "npm run lint:js && npm run lint:css && npm run lint:md",
+    "lint:js": "eslint \"e2e/**/*.js\" \"admin/**/*.js\" \"scripts/*.js\" \"*.config.js\"",
+    "lint:css": "stylelint \"assets/css/*.css\" \"admin/*.css\"",
+    "lint:md": "markdownlint-cli2",
+    "format": "prettier --write \"e2e/**/*.js\" \"admin/**/*.js\" \"scripts/*.js\" \"*.config.js\"",
+    "format:check": "prettier --check \"e2e/**/*.js\" \"admin/**/*.js\" \"scripts/*.js\" \"*.config.js\""
   },
   "repository": {
     "type": "git",
@@ -15,10 +21,20 @@
   "author": "",
   "license": "ISC",
   "devDependencies": {
+    "@eslint/js": "^10.0.1",
     "@playwright/test": "^1.59.1",
     "decap-cms": "^3.12.2",
     "decap-server": "^3.7.0",
+    "eslint": "^10.4.0",
+    "eslint-config-prettier": "^10.1.8",
+    "eslint-plugin-no-unsanitized": "^4.1.5",
+    "eslint-plugin-security": "^4.0.0",
+    "globals": "^17.6.0",
+    "markdownlint-cli2": "^0.22.1",
     "pngjs": "^7.0.0",
-    "serve": "^14.2.6"
+    "prettier": "^3.8.3",
+    "serve": "^14.2.6",
+    "stylelint": "^17.12.0",
+    "stylelint-config-standard": "^40.0.0"
   }
 }

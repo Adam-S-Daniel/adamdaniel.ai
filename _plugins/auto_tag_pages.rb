@@ -1,4 +1,5 @@
 # frozen_string_literal: true
+
 #
 # Surface every tag referenced by a post — even ones the editor never
 # created a `_tags/` entry for — as a real `/tags/<slug>/` archive page,
@@ -24,7 +25,7 @@ module Jekyll
     # without booting a Jekyll site. The `slugify` proc lets the test
     # double in a stub; the real generator below passes Jekyll::Utils.slugify.
     def self.summarise(curated:, post_tag_lists:, slugify:)
-      curated_names = curated.map { |c| c['name'] }.compact
+      curated_names = curated.filter_map { |c| c['name'] }
       in_posts = post_tag_lists.flatten.compact.uniq
       missing = in_posts - curated_names
       all_names = (curated_names + in_posts).uniq.sort_by { |n| n.to_s.downcase }
@@ -80,28 +81,30 @@ if defined?(Jekyll::Generator)
         priority :low
 
         def generate(site)
-          tags_collection = site.collections['tags']
-          curated = if tags_collection
-                      tags_collection.docs.map do |doc|
-                        {
-                          'name' => doc.data['name'],
-                          'description' => doc.data['description'],
-                        }
-                      end
-                    else
-                      []
-                    end
-          post_tag_lists = site.posts.docs.map { |p| Array(p.data['tags']) }
-          slugify = ->(name) { Jekyll::Utils.slugify(name) }
-
           missing, all_tags = AutoTagPages.summarise(
-            curated: curated,
-            post_tag_lists: post_tag_lists,
-            slugify: slugify,
+            curated: curated_tags(site),
+            post_tag_lists: site.posts.docs.map { |p| Array(p.data['tags']) },
+            slugify: ->(name) { Jekyll::Utils.slugify(name) },
           )
 
           missing.each { |name| site.pages << TagPage.new(site, name) }
           site.config['all_tags'] = all_tags
+        end
+
+        private
+
+        # Shape the `_tags/` collection (if any) into the `[{name,
+        # description}, ...]` list `summarise` expects.
+        def curated_tags(site)
+          collection = site.collections['tags']
+          return [] unless collection
+
+          collection.docs.map do |doc|
+            {
+              'name' => doc.data['name'],
+              'description' => doc.data['description'],
+            }
+          end
         end
       end
     end

@@ -4,7 +4,6 @@ const fs = require("node:fs");
 const os = require("node:os");
 const path = require("node:path");
 const {
-  buildBucketedCombinedVideos,
   buildFrameBannerLines,
   bucketFor,
   bucketForEntry,
@@ -13,7 +12,6 @@ const {
   frameStepLabel,
   hostFromUrl,
   sanitizeBannerText,
-  writeManifest,
   BANNER_MAX_CHARS,
   BUCKETS,
 } = require("./generate-test-videos");
@@ -86,9 +84,7 @@ test.describe("generate-test-videos helpers", () => {
       },
     };
     const sorted = [e3, e2, e4, e1].sort(compareEntries);
-    expect(
-      sorted.map((s) => s.meta.projectName + "#" + s.meta.repeatEachIndex),
-    ).toEqual([
+    expect(sorted.map((s) => s.meta.projectName + "#" + s.meta.repeatEachIndex)).toEqual([
       "chromium-desktop#0",
       "chromium-desktop#1",
       "firefox-desktop#0",
@@ -257,9 +253,7 @@ test.describe("generate-test-videos helpers", () => {
       projectName: "chromium-desktop",
       endTime: new Date("2026-05-05T18:30:00Z"),
     });
-    expect(lines[1]).toBe(
-      "Step 4 of 7: Click the login button · passed",
-    );
+    expect(lines[1]).toBe("Step 4 of 7: Click the login button · passed");
     const i1 = lines[1].indexOf("Step 4 of 7");
     const i2 = lines[1].indexOf("Click the login button");
     const i3 = lines[1].indexOf("passed");
@@ -288,9 +282,7 @@ test.describe("generate-test-videos helpers", () => {
       projectName: "chromium-desktop",
       endTime: new Date("2026-05-05T18:30:00Z"),
     });
-    expect(lines[1]).toBe(
-      "Step 1 of 1: localhost/blog/replacement-test-post-1/ · passed",
-    );
+    expect(lines[1]).toBe("Step 1 of 1: localhost/blog/replacement-test-post-1/ · passed");
   });
 
   test("buildFrameBannerLines line 2: prod URL fallback renders <host><path>", () => {
@@ -353,9 +345,7 @@ test.describe("generate-test-videos helpers", () => {
       projectName: "chromium-desktop",
       endTime: new Date("2026-05-05T18:30:00Z"),
     });
-    expect(lines[1]).toBe(
-      "Step 1 of 1: Open the Posts collection · passed",
-    );
+    expect(lines[1]).toBe("Step 1 of 1: Open the Posts collection · passed");
     expect(lines[1]).not.toContain("adamdaniel.ai");
   });
 
@@ -373,9 +363,7 @@ test.describe("generate-test-videos helpers", () => {
       projectName: "chromium-desktop",
       endTime: new Date("2026-05-05T18:30:00Z"),
     });
-    expect(summer[2]).toBe(
-      "project: chromium-desktop · 2026-05-05 14:30:00 EDT",
-    );
+    expect(summer[2]).toBe("project: chromium-desktop · 2026-05-05 14:30:00 EDT");
     const winter = buildFrameBannerLines({
       prNumber: 143,
       testIndex: 1,
@@ -389,9 +377,7 @@ test.describe("generate-test-videos helpers", () => {
       projectName: "firefox-desktop",
       endTime: new Date("2026-01-15T18:00:00Z"),
     });
-    expect(winter[2]).toBe(
-      "project: firefox-desktop · 2026-01-15 13:00:00 EST",
-    );
+    expect(winter[2]).toBe("project: firefox-desktop · 2026-01-15 13:00:00 EST");
     // TZ abbrev must be present.
     expect(summer[2]).toMatch(/\bEDT\b/);
     expect(winter[2]).toMatch(/\bEST\b/);
@@ -561,9 +547,7 @@ test.describe("hostFromUrl: hostname extraction", () => {
 
   test("returns the apex / subdomain for a normal URL", () => {
     expect(hostFromUrl("https://adamdaniel.ai/admin/")).toBe("adamdaniel.ai");
-    expect(hostFromUrl("https://preview-pr137.adamdaniel.ai/")).toBe(
-      "preview-pr137.adamdaniel.ai",
-    );
+    expect(hostFromUrl("https://preview-pr137.adamdaniel.ai/")).toBe("preview-pr137.adamdaniel.ai");
     expect(hostFromUrl("https://example.com/page?q=1")).toBe("example.com");
   });
 
@@ -752,28 +736,14 @@ test.describe("buildBucketedCombinedVideos: per-bucket assembly", () => {
       mod = require(modPath);
       const emitted = mod.buildBucketedCombinedVideos(records);
       // Three non-empty buckets emit, `other` is skipped.
-      expect(Object.keys(emitted).sort()).toEqual([
-        "local",
-        "preview",
-        "prod",
-      ]);
-      expect(emitted.local).toBe(
-        path.join(videosRoot, "_combined-local.mp4"),
-      );
-      expect(emitted.preview).toBe(
-        path.join(videosRoot, "_combined-preview.mp4"),
-      );
-      expect(emitted.prod).toBe(
-        path.join(videosRoot, "_combined-prod.mp4"),
-      );
+      expect(Object.keys(emitted).sort()).toEqual(["local", "preview", "prod"]);
+      expect(emitted.local).toBe(path.join(videosRoot, "_combined-local.mp4"));
+      expect(emitted.preview).toBe(path.join(videosRoot, "_combined-preview.mp4"));
+      expect(emitted.prod).toBe(path.join(videosRoot, "_combined-prod.mp4"));
       // No `other` mp4 (zero records there → silently omitted).
-      expect(fs.existsSync(path.join(videosRoot, "_combined-other.mp4"))).toBe(
-        false,
-      );
+      expect(fs.existsSync(path.join(videosRoot, "_combined-other.mp4"))).toBe(false);
       // No master `_combined.mp4` is produced.
-      expect(fs.existsSync(path.join(videosRoot, "_combined.mp4"))).toBe(
-        false,
-      );
+      expect(fs.existsSync(path.join(videosRoot, "_combined.mp4"))).toBe(false);
 
       // Manifest lists each test under its bucket header.
       const manifestPath = mod.writeManifest(records, "143", emitted);
@@ -782,9 +752,7 @@ test.describe("buildBucketedCombinedVideos: per-bucket assembly", () => {
       expect(manifest).toContain("Bucket preview → _combined-preview.mp4 (1 test)");
       expect(manifest).toContain("Bucket prod → _combined-prod.mp4 (2 tests)");
       // `other` is empty — manifest should explicitly note that.
-      expect(manifest).toContain(
-        "Bucket other → (empty — no combined video emitted)",
-      );
+      expect(manifest).toContain("Bucket other → (empty — no combined video emitted)");
       // Each test row appears under its bucket section.
       expect(manifest).toContain("a-local-1.mp4");
       expect(manifest).toContain("b-local-2.mp4");

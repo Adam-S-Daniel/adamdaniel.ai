@@ -1,10 +1,6 @@
 // @lane: local — pure-Node unit tests for the changed-page classifier
 const { test, expect } = require("./base");
-const {
-  classifyPages,
-  mapFileToUrls,
-  runDetect,
-} = require("./detect-changed-pages");
+const { classifyPages, mapFileToUrls, runDetect } = require("./detect-changed-pages");
 
 // Pure-function unit tests for the page-change classifier. No browser,
 // no git — just verify each rule fires correctly.
@@ -137,10 +133,7 @@ test.describe("classifyPages", () => {
   test("fanout + post → fanout wins, every page is in changed", () => {
     const r = classifyPages({
       allPages: ALL_PAGES,
-      changedFiles: [
-        "_layouts/default.html",
-        "_posts/2026-01-01-hello-world.md",
-      ],
+      changedFiles: ["_layouts/default.html", "_posts/2026-01-01-hello-world.md"],
     });
     expect(r.changed.sort()).toEqual([...ALL_PAGES].sort());
     expect(r.unchanged).toEqual([]);
@@ -149,9 +142,7 @@ test.describe("classifyPages", () => {
 
 test.describe("mapFileToUrls", () => {
   test("post → /blog/<slug>/", () => {
-    expect(mapFileToUrls("_posts/2026-01-01-hello.md")).toEqual([
-      "/blog/hello/",
-    ]);
+    expect(mapFileToUrls("_posts/2026-01-01-hello.md")).toEqual(["/blog/hello/"]);
   });
 
   test("project → /projects/<slug>/", () => {
@@ -163,10 +154,7 @@ test.describe("mapFileToUrls", () => {
   });
 
   test("admin/ → /admin/ + /admin/reviews/", () => {
-    expect(mapFileToUrls("admin/config.yml").sort()).toEqual([
-      "/admin/",
-      "/admin/reviews/",
-    ]);
+    expect(mapFileToUrls("admin/config.yml").sort()).toEqual(["/admin/", "/admin/reviews/"]);
   });
 
   test("layout/include/css/_config → __ALL__", () => {
@@ -194,9 +182,7 @@ test.describe("runDetect (CLI integration)", () => {
       // The fetch is best-effort and shouldn't throw — only the diff
       // should. Mirrors the in-CI failure mode exactly.
       if (cmd.startsWith("git fetch")) return "";
-      const err = new Error(
-        "fatal: no merge base found between origin/main and HEAD",
-      );
+      const err = new Error("fatal: no merge base found between origin/main and HEAD");
       throw err;
     };
     expect(() =>

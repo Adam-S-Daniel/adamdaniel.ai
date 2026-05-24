@@ -54,11 +54,7 @@ function spawnDiagnosticAndCollect({ waitingFor, kind, waitPrNumber }) {
   return new Promise((resolve) => {
     const env = {
       ...process.env,
-      GH_TOKEN:
-        process.env.CMS_E2E_PAT ||
-        process.env.GH_TOKEN ||
-        process.env.GITHUB_TOKEN ||
-        "",
+      GH_TOKEN: process.env.CMS_E2E_PAT || process.env.GH_TOKEN || process.env.GITHUB_TOKEN || "",
       GH_REPO: process.env.GH_REPO || "Adam-S-Daniel/adamdaniel.ai",
       WAITING_FOR: waitingFor || "",
       WAITING_FOR_KIND: kind || "",
@@ -97,7 +93,9 @@ function spawnDiagnosticAndCollect({ waitingFor, kind, waitPrNumber }) {
       else finish(`_(diagnostic produced no output)_`);
     });
     setTimeout(() => {
-      finish(`_(diagnostic exceeded ${BUDGET_MS / 1000}s budget — partial output)_\n\n${stdout.trim()}`);
+      finish(
+        `_(diagnostic exceeded ${BUDGET_MS / 1000}s budget — partial output)_\n\n${stdout.trim()}`,
+      );
     }, BUDGET_MS).unref();
   });
 }

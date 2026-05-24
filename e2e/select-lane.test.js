@@ -47,12 +47,9 @@ test.describe("@lane: directive parser", () => {
 
   test("present + real → returns 'real'", () => {
     const { dir, file } = writeFixture(
-      [
-        "// @lane: real",
-        "const { test } = require('./base');",
-        "test('noop', () => {});",
-        "",
-      ].join("\n"),
+      ["// @lane: real", "const { test } = require('./base');", "test('noop', () => {});", ""].join(
+        "\n",
+      ),
     );
     try {
       expect(parseSpecDirectives(file).lane).toBe("real");
@@ -84,11 +81,7 @@ test.describe("@lane: directive parser", () => {
 
   test("absent → defaults to 'local'", () => {
     const { dir, file } = writeFixture(
-      [
-        "const { test } = require('./base');",
-        "test('noop', () => {});",
-        "",
-      ].join("\n"),
+      ["const { test } = require('./base');", "test('noop', () => {});", ""].join("\n"),
     );
     try {
       expect(parseSpecDirectives(file).lane).toBeUndefined();
@@ -120,14 +113,7 @@ test.describe("@lane: directive parser", () => {
 
   test("directive inside a JSDoc-style block comment → still parses", () => {
     const { dir, file } = writeFixture(
-      [
-        "/*",
-        " * Block-comment header.",
-        " * @lane: real",
-        " */",
-        "const x = 1;",
-        "",
-      ].join("\n"),
+      ["/*", " * Block-comment header.", " * @lane: real", " */", "const x = 1;", ""].join("\n"),
     );
     try {
       expect(parseLaneDirective(file)).toBe("real");
@@ -192,9 +178,7 @@ test.describe("filterByLane", () => {
     try {
       const specs = ["e2e/alpha.spec.js", "e2e/beta.spec.js"];
       // 'bogus' is not 'real' → treat as 'local'.
-      expect(filterByLane(specs, "bogus", { repoRoot })).toEqual([
-        "e2e/beta.spec.js",
-      ]);
+      expect(filterByLane(specs, "bogus", { repoRoot })).toEqual(["e2e/beta.spec.js"]);
     } finally {
       fs.rmSync(repoRoot, { recursive: true, force: true });
     }

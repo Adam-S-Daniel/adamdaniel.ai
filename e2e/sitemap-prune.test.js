@@ -39,9 +39,7 @@ test.describe("sitemap-prune", () => {
     // …and exactly two <url> blocks were removed (4 → 2).
     expect((out.match(/<url>/g) || []).length).toBe(2);
     // Still well-formed: every opening <url> has a matching close.
-    expect((out.match(/<url>/g) || []).length).toBe(
-      (out.match(/<\/url>/g) || []).length,
-    );
+    expect((out.match(/<url>/g) || []).length).toBe((out.match(/<\/url>/g) || []).length);
     expect(out).toContain("</urlset>");
   });
 

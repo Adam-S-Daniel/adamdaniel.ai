@@ -28,7 +28,5 @@ test("no unconditional `gh pr merge --merge|--squash` (without --auto)", () => {
 });
 
 test("enablePullRequestAutoMerge GraphQL mutation IS used", () => {
-  expect(readWorkflow("cms-editorial-workflow.yml")).toMatch(
-    /enablePullRequestAutoMerge\b/,
-  );
+  expect(readWorkflow("cms-editorial-workflow.yml")).toMatch(/enablePullRequestAutoMerge\b/);
 });

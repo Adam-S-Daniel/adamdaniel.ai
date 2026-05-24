@@ -20,33 +20,32 @@ test.describe(
   // webkit-iphone16. See playwright.config.js.
   { tag: ["@admin-read"] },
   () => {
-  test.beforeEach(({ page }, testInfo) => {
-    page.on("pageerror", (err) =>
-      console.log(`[pageerror] ${err.name}: ${err.message}`),
-    );
-  });
-
-  for (const url of ["/admin/", "/admin/?notheme"]) {
-    test(`no cobalt theme markers on ${url}`, async ({ page }) => {
-      await page.goto(url);
-
-      // No data-cobalt-popup attribute anywhere in the document. That
-      // attribute was the cobalt theme's signature hook for Decap's
-      // toolbar popups.
-      await expect(page.locator("[data-cobalt-popup]")).toHaveCount(0);
-
-      // No #inline-cobalt-theme stylesheet element with an active media
-      // query. The retired theme injected its CSS via this element; if
-      // it's present with media != 'not all', the theme is back on.
-      const themeEl = page.locator("#inline-cobalt-theme");
-      const themeCount = await themeEl.count();
-      if (themeCount > 0) {
-        const media = await themeEl.first().getAttribute("media");
-        expect(
-          media,
-          "If #inline-cobalt-theme is present at all, it must be disabled via media='not all'",
-        ).toBe("not all");
-      }
+    test.beforeEach(({ page }) => {
+      page.on("pageerror", (err) => console.log(`[pageerror] ${err.name}: ${err.message}`));
     });
-  }
-});
+
+    for (const url of ["/admin/", "/admin/?notheme"]) {
+      test(`no cobalt theme markers on ${url}`, async ({ page }) => {
+        await page.goto(url);
+
+        // No data-cobalt-popup attribute anywhere in the document. That
+        // attribute was the cobalt theme's signature hook for Decap's
+        // toolbar popups.
+        await expect(page.locator("[data-cobalt-popup]")).toHaveCount(0);
+
+        // No #inline-cobalt-theme stylesheet element with an active media
+        // query. The retired theme injected its CSS via this element; if
+        // it's present with media != 'not all', the theme is back on.
+        const themeEl = page.locator("#inline-cobalt-theme");
+        const themeCount = await themeEl.count();
+        if (themeCount > 0) {
+          const media = await themeEl.first().getAttribute("media");
+          expect(
+            media,
+            "If #inline-cobalt-theme is present at all, it must be disabled via media='not all'",
+          ).toBe("not all");
+        }
+      });
+    }
+  },
+);

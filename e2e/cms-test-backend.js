@@ -54,9 +54,7 @@ async function loadTestAdmin(page, { seed = defaultSeed() } = {}) {
     window.repoFilesUnpublished = s.repoFilesUnpublished;
   }, JSON.stringify(seed));
 
-  page.on("pageerror", (err) =>
-    console.log(`[pageerror] ${err.name}: ${err.message}`),
-  );
+  page.on("pageerror", (err) => console.log(`[pageerror] ${err.name}: ${err.message}`));
 
   await page.goto("/admin/index-test.html");
   await page.getByRole("button", { name: /login/i }).click();

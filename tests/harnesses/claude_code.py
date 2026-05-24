@@ -1,4 +1,5 @@
 """Claude Code harness for the skill-mirror test suite."""
+
 from __future__ import annotations
 
 import json
@@ -76,9 +77,7 @@ class ClaudeCodeHarness(AgentHarness):
 
     def verify_live(self, repo_root: Path, skill_name: str) -> HarnessResult:
         if shutil.which("claude") is None:
-            return HarnessResult(
-                self.name, Outcome.SKIP, "claude CLI not on PATH"
-            )
+            return HarnessResult(self.name, Outcome.SKIP, "claude CLI not on PATH")
 
         prompt = self._LIVE_PROMPT_TEMPLATE.format(skill=skill_name)
         cmd = [

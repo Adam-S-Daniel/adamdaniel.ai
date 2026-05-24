@@ -150,6 +150,10 @@ jobs:
             exit 1
           fi
           echo "Changed files:"
+          # Indent each line of the multi-line `$changed` for readable logs;
+          # `sed 's/^/  /'` does per-line prefixing that ${var//…} can't.
+          # (SC2001 parameter-expansion suggestion.)
+          # shellcheck disable=SC2001
           echo "$changed" | sed 's/^/  /'
           # grep -E with an alternation of the salient path anchors.
           if echo "$changed" | grep -Eq \

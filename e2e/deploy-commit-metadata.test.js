@@ -15,6 +15,7 @@ const { readWorkflow } = require("./workflow-yaml-utils");
 // Pull every step block (split on `- name:`) whose body mentions
 // commit.json — that's the deployed-build pill writer.
 function commitJsonStepBlocks(yaml) {
+  // eslint-disable-next-line no-useless-escape -- `\Z` is a literal end-of-input fallback in the lookahead alternation; kept verbatim to preserve the existing step-block split behavior.
   const stepRe = /-\s+name:[^\n]*\n([\s\S]*?)(?=^\s*-\s+name:|^\s{2}\S|\Z)/gm;
   const blocks = [];
   let m;
@@ -48,9 +49,7 @@ for (const wf of ["deploy-preview.yml", "deploy-production.yml"]) {
       expect(code).toMatch(/git log\b/);
       const offenders = code
         .split("\n")
-        .filter(
-          (l) => /git log\b/.test(l) && /\$\{\{\s*github\.sha\s*\}\}/.test(l),
-        );
+        .filter((l) => /git log\b/.test(l) && /\$\{\{\s*github\.sha\s*\}\}/.test(l));
       expect(
         offenders,
         `git log in ${wf} must use HEAD or github.event.pull_request.head.sha, ` +

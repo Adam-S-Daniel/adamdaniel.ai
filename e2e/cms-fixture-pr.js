@@ -28,11 +28,7 @@
  *   - e2e/cms-delete-published.spec.js  (throw-away fixture seed)
  */
 const { HOST_REPO } = require("./decap-pat");
-const {
-  gh,
-  getDefaultBranchHeadSha,
-  waitForMerge,
-} = require("./github-actions-poll");
+const { gh, getDefaultBranchHeadSha, waitForMerge } = require("./github-actions-poll");
 
 const FIXTURE_BRANCH_PREFIX = "cms/e2e-fixture";
 
@@ -159,14 +155,10 @@ async function addReadyLabel({ repo, prNumber }) {
  */
 async function closeStaleDecapPrOnBranch({ repo = HOST_REPO, branch }) {
   if (!branch) return;
-  let prs = [];
+  let prs;
   try {
     const owner = repo.split("/")[0];
-    prs = await gh(
-      `/repos/${repo}/pulls?head=${owner}:${encodeURIComponent(
-        branch,
-      )}&state=open`,
-    );
+    prs = await gh(`/repos/${repo}/pulls?head=${owner}:${encodeURIComponent(branch)}&state=open`);
   } catch (_) {
     return;
   }
@@ -247,9 +239,7 @@ async function seedFixtureViaPr({
   skipWaitForMerge = false,
 } = {}) {
   if (!slug || !runId || !filePath || !bodyText || !message) {
-    throw new Error(
-      "seedFixtureViaPr requires slug, runId, filePath, bodyText, and message.",
-    );
+    throw new Error("seedFixtureViaPr requires slug, runId, filePath, bodyText, and message.");
   }
   const branch = fixtureBranchName({ slug, runId, action: "seed" });
   let pr;
@@ -305,9 +295,7 @@ async function removeFixtureViaPr({
   timeoutMs = 25 * 60 * 1000,
 } = {}) {
   if (!slug || !runId || !filePath || !message) {
-    throw new Error(
-      "removeFixtureViaPr requires slug, runId, filePath, and message.",
-    );
+    throw new Error("removeFixtureViaPr requires slug, runId, filePath, and message.");
   }
   const branch = fixtureBranchName({ slug, runId, action: "remove" });
   let pr;

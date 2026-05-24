@@ -97,7 +97,7 @@ CloudWatch RUM's own dashboard retains data for **30 days only**, then
 auto-deletes. The CloudFormation template sets `CwLogEnabled: true`, which
 mirrors every event to a CloudWatch Logs group:
 
-```
+```text
 /aws/vendedlogs/RUMAccessLogs/adamdaniel-ai
 ```
 

@@ -24,7 +24,10 @@ test.describe("Canary content invariants", () => {
       // reset, leaving conflicting PRs in their wake.
       const fmEnd = src.indexOf("\n---\n", 4);
       expect(fmEnd, `${c.path} must have a closing front-matter delimiter`).toBeGreaterThan(0);
-      const fileBody = src.slice(fmEnd + 5).replace(/^\n+/, "").replace(/\n+$/, "");
+      const fileBody = src
+        .slice(fmEnd + 5)
+        .replace(/^\n+/, "")
+        .replace(/\n+$/, "");
       expect(
         fileBody,
         `${c.path} body must match the canonical buildBaselineBody() output verbatim — newline drift (often from a Decap markdown-widget round-trip) breaks the publish-loop cleanup contract`,
@@ -38,10 +41,7 @@ test.describe("Canary content invariants", () => {
   });
 
   test("admin/config.yml exposes the e2e canary collection", () => {
-    const cfg = fs.readFileSync(
-      path.join(__dirname, "..", "admin", "config.yml"),
-      "utf8",
-    );
+    const cfg = fs.readFileSync(path.join(__dirname, "..", "admin", "config.yml"), "utf8");
     // The publish-loop test drives admin actions on this collection.
     // If it disappears, the test goes silently green (no PR opened ≠
     // success) — fail loudly here.
@@ -79,9 +79,7 @@ test.describe("Canary content invariants", () => {
     // field from a different collection (posts/projects/pages).
     const nextCollection = cfg.slice(e2eStart + 1).search(/^\s{2}- name: \w/m);
     const e2eBlock =
-      nextCollection < 0
-        ? cfg.slice(e2eStart)
-        : cfg.slice(e2eStart, e2eStart + 1 + nextCollection);
+      nextCollection < 0 ? cfg.slice(e2eStart) : cfg.slice(e2eStart, e2eStart + 1 + nextCollection);
     expect(e2eBlock).toMatch(/^\s{6}- name: body\s*$/m);
     expect(
       e2eBlock,
@@ -92,6 +90,7 @@ test.describe("Canary content invariants", () => {
     // `widget: text`, but a misindented `widget: markdown` could
     // theoretically slip through; this makes the intent loud.)
     const e2eBody = e2eBlock.match(
+      // eslint-disable-next-line no-useless-escape -- `\Z` is a literal end-of-input fallback in the lookahead alternation; kept verbatim to preserve the existing match behavior of this YAML-structure scan.
       /^\s{6}- name: body\s*\n(?:\s{6,}.+\n)+?(?=\s{0,6}-|\s{0,4}- name|\Z)/m,
     );
     if (e2eBody) {

@@ -38,7 +38,9 @@ function bootShim() {
       headers,
       json: () => Promise.resolve(JSON.parse(text || "null")),
       text: () => Promise.resolve(text),
-      clone() { return makeResponse(text, init); },
+      clone() {
+        return makeResponse(text, init);
+      },
     };
   }
 
@@ -130,7 +132,10 @@ test.describe("publish-via-auto-merge.js (unit)", () => {
   test("non-targeted requests pass through untouched", async () => {
     const { fetch, queueResponse, calls } = bootShim();
     queueResponse({ ok: 1 }, { status: 200 });
-    const res = await fetch("https://api.github.com/repos/Adam-S-Daniel/adamdaniel.ai/contents/_posts/x.md", { method: "GET" });
+    const res = await fetch(
+      "https://api.github.com/repos/Adam-S-Daniel/adamdaniel.ai/contents/_posts/x.md",
+      { method: "GET" },
+    );
     expect(res.status).toBe(200);
     expect(calls).toHaveLength(1);
     expect(calls[0].method).toBe("GET");
@@ -149,7 +154,10 @@ test.describe("publish-via-auto-merge.js (unit)", () => {
     // didn't supply init.
     const { fetch, queueResponse, calls } = bootShim();
     queueResponse({ tree: [] }, { status: 200 });
-    const request = { url: "https://api.github.com/repos/Adam-S-Daniel/adamdaniel.ai/git/trees/main?recursive=1", method: "GET" };
+    const request = {
+      url: "https://api.github.com/repos/Adam-S-Daniel/adamdaniel.ai/git/trees/main?recursive=1",
+      method: "GET",
+    };
     const res = await fetch(request);
     expect(res.status).toBe(200);
     expect(calls).toHaveLength(1);
@@ -234,13 +242,18 @@ test.describe("publish-via-auto-merge.js (unit)", () => {
     queueResponse({ id: 1 }, { status: 200 });
     // Pass a Headers-like object exposing .get(...).
     const headers = {
-      _store: { authorization: "token gho_xyz", "x-github-api-version": "2022-11-28" },
-      get(k) { return this._store[k.toLowerCase()] || null; },
+      _store: {
+        authorization: "token gho_xyz",
+        "x-github-api-version": "2022-11-28",
+      },
+      get(k) {
+        return this._store[k.toLowerCase()] || null;
+      },
     };
-    await fetch(
-      "https://api.github.com/repos/Adam-S-Daniel/adamdaniel.ai/pulls/7/merge",
-      { method: "PUT", headers },
-    );
+    await fetch("https://api.github.com/repos/Adam-S-Daniel/adamdaniel.ai/pulls/7/merge", {
+      method: "PUT",
+      headers,
+    });
     expect(calls[1].headers.Authorization).toBe("token gho_xyz");
     expect(calls[1].headers["X-GitHub-Api-Version"]).toBe("2022-11-28");
   });

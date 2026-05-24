@@ -22,8 +22,8 @@ WIDTH=1920
 HEIGHT=1080
 SIDE_W=940
 SIDE_H=540
-HSTACK_W=$((SIDE_W * 2))   # 1880
-TOP_BAR_H=80               # space reserved at top for the per-page indicator
+# hstack of the two SIDE_W panels is 1880px wide before padding out to WIDTH.
+TOP_BAR_H=80 # space reserved at top for the per-page indicator
 
 # Parse all pages into a flat list with the changeset classification
 # (CHANGED / NEW / UNCHANGED — what the changeset *might* have touched)
@@ -48,10 +48,10 @@ node -e "
     const visual = (visualByPath[p] || (kind === 'NEW' ? 'new' : 'identical')).toUpperCase();
     console.log([p, kind, visual].join('\t'));
   }
-" "$CHANGES_FILE" "$DIFFS_FILE" > "${TEMP_DIR}/pages.tsv"
+" "$CHANGES_FILE" "$DIFFS_FILE" >"${TEMP_DIR}/pages.tsv"
 
 SEGMENT_INDEX=0
-> "${TEMP_DIR}/concat.txt"
+: >"${TEMP_DIR}/concat.txt"
 
 while IFS=$'\t' read -r PAGE_PATH CHANGE_TYPE VISUAL_STATUS; do
   [ -z "$PAGE_PATH" ] && continue
@@ -83,7 +83,7 @@ while IFS=$'\t' read -r PAGE_PATH CHANGE_TYPE VISUAL_STATUS; do
       INDICATOR_BG="#285aff"
       INDICATOR_FG="white"
       ;;
-    IDENTICAL|*)
+    IDENTICAL | *)
       INDICATOR_TEXT="VISUALLY IDENTICAL"
       INDICATOR_BG="#1a8e54"
       INDICATOR_FG="white"
@@ -96,7 +96,8 @@ while IFS=$'\t' read -r PAGE_PATH CHANGE_TYPE VISUAL_STATUS; do
 
   # Side panels scaled with letterboxing, hstacked, padded into the full
   # frame so the top 80px is reserved for the indicator bar.
-  ffmpeg -y -loglevel warning \
+  # -nostdin: this loop reads pages.tsv on stdin; ffmpeg must not swallow it.
+  ffmpeg -nostdin -y -loglevel warning \
     -loop 1 -t 3 -i "$PROD_IMG" \
     -loop 1 -t 3 -i "$PR_IMG" \
     -filter_complex "
@@ -114,9 +115,9 @@ while IFS=$'\t' read -r PAGE_PATH CHANGE_TYPE VISUAL_STATUS; do
     " \
     -c:v libx264 -preset medium -crf 20 -pix_fmt yuv420p -r 2 "$SEGMENT_FILE"
 
-  echo "file '${SEGMENT_FILE}'" >> "${TEMP_DIR}/concat.txt"
+  echo "file '${SEGMENT_FILE}'" >>"${TEMP_DIR}/concat.txt"
   SEGMENT_INDEX=$((SEGMENT_INDEX + 1))
-done < "${TEMP_DIR}/pages.tsv"
+done <"${TEMP_DIR}/pages.tsv"
 
 if [ -s "${TEMP_DIR}/concat.txt" ]; then
   ffmpeg -y -loglevel warning \

@@ -5,7 +5,7 @@ Each row maps a documented contributor capability (from `AGENTS.md`,
 that proves it works end-to-end against the local Decap backend.
 
 | Capability | Spec | Verified |
-|---|---|---|
+| --- | --- | --- |
 | Login → admin loads with collections sidebar | `e2e/cms-smoke.spec.js` | yes |
 | Create a new Post (full schema) | `e2e/cms-publish-flow.spec.js` (CMS → disk → live URL) and `e2e/cms-smoke.spec.js` (Posts schema render audit) | yes |
 | Edit an existing Post | `e2e/cms-editorial-workflow.spec.js` (`editing an existing post and saving creates a workflow draft`) | yes |

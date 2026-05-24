@@ -50,9 +50,7 @@ async function login(page) {
     };
     window.repoFilesUnpublished = [];
   }, SEED_POST_CONTENT);
-  page.on("pageerror", (err) =>
-    console.log(`[pageerror] ${err.name}: ${err.message}`),
-  );
+  page.on("pageerror", (err) => console.log(`[pageerror] ${err.name}: ${err.message}`));
   await page.goto("/admin/index-test.html");
   await page.getByRole("button", { name: /login/i }).click();
   await expect(page.getByRole("link", { name: /^posts$/i })).toBeVisible({
@@ -84,9 +82,7 @@ test.describe(
 
     test("entry editor — Save / Publish / Delete are reachable", async ({ page }) => {
       await login(page);
-      await page.goto(
-        `/admin/index-test.html#/collections/posts/entries/${SEED_POST_SLUG}`,
-      );
+      await page.goto(`/admin/index-test.html#/collections/posts/entries/${SEED_POST_SLUG}`);
       await expect(page.getByLabel(/^Title$/)).toBeVisible({ timeout: 60_000 });
 
       await expectReachable(
@@ -106,14 +102,12 @@ test.describe(
       );
     });
 
-    test("editorial workflow board — New control and columns are reachable", async ({
-      page,
-    }) => {
+    test("editorial workflow board — New control and columns are reachable", async ({ page }) => {
       await login(page);
       await page.goto("/admin/index-test.html#/workflow");
-      await expect(
-        page.getByRole("heading", { name: /Editorial Workflow/i }),
-      ).toBeVisible({ timeout: 30_000 });
+      await expect(page.getByRole("heading", { name: /Editorial Workflow/i })).toBeVisible({
+        timeout: 30_000,
+      });
 
       await expectReachable(
         page,

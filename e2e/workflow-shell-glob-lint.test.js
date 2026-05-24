@@ -57,13 +57,9 @@ for (const file of listWorkflows()) {
 
       const before = bodyLines.slice(0, k).join("\n");
       const inner = loopBody(bodyLines, k);
-      const safe =
-        /shopt\s+-s\s+nullglob\b/.test(before) ||
-        /\[\[?\s+-[efd]\s+["']?\$/.test(inner);
+      const safe = /shopt\s+-s\s+nullglob\b/.test(before) || /\[\[?\s+-[efd]\s+["']?\$/.test(inner);
 
-      const label =
-        `${path.basename(file)} :: line ${block.startLine + k} :: ` +
-        line.trim();
+      const label = `${path.basename(file)} :: line ${block.startLine + k} :: ` + line.trim();
       test(`shell glob loop is empty-safe (${label})`, () => {
         expect(
           safe,

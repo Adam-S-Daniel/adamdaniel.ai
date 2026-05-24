@@ -22,10 +22,10 @@ REPO_ROOT="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
 cd "$REPO_ROOT"
 
 # ── Helpers ───────────────────────────────────────────────────────────────
-have()    { command -v "$1" >/dev/null 2>&1; }
-note()    { printf '\033[1;34m[setup]\033[0m %s\n' "$*"; }
-ok()      { printf '\033[1;32m[ ok  ]\033[0m %s\n' "$*"; }
-warn()    { printf '\033[1;33m[warn ]\033[0m %s\n' "$*"; }
+have() { command -v "$1" >/dev/null 2>&1; }
+note() { printf '\033[1;34m[setup]\033[0m %s\n' "$*"; }
+ok() { printf '\033[1;32m[ ok  ]\033[0m %s\n' "$*"; }
+warn() { printf '\033[1;33m[warn ]\033[0m %s\n' "$*"; }
 
 # Single sudo prompt up front, then `sudo -n` for the rest.
 need_sudo() {

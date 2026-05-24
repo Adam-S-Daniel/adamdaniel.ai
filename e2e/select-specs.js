@@ -89,17 +89,12 @@ const FANOUT_PATTERNS = [
 // matches one of these patterns, include this spec." A spec NOT named
 // here is included only via fanout (or because its own file changed).
 const SPEC_RULES = {
-  "e2e/admin-reviews-auth.spec.js": [
-    /^admin\/reviews\//,
-    /^oauth-proxy\//,
-  ],
+  "e2e/admin-reviews-auth.spec.js": [/^admin\/reviews\//, /^oauth-proxy\//],
   // Live byte-parity probe: fetches every admin/ file from prod and
   // from the latest open PR's preview, compares ETag/sha256. Triggers
   // on any admin/ change so a CMS-shaped diff verifies it survives
   // the deploy round-trip without drift.
-  "e2e/admin-bundle-parity.spec.js": [
-    /^admin\//,
-  ],
+  "e2e/admin-bundle-parity.spec.js": [/^admin\//],
   "e2e/admin-reviews-stats.spec.js": [
     /^admin\/reviews\//,
     /^e2e\/compute-visual-diffs\.js$/,
@@ -109,37 +104,19 @@ const SPEC_RULES = {
   // Pure-node invariants on admin/index.html + admin/custom.css. Runs
   // any time admin/ changes — guards the cobalt theme + ?notheme
   // kill-switch contract documented in AGENTS.md.
-  "e2e/admin-theme-removed.test.js": [
-    /^admin\/(index\.html|custom\.css)$/,
-  ],
+  "e2e/admin-theme-removed.test.js": [/^admin\/(index\.html|custom\.css)$/],
   // Responsive-layout invariants for admin/admin-mobile.css (iPhone 16).
   // Runs on any admin/ change: the stylesheet, the shells that link it,
   // or a Decap version bump in index*.html could each regress the
   // mobile overlay. Drives the test-repo backend on the admin lane.
-  "e2e/cms-mobile-layout.spec.js": [
-    /^admin\//,
-  ],
+  "e2e/cms-mobile-layout.spec.js": [/^admin\//],
   // Cross-resolution occlusion guard for every admin screen (controls
   // not clipped off-screen or covered by another element). Runs on any
   // admin/ change and when the shared visibility helper changes.
-  "e2e/admin-no-occlusion.spec.js": [
-    /^admin\//,
-    /^e2e\/ui-visibility\.js$/,
-  ],
-  "e2e/detect-changed-pages.test.js": [
-    /^e2e\/detect-changed-pages\.js$/,
-  ],
-  "e2e/cms-smoke.spec.js": [
-    /^admin\//,
-    /^_posts\//,
-    /^_tags\//,
-    /^_projects\//,
-    /^pages\//,
-  ],
-  "e2e/cms-editorial-workflow.spec.js": [
-    /^admin\//,
-    /^_posts\//,
-  ],
+  "e2e/admin-no-occlusion.spec.js": [/^admin\//, /^e2e\/ui-visibility\.js$/],
+  "e2e/detect-changed-pages.test.js": [/^e2e\/detect-changed-pages\.js$/],
+  "e2e/cms-smoke.spec.js": [/^admin\//, /^_posts\//, /^_tags\//, /^_projects\//, /^pages\//],
+  "e2e/cms-editorial-workflow.spec.js": [/^admin\//, /^_posts\//],
   // Canary content invariants — fast, no browser. Cross-checks the
   // _e2e/ collection wiring stays consistent across _config.yml,
   // admin/config.yml, and the canary source files.
@@ -166,9 +143,7 @@ const SPEC_RULES = {
   // reorderFixturesLast fixed point — guards the ≥2-fixture infinite reorder
   // loop that wedged the admin main thread (worst at the 3K viewport). Selects
   // on any change to the script it exercises.
-  "e2e/posts-list-enhance-reorder.test.js": [
-    /^admin\/posts-list-enhance\.js$/,
-  ],
+  "e2e/posts-list-enhance-reorder.test.js": [/^admin\/posts-list-enhance\.js$/],
   // Real-network publish-loop specs. Heavy and slow; run only when
   // something contributor-relevant changed.
   "e2e/cms-publish-loop.spec.js": [
@@ -308,24 +283,11 @@ const SPEC_RULES = {
     /^e2e\/sitemap-prune\.js$/,
   ],
   // Pure-node unit test for the sitemap-prune cleanup helper.
-  "e2e/sitemap-prune.test.js": [
-    /^e2e\/sitemap-prune\.js$/,
-  ],
-  "e2e/cms-preview-url.spec.js": [
-    /^admin\//,
-    /^_posts\//,
-  ],
-  "e2e/blog-post.spec.js": [
-    /^_posts\//,
-    /^blog\//,
-  ],
-  "e2e/tags.spec.js": [
-    /^_tags\//,
-    /^tags\//,
-  ],
-  "e2e/not-found.spec.js": [
-    /^404\.html$/,
-  ],
+  "e2e/sitemap-prune.test.js": [/^e2e\/sitemap-prune\.js$/],
+  "e2e/cms-preview-url.spec.js": [/^admin\//, /^_posts\//],
+  "e2e/blog-post.spec.js": [/^_posts\//, /^blog\//],
+  "e2e/tags.spec.js": [/^_tags\//, /^tags\//],
+  "e2e/not-found.spec.js": [/^404\.html$/],
   // @parity specs that hit Jekyll output through the deployed preview
   // surface. Path-rules cover the inputs that can shift what's served.
   // The sitemap/feed/console-clean/image-alt specs ALSO read `_site/`
@@ -385,18 +347,12 @@ const SPEC_RULES = {
     /^scripts\/patch-preview-config\.sh$/,
     /^admin\/(config\.yml|config-local\.yml)$/,
   ],
-  "e2e/cloudfront-preview-router.spec.js": [
-    /^infrastructure\//,
-  ],
-  "e2e/cloudfront-preview-location-fixer.spec.js": [
-    /^infrastructure\//,
-  ],
+  "e2e/cloudfront-preview-router.spec.js": [/^infrastructure\//],
+  "e2e/cloudfront-preview-location-fixer.spec.js": [/^infrastructure\//],
   // publish-via-auto-merge shim: pure-node matcher tests + browser-
   // context route-mocked tests. Trigger on any change to the shim
   // itself or the admin shell that loads it.
-  "e2e/publish-via-auto-merge.test.js": [
-    /^admin\/publish-via-auto-merge\.js$/,
-  ],
+  "e2e/publish-via-auto-merge.test.js": [/^admin\/publish-via-auto-merge\.js$/],
   "e2e/publish-via-auto-merge-browser.spec.js": [
     /^admin\/publish-via-auto-merge\.js$/,
     /^admin\/index\.html$/,
@@ -458,7 +414,7 @@ function getChangedFiles(baseRef) {
 // selector — directives are an additive opt-out, not a contract.
 function parseSpecDirectives(absPath) {
   const directives = {};
-  let head = "";
+  let head;
   try {
     const fd = fs.openSync(absPath, "r");
     try {
@@ -487,9 +443,9 @@ function parseSpecDirectives(absPath) {
           .map((v) => v.trim())
           .filter(Boolean);
         if (values.length > 0) {
-          directives.skipWhenHeadRefPrefix = (
-            directives.skipWhenHeadRefPrefix || []
-          ).concat(values);
+          directives.skipWhenHeadRefPrefix = (directives.skipWhenHeadRefPrefix || []).concat(
+            values,
+          );
         }
         break;
       }
@@ -557,18 +513,13 @@ function selectSpecs(changedFiles, options = {}) {
   // `scope: "all"` implies "every spec", and on a `real` lane that
   // means "every @lane: real spec", not "every spec ignoring lane".
   const resolvedLane =
-    (
-      options.lane !== undefined
-        ? options.lane
-        : process.env.TEST_LANE || "local"
-    ).toLowerCase() === "real"
+    (options.lane !== undefined ? options.lane : process.env.TEST_LANE || "local").toLowerCase() ===
+    "real"
       ? "real"
       : "local";
 
   // Fanout files include all specs.
-  const fanoutHit = changedFiles.find((f) =>
-    FANOUT_PATTERNS.some((rx) => rx.test(f)),
-  );
+  const fanoutHit = changedFiles.find((f) => FANOUT_PATTERNS.some((rx) => rx.test(f)));
   if (fanoutHit) {
     if (resolvedLane === "local") {
       return {
@@ -582,7 +533,7 @@ function selectSpecs(changedFiles, options = {}) {
     // to an explicit subset of every real-lane spec under e2e/.
     const repoRoot = options.repoRoot || path.resolve(__dirname, "..");
     const e2eDir = path.join(repoRoot, "e2e");
-    let allSpecs = [];
+    let allSpecs;
     try {
       allSpecs = fs
         .readdirSync(e2eDir)
@@ -630,9 +581,7 @@ function selectSpecs(changedFiles, options = {}) {
   // rule-matched specs; the ALWAYS_RUN baseline is intentionally
   // exempt (those are tiny and self-document the change).
   const headRef =
-    options.headRef !== undefined
-      ? options.headRef
-      : process.env.GITHUB_HEAD_REF || "";
+    options.headRef !== undefined ? options.headRef : process.env.GITHUB_HEAD_REF || "";
   const skippedByDirective = [];
   const repoRoot = options.repoRoot || path.resolve(__dirname, "..");
   if (headRef) {
@@ -690,9 +639,7 @@ function selectSpecs(changedFiles, options = {}) {
   // run baselines, the payload is identical to scope=skip. Collapse it
   // so the workflow can run a single shard instead of a 4-way matrix —
   // sharding 3 sub-second file-comparison tests is pure overhead.
-  const onlyBaseline =
-    specs.size === ALWAYS_RUN.length &&
-    ALWAYS_RUN.every((s) => specs.has(s));
+  const onlyBaseline = specs.size === ALWAYS_RUN.length && ALWAYS_RUN.every((s) => specs.has(s));
   if (onlyBaseline && !options.disableSkip) {
     return {
       scope: "skip",
@@ -727,9 +674,7 @@ function pickShardCount(scope, files) {
   if (scope === "skip") return 1;
   if (scope === "all") return 4;
   if (scope === "subset") {
-    const browser = (files || []).filter(
-      (f) => f.endsWith(".spec.js") && !HEAVY.has(f),
-    );
+    const browser = (files || []).filter((f) => f.endsWith(".spec.js") && !HEAVY.has(f));
     if (browser.length <= 2) return 1;
     if (browser.length <= 6) return 2;
     return 4;
@@ -757,9 +702,7 @@ const PARITY_PREVIEW_SPECS = [
 // renaming/touching a parity-preview spec exercises it once before merge.
 function selectParityPreviewSpecs(changedFiles) {
   const selected = [];
-  const fanout = changedFiles.some((f) =>
-    FANOUT_PATTERNS.some((p) => p.test(f)),
-  );
+  const fanout = changedFiles.some((f) => FANOUT_PATTERNS.some((p) => p.test(f)));
   for (const spec of PARITY_PREVIEW_SPECS) {
     if (fanout || changedFiles.includes(spec)) {
       selected.push(spec);

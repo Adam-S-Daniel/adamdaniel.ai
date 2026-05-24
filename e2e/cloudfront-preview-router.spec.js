@@ -12,23 +12,15 @@ const { test, expect } = require("./base");
 // the `/blog/foo/` strings are synthetic router-input fixtures, not refs
 // to real `_posts/*.md` content.
 
-const TEMPLATE_PATH = path.join(
-  __dirname,
-  "..",
-  "infrastructure/bootstrap/template.yaml",
-);
+const TEMPLATE_PATH = path.join(__dirname, "..", "infrastructure/bootstrap/template.yaml");
 
 function loadHandler() {
   const template = fs.readFileSync(TEMPLATE_PATH, "utf8");
   // Match the `FunctionCode: |` block literal body. The scalar ends when a
   // line returns to outer indentation (two or fewer spaces).
-  const match = template.match(
-    /FunctionCode:\s*\|\s*\n((?:[ \t]{8,}.*(?:\n|$))+)/,
-  );
+  const match = template.match(/FunctionCode:\s*\|\s*\n((?:[ \t]{8,}.*(?:\n|$))+)/);
   if (!match) {
-    throw new Error(
-      "Could not locate PreviewRouterFunction.FunctionCode in template.yaml",
-    );
+    throw new Error("Could not locate PreviewRouterFunction.FunctionCode in template.yaml");
   }
   // Dedent the block (block scalars preserve leading spaces past the
   // indicator's indent). 8 spaces is the baseline indentation in this
@@ -99,10 +91,7 @@ test.describe("CloudFront preview-router function", () => {
   // the same entry. See docs/preview-pr-ruleset-spike.md.
 
   test("preview-cms-posts-foo-bar.adamdaniel.ai rewrites /blog/foo-bar/ to /cms-posts-foo-bar/blog/foo-bar/", () => {
-    const evt = request(
-      "preview-cms-posts-foo-bar.adamdaniel.ai",
-      "/blog/foo-bar/",
-    );
+    const evt = request("preview-cms-posts-foo-bar.adamdaniel.ai", "/blog/foo-bar/");
     handler(evt);
     expect(evt.request.uri).toBe("/cms-posts-foo-bar/blog/foo-bar/");
   });

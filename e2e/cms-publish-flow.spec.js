@@ -59,9 +59,7 @@ const SMOKE_TAG_SLUG = "e2e-smoke-flow-tag";
 
 function findSmokePostFile() {
   if (!fs.existsSync(POSTS_DIR)) return null;
-  const match = fs
-    .readdirSync(POSTS_DIR)
-    .find((f) => f.endsWith(`-${SMOKE_SLUG}.md`));
+  const match = fs.readdirSync(POSTS_DIR).find((f) => f.endsWith(`-${SMOKE_SLUG}.md`));
   return match ? path.join(POSTS_DIR, match) : null;
 }
 
@@ -89,10 +87,7 @@ function removeSmokePost() {
   const sitemap = path.join(REPO_ROOT, "_site", "sitemap.xml");
   if (fs.existsSync(sitemap)) {
     const xml = fs.readFileSync(sitemap, "utf8");
-    const cleaned = pruneSitemapUrls(xml, [
-      `/blog/${SMOKE_SLUG}/`,
-      `/tags/${SMOKE_TAG_SLUG}/`,
-    ]);
+    const cleaned = pruneSitemapUrls(xml, [`/blog/${SMOKE_SLUG}/`, `/tags/${SMOKE_TAG_SLUG}/`]);
     if (cleaned !== xml) fs.writeFileSync(sitemap, cleaned);
   }
 }
@@ -113,127 +108,122 @@ test.describe(
   // Runs on chromium-desktop-3k only. See playwright.config.js.
   { tag: ["@admin-write"] },
   () => {
-  test.describe.configure({ mode: "serial", timeout: 240_000 });
+    test.describe.configure({ mode: "serial", timeout: 240_000 });
 
-  test.beforeAll(() => {
-    removeSmokePost();
-  });
-  test.afterAll(() => {
-    removeSmokePost();
-  });
-
-  test.beforeEach(({ page }, testInfo) => {
-    page.on("pageerror", (err) =>
-      console.log(`[pageerror] ${err.name}: ${err.message}`),
-    );
-  });
-
-  test("create a post in Decap, rebuild, and assert /blog/<slug>/ renders it", async ({
-    page,
-  }) => {
-    // ── Drive the admin: open New Post, fill Title + Body, publish ────
-    await page.goto("/admin/index-local.html");
-    await page.getByRole("button", { name: /login/i }).click();
-    await page.getByRole("link", { name: /^posts$/i }).waitFor({ timeout: 30_000 });
-    await page.goto("/admin/index-local.html#/collections/posts/new");
-
-    const titleField = page.getByLabel(/^Title$/);
-    await expect(titleField).toBeVisible({ timeout: 60_000 });
-    await titleField.fill(SMOKE_TITLE);
-
-    // The slug field auto-derives from title; explicitly set it so the
-    // post lands at a predictable URL even if the slugify algorithm
-    // changes between Decap versions.
-    const slugField = page.getByLabel(/^URL Slug/);
-    await slugField.fill(SMOKE_SLUG);
-
-    // Decap's markdown widget defaults to rich-text mode. The
-    // contentEditable surface accepts plain typed text, which is good
-    // enough for asserting the post renders end-to-end.
-    const bodyEditor = page
-      .locator('[role="textbox"][contenteditable="true"]')
-      .last();
-    await bodyEditor.waitFor({ timeout: 30_000 });
-    await bodyEditor.click();
-    await bodyEditor.fill(SMOKE_BODY);
-
-    // Set an inline tag — exercises the auto_tag_pages plugin's
-    // "manufacture an archive page when no curated _tags/<slug>.md
-    // exists" branch. Tags is a list-of-strings widget; click into its
-    // input, type, press Enter to commit the chip.
-    const tagsInput = page.getByLabel(/^Tags/i).first();
-    await tagsInput.click();
-    await tagsInput.fill(SMOKE_TAG_LABEL);
-    await page.keyboard.press("Enter");
-
-    // Flip Published on so this post is part of `site.posts` immediately.
-    // (Default in the schema is OFF, which would route the post into the
-    // scheduled-publish bucket and skip Jekyll's _posts/ rendering for the
-    // immediate build.)
-    const publishedToggle = page.getByLabel(/^Published$/).first();
-    await publishedToggle.click();
-    await captureStep(page, {
-      section: "Marking ready and publishing",
-      step: "6.1",
-      title: "Filled-out post ready to publish",
-      body:
-        "Title, slug, body, tags, and the Published toggle are all set. In editorial workflow mode (production), the toolbar shows **Save** and a separate Status dropdown; clicking Save opens a PR in draft. Setting the dropdown to **Ready** is what triggers the auto-merge.",
+    test.beforeAll(() => {
+      removeSmokePost();
+    });
+    test.afterAll(() => {
+      removeSmokePost();
     });
 
-    // Decap's split publish button: open menu, pick "Publish now".
-    await page.getByRole("button", { name: /^publish$/i }).first().click();
-    await captureStep(page, {
-      section: "Marking ready and publishing",
-      step: "6.2",
-      title: "Publish menu open",
-      body:
-        "Decap's primary button is a split control. Clicking the Publish trigger opens a menu — **Publish now** commits the entry; **Publish and create new** commits then routes you to a fresh blank entry. In editorial-workflow mode this is replaced with a Save → Status flow.",
-    });
-    await page
-      .getByRole("menuitem", { name: /publish now/i })
-      .first()
-      .click();
-
-    // ── Wait for the file to land in _posts/ ──────────────────────────
-    await expect
-      .poll(() => findSmokePostFile() !== null, { timeout: 60_000 })
-      .toBe(true);
-    const postPath = findSmokePostFile();
-    const written = fs.readFileSync(postPath, "utf8");
-    expect(written).toMatch(/^---/);
-    expect(written).toContain(`title: ${SMOKE_TITLE}`);
-    expect(written).toContain(`slug: ${SMOKE_SLUG}`);
-    expect(written).toContain("published: true");
-
-    // ── Rebuild Jekyll so /blog/<slug>/ is in `_site/` ────────────────
-    jekyllBuild();
-
-    // ── Browse to the live URL, assert the post renders ──────────────
-    const liveURL = `/blog/${SMOKE_SLUG}/`;
-    const response = await page.goto(liveURL);
-    expect(response.status(), `${liveURL} should be 200`).toBe(200);
-
-    await expect(page.locator(".post-header h1")).toHaveText(SMOKE_TITLE);
-    await expect(page.locator(".post-content")).toContainText(SMOKE_BODY);
-    await captureStep(page, {
-      section: "Marking ready and publishing",
-      step: "6.3",
-      title: "Published post live",
-      body:
-        "After the publish settles, the post is reachable at its public URL — here `/blog/<slug>/`. In production the same URL pattern is served by CloudFront once `deploy-production.yml` finishes its `aws s3 sync` and invalidation, typically within ~2 minutes of the merge.",
+    test.beforeEach(({ page }) => {
+      page.on("pageerror", (err) => console.log(`[pageerror] ${err.name}: ${err.message}`));
     });
 
-    // ── Inline tag → auto-generated archive page ─────────────────────
-    // The auto_tag_pages plugin should manufacture /tags/<slug>/ for
-    // any tag a post uses, even if no curated _tags/<slug>.md exists.
-    // This catches plugin regressions that break the post → tag-archive
-    // handoff (issue #27 territory).
-    const tagURL = `/tags/${SMOKE_TAG_SLUG}/`;
-    const tagResp = await page.goto(tagURL);
-    expect(tagResp.status(), `${tagURL} should be 200`).toBe(200);
-    await expect(
-      page.getByRole("link", { name: SMOKE_TITLE }).first(),
-      "auto-generated tag archive should list the new post",
-    ).toBeVisible();
-  });
-});
+    test("create a post in Decap, rebuild, and assert /blog/<slug>/ renders it", async ({
+      page,
+    }) => {
+      // ── Drive the admin: open New Post, fill Title + Body, publish ────
+      await page.goto("/admin/index-local.html");
+      await page.getByRole("button", { name: /login/i }).click();
+      await page.getByRole("link", { name: /^posts$/i }).waitFor({ timeout: 30_000 });
+      await page.goto("/admin/index-local.html#/collections/posts/new");
+
+      const titleField = page.getByLabel(/^Title$/);
+      await expect(titleField).toBeVisible({ timeout: 60_000 });
+      await titleField.fill(SMOKE_TITLE);
+
+      // The slug field auto-derives from title; explicitly set it so the
+      // post lands at a predictable URL even if the slugify algorithm
+      // changes between Decap versions.
+      const slugField = page.getByLabel(/^URL Slug/);
+      await slugField.fill(SMOKE_SLUG);
+
+      // Decap's markdown widget defaults to rich-text mode. The
+      // contentEditable surface accepts plain typed text, which is good
+      // enough for asserting the post renders end-to-end.
+      const bodyEditor = page.locator('[role="textbox"][contenteditable="true"]').last();
+      await bodyEditor.waitFor({ timeout: 30_000 });
+      await bodyEditor.click();
+      await bodyEditor.fill(SMOKE_BODY);
+
+      // Set an inline tag — exercises the auto_tag_pages plugin's
+      // "manufacture an archive page when no curated _tags/<slug>.md
+      // exists" branch. Tags is a list-of-strings widget; click into its
+      // input, type, press Enter to commit the chip.
+      const tagsInput = page.getByLabel(/^Tags/i).first();
+      await tagsInput.click();
+      await tagsInput.fill(SMOKE_TAG_LABEL);
+      await page.keyboard.press("Enter");
+
+      // Flip Published on so this post is part of `site.posts` immediately.
+      // (Default in the schema is OFF, which would route the post into the
+      // scheduled-publish bucket and skip Jekyll's _posts/ rendering for the
+      // immediate build.)
+      const publishedToggle = page.getByLabel(/^Published$/).first();
+      await publishedToggle.click();
+      await captureStep(page, {
+        section: "Marking ready and publishing",
+        step: "6.1",
+        title: "Filled-out post ready to publish",
+        body: "Title, slug, body, tags, and the Published toggle are all set. In editorial workflow mode (production), the toolbar shows **Save** and a separate Status dropdown; clicking Save opens a PR in draft. Setting the dropdown to **Ready** is what triggers the auto-merge.",
+      });
+
+      // Decap's split publish button: open menu, pick "Publish now".
+      await page
+        .getByRole("button", { name: /^publish$/i })
+        .first()
+        .click();
+      await captureStep(page, {
+        section: "Marking ready and publishing",
+        step: "6.2",
+        title: "Publish menu open",
+        body: "Decap's primary button is a split control. Clicking the Publish trigger opens a menu — **Publish now** commits the entry; **Publish and create new** commits then routes you to a fresh blank entry. In editorial-workflow mode this is replaced with a Save → Status flow.",
+      });
+      await page
+        .getByRole("menuitem", { name: /publish now/i })
+        .first()
+        .click();
+
+      // ── Wait for the file to land in _posts/ ──────────────────────────
+      await expect.poll(() => findSmokePostFile() !== null, { timeout: 60_000 }).toBe(true);
+      const postPath = findSmokePostFile();
+      const written = fs.readFileSync(postPath, "utf8");
+      expect(written).toMatch(/^---/);
+      expect(written).toContain(`title: ${SMOKE_TITLE}`);
+      expect(written).toContain(`slug: ${SMOKE_SLUG}`);
+      expect(written).toContain("published: true");
+
+      // ── Rebuild Jekyll so /blog/<slug>/ is in `_site/` ────────────────
+      jekyllBuild();
+
+      // ── Browse to the live URL, assert the post renders ──────────────
+      const liveURL = `/blog/${SMOKE_SLUG}/`;
+      const response = await page.goto(liveURL);
+      expect(response.status(), `${liveURL} should be 200`).toBe(200);
+
+      await expect(page.locator(".post-header h1")).toHaveText(SMOKE_TITLE);
+      await expect(page.locator(".post-content")).toContainText(SMOKE_BODY);
+      await captureStep(page, {
+        section: "Marking ready and publishing",
+        step: "6.3",
+        title: "Published post live",
+        body: "After the publish settles, the post is reachable at its public URL — here `/blog/<slug>/`. In production the same URL pattern is served by CloudFront once `deploy-production.yml` finishes its `aws s3 sync` and invalidation, typically within ~2 minutes of the merge.",
+      });
+
+      // ── Inline tag → auto-generated archive page ─────────────────────
+      // The auto_tag_pages plugin should manufacture /tags/<slug>/ for
+      // any tag a post uses, even if no curated _tags/<slug>.md exists.
+      // This catches plugin regressions that break the post → tag-archive
+      // handoff (issue #27 territory).
+      const tagURL = `/tags/${SMOKE_TAG_SLUG}/`;
+      const tagResp = await page.goto(tagURL);
+      expect(tagResp.status(), `${tagURL} should be 200`).toBe(200);
+      await expect(
+        page.getByRole("link", { name: SMOKE_TITLE }).first(),
+        "auto-generated tag archive should list the new post",
+      ).toBeVisible();
+    });
+  },
+);

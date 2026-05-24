@@ -17,9 +17,7 @@ const SPEC_DIR = path.resolve(__dirname);
 const FORCED_COLORS_RE = /matchMedia\s*\([^)]*forced-colors/;
 
 function stripComments(line) {
-  return line
-    .replace(/\/\*[\s\S]*?\*\//g, "")
-    .replace(/\/\/.*$/, "");
+  return line.replace(/\/\*[\s\S]*?\*\//g, "").replace(/\/\/.*$/, "");
 }
 
 const offenders = [];

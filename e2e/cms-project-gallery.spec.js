@@ -94,172 +94,153 @@ test.describe(
   // Runs on chromium-desktop-3k only. See playwright.config.js.
   { tag: ["@admin-write"] },
   () => {
-  test.describe.configure({ mode: "serial", timeout: 240_000 });
+    test.describe.configure({ mode: "serial", timeout: 240_000 });
 
-  test.beforeAll(() => {
-    if (!fs.existsSync(PROJECTS_DIR)) {
-      fs.mkdirSync(PROJECTS_DIR, { recursive: true });
-    }
-    cleanup();
-  });
-  test.afterAll(() => cleanup());
+    test.beforeAll(() => {
+      if (!fs.existsSync(PROJECTS_DIR)) {
+        fs.mkdirSync(PROJECTS_DIR, { recursive: true });
+      }
+      cleanup();
+    });
+    test.afterAll(() => cleanup());
 
-  test.beforeEach(({ page }, testInfo) => {
-    page.on("pageerror", (err) =>
-      console.log(`[pageerror] ${err.name}: ${err.message}`),
-    );
-  });
-
-  test("project saved with 3-image gallery; uploads land on disk; image URLs resolve", async ({
-    page,
-  }) => {
-    // ── Load admin and open New Project ──────────────────────────────
-    await page.goto("/admin/index-local.html");
-    await page.getByRole("button", { name: /login/i }).click();
-    await page
-      .getByRole("link", { name: /^projects$/i })
-      .waitFor({ timeout: 30_000 });
-    await page.goto("/admin/index-local.html#/collections/projects/new");
-
-    const titleField = page.getByLabel(/^Title$/);
-    await expect(titleField).toBeVisible({ timeout: 60_000 });
-    await titleField.fill(SMOKE_TITLE);
-
-    // Required slug — Projects collection uses {{slug}}, so this is what
-    // the on-disk file is named after.
-    await page.getByLabel(/^Technology \/ Stack/).fill("HTML · CSS");
-    await page
-      .getByLabel(/^Project URL/)
-      .fill("https://example.com/gallery-project");
-
-    // ── Add 3 images via the list widget ─────────────────────────────
-    // The Images field is a `widget: list` with `field.name: image,
-    // field.label: Image, field.widget: image`. Decap renders one
-    // "Add <field.label>" button per list widget — clicking it appends
-    // a new collapsed item with an image picker inside. We loop:
-    // click Add → open the new item's "Choose an Image" → setInputFiles
-    // on the hidden file input → confirm via "Choose selected"/"Insert".
-    for (let i = 0; i < FIXTURES.length; i++) {
-      // Decap's list-widget Add button renders the i18n template
-      // `Add %{item}` — `%{item}` is filled by either the outer list
-      // label ("Images" in this collection) or the inner field label
-      // ("Image"), depending on Decap version. We've also seen "Add"
-      // bare, "Add more images" (with files), "Add Item" on older
-      // themes. Match anything that starts with "Add " to absorb the
-      // drift; `.first()` keeps us bound to the only list widget on
-      // the New Project form.
-      const addBtn = page
-        .getByRole("button", { name: /^add\b/i })
-        .first();
-      await expect(
-        addBtn,
-        `Add-image button should be visible before adding fixture ${i + 1}`,
-      ).toBeVisible({ timeout: 30_000 });
-      await addBtn.click();
-
-      // After Add, a new "Choose an Image" picker becomes available for
-      // the freshly-appended item. Already-filled items show "Choose
-      // different image" instead. The regex below matches *both* labels
-      // so the count of choosers === number of list items, and `.last()`
-      // always binds to the newest (just-added) item — it's appended at
-      // the end of the list in DOM order.
-      const choosers = page.getByRole("button", {
-        name: /choose (an |different )?image/i,
-      });
-      await expect(choosers.last()).toBeVisible({ timeout: 15_000 });
-      await choosers.last().click();
-
-      // Decap's media library shares one hidden <input type="file"> per
-      // open dialog — same pattern as cms-image-upload.spec.js.
-      const fileInput = page
-        .locator('input[type="file"][accept*="image"]')
-        .first();
-      await fileInput.waitFor({ state: "attached", timeout: 30_000 });
-      await fileInput.setInputFiles(FIXTURES[i]);
-
-      const insertBtn = page
-        .getByRole("button", { name: /^(choose selected|insert)$/i })
-        .first();
-      await expect(insertBtn).toBeVisible({ timeout: 30_000 });
-      await insertBtn.click();
-    }
-
-    // ── Save ─────────────────────────────────────────────────────────
-    await page.getByRole("button", { name: /^publish$/i }).first().click();
-    await page
-      .getByRole("menuitem", { name: /publish now/i })
-      .first()
-      .click();
-
-    // ── Assertion 1: file on disk ────────────────────────────────────
-    await expect
-      .poll(() => fs.existsSync(SMOKE_FILE), { timeout: 60_000 })
-      .toBe(true);
-
-    const saved = fs.readFileSync(SMOKE_FILE, "utf8");
-    expect(saved).toContain(`title: ${SMOKE_TITLE}`);
-    expect(saved).toMatch(/^images:/m);
-    // Each list entry is one line `  - /assets/images/uploads/<file>.png`.
-    // `[^/\s]+` (no path separator) is the regression guard against a
-    // nested/templated media_folder reappearing.
-    const imageLines = saved.match(/-\s+\/assets\/images\/uploads\/[^/\s]+\.png/g);
-    expect(
-      imageLines,
-      "front matter should contain 3 image-URL list entries",
-    ).not.toBeNull();
-    expect(imageLines.length).toBe(3);
-
-    // ── Assertion 2: 3 fixtures on disk under uploads/ ───────────────
-    const uploaded = findUploadedFixtures();
-    expect(
-      uploaded.length,
-      "all 3 gallery PNG fixtures should land under assets/images/uploads/",
-    ).toBe(3);
-
-    // The webServer is `bundle exec jekyll build` ONCE at startup then
-    // `npx serve _site` — it does NOT watch or rebuild. decap-server
-    // wrote the uploads into the SOURCE tree (assets/images/uploads/),
-    // so we must rebuild for `_site/` (what port 4000 serves) to
-    // actually contain them. Every other upload spec
-    // (cms-image-upload, cms-featured-image-lifecycle,
-    // manual-walkthrough-first-post) does this explicit rebuild; this
-    // spec historically masked its absence by tolerating a 404.
-    execFileSync("bundle", ["exec", "jekyll", "build", "--quiet"], {
-      cwd: REPO_ROOT,
-      stdio: "inherit",
+    test.beforeEach(({ page }) => {
+      page.on("pageerror", (err) => console.log(`[pageerror] ${err.name}: ${err.message}`));
     });
 
-    // ── Assertion 3: public image URLs resolve (strict 200) ──────────
-    // Extract the raw URL from each YAML list line and HEAD-fetch it.
-    // The serve webServer streams assets/ directly out of _site/ (Jekyll
-    // rebuilds copy uploads as-is), and decap-server writes inside the
-    // on-disk source tree.
-    //
-    // Because media_folder is flat + template-free, the URL written
-    // into front matter is byte-identical to the file's on-disk path —
-    // exactly what production does too. There is no template-expansion
-    // gap to tolerate: every URL MUST 200. A 404 is the broken-image
-    // regression this whole change exists to prevent.
-    const urls = imageLines.map((line) =>
-      line.replace(/^-\s+/, "").trim(),
-    );
-    expect(urls.length).toBe(3);
-    for (const u of urls) {
-      expect(u).toMatch(/^\/assets\/images\/uploads\/[^/]+\.png$/);
-      const status = await headStatus(u).catch(() => 0);
+    test("project saved with 3-image gallery; uploads land on disk; image URLs resolve", async ({
+      page,
+    }) => {
+      // ── Load admin and open New Project ──────────────────────────────
+      await page.goto("/admin/index-local.html");
+      await page.getByRole("button", { name: /login/i }).click();
+      await page.getByRole("link", { name: /^projects$/i }).waitFor({ timeout: 30_000 });
+      await page.goto("/admin/index-local.html#/collections/projects/new");
+
+      const titleField = page.getByLabel(/^Title$/);
+      await expect(titleField).toBeVisible({ timeout: 60_000 });
+      await titleField.fill(SMOKE_TITLE);
+
+      // Required slug — Projects collection uses {{slug}}, so this is what
+      // the on-disk file is named after.
+      await page.getByLabel(/^Technology \/ Stack/).fill("HTML · CSS");
+      await page.getByLabel(/^Project URL/).fill("https://example.com/gallery-project");
+
+      // ── Add 3 images via the list widget ─────────────────────────────
+      // The Images field is a `widget: list` with `field.name: image,
+      // field.label: Image, field.widget: image`. Decap renders one
+      // "Add <field.label>" button per list widget — clicking it appends
+      // a new collapsed item with an image picker inside. We loop:
+      // click Add → open the new item's "Choose an Image" → setInputFiles
+      // on the hidden file input → confirm via "Choose selected"/"Insert".
+      for (let i = 0; i < FIXTURES.length; i++) {
+        // Decap's list-widget Add button renders the i18n template
+        // `Add %{item}` — `%{item}` is filled by either the outer list
+        // label ("Images" in this collection) or the inner field label
+        // ("Image"), depending on Decap version. We've also seen "Add"
+        // bare, "Add more images" (with files), "Add Item" on older
+        // themes. Match anything that starts with "Add " to absorb the
+        // drift; `.first()` keeps us bound to the only list widget on
+        // the New Project form.
+        const addBtn = page.getByRole("button", { name: /^add\b/i }).first();
+        await expect(
+          addBtn,
+          `Add-image button should be visible before adding fixture ${i + 1}`,
+        ).toBeVisible({ timeout: 30_000 });
+        await addBtn.click();
+
+        // After Add, a new "Choose an Image" picker becomes available for
+        // the freshly-appended item. Already-filled items show "Choose
+        // different image" instead. The regex below matches *both* labels
+        // so the count of choosers === number of list items, and `.last()`
+        // always binds to the newest (just-added) item — it's appended at
+        // the end of the list in DOM order.
+        const choosers = page.getByRole("button", {
+          name: /choose (an |different )?image/i,
+        });
+        await expect(choosers.last()).toBeVisible({ timeout: 15_000 });
+        await choosers.last().click();
+
+        // Decap's media library shares one hidden <input type="file"> per
+        // open dialog — same pattern as cms-image-upload.spec.js.
+        const fileInput = page.locator('input[type="file"][accept*="image"]').first();
+        await fileInput.waitFor({ state: "attached", timeout: 30_000 });
+        await fileInput.setInputFiles(FIXTURES[i]);
+
+        const insertBtn = page.getByRole("button", { name: /^(choose selected|insert)$/i }).first();
+        await expect(insertBtn).toBeVisible({ timeout: 30_000 });
+        await insertBtn.click();
+      }
+
+      // ── Save ─────────────────────────────────────────────────────────
+      await page
+        .getByRole("button", { name: /^publish$/i })
+        .first()
+        .click();
+      await page
+        .getByRole("menuitem", { name: /publish now/i })
+        .first()
+        .click();
+
+      // ── Assertion 1: file on disk ────────────────────────────────────
+      await expect.poll(() => fs.existsSync(SMOKE_FILE), { timeout: 60_000 }).toBe(true);
+
+      const saved = fs.readFileSync(SMOKE_FILE, "utf8");
+      expect(saved).toContain(`title: ${SMOKE_TITLE}`);
+      expect(saved).toMatch(/^images:/m);
+      // Each list entry is one line `  - /assets/images/uploads/<file>.png`.
+      // `[^/\s]+` (no path separator) is the regression guard against a
+      // nested/templated media_folder reappearing.
+      const imageLines = saved.match(/-\s+\/assets\/images\/uploads\/[^/\s]+\.png/g);
+      expect(imageLines, "front matter should contain 3 image-URL list entries").not.toBeNull();
+      expect(imageLines.length).toBe(3);
+
+      // ── Assertion 2: 3 fixtures on disk under uploads/ ───────────────
+      const uploaded = findUploadedFixtures();
       expect(
-        status,
-        `HEAD ${u} must return 200 (gallery image must resolve end-to-end)`,
-      ).toBe(200);
-    }
+        uploaded.length,
+        "all 3 gallery PNG fixtures should land under assets/images/uploads/",
+      ).toBe(3);
 
-    // ── Assertion 4 (homepage card): currently disabled section ──────
-    // Re-enable Featured Projects on index.html to flip this fixme.
-  });
+      // The webServer is `bundle exec jekyll build` ONCE at startup then
+      // `npx serve _site` — it does NOT watch or rebuild. decap-server
+      // wrote the uploads into the SOURCE tree (assets/images/uploads/),
+      // so we must rebuild for `_site/` (what port 4000 serves) to
+      // actually contain them. Every other upload spec
+      // (cms-image-upload, cms-featured-image-lifecycle,
+      // manual-walkthrough-first-post) does this explicit rebuild; this
+      // spec historically masked its absence by tolerating a 404.
+      execFileSync("bundle", ["exec", "jekyll", "build", "--quiet"], {
+        cwd: REPO_ROOT,
+        stdio: "inherit",
+      });
 
-  test.fixme(
-    "homepage shows the new Featured Projects card",
-    async ({ page }) => {
+      // ── Assertion 3: public image URLs resolve (strict 200) ──────────
+      // Extract the raw URL from each YAML list line and HEAD-fetch it.
+      // The serve webServer streams assets/ directly out of _site/ (Jekyll
+      // rebuilds copy uploads as-is), and decap-server writes inside the
+      // on-disk source tree.
+      //
+      // Because media_folder is flat + template-free, the URL written
+      // into front matter is byte-identical to the file's on-disk path —
+      // exactly what production does too. There is no template-expansion
+      // gap to tolerate: every URL MUST 200. A 404 is the broken-image
+      // regression this whole change exists to prevent.
+      const urls = imageLines.map((line) => line.replace(/^-\s+/, "").trim());
+      expect(urls.length).toBe(3);
+      for (const u of urls) {
+        expect(u).toMatch(/^\/assets\/images\/uploads\/[^/]+\.png$/);
+        const status = await headStatus(u).catch(() => 0);
+        expect(status, `HEAD ${u} must return 200 (gallery image must resolve end-to-end)`).toBe(
+          200,
+        );
+      }
+
+      // ── Assertion 4 (homepage card): currently disabled section ──────
+      // Re-enable Featured Projects on index.html to flip this fixme.
+    });
+
+    test.fixme("homepage shows the new Featured Projects card", async ({ page }) => {
       // index.html wraps the Featured Projects section in `{% comment %}`
       // so the projects-grid never renders. Removing that comment will
       // make this test runnable. Until then it stays a `fixme` so the
@@ -269,6 +250,6 @@ test.describe(
         page.locator(".projects-grid"),
         "Featured Projects section is currently disabled in index.html",
       ).toBeVisible();
-    },
-  );
-});
+    });
+  },
+);

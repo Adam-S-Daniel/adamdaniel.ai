@@ -69,17 +69,10 @@
 const { test, expect } = require("./base");
 const { seedDecapAuth, getPat, HOST_REPO } = require("./decap-pat");
 const { closeStaleDecapPrOnBranch } = require("./cms-fixture-pr");
-const {
-  addLabel,
-  gh,
-  waitForCmsPullRequest,
-} = require("./github-actions-poll");
+const { addLabel, gh, waitForCmsPullRequest } = require("./github-actions-poll");
 const { waitForChangeReflected } = require("./deploy-pill");
 const { previewTarget } = require("./cms-host");
-const {
-  readPublishedFlag,
-  forcePublishedFalse,
-} = require("./fixture-baseline");
+const { readPublishedFlag, forcePublishedFalse } = require("./fixture-baseline");
 
 const FIXTURE_PATH = "_posts/2024-01-02-e2e-unpublish-canary.md";
 const FIXTURE_SLUG = "e2e-unpublish-canary";
@@ -116,9 +109,7 @@ function toContentBase64(text) {
 }
 
 async function fetchFixtureFromBranch(branch) {
-  return gh(
-    `/repos/${HOST_REPO}/contents/${FIXTURE_PATH}?ref=${encodeURIComponent(branch)}`,
-  );
+  return gh(`/repos/${HOST_REPO}/contents/${FIXTURE_PATH}?ref=${encodeURIComponent(branch)}`);
 }
 
 // `readPublishedFlag` and `forcePublishedFalse` are shared from
@@ -176,11 +167,8 @@ async function url4xxs(page) {
 test(
   "CMS unpublish + re-publish — preview env, target PR head branch",
   { tag: ["@admin-write"] },
-  async ({ page }, testInfo) => {
-    test.skip(
-      !getPat(),
-      "CMS_E2E_PAT not set — preview unpublish/re-publish disabled.",
-    );
+  async ({ page }) => {
+    test.skip(!getPat(), "CMS_E2E_PAT not set — preview unpublish/re-publish disabled.");
     test.skip(
       !PR_NUMBER || !PR_HEAD_REF,
       "PR_NUMBER / PR_HEAD_REF not set — this spec only runs in the cms-preview-loops workflow.",
@@ -207,18 +195,16 @@ test(
       } catch (e) {
         throw new Error(
           `Fixture ${FIXTURE_PATH} is missing on ${PR_HEAD_REF} (${e && e.message}). It ships on main; restore it or re-cut the PR branch.`,
+          { cause: e },
         );
       }
-      const remoteBody = Buffer.from(current.content, "base64").toString(
-        "utf8",
-      );
+      const remoteBody = Buffer.from(current.content, "base64").toString("utf8");
       baselineFileText = forcePublishedFalse(remoteBody, FIXTURE_PATH);
       if (remoteBody !== baselineFileText) {
         await writeFixtureOnBranch({
           branch: PR_HEAD_REF,
           fileText: baselineFileText,
-          message:
-            "test(preview-unpublish): reset fixture baseline (published: false) before run",
+          message: "test(preview-unpublish): reset fixture baseline (published: false) before run",
         });
       }
     });
@@ -237,19 +223,18 @@ test(
         if (res.status() >= 400 && res.status() < 500) break;
         await page.waitForTimeout(8000);
       }
-      expect(
-        lastStatus,
-        `${PUBLIC_URL} should 4xx at baseline (published: false)`,
-      ).toMatch(/^4\d\d$/);
+      expect(lastStatus, `${PUBLIC_URL} should 4xx at baseline (published: false)`).toMatch(
+        /^4\d\d$/,
+      );
     });
 
     // ── 2. Open admin, navigate to the unpublish-canary entry ───────
     await seedDecapAuth(page);
     await test.step("Load preview admin", async () => {
       await page.goto(PREVIEW_ADMIN, { waitUntil: "domcontentloaded" });
-      await expect(
-        page.getByRole("link", { name: /^Posts$/i }),
-      ).toBeVisible({ timeout: 60_000 });
+      await expect(page.getByRole("link", { name: /^Posts$/i })).toBeVisible({
+        timeout: 60_000,
+      });
     });
 
     await test.step("Navigate to the unpublish-canary post entry", async () => {
@@ -283,13 +268,10 @@ test(
       // Decap renders the boolean Published widget as role="switch"
       // (NOT checkbox); state via aria-checked. PR #407's first run
       // failed on getByRole("checkbox") — use switch consistently.
-      const toggle = page
-        .getByRole("switch", { name: /^Published$/i })
-        .first();
-      await expect(
-        toggle,
-        "Published toggle should be visible",
-      ).toBeVisible({ timeout: 30_000 });
+      const toggle = page.getByRole("switch", { name: /^Published$/i }).first();
+      await expect(toggle, "Published toggle should be visible").toBeVisible({
+        timeout: 30_000,
+      });
       await expect(
         toggle,
         "Published toggle should reflect baseline (aria-checked=false)",
@@ -298,9 +280,7 @@ test(
 
     // ── 3. Re-publish leg: toggle ON → Save → cms PR → URL 200 ──────
     await test.step("Toggle Published → ON via UI", async () => {
-      const toggle = page
-        .getByRole("switch", { name: /^Published$/i })
-        .first();
+      const toggle = page.getByRole("switch", { name: /^Published$/i }).first();
       const ariaChecked = await toggle.getAttribute("aria-checked");
       if (ariaChecked !== "true") await toggle.click();
       await expect(toggle).toHaveAttribute("aria-checked", "true", {
@@ -310,9 +290,9 @@ test(
 
     await test.step("Save → wait for cms PR → label cms/ready (re-publish)", async () => {
       await page.getByRole("button", { name: /^Save$/i }).click();
-      await expect(
-        page.getByText(/Changes saved/i).first(),
-      ).toBeVisible({ timeout: 60_000 });
+      await expect(page.getByText(/Changes saved/i).first()).toBeVisible({
+        timeout: 60_000,
+      });
       // The diff for this leg flips `-published: false` /
       // `+published: true`. The previous leg's PR (none yet — this is
       // the first) can't collide; waitForCmsPullRequest only
@@ -350,26 +330,25 @@ test(
       await closeStaleDecapPrOnBranch({
         branch: `cms/posts/${FIXTURE_FILE_SLUG}`,
       });
-      await page.goto(
-        `${PREVIEW_ADMIN}#/collections/posts/entries/${FIXTURE_FILE_SLUG}`,
-        { waitUntil: "domcontentloaded" },
-      );
+      await page.goto(`${PREVIEW_ADMIN}#/collections/posts/entries/${FIXTURE_FILE_SLUG}`, {
+        waitUntil: "domcontentloaded",
+      });
       await page.reload({ waitUntil: "domcontentloaded" });
-      await expect(
-        page.getByRole("textbox", { name: /^Title$/i }),
-      ).toBeVisible({ timeout: 60_000 });
+      await expect(page.getByRole("textbox", { name: /^Title$/i })).toBeVisible({
+        timeout: 60_000,
+      });
       // After the re-publish chain landed, the editor should now read
       // the toggle as ON; assert it so the OFF flip below is a real
       // state transition (not a no-op on a stale view).
-      await expect(
-        page.getByRole("switch", { name: /^Published$/i }).first(),
-      ).toHaveAttribute("aria-checked", "true", { timeout: 30_000 });
+      await expect(page.getByRole("switch", { name: /^Published$/i }).first()).toHaveAttribute(
+        "aria-checked",
+        "true",
+        { timeout: 30_000 },
+      );
     });
 
     await test.step("Toggle Published → OFF via UI", async () => {
-      const toggle = page
-        .getByRole("switch", { name: /^Published$/i })
-        .first();
+      const toggle = page.getByRole("switch", { name: /^Published$/i }).first();
       const ariaChecked = await toggle.getAttribute("aria-checked");
       if (ariaChecked !== "false") await toggle.click();
       await expect(toggle).toHaveAttribute("aria-checked", "false", {
@@ -379,9 +358,9 @@ test(
 
     await test.step("Save → wait for cms PR → label cms/ready (unpublish)", async () => {
       await page.getByRole("button", { name: /^Save$/i }).click();
-      await expect(
-        page.getByText(/Changes saved/i).first(),
-      ).toBeVisible({ timeout: 60_000 });
+      await expect(page.getByText(/Changes saved/i).first()).toBeVisible({
+        timeout: 60_000,
+      });
       // The re-publish leg's PR is merged (the URL-200 wait only
       // resolves once it landed on the head branch and deploy-preview
       // ran), so waitForCmsPullRequest's state=open filter excludes

@@ -34,9 +34,7 @@ test.describe("Preview deploy: patch-preview-config.sh", () => {
   });
 
   test("site_url is the full preview subdomain", () => {
-    expect(patched).toMatch(
-      new RegExp(`^site_url: https://${HOST.replace(/\./g, "\\.")}$`, "m"),
-    );
+    expect(patched).toMatch(new RegExp(`^site_url: https://${HOST.replace(/\./g, "\\.")}$`, "m"));
   });
 
   test("display_url matches site_url for the Open Production Site button", () => {
@@ -52,12 +50,8 @@ test.describe("Preview deploy: patch-preview-config.sh", () => {
   test("preview_path values are left untouched — same paths as prod", () => {
     // Each PR serves from its own subdomain root, so blog/project/page
     // URLs are identical to prod. The patch must not rewrite preview_path.
-    const prePreviewPaths = [
-      ...preImage.matchAll(/preview_path:\s*"?([^"\s]+)/g),
-    ].map((m) => m[1]);
-    const postPreviewPaths = [
-      ...patched.matchAll(/preview_path:\s*"?([^"\s]+)/g),
-    ].map((m) => m[1]);
+    const prePreviewPaths = [...preImage.matchAll(/preview_path:\s*"?([^"\s]+)/g)].map((m) => m[1]);
+    const postPreviewPaths = [...patched.matchAll(/preview_path:\s*"?([^"\s]+)/g)].map((m) => m[1]);
     expect(postPreviewPaths).toEqual(prePreviewPaths);
   });
 });

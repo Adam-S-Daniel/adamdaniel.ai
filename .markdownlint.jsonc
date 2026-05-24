@@ -1,0 +1,48 @@
+{
+  // markdownlint rule config for adamdaniel.ai prose docs.
+  // Pragmatic: keep high-value style rules, relax those that fight
+  // intentional GitHub-flavored-markdown usage (tables, HTML, long lines).
+  // Inherit the default rule set, then tune below.
+  "default": true,
+
+  // MD013 line-length: docs wrap prose and contain long URLs/tables.
+  // Rewrapping would churn content with no real benefit. Disabled.
+  "MD013": false,
+
+  // MD033 no-inline-html: docs intentionally use HTML (<details>, <img>,
+  // <br>, <kbd>, alignment <div>s) that GFM renders. Allowed.
+  "MD033": false,
+
+  // MD041 first-line-h1: some docs begin with a badge/HTML block or
+  // comment rather than an H1; do not force a leading heading.
+  "MD041": false,
+
+  // MD024 no-duplicate-headings: allow identical heading text when nested
+  // under different parents (common in changelog/ADR/step-by-step docs).
+  "MD024": { "siblings_only": true },
+
+  // MD029 ordered-list-prefix: allow ordered lists numbered 1/2/3 (the
+  // most common convention) without forcing "1." everywhere.
+  "MD029": { "style": "ordered" },
+
+  // MD046 code-block-style: the docs mix indented and fenced blocks in a
+  // few places; require fenced (the dominant, language-tagged style).
+  "MD046": { "style": "fenced" },
+
+  // MD004 unordered-list-style: standardize on dash bullets.
+  "MD004": { "style": "dash" },
+
+  // MD007 unordered-list-indent: 2-space nested-list indent (default).
+  "MD007": { "indent": 2 },
+
+  // MD040 fenced-code-language: keep enabled — code fences should declare
+  // a language. (Plain output blocks can use ```text.)
+  "MD040": true,
+
+  // MD038 spaces-inside-code-span: DISABLED. The docs intentionally put a
+  // trailing/leading space inside inline code to document literal string
+  // values — e.g. the commit-message prefix `publish: ` (the trailing
+  // space is part of the prefix being matched). Auto-stripping it would
+  // silently corrupt the documented value, so this rule is off.
+  "MD038": false
+}

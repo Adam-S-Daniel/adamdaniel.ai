@@ -111,15 +111,18 @@
       if (!raw) return null;
       var parsed = JSON.parse(raw);
       return parsed && parsed.token ? parsed.token : null;
-    } catch (e) {
+    } catch {
       return null;
     }
   }
 
   function esc(s) {
     return String(s == null ? "" : s)
-      .replace(/&/g, "&amp;").replace(/</g, "&lt;").replace(/>/g, "&gt;")
-      .replace(/"/g, "&quot;").replace(/'/g, "&#39;");
+      .replace(/&/g, "&amp;")
+      .replace(/</g, "&lt;")
+      .replace(/>/g, "&gt;")
+      .replace(/"/g, "&quot;")
+      .replace(/'/g, "&#39;");
   }
 
   function isPostsListRoute() {
@@ -172,28 +175,23 @@
 
   // ── card discovery ───────────────────────────────────────────────
   function collectCards() {
-    var anchors = document.querySelectorAll(
-      'a[href*="#/collections/posts/entries/"]'
-    );
+    var anchors = document.querySelectorAll('a[href*="#/collections/posts/entries/"]');
     var cards = [];
     for (var i = 0; i < anchors.length; i++) {
       var a = anchors[i];
-      var m = /#\/collections\/posts\/entries\/([^?#]+)/.exec(
-        a.getAttribute("href") || ""
-      );
+      var m = /#\/collections\/posts\/entries\/([^?#]+)/.exec(a.getAttribute("href") || "");
       if (!m) continue;
       var slug;
       try {
         slug = decodeURIComponent(m[1]);
-      } catch (e) {
+      } catch {
         slug = m[1];
       }
       var li = a.closest("li") || a.parentElement;
       var h2 = a.querySelector("h2");
       var summaryText = (h2 ? h2.textContent : a.textContent || "").trim();
       var title = summaryText.replace(/\s*\(.*$/, "").trim() || slug;
-      var isFixture =
-        FIXTURE_SLUG_RE.test(slug) || FIXTURE_TITLE_RE.test(title);
+      var isFixture = FIXTURE_SLUG_RE.test(slug) || FIXTURE_TITLE_RE.test(title);
       cards.push({
         a: a,
         li: li,
@@ -220,18 +218,15 @@
       var c = JSON.parse(raw);
       if (!c || Date.now() - c.at > CACHE_TTL_MS) return null;
       return c;
-    } catch (e) {
+    } catch {
       return null;
     }
   }
 
   function writeCache(data) {
     try {
-      sessionStorage.setItem(
-        CACHE_KEY,
-        JSON.stringify({ at: Date.now(), data: data })
-      );
-    } catch (e) {
+      sessionStorage.setItem(CACHE_KEY, JSON.stringify({ at: Date.now(), data: data }));
+    } catch {
       /* sessionStorage full / disabled — in-memory only */
     }
   }
@@ -242,7 +237,7 @@
     if (!res || !res.ok) return null;
     try {
       return await res.json();
-    } catch (e) {
+    } catch {
       return null;
     }
   }
@@ -261,7 +256,7 @@
       return (
         "f" +
         idx +
-        ': history(first: 1, path: ' +
+        ": history(first: 1, path: " +
         JSON.stringify(fp) +
         ") { nodes { committedDate url" +
         " associatedPullRequests(first: 1) { nodes { number url } } } }"
@@ -272,7 +267,7 @@
       JSON.stringify(REPO.split("/")[0]) +
       ", name: " +
       JSON.stringify(REPO.split("/")[1]) +
-      ") {\n    ref(qualifiedName: \"refs/heads/main\") {\n      target {\n        ... on Commit {\n          " +
+      ') {\n    ref(qualifiedName: "refs/heads/main") {\n      target {\n        ... on Commit {\n          ' +
       parts.join("\n          ") +
       "\n        }\n      }\n    }\n  }\n}";
     var out = {};
@@ -287,14 +282,12 @@
       });
       var j = await safeJson(res);
       var commit =
-        j && j.data && j.data.repository && j.data.repository.ref &&
-        j.data.repository.ref.target
+        j && j.data && j.data.repository && j.data.repository.ref && j.data.repository.ref.target
           ? j.data.repository.ref.target
           : null;
       if (commit) {
         files.forEach(function (fp, idx) {
-          var node = commit["f" + idx] && commit["f" + idx].nodes &&
-            commit["f" + idx].nodes[0];
+          var node = commit["f" + idx] && commit["f" + idx].nodes && commit["f" + idx].nodes[0];
           if (!node) return;
           // associatedPullRequests(first:1) on the last main commit =
           // the PR whose merge published the current live version of
@@ -313,31 +306,37 @@
         });
       }
     } catch (e) {
-      console.warn("[posts-list-enhance] last-edited query failed: " +
-        (e && e.message ? e.message : e));
+      console.warn(
+        "[posts-list-enhance] last-edited query failed: " + (e && e.message ? e.message : e),
+      );
     }
     return out;
   }
 
   async function fetchSiteDeploy(token) {
     try {
-      var dRes = await fetch(
-        REST + "/deployments?environment=production&per_page=1",
-        { headers: { Authorization: "token " + token,
-          Accept: "application/vnd.github+json" } }
-      );
+      var dRes = await fetch(REST + "/deployments?environment=production&per_page=1", {
+        headers: {
+          Authorization: "token " + token,
+          Accept: "application/vnd.github+json",
+        },
+      });
       var deps = await safeJson(dRes);
       if (!Array.isArray(deps) || !deps.length) return null;
-      var sRes = await fetch(
-        REST + "/deployments/" + deps[0].id + "/statuses?per_page=1",
-        { headers: { Authorization: "token " + token,
-          Accept: "application/vnd.github+json" } }
-      );
+      var sRes = await fetch(REST + "/deployments/" + deps[0].id + "/statuses?per_page=1", {
+        headers: {
+          Authorization: "token " + token,
+          Accept: "application/vnd.github+json",
+        },
+      });
       var st = await safeJson(sRes);
       if (!Array.isArray(st) || !st.length) return null;
-      return { state: st[0].state, at: st[0].created_at,
-        url: st[0].log_url || st[0].target_url || null };
-    } catch (e) {
+      return {
+        state: st[0].state,
+        at: st[0].created_at,
+        url: st[0].log_url || st[0].target_url || null,
+      };
+    } catch {
       return null;
     }
   }
@@ -345,11 +344,12 @@
   async function fetchOpenPrBySlug(token) {
     var map = {};
     try {
-      var res = await fetch(
-        REST + "/pulls?state=open&per_page=100",
-        { headers: { Authorization: "token " + token,
-          Accept: "application/vnd.github+json" } }
-      );
+      var res = await fetch(REST + "/pulls?state=open&per_page=100", {
+        headers: {
+          Authorization: "token " + token,
+          Accept: "application/vnd.github+json",
+        },
+      });
       var prs = await safeJson(res);
       if (!Array.isArray(prs)) return map;
       prs.forEach(function (pr) {
@@ -362,7 +362,7 @@
           map[mm[1]] = { number: pr.number, url: pr.html_url };
         }
       });
-    } catch (e) {
+    } catch {
       /* degrade */
     }
     return map;
@@ -420,7 +420,7 @@
   function showFixtures() {
     try {
       return localStorage.getItem(SHOW_FIXTURES_KEY) === "1";
-    } catch (e) {
+    } catch {
       return false;
     }
   }
@@ -463,13 +463,12 @@
       (memCache && memCache.siteDeploy) ||
       (readCache() && readCache().data && readCache().data.siteDeploy);
     var deployHtml = deploy
-      ? 'site ' +
+      ? "site " +
         (deploy.state === "success" ? "deployed" : esc(deploy.state)) +
         " " +
         esc(timeAgo(deploy.at)) +
         (deploy.url
-          ? ' · <a href="' + esc(deploy.url) +
-            '" target="_blank" rel="noopener">run ↗</a>'
+          ? ' · <a href="' + esc(deploy.url) + '" target="_blank" rel="noopener">run ↗</a>'
           : "")
       : '<span style="color:#8c959f">sign in for deploy / PR data</span>';
     var nextHTML =
@@ -483,8 +482,11 @@
       ")</label>" +
       '<button type="button" id="cms-ple-refresh" title="Re-fetch ' +
       'last-edited / PR / deploy data">↻ Refresh</button>' +
-      '<span id="cms-ple-deploy">' + deployHtml + "</span>";
+      '<span id="cms-ple-deploy">' +
+      deployHtml +
+      "</span>";
     if (nextHTML !== lastBarHTML) {
+      // eslint-disable-next-line no-unsanitized/property -- every dynamic value in `nextHTML` (deploy state/url/age) is run through the HTML-escaping `esc()` helper; the rest is static markup.
       bar.innerHTML = nextHTML;
       lastBarHTML = nextHTML;
     }
@@ -495,7 +497,9 @@
       cb.addEventListener("change", function () {
         try {
           localStorage.setItem(SHOW_FIXTURES_KEY, cb.checked ? "1" : "0");
-        } catch (e) { /* ignore */ }
+        } catch {
+          /* ignore */
+        }
         applyHideClass();
       });
     }
@@ -532,7 +536,10 @@
     var bits = [];
     bits.push(
       '<span class="cms-ple-pill" style="background:' +
-        card.state.color + '">' + esc(card.state.label) + "</span>"
+        card.state.color +
+        '">' +
+        esc(card.state.label) +
+        "</span>",
     );
     if (card.isFixture) {
       bits.push('<span class="cms-ple-fixture-tag">automated test</span>');
@@ -540,25 +547,33 @@
     var pub = publicUrl(card.slug);
     if (pub && card.state.live) {
       bits.push(
-        '<a href="' + esc(pub) + '" target="_blank" rel="noopener" ' +
-          'title="Open the published post">published ↗</a>'
+        '<a href="' +
+          esc(pub) +
+          '" target="_blank" rel="noopener" ' +
+          'title="Open the published post">published ↗</a>',
       );
     } else if (pub) {
       bits.push(
         '<span title="Live once published" style="color:#8c959f">' +
-          esc("/blog/" + urlSlug(card.slug) + "/") + "</span>"
+          esc("/blog/" + urlSlug(card.slug) + "/") +
+          "</span>",
       );
     }
     var le = remote && remote.lastEdited && remote.lastEdited[card.filePath];
     if (le && le.date) {
       bits.push(
-        '<span title="Last commit to ' + esc(card.filePath) +
+        '<span title="Last commit to ' +
+          esc(card.filePath) +
           ' on main">edited ' +
           (le.url
-            ? '<a href="' + esc(le.url) + '" target="_blank" ' +
-              'rel="noopener">' + esc(timeAgo(le.date)) + "</a>"
+            ? '<a href="' +
+              esc(le.url) +
+              '" target="_blank" ' +
+              'rel="noopener">' +
+              esc(timeAgo(le.date)) +
+              "</a>"
             : esc(timeAgo(le.date))) +
-          "</span>"
+          "</span>",
       );
     }
     // "view published changes" — the GitHub diff (Files-changed tab)
@@ -580,33 +595,41 @@
     var publishedPr = le && le.pr;
     if (publishedPr) {
       bits.push(
-        '<a href="' + esc(publishedPr.url) +
+        '<a href="' +
+          esc(publishedPr.url) +
           '/files" target="_blank" rel="noopener" title="GitHub diff ' +
-          '(Files changed) of the merged PR #' + esc(publishedPr.number) +
-          ' that published the live version">view published changes</a>'
+          "(Files changed) of the merged PR #" +
+          esc(publishedPr.number) +
+          ' that published the live version">view published changes</a>',
       );
     }
 
     var pr =
-      remote && remote.prBySlug &&
-      (remote.prBySlug[card.slug] ||
-        remote.prBySlug[urlSlug(card.slug)]);
+      remote &&
+      remote.prBySlug &&
+      (remote.prBySlug[card.slug] || remote.prBySlug[urlSlug(card.slug)]);
     if (pr) {
       bits.push(
-        '<a href="https://preview-pr' + esc(pr.number) +
-          '.adamdaniel.ai/blog/' + esc(urlSlug(card.slug)) +
+        '<a href="https://preview-pr' +
+          esc(pr.number) +
+          ".adamdaniel.ai/blog/" +
+          esc(urlSlug(card.slug)) +
           '/" target="_blank" rel="noopener" title="Per-PR preview ' +
-          'environment for the unmerged draft (open PR #' +
-          esc(pr.number) + ')">preview draft ↗</a>'
+          "environment for the unmerged draft (open PR #" +
+          esc(pr.number) +
+          ')">preview draft ↗</a>',
       );
       bits.push(
-        '<a href="' + esc(pr.url) +
+        '<a href="' +
+          esc(pr.url) +
           '/files" target="_blank" rel="noopener" title="GitHub diff ' +
-          '(Files changed) of the open editorial-workflow PR #' +
-          esc(pr.number) + '">view draft changes</a>'
+          "(Files changed) of the open editorial-workflow PR #" +
+          esc(pr.number) +
+          '">view draft changes</a>',
       );
     }
     var next = bits.join("");
+    // eslint-disable-next-line no-unsanitized/property -- every dynamic value pushed into `bits` (PR numbers, URLs, slugs, timestamps) is run through the HTML-escaping `esc()` helper; the rest is static markup.
     if (meta.innerHTML !== next) meta.innerHTML = next;
   }
 
@@ -644,8 +667,7 @@
     var settled = true;
     for (var k = 0; k < kids.length; k++) {
       var isFixtureLi =
-        kids[k].getAttribute &&
-        kids[k].getAttribute("data-cms-ple-fixture") === "1";
+        kids[k].getAttribute && kids[k].getAttribute("data-cms-ple-fixture") === "1";
       if (isFixtureLi) {
         seenFixture = true;
       } else if (seenFixture) {
@@ -684,8 +706,7 @@
       try {
         augment();
       } catch (e) {
-        console.warn("[posts-list-enhance] augment error: " +
-          (e && e.message ? e.message : e));
+        console.warn("[posts-list-enhance] augment error: " + (e && e.message ? e.message : e));
       }
     });
   }
@@ -698,9 +719,7 @@
     ensureStyle();
     applyHideClass();
 
-    var remote =
-      memCache ||
-      (readCache() ? readCache().data : null);
+    var remote = memCache || (readCache() ? readCache().data : null);
 
     var fixtureCount = 0;
     for (var i = 0; i < cards.length; i++) {
@@ -748,7 +767,7 @@
   new MutationObserver(function () {
     try {
       syncFixtureReorder();
-    } catch (e) {
+    } catch {
       /* swallow — never let our hook block Decap's own updates */
     }
     scheduleAugment();

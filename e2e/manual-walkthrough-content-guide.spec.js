@@ -136,8 +136,7 @@ async function probePreview(page, section) {
     section: "Real-layout preview",
     step: "C2.1",
     title: "Open /preview/?collection=posts in a second tab",
-    body:
-      "The Editor's Guide tells you to open `https://adamdaniel.ai/preview/?collection=posts` and snap it next to the editor. Each Save in the admin updates this tab within a frame, rendered with the real `_layouts/post.html` so it matches the live site exactly. The same pattern works for `?collection=projects` and `?collection=pages`.",
+    body: "The Editor's Guide tells you to open `https://adamdaniel.ai/preview/?collection=posts` and snap it next to the editor. Each Save in the admin updates this tab within a frame, rendered with the real `_layouts/post.html` so it matches the live site exactly. The same pattern works for `?collection=projects` and `?collection=pages`.",
   });
 }
 
@@ -157,9 +156,7 @@ async function probeMediaLibrary(page, section) {
   ).toBeVisible({ timeout: 60_000 });
   await loginBtn.click();
 
-  await page
-    .getByRole("link", { name: /^posts$/i })
-    .waitFor({ timeout: 30_000 });
+  await page.getByRole("link", { name: /^posts$/i }).waitFor({ timeout: 30_000 });
   await page.goto("/admin/index-local.html#/collections/posts/new");
 
   const titleField = page.getByLabel(/^Title$/);
@@ -171,9 +168,7 @@ async function probeMediaLibrary(page, section) {
   // The guide: "Click any image field → Choose Image". Decap's button
   // is labelled "Choose an Image" / "Choose Image" depending on
   // version; match both.
-  const chooseImage = page
-    .getByRole("button", { name: /choose (an )?image/i })
-    .first();
+  const chooseImage = page.getByRole("button", { name: /choose (an )?image/i }).first();
   await expect(
     chooseImage,
     `${citation(section)}: the Featured Image widget did not render its "Choose Image" button — the documented "click any image field" entry-point is gone.`,
@@ -205,8 +200,7 @@ async function probeMediaLibrary(page, section) {
     section: "Media library",
     step: "C2.2",
     title: "Open the media library from a Posts edit form",
-    body:
-      "Click any image field's **Choose Image** button to open the media library. The dialog hosts a grid of every prior upload (a single flat folder, since `media_folder: assets/images/uploads` is the configured layout) plus an Upload control wired to a hidden `<input type=\"file\">`. Every upload's public URL is `/assets/images/uploads/<filename>` — byte-identical to where the file is committed, so Copy Path and the rendered image always resolve.",
+    body: "Click any image field's **Choose Image** button to open the media library. The dialog hosts a grid of every prior upload (a single flat folder, since `media_folder: assets/images/uploads` is the configured layout) plus an Upload control wired to a hidden `<input type=\"file\">`. Every upload's public URL is `/assets/images/uploads/<filename>` — byte-identical to where the file is committed, so Copy Path and the rendered image always resolve.",
   });
 
   // Back out of the dialog cleanly so we don't leak state into a
@@ -266,9 +260,7 @@ const PROBES = {
 // ── Test wiring ──────────────────────────────────────────────────────
 
 const guideExists = fs.existsSync(GUIDE_PATH);
-const sections = guideExists
-  ? parseSections(fs.readFileSync(GUIDE_PATH, "utf8"))
-  : [];
+const sections = guideExists ? parseSections(fs.readFileSync(GUIDE_PATH, "utf8")) : [];
 
 test.describe(
   "Manual walkthrough — docs/CONTENT_GUIDE.md @parity",
@@ -278,80 +270,73 @@ test.describe(
   // for the rationale). See playwright.config.js.
   { tag: ["@admin-screenshots"] },
   () => {
-  test.describe.configure({ mode: "serial", timeout: 180_000 });
+    test.describe.configure({ mode: "serial", timeout: 180_000 });
 
-  test.beforeEach(({ page }, testInfo) => {
-    test.skip(
-      TARGET === "prod",
-      "Probes drive /admin/index-local.html (local_backend: true). prod has no local proxy, so login can't populate the sidebar.",
-    );
-    page.on("pageerror", (err) =>
-      console.log(`[pageerror] ${err.name}: ${err.message}`),
-    );
-    // Decap CMS uses native window.confirm() for delete / unpublish
-    // confirmations; without a persistent listener, Playwright auto-
-    // dismisses the dialog and Decap reads it as "user cancelled."
-    // Defensive in case future probes exercise destructive actions —
-    // see AGENTS.md "Test-Driven Design" section.
-    page.on("dialog", (d) => d.accept());
-  });
+    test.beforeEach(({ page }) => {
+      test.skip(
+        TARGET === "prod",
+        "Probes drive /admin/index-local.html (local_backend: true). prod has no local proxy, so login can't populate the sidebar.",
+      );
+      page.on("pageerror", (err) => console.log(`[pageerror] ${err.name}: ${err.message}`));
+      // Decap CMS uses native window.confirm() for delete / unpublish
+      // confirmations; without a persistent listener, Playwright auto-
+      // dismisses the dialog and Decap reads it as "user cancelled."
+      // Defensive in case future probes exercise destructive actions —
+      // see AGENTS.md "Test-Driven Design" section.
+      page.on("dialog", (d) => d.accept());
+    });
 
-  if (!guideExists) {
-    test.fixme(
-      "docs/CONTENT_GUIDE.md missing — nothing to walk through @parity",
-      () => {
+    if (!guideExists) {
+      test.fixme("docs/CONTENT_GUIDE.md missing — nothing to walk through @parity", () => {
         // Intentional: the guide's absence is itself a doc bug, but we
         // don't want this spec to be the thing that breaks CI when
         // someone is mid-rename. Surfacing as fixme keeps it visible
         // without going red.
-      },
-    );
-    return;
-  }
+      });
+      return;
+    }
 
-  // Sanity check: the guide should expose at least the two sections we
-  // do have probes for. If parsing breaks (or the guide is renamed),
-  // this fails first with a clear pointer instead of every section
-  // skipping silently.
-  test("CONTENT_GUIDE.md parses and exposes the documented section list @parity", () => {
-    expect(
-      sections.length,
-      `${path.relative(REPO_ROOT, GUIDE_PATH)} produced 0 ## headings — the parser or the guide structure changed.`,
-    ).toBeGreaterThan(0);
-    const slugs = sections.map((s) => s.slug);
-    for (const required of ["two-ways-to-preview", "media-library"]) {
+    // Sanity check: the guide should expose at least the two sections we
+    // do have probes for. If parsing breaks (or the guide is renamed),
+    // this fails first with a clear pointer instead of every section
+    // skipping silently.
+    test("CONTENT_GUIDE.md parses and exposes the documented section list @parity", () => {
       expect(
-        slugs,
-        `Expected section slug "${required}" in ${path.relative(REPO_ROOT, GUIDE_PATH)}; got ${JSON.stringify(slugs)}.`,
-      ).toContain(required);
-    }
-  });
-
-  for (const section of sections) {
-    const probe = PROBES[section.slug];
-    const baseTitle = `[L${section.line}] ${section.title} @parity`;
-
-    if (!probe) {
-      // No mapping at all — probably a new section was added to the
-      // guide. Mark fixme with the line number so the next reader
-      // knows where to look.
-      test.fixme(
-        `${baseTitle} (no probe wired — add one in PROBES["${section.slug}"])`,
-        () => {},
-      );
-      continue;
-    }
-
-    test(baseTitle, async ({ page }) => {
-      try {
-        await probe(page, section);
-      } catch (err) {
-        if (err instanceof FixmeError) {
-          test.fixme(true, err.message);
-          return;
-        }
-        throw err;
+        sections.length,
+        `${path.relative(REPO_ROOT, GUIDE_PATH)} produced 0 ## headings — the parser or the guide structure changed.`,
+      ).toBeGreaterThan(0);
+      const slugs = sections.map((s) => s.slug);
+      for (const required of ["two-ways-to-preview", "media-library"]) {
+        expect(
+          slugs,
+          `Expected section slug "${required}" in ${path.relative(REPO_ROOT, GUIDE_PATH)}; got ${JSON.stringify(slugs)}.`,
+        ).toContain(required);
       }
     });
-  }
-});
+
+    for (const section of sections) {
+      const probe = PROBES[section.slug];
+      const baseTitle = `[L${section.line}] ${section.title} @parity`;
+
+      if (!probe) {
+        // No mapping at all — probably a new section was added to the
+        // guide. Mark fixme with the line number so the next reader
+        // knows where to look.
+        test.fixme(`${baseTitle} (no probe wired — add one in PROBES["${section.slug}"])`, () => {});
+        continue;
+      }
+
+      test(baseTitle, async ({ page }) => {
+        try {
+          await probe(page, section);
+        } catch (err) {
+          if (err instanceof FixmeError) {
+            test.fixme(true, err.message);
+            return;
+          }
+          throw err;
+        }
+      });
+    }
+  },
+);

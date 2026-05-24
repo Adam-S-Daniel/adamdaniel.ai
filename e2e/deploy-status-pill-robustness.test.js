@@ -56,9 +56,10 @@ test.describe("deploy-status-pill: robustness invariants", () => {
     // Inside fetchWithRetry: when isRateLimited(res) is true, we must
     // return null before falling through to the retry path. Assert
     // the function contains the early-return shape.
-    expect(src, "missing rate-limit early-return — would retry rate-limited fetches and burn through the budget").toMatch(
-      /isRateLimited\(res\)[\s\S]{0,500}?return null/,
-    );
+    expect(
+      src,
+      "missing rate-limit early-return — would retry rate-limited fetches and burn through the budget",
+    ).toMatch(/isRateLimited\(res\)[\s\S]{0,500}?return null/);
   });
 
   test("STALE_THRESHOLD_MS is defined and amber rendering exists", () => {
@@ -69,9 +70,10 @@ test.describe("deploy-status-pill: robustness invariants", () => {
     );
     // Amber colour family. GitHub Primer's warning yellow is #d4a72c
     // (border) / #9a6700 (text). Any of these confirm the amber path.
-    expect(src, "missing amber colour for stale state — would render in default styling and look identical to in-progress").toMatch(
-      /#d4a72c|#9a6700|amber|stale/i,
-    );
+    expect(
+      src,
+      "missing amber colour for stale state — would render in default styling and look identical to in-progress",
+    ).toMatch(/#d4a72c|#9a6700|amber|stale/i);
   });
 
   test("lastSeenStatusIds dedup is keyed off GitHub status.id (per-event)", () => {
@@ -83,7 +85,9 @@ test.describe("deploy-status-pill: robustness invariants", () => {
     expect(
       src,
       "expected dedup to compare against status.id — comparing against status.state would miss success→in_progress transitions on re-publish",
-    ).toMatch(/lastSeenStatusIds\s*\.[\w]*\s*=\s*[a-zA-Z_$][\w$]*Id|statusId\s*!==?\s*lastSeenStatusIds/);
+    ).toMatch(
+      /lastSeenStatusIds\s*\.[\w]*\s*=\s*[a-zA-Z_$][\w$]*Id|statusId\s*!==?\s*lastSeenStatusIds/,
+    );
   });
 
   test("polling tick logs an info diagnostic when no deployment is found", () => {

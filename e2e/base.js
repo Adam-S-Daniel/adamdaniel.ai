@@ -36,9 +36,7 @@ function resolveTargetBaseURL() {
   if (TARGET === "local") return LOCAL_URL;
   if (TARGET === "prod") return PROD_URL;
   if (TARGET === "preview") return resolvePreviewBaseURL();
-  throw new Error(
-    `Unknown TARGET="${process.env.TARGET}". Use local | preview | prod.`,
-  );
+  throw new Error(`Unknown TARGET="${process.env.TARGET}". Use local | preview | prod.`);
 }
 
 function resolvePreviewBaseURL() {
@@ -50,9 +48,7 @@ function resolvePreviewBaseURL() {
   const explicit = process.env.PR_NUMBER || process.env.GITHUB_PR_NUMBER;
   if (explicit) {
     if (!/^\d+$/.test(String(explicit))) {
-      throw new Error(
-        `TARGET=preview: PR_NUMBER="${explicit}" is not a positive integer.`,
-      );
+      throw new Error(`TARGET=preview: PR_NUMBER="${explicit}" is not a positive integer.`);
     }
     return `https://preview-pr${explicit}.adamdaniel.ai`;
   }
@@ -72,15 +68,16 @@ function resolvePreviewBaseURL() {
     throw new Error(
       `TARGET=preview: failed to query GitHub for the latest open PR (${err.message}). ` +
         `Ensure 'gh' is on PATH and authenticated, or run with TARGET=local.`,
+      { cause: err },
     );
   }
   let pulls;
   try {
     pulls = JSON.parse(raw);
   } catch (err) {
-    throw new Error(
-      `TARGET=preview: GitHub API returned non-JSON: ${raw.slice(0, 200)}`,
-    );
+    throw new Error(`TARGET=preview: GitHub API returned non-JSON: ${raw.slice(0, 200)}`, {
+      cause: err,
+    });
   }
   if (!Array.isArray(pulls) || pulls.length === 0) {
     throw new Error(
@@ -128,11 +125,7 @@ function resolvePreviewBaseURL() {
 // instrumented — extending coverage is a follow-up.
 
 const REPO_ROOT = path.resolve(__dirname, "..");
-const PER_TEST_FRAMES_ROOT = path.join(
-  REPO_ROOT,
-  "test-results",
-  "per-test-frames",
-);
+const PER_TEST_FRAMES_ROOT = path.join(REPO_ROOT, "test-results", "per-test-frames");
 const PER_TEST_MAX_FRAMES = 50;
 
 function safeTestId(testInfo) {
@@ -171,9 +164,7 @@ function ensureFrameDir(testInfo) {
 const _stepTitleStack = [];
 
 function _currentStepTitle() {
-  return _stepTitleStack.length === 0
-    ? null
-    : _stepTitleStack[_stepTitleStack.length - 1];
+  return _stepTitleStack.length === 0 ? null : _stepTitleStack[_stepTitleStack.length - 1];
 }
 
 // Build a patched `step` method that pushes the active title onto the

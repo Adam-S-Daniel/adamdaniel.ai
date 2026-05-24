@@ -41,10 +41,7 @@ if (!fs.existsSync(inputFile)) {
   process.exit(0);
 }
 
-const reportFile = path.join(
-  os.tmpdir(),
-  `gitleaks-report-${Date.now()}.json`,
-);
+const reportFile = path.join(os.tmpdir(), `gitleaks-report-${Date.now()}.json`);
 
 let findings = [];
 try {
@@ -72,10 +69,7 @@ for (const f of findings || []) {
   seen.add(f.Match);
   // Global, case-sensitive replace. Escape regex metacharacters.
   const escaped = f.Match.replace(/[.*+?^${}()|[\]\\]/g, "\\$&");
-  scrubbed = scrubbed.replace(
-    new RegExp(escaped, "g"),
-    `<REDACTED:${f.RuleID || "secret"}>`,
-  );
+  scrubbed = scrubbed.replace(new RegExp(escaped, "g"), `<REDACTED:${f.RuleID || "secret"}>`);
 }
 
 if (outputFile) {

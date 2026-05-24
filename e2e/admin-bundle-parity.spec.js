@@ -138,143 +138,132 @@ test.describe(
   // webkit-iphone16. See playwright.config.js.
   { tag: ["@admin-read"] },
   () => {
-  test.describe.configure({ timeout: 120_000 });
+    test.describe.configure({ timeout: 120_000 });
 
-  test.beforeEach(({}, testInfo) => {
-  });
+    test.beforeEach(() => {});
 
-  test("prod and preview admin bundles are byte-identical to the working tree", async ({
-    request,
-  }) => {
-    const adminDir = path.join(__dirname, "..", "admin");
-    const allFiles = listAdminFiles(adminDir);
-    const files = allFiles.filter((p) => !isExcluded(p));
+    test("prod and preview admin bundles are byte-identical to the working tree", async ({
+      request,
+    }) => {
+      const adminDir = path.join(__dirname, "..", "admin");
+      const allFiles = listAdminFiles(adminDir);
+      const files = allFiles.filter((p) => !isExcluded(p));
 
-    expect(
-      files.length,
-      "Expected at least one admin/ file after exclusions",
-    ).toBeGreaterThan(0);
+      expect(files.length, "Expected at least one admin/ file after exclusions").toBeGreaterThan(0);
 
-    const previewPr = await findLatestOpenPrNumber(request);
-    const previewBase =
-      previewPr !== null ? `https://preview-pr${previewPr}.adamdaniel.ai` : null;
-    if (previewBase) {
-      console.log(
-        `[admin-bundle-parity] comparing prod vs. preview-pr${previewPr}`,
-      );
-    } else {
-      console.log(
-        `[admin-bundle-parity] no open PR — running prod-side parity only`,
-      );
-    }
+      const previewPr = await findLatestOpenPrNumber(request);
+      const previewBase =
+        previewPr !== null ? `https://preview-pr${previewPr}.adamdaniel.ai` : null;
+      if (previewBase) {
+        console.log(`[admin-bundle-parity] comparing prod vs. preview-pr${previewPr}`);
+      } else {
+        console.log(`[admin-bundle-parity] no open PR — running prod-side parity only`);
+      }
 
-    const failures = [];
-    const lagWarnings = [];
+      const failures = [];
+      const lagWarnings = [];
 
-    for (const rel of files) {
-      const urlPath = `/${ADMIN_PREFIX}/${rel.split(path.sep).join("/")}`;
-      const prodUrl = `${PROD_BASE}${urlPath}`;
+      for (const rel of files) {
+        const urlPath = `/${ADMIN_PREFIX}/${rel.split(path.sep).join("/")}`;
+        const prodUrl = `${PROD_BASE}${urlPath}`;
 
-      const prod = await fetchBodyHash(request, prodUrl);
+        const prod = await fetchBodyHash(request, prodUrl);
 
-      if (!previewBase) {
-        // No preview — skip the cross-host comparison but still
-        // surface obviously-broken prod responses (anything other
-        // than 200 or 404; 404 is acceptable for files added in a
-        // not-yet-merged PR).
-        if (prod.status !== 200 && !ACCEPTABLE_STATUSES_MISSING.has(prod.status)) {
-          failures.push(
-            `${rel}: prod returned ${prod.status} (expected 200 or 404)`,
-          );
+        if (!previewBase) {
+          // No preview — skip the cross-host comparison but still
+          // surface obviously-broken prod responses (anything other
+          // than 200 or 404; 404 is acceptable for files added in a
+          // not-yet-merged PR).
+          if (prod.status !== 200 && !ACCEPTABLE_STATUSES_MISSING.has(prod.status)) {
+            failures.push(`${rel}: prod returned ${prod.status} (expected 200 or 404)`);
+          }
+          continue;
         }
-        continue;
-      }
 
-      const previewUrl = `${previewBase}${urlPath}`;
-      const preview = await fetchBodyHash(request, previewUrl);
+        const previewUrl = `${previewBase}${urlPath}`;
+        const preview = await fetchBodyHash(request, previewUrl);
 
-      // Both 404 → consistent absence (file was just deleted on
-      // both branches, or the admin/ tree is ahead of both deploys).
-      // Both 200 → continue to the byte-parity check.
-      if (prod.status === 404 && preview.status === 404) {
-        continue;
-      }
+        // Both 404 → consistent absence (file was just deleted on
+        // both branches, or the admin/ tree is ahead of both deploys).
+        // Both 200 → continue to the byte-parity check.
+        if (prod.status === 404 && preview.status === 404) {
+          continue;
+        }
 
-      // One 404, the other 200 → expected deploy-lag window. Warn,
-      // don't fail. (Could be: file just added on the PR's branch,
-      // not yet merged → preview has it, prod doesn't. Or file just
-      // merged → prod has it but the PR's preview pre-dates the
-      // merge.) Either way the gap closes once both deploys settle.
-      if (prod.status === 404 || preview.status === 404) {
-        lagWarnings.push(
-          `${rel}: prod=${prod.status}, preview=${preview.status} (deploy lag — expected during merge windows)`,
-        );
-        continue;
-      }
+        // One 404, the other 200 → expected deploy-lag window. Warn,
+        // don't fail. (Could be: file just added on the PR's branch,
+        // not yet merged → preview has it, prod doesn't. Or file just
+        // merged → prod has it but the PR's preview pre-dates the
+        // merge.) Either way the gap closes once both deploys settle.
+        if (prod.status === 404 || preview.status === 404) {
+          lagWarnings.push(
+            `${rel}: prod=${prod.status}, preview=${preview.status} (deploy lag — expected during merge windows)`,
+          );
+          continue;
+        }
 
-      // Both not-404 and not-200 (e.g. 500, 403): real breakage.
-      if (prod.status !== 200 || preview.status !== 200) {
+        // Both not-404 and not-200 (e.g. 500, 403): real breakage.
+        if (prod.status !== 200 || preview.status !== 200) {
+          failures.push(
+            `${rel}: prod=${prod.status}, preview=${preview.status} (expected 200/200)`,
+          );
+          continue;
+        }
+
+        // Both 200 → byte parity. Prefer ETag when both sides offer
+        // one and they're non-empty; fall back to sha256 of body.
+        const haveBothEtags = prod.etag && preview.etag;
+        if (haveBothEtags && prod.etag === preview.etag) continue;
+        if (prod.sha && preview.sha && prod.sha === preview.sha) continue;
+
+        // Bytes differ between prod and preview. Three cases:
+        //   - working-tree matches preview → preview is "ahead" of prod
+        //     because this branch (or a recently-merged one) changed the
+        //     file, and prod hasn't redeployed/cache-invalidated yet.
+        //     Deploy lag, not drift. Warn instead of failing.
+        //   - working-tree matches prod → preview is "ahead" of working
+        //     tree (preview wasn't built from this branch?), unusual but
+        //     not a drift signal. Warn.
+        //   - neither matches → real cross-environment drift. Fail.
+        let localSha = null;
+        try {
+          const buf = fs.readFileSync(path.join(adminDir, rel));
+          localSha = crypto.createHash("sha256").update(buf).digest("hex");
+        } catch (_) {
+          /* file missing locally — fall through to failure */
+        }
+        if (localSha && preview.sha === localSha) {
+          lagWarnings.push(
+            `${rel}: prod sha=${prod.sha?.slice(0, 12)}, preview sha=${preview.sha?.slice(0, 12)} (deploy lag — branch change hasn't reached prod yet)`,
+          );
+          continue;
+        }
+        if (localSha && prod.sha === localSha) {
+          lagWarnings.push(
+            `${rel}: prod sha=${prod.sha?.slice(0, 12)}, preview sha=${preview.sha?.slice(0, 12)} (preview ahead of working tree — likely stale preview build)`,
+          );
+          continue;
+        }
+
         failures.push(
-          `${rel}: prod=${prod.status}, preview=${preview.status} (expected 200/200)`,
+          `${rel}: byte mismatch\n` +
+            `      prod    etag=${prod.etag || "(none)"} sha=${prod.sha}\n` +
+            `      preview etag=${preview.etag || "(none)"} sha=${preview.sha}\n` +
+            `      local   sha=${localSha || "(unreadable)"}`,
         );
-        continue;
       }
 
-      // Both 200 → byte parity. Prefer ETag when both sides offer
-      // one and they're non-empty; fall back to sha256 of body.
-      const haveBothEtags = prod.etag && preview.etag;
-      if (haveBothEtags && prod.etag === preview.etag) continue;
-      if (prod.sha && preview.sha && prod.sha === preview.sha) continue;
-
-      // Bytes differ between prod and preview. Three cases:
-      //   - working-tree matches preview → preview is "ahead" of prod
-      //     because this branch (or a recently-merged one) changed the
-      //     file, and prod hasn't redeployed/cache-invalidated yet.
-      //     Deploy lag, not drift. Warn instead of failing.
-      //   - working-tree matches prod → preview is "ahead" of working
-      //     tree (preview wasn't built from this branch?), unusual but
-      //     not a drift signal. Warn.
-      //   - neither matches → real cross-environment drift. Fail.
-      let localSha = null;
-      try {
-        const buf = fs.readFileSync(path.join(adminDir, rel));
-        localSha = crypto.createHash("sha256").update(buf).digest("hex");
-      } catch (_) {
-        /* file missing locally — fall through to failure */
-      }
-      if (localSha && preview.sha === localSha) {
-        lagWarnings.push(
-          `${rel}: prod sha=${prod.sha?.slice(0, 12)}, preview sha=${preview.sha?.slice(0, 12)} (deploy lag — branch change hasn't reached prod yet)`,
+      if (lagWarnings.length) {
+        console.log(
+          `[admin-bundle-parity] deploy-lag warnings (${lagWarnings.length}):\n  ` +
+            lagWarnings.join("\n  "),
         );
-        continue;
-      }
-      if (localSha && prod.sha === localSha) {
-        lagWarnings.push(
-          `${rel}: prod sha=${prod.sha?.slice(0, 12)}, preview sha=${preview.sha?.slice(0, 12)} (preview ahead of working tree — likely stale preview build)`,
-        );
-        continue;
       }
 
-      failures.push(
-        `${rel}: byte mismatch\n` +
-          `      prod    etag=${prod.etag || "(none)"} sha=${prod.sha}\n` +
-          `      preview etag=${preview.etag || "(none)"} sha=${preview.sha}\n` +
-          `      local   sha=${localSha || "(unreadable)"}`,
-      );
-    }
-
-    if (lagWarnings.length) {
-      console.log(
-        `[admin-bundle-parity] deploy-lag warnings (${lagWarnings.length}):\n  ` +
-          lagWarnings.join("\n  "),
-      );
-    }
-
-    expect(
-      failures,
-      `Admin bundle parity failures (${failures.length}):\n  ${failures.join(
-        "\n  ",
-      )}`,
-    ).toEqual([]);
-  });
-});
+      expect(
+        failures,
+        `Admin bundle parity failures (${failures.length}):\n  ${failures.join("\n  ")}`,
+      ).toEqual([]);
+    });
+  },
+);

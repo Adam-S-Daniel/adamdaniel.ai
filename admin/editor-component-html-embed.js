@@ -66,10 +66,7 @@
   };
 
   function tryRegister() {
-    if (
-      window.CMS &&
-      typeof window.CMS.registerEditorComponent === "function"
-    ) {
+    if (window.CMS && typeof window.CMS.registerEditorComponent === "function") {
       window.CMS.registerEditorComponent(component);
       return true;
     }

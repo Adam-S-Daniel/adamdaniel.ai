@@ -48,6 +48,7 @@ Restrict the markdown widget to raw mode by removing `rich_text` from `modes:`. 
 ### Keep `widget: markdown`, single-line baseline
 
 Restructure the canary baseline to have no hard line wraps and no paragraph breaks — collapse the whole body to one long line. The Slate round-trip can't double newlines that aren't there. Rejected because:
+
 - The baseline source becomes ugly and hard to maintain.
 - It doesn't fix the underlying bug for any future regression that adds a second paragraph.
 - The fix lives in the wrong place (content shape, not editor config).
@@ -55,6 +56,7 @@ Restructure the canary baseline to have no hard line wraps and no paragraph brea
 ### Register a custom markdown widget with a non-mangling serializer
 
 Override Decap's default Slate serializer via `CMS.registerWidget(...)` in `admin/index.html`. Rejected for v1 because:
+
 - Significant work (vendoring or forking parts of Decap's widget chain).
 - Risk of breaking *real* content collections that depend on the standard widget.
 - The e2e collection has no need for the rich editor, so a per-collection switch (`widget: text`) is a 5-line change vs. a multi-day fork-and-maintain commitment.

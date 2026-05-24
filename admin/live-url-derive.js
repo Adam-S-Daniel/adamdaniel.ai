@@ -37,13 +37,13 @@
   "use strict";
 
   function getCollection() {
-    var m = /#\/collections\/([^\/]+)/.exec(window.location.hash || "");
+    var m = /#\/collections\/([^/]+)/.exec(window.location.hash || "");
     return m ? m[1] : null;
   }
 
   function readField(name) {
     var el = document.querySelector(
-      'input[id^="' + name + '-field"], textarea[id^="' + name + '-field"]'
+      'input[id^="' + name + '-field"], textarea[id^="' + name + '-field"]',
     );
     return el ? el.value : null;
   }
@@ -72,10 +72,7 @@
     for (var k = 0; k < matches.length; k++) {
       var cur = matches[k];
       for (var d = 0; d < 6 && cur; d++) {
-        if (
-          typeof cur.className === "string" &&
-          cur.className.indexOf("ControlContainer") !== -1
-        ) {
+        if (typeof cur.className === "string" && cur.className.indexOf("ControlContainer") !== -1) {
           var toggle = cur.querySelector('button[role="switch"]');
           if (toggle) return toggle.getAttribute("aria-checked") === "true";
         }

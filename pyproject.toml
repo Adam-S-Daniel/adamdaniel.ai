@@ -4,3 +4,81 @@ addopts = "-m 'not live'"
 markers = [
     "live: tests that invoke an external agent CLI (e.g. `claude -p`); skipped by default. Run with `-m live` or set SKILLS_TEST_LIVE=1.",
 ]
+
+# ── Ruff: linter + formatter (replaces flake8/black/isort) ───────────────────
+[tool.ruff]
+line-length = 100
+target-version = "py311"
+# Only lint/format the Python this repo owns; the tree is a Jekyll site with a
+# large amount of JS/Ruby/shell that ruff must not touch.
+include = [
+    "oauth-proxy/lambda.py",
+    "oauth-proxy/test_lambda.py",
+    "scripts/publish_scheduled_posts.py",
+    "tests/**/*.py",
+    "pyproject.toml",
+]
+
+[tool.ruff.lint]
+select = [
+    "E",    # pycodestyle errors
+    "W",    # pycodestyle warnings
+    "F",    # pyflakes
+    "I",    # isort
+    "B",    # flake8-bugbear
+    "UP",   # pyupgrade
+    "C4",   # flake8-comprehensions
+    "SIM",  # flake8-simplify
+    "S",    # flake8-bandit
+]
+
+[tool.ruff.lint.per-file-ignores]
+# Test suites: `assert` is the idiomatic check (S101); they shell out to
+# trusted, hardcoded binaries (git/bash/pwsh) with controlled args, which
+# flake8-bandit flags as S603/S607 false positives; and the fake GitHub token
+# default / Enum string values trip the hardcoded-password heuristics
+# (S105/S107).
+"tests/**/*.py" = ["S101", "S603", "S607", "S105", "S106", "S107"]
+"oauth-proxy/test_lambda.py" = ["S101", "S105", "S106", "S107"]
+
+# ── Bandit: security static analysis ─────────────────────────────────────────
+[tool.bandit]
+# The top-level tests/ tree legitimately uses assert and subprocess with
+# trusted, hardcoded argv (no shell=True, no user-controlled binary), so prune
+# it from bandit's recursive walk. `oauth-proxy/test_lambda.py` lives under a
+# production dir and so is still scanned; its two fake-fixture B105/B107
+# findings are suppressed inline with a narrow `# nosec`. Genuine findings in
+# production code (oauth-proxy/lambda.py, scripts/) are addressed inline with a
+# narrow `# nosec` carrying a justification — nothing real is blanket-skipped.
+exclude_dirs = ["tests", "node_modules", "vendor"]
+
+# ── Mypy: pragmatic static typing ────────────────────────────────────────────
+[tool.mypy]
+python_version = "3.11"
+files = [
+    "oauth-proxy/lambda.py",
+    "oauth-proxy/test_lambda.py",
+    "scripts/publish_scheduled_posts.py",
+    "tests",
+]
+# boto3, yaml and the AWS Lambda runtime have no stubs in this env.
+ignore_missing_imports = true
+warn_unused_ignores = true
+warn_redundant_casts = true
+no_implicit_optional = true
+check_untyped_defs = true
+# `lambda.py` is not a valid module name to import, so mypy analyses it as a
+# standalone file; allow that and don't insist every test helper is annotated.
+explicit_package_bases = true
+
+[[tool.mypy.overrides]]
+# Test modules use pytest fixtures / unittest dynamic dispatch heavily; full
+# annotation buys little. Keep them analysed but don't require typed defs, and
+# tolerate two test-only patterns:
+#   * import-untyped: yaml has upstream stubs (types-PyYAML) that aren't
+#     installed in this env; the suite isn't type-driven against it.
+#   * `_PWSH = shutil.which(...) or shutil.which(...)` is `str | None`; the
+#     tests narrow it with skipif() at runtime, which mypy can't follow.
+module = ["tests.*", "test_lambda", "conftest"]
+disallow_untyped_defs = false
+disable_error_code = ["import-untyped", "list-item"]

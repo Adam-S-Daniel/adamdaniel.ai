@@ -19,13 +19,7 @@ const { test, expect } = require("./base");
 // (a) explicitly remove the path again or (b) document why the
 // invariant changed by editing this test.
 
-const WORKFLOW = path.join(
-  __dirname,
-  "..",
-  ".github",
-  "workflows",
-  "visual-regression.yml",
-);
+const WORKFLOW = path.join(__dirname, "..", ".github", "workflows", "visual-regression.yml");
 
 // CMS-managed content paths. These MUST NOT appear in the workflow's
 // `paths:` list. Mirror admin/config.yml's collection folders.
@@ -85,28 +79,27 @@ test.describe("visual-regression workflow: content-only PRs are skipped", () => 
   test("no CMS-managed content path appears in the trigger list", () => {
     const paths = readPathsList();
     for (const forbidden of FORBIDDEN_PATHS) {
-      expect(paths, `forbidden path "${forbidden}" is present in visual-regression.yml's paths: list — content-only PRs would re-trigger the regression video`).not.toContain(
-        forbidden,
-      );
+      expect(
+        paths,
+        `forbidden path "${forbidden}" is present in visual-regression.yml's paths: list — content-only PRs would re-trigger the regression video`,
+      ).not.toContain(forbidden);
     }
   });
 
   test("template/styling paths are still in the trigger list", () => {
     const paths = readPathsList();
     for (const required of REQUIRED_PATHS) {
-      expect(paths, `required path "${required}" is missing from visual-regression.yml's paths: list — the workflow would no longer fire on template/styling changes`).toContain(
-        required,
-      );
+      expect(
+        paths,
+        `required path "${required}" is missing from visual-regression.yml's paths: list — the workflow would no longer fire on template/styling changes`,
+      ).toContain(required);
     }
   });
 
   test("CMS collection folders match the forbidden list", () => {
     // Sanity check: if a new collection is added to admin/config.yml,
     // its folder should also be added to FORBIDDEN_PATHS above.
-    const cfg = fs.readFileSync(
-      path.join(__dirname, "..", "admin", "config.yml"),
-      "utf8",
-    );
+    const cfg = fs.readFileSync(path.join(__dirname, "..", "admin", "config.yml"), "utf8");
     // Folder lines look like:    folder: _posts
     const folderRe = /^\s{4}folder:\s*([^\s]+)\s*$/gm;
     const folders = [];
@@ -114,7 +107,9 @@ test.describe("visual-regression workflow: content-only PRs are skipped", () => 
     while ((m = folderRe.exec(cfg)) !== null) {
       folders.push(m[1]);
     }
-    expect(folders.length, "admin/config.yml has at least one collection folder").toBeGreaterThan(0);
+    expect(folders.length, "admin/config.yml has at least one collection folder").toBeGreaterThan(
+      0,
+    );
     for (const folder of folders) {
       const expected = `${folder}/**`;
       expect(

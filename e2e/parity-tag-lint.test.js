@@ -52,9 +52,7 @@ function isParitySpec(source) {
   // Match `@parity` only inside `test(...)` or `test.describe(...)` titles.
   // A free-form prose `@parity` mention in a comment doesn't auto-promote
   // a spec into the parity matrix.
-  return /\b(test|describe)(?:\s*\.\s*\w+)?\s*\(\s*(["'`])[^"'`]*@parity[^"'`]*\2/.test(
-    source,
-  );
+  return /\b(test|describe)(?:\s*\.\s*\w+)?\s*\(\s*(["'`])[^"'`]*@parity[^"'`]*\2/.test(source);
 }
 
 function findViolations(filePath) {
@@ -64,9 +62,7 @@ function findViolations(filePath) {
   // Scrub block comments first so multi-line `/* ... fs.writeFileSync ... */`
   // doesn't trip a rule. Line comments are handled per-line below so we
   // can still emit accurate line numbers.
-  const scrubbed = source.replace(STRIP_BLOCK_COMMENT, (match) =>
-    match.replace(/[^\n]/g, " "),
-  );
+  const scrubbed = source.replace(STRIP_BLOCK_COMMENT, (match) => match.replace(/[^\n]/g, " "));
   const lines = scrubbed.split("\n");
   const rawLines = source.split("\n");
   const violations = [];
@@ -118,12 +114,8 @@ test.describe("@parity static lint", () => {
       }
     }
     lines.push("");
-    lines.push(
-      "Either remove the @parity tag, refactor the mutation into a non-spec helper,",
-    );
-    lines.push(
-      "or annotate the line with `// @parity-lint-allow: <reason>` if it is",
-    );
+    lines.push("Either remove the @parity tag, refactor the mutation into a non-spec helper,");
+    lines.push("or annotate the line with `// @parity-lint-allow: <reason>` if it is");
     lines.push("explicitly gated behind a TARGET=local check.");
     expect(offenders, lines.join("\n")).toEqual([]);
   });

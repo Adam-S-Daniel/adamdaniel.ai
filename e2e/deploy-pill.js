@@ -152,7 +152,9 @@ async function expectDeployPillHidden({ page, pillId, timeoutMs = 90_000 }) {
       if (!el) return true;
       if (el.innerHTML && el.innerHTML.includes("failed")) {
         throw new Error(
-          "deploy-status-pill (#" + id + ") is in failure state — clear it before driving the next action",
+          "deploy-status-pill (#" +
+            id +
+            ") is in failure state — clear it before driving the next action",
         );
       }
       return el.style.display === "none";

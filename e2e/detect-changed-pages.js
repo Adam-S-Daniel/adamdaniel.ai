@@ -55,8 +55,11 @@ function discoverAllPages() {
   if (useSiteScan) {
     const htmlFiles = execSync(
       `find ${siteDir} -name 'index.html' -not -path '*/admin/*' -not -path '*/preview/*'`,
-      { encoding: "utf-8" }
-    ).trim().split("\n").filter(Boolean);
+      { encoding: "utf-8" },
+    )
+      .trim()
+      .split("\n")
+      .filter(Boolean);
 
     for (const f of htmlFiles) {
       const rel = f.replace(siteDir, "").replace(/index\.html$/, "");
@@ -193,10 +196,7 @@ function classifyPages({ allPages, changedFiles, fileExistsOnMain = () => true }
         // placeholder for the prod side instead of the real
         // production admin, and the resulting video shows admin
         // pages with the wrong reference image.
-        if (
-          !fileExistsOnMain(file) &&
-          !ALWAYS_INCLUDED_ADMIN_PAGES.includes(url)
-        ) {
+        if (!fileExistsOnMain(file) && !ALWAYS_INCLUDED_ADMIN_PAGES.includes(url)) {
           newPages.add(url);
         }
       }

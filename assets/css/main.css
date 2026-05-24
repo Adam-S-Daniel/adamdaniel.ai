@@ -15,11 +15,11 @@
   --bg-3: #111e40;
   --accent: #285aff;
   --accent-dim: #1a3abf;
-  --accent-glow: rgba(40, 90, 255, 0.28);
+  --accent-glow: rgb(40 90 255 / 28%);
   --text-primary: #d8e4ff;
   --text-secondary: #c8d4f0;
   --text-dim: #8ab0e8;
-  --text-bright: #ffffff;
+  --text-bright: #fff;
   --border: #1a2a5e;
   --border-bright: #2a3a7e;
   --mono: 'SF Mono', 'Fira Code', 'Consolas', monospace;
@@ -59,8 +59,15 @@ body::before {
 }
 
 @keyframes warmth {
-  0%   { opacity: 0.05; transform: scale(0.7); }
-  100% { opacity: 0.6;  transform: scale(1.3); }
+  0% {
+    opacity: 0.05;
+    transform: scale(0.7);
+  }
+
+  100% {
+    opacity: 0.6;
+    transform: scale(1.3);
+  }
 }
 
 body::after {
@@ -196,7 +203,7 @@ main {
   position: sticky;
   top: 0;
   z-index: 100;
-  background: rgba(4, 6, 15, 0.85);
+  background: rgb(4 6 15 / 85%);
   backdrop-filter: blur(12px);
   -webkit-backdrop-filter: blur(12px);
   border-bottom: 1px solid var(--border);
@@ -755,7 +762,7 @@ main {
 .feed-link:focus-visible {
   color: #ee802f; /* canonical RSS orange — appears only on intent */
   border-color: #ee802f;
-  background: rgba(238, 128, 47, 0.08);
+  background: rgb(238 128 47 / 8%);
 }
 
 .feed-link-icon {
@@ -830,6 +837,7 @@ main {
 .share-icon-success { display: none; }
 .share-copy.share-copied .share-icon-default { display: none; }
 .share-copy.share-copied .share-icon-success { display: block; }
+
 .share-copy.share-copied {
   color: var(--text-bright);
   border-color: var(--accent);
@@ -840,6 +848,7 @@ main {
   .share-link {
     border-color: ButtonText;
   }
+
   .feed-link:hover,
   .feed-link:focus-visible,
   .share-link:hover,
@@ -851,7 +860,7 @@ main {
 
 /* ── Responsive ─────────────────────────────────── */
 
-@media (max-width: 640px) {
+@media (width <= 640px) {
   .site-nav {
     gap: 1.2rem;
   }

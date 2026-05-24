@@ -172,10 +172,7 @@ test.describe("sitemap structure @parity", () => {
         leaks.push({ file: path.relative(REPO_ROOT, file), url });
       }
     }
-    expect(
-      leaks,
-      `drafts leaked into sitemap: ${JSON.stringify(leaks, null, 2)}`,
-    ).toEqual([]);
+    expect(leaks, `drafts leaked into sitemap: ${JSON.stringify(leaks, null, 2)}`).toEqual([]);
   });
 
   test("no _e2e/ canary entry appears in the sitemap @parity", () => {

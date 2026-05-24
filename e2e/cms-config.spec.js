@@ -98,10 +98,9 @@ test.describe("Decap CMS config invariants", () => {
         mediaFolder,
         "media_folder must not contain Decap template tokens (e.g. {{year}})",
       ).not.toMatch(/\{\{.*?\}\}/);
-      expect(
-        publicFolder,
-        "public_folder must not contain Decap template tokens",
-      ).not.toMatch(/\{\{.*?\}\}/);
+      expect(publicFolder, "public_folder must not contain Decap template tokens").not.toMatch(
+        /\{\{.*?\}\}/,
+      );
 
       // The exact path is pinned so a future edit can't quietly
       // reintroduce nesting.
@@ -278,25 +277,6 @@ test.describe("Decap CMS config invariants", () => {
   // PER-ENTRY permalink convention enforced by admin/config.yml's
   // `pages.permalink.pattern` default ("/pages/<slug>/").
 
-  function permalinkFor(jekyllConfig, collection) {
-    // Top-level posts permalink lives at root; collection permalinks
-    // live nested under `collections: <name>: permalink:`. Trivial
-    // string parse — yaml is sufficiently regular for this single key.
-    if (collection === "posts") {
-      const m = jekyllConfig.match(/^permalink:\s*(\S+)\s*$/m);
-      return m ? m[1] : null;
-    }
-    // Match the collection block, then the permalink within it.
-    const re = new RegExp(
-      `^\\s{2}${collection}:\\s*$([\\s\\S]*?)(?=^\\S|^\\s{2}\\S)`,
-      "m",
-    );
-    const block = jekyllConfig.match(re);
-    if (!block) return null;
-    const m = block[1].match(/^\s+permalink:\s*(\S+)\s*$/m);
-    return m ? m[1] : null;
-  }
-
   function previewPathFor(yml, collection) {
     const chunk = findCollection(yml, collection);
     if (!chunk) return null;
@@ -327,9 +307,7 @@ test.describe("Decap CMS config invariants", () => {
     expect(decapPreviewURL).toBe("/pages/foo-bar/");
 
     const permalinkField = findField(findCollection(adminYml, "pages"), "permalink");
-    const defaultMatch = permalinkField.match(
-      /^\s+default:\s*['"]?([^'"\n]+?)['"]?\s*$/m,
-    );
+    const defaultMatch = permalinkField.match(/^\s+default:\s*['"]?([^'"\n]+?)['"]?\s*$/m);
     expect(
       defaultMatch,
       "pages.permalink should ship a `default:` so the New Page form pre-fills a sensible value",

@@ -5,6 +5,7 @@ Each registered harness has an offline check (always runs) and a live check
 is set). Adding a harness for a new agent is a pure config + new module
 change — see tests/harness-config.yaml.
 """
+
 from __future__ import annotations
 
 from abc import ABC, abstractmethod

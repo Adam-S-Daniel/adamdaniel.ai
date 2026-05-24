@@ -99,25 +99,27 @@ async function waitForCmsPullRequest({
   }
   const deadline = Date.now() + timeoutMs;
   while (Date.now() < deadline) {
-    const prs = await gh(`/repos/${repo}/pulls?state=open&base=${encodeURIComponent(base)}&per_page=50`);
+    const prs = await gh(
+      `/repos/${repo}/pulls?state=open&base=${encodeURIComponent(base)}&per_page=50`,
+    );
     const candidates = prs.filter(
       (pr) =>
-        pr.head &&
-        typeof pr.head.ref === "string" &&
-        pr.head.ref.startsWith(headBranchPrefix),
+        pr.head && typeof pr.head.ref === "string" && pr.head.ref.startsWith(headBranchPrefix),
     );
     for (const pr of candidates) {
       const files = await gh(`/repos/${repo}/pulls/${pr.number}/files?per_page=100`);
       const hit = files.find(
         (f) =>
-          f.filename === filePath &&
-          typeof f.patch === "string" &&
-          f.patch.includes(canaryMarker),
+          f.filename === filePath && typeof f.patch === "string" && f.patch.includes(canaryMarker),
       );
       if (hit) {
         if (autoLabelTest) {
           try {
-            await addLabel({ repo, prNumber: pr.number, label: "automated-test" });
+            await addLabel({
+              repo,
+              prNumber: pr.number,
+              label: "automated-test",
+            });
           } catch (e) {
             console.warn(
               `[waitForCmsPullRequest] could not label PR #${pr.number} automated-test: ${e && e.message}`,
@@ -174,10 +176,11 @@ async function waitForMerge({
     }
     await sleep(pollMs);
   }
-  throw await augmentTimeoutError(
-    new Error(`Timed out waiting for PR #${prNumber} to merge.`),
-    { waitingFor: `PR #${prNumber} to merge`, kind: "merge", waitPrNumber: prNumber },
-  );
+  throw await augmentTimeoutError(new Error(`Timed out waiting for PR #${prNumber} to merge.`), {
+    waitingFor: `PR #${prNumber} to merge`,
+    kind: "merge",
+    waitPrNumber: prNumber,
+  });
 }
 
 async function waitForAutoMergeEnabled({
@@ -257,7 +260,6 @@ async function waitForWorkflowRun({
           // Newer run hopefully on the way. Record the ID so we don't
           // spin on the same cancelled run forever, then keep polling.
           cancelledSeen.add(lastSeen.id);
-          // eslint-disable-next-line no-console
           console.info(
             `[waitForWorkflowRun] ${workflow} run ${lastSeen.id} on ${branch || headSha} was cancelled — waiting for a newer run to land.`,
           );
@@ -300,7 +302,9 @@ async function fetchPublicUrl(url, { timeoutMs = 240_000, pollMs = 6_000, expect
         const body = await res.text();
         if (!expectContent || body.includes(expectContent)) return body;
       }
-    } catch (_) { /* network blip — keep polling */ }
+    } catch (_) {
+      /* network blip — keep polling */
+    }
     await sleep(pollMs);
   }
   throw await augmentTimeoutError(

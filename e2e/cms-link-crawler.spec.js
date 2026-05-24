@@ -100,9 +100,7 @@ async function openCollectionEditor(page, collection) {
   // Decap renders entry links as <a href="…#/collections/<name>/entries/<slug>">.
   // Wait briefly for any to appear; if none do, route into the New form
   // to still mount the editor surface.
-  const entryLink = page
-    .locator(`a[href*="#/collections/${collection}/entries/"]`)
-    .first();
+  const entryLink = page.locator(`a[href*="#/collections/${collection}/entries/"]`).first();
   const haveEntry = await entryLink
     .waitFor({ timeout: 15_000 })
     .then(() => true)
@@ -117,9 +115,7 @@ async function openCollectionEditor(page, collection) {
   // Wait until *some* form control mounts. Title is shared across
   // posts / projects / pages; tags has Name. Either way the labelled
   // input proves the editor is up before we harvest hrefs.
-  const editorMounted = page.locator(
-    'label, h3, h4, legend, input[type="text"], textarea',
-  );
+  const editorMounted = page.locator('label, h3, h4, legend, input[type="text"], textarea');
   await expect(editorMounted.first()).toBeVisible({ timeout: 60_000 });
 }
 
@@ -130,105 +126,96 @@ test.describe(
   // webkit-iphone16. See playwright.config.js.
   { tag: ["@admin-read"] },
   () => {
-  test.describe.configure({ timeout: 240_000 });
+    test.describe.configure({ timeout: 240_000 });
 
-  test.beforeEach(({ page }, testInfo) => {
-    test.skip(
-      TARGET === "prod",
-      "Crawler drives /admin/index-local.html (local_backend: true). prod has no local proxy, so login can't populate the sidebar.",
-    );
-    page.on("pageerror", (err) =>
-      console.log(`[pageerror] ${err.name}: ${err.message}`),
-    );
-  });
-
-  test("every <a href> in the admin returns 200/302/304 (HEAD)", async ({
-    page,
-  }) => {
-    // ── Login (local-backend skips OAuth) ─────────────────────────────
-    await page.goto(ADMIN_PATH);
-    const loginBtn = page.getByRole("button", { name: /login/i });
-    await expect(loginBtn).toBeVisible({ timeout: 60_000 });
-    await loginBtn.click();
-    await expect(page.getByRole("link", { name: /^posts$/i })).toBeVisible({
-      timeout: 30_000,
+    test.beforeEach(({ page }) => {
+      test.skip(
+        TARGET === "prod",
+        "Crawler drives /admin/index-local.html (local_backend: true). prod has no local proxy, so login can't populate the sidebar.",
+      );
+      page.on("pageerror", (err) => console.log(`[pageerror] ${err.name}: ${err.message}`));
     });
 
-    const adminOrigin = new URL(page.url()).origin;
-    const harvested = new Set();
+    test("every <a href> in the admin returns 200/302/304 (HEAD)", async ({ page }) => {
+      // ── Login (local-backend skips OAuth) ─────────────────────────────
+      await page.goto(ADMIN_PATH);
+      const loginBtn = page.getByRole("button", { name: /login/i });
+      await expect(loginBtn).toBeVisible({ timeout: 60_000 });
+      await loginBtn.click();
+      await expect(page.getByRole("link", { name: /^posts$/i })).toBeVisible({
+        timeout: 30_000,
+      });
 
-    // Harvest every <a href> reachable from the page right now. Called
-    // once per surface (collection list / entry editor) — the de-dup
-    // happens in the surrounding Set.
-    async function harvest() {
-      const hrefs = await page.$$eval("a[href]", (els) =>
-        els.map((a) => a.href),
-      );
-      for (const href of hrefs) harvested.add(href);
-    }
+      const adminOrigin = new URL(page.url()).origin;
+      const harvested = new Set();
 
-    // Walk every declared collection. The loop opens the list, harvests,
-    // opens the first entry (or the New form if the folder is empty),
-    // harvests again, and moves on.
-    for (const collection of COLLECTIONS) {
-      await page.goto(`${ADMIN_PATH}#/collections/${collection}`);
-      await expect(
-        page.getByRole("link", { name: new RegExp(`^${collection}$`, "i") }),
-      ).toBeVisible({ timeout: 30_000 });
-      await harvest();
-
-      await openCollectionEditor(page, collection);
-      await harvest();
-    }
-
-    // ── Filter to same-origin, non-SPA URLs and HEAD each one ─────────
-    const candidates = Array.from(harvested).filter(
-      (href) => !shouldSkip(href, adminOrigin),
-    );
-
-    // Belt-and-braces: the harvested set will almost always include at
-    // least one same-origin href (the floating Live Preview link points
-    // at /preview/). If the filter ever drops to zero, that's a signal
-    // the admin shell didn't render — fail loud rather than passing
-    // vacuously.
-    expect(
-      candidates.length,
-      "Expected at least one same-origin <a href> to crawl after walking every collection",
-    ).toBeGreaterThan(0);
-
-    const failures = [];
-    const knownBugHits = [];
-    for (const url of candidates) {
-      let status = "(no response)";
-      try {
-        const response = await page.request.fetch(url, {
-          method: "HEAD",
-          maxRedirects: 0,
-        });
-        status = response.status();
-        if (ACCEPTED_STATUSES.has(status)) continue;
-        if (isKnownBug(url)) {
-          knownBugHits.push(`${url} → ${status} (allowlisted; see KNOWN_BUGS)`);
-          continue;
-        }
-        failures.push(`${url} → ${status}`);
-      } catch (err) {
-        failures.push(`${url} → request error: ${err.message}`);
+      // Harvest every <a href> reachable from the page right now. Called
+      // once per surface (collection list / entry editor) — the de-dup
+      // happens in the surrounding Set.
+      async function harvest() {
+        const hrefs = await page.$$eval("a[href]", (els) => els.map((a) => a.href));
+        for (const href of hrefs) harvested.add(href);
       }
-    }
 
-    if (knownBugHits.length) {
-      console.log(
-        `[cms-link-crawler] known-bug allowlist hits (${knownBugHits.length}):\n  ` +
-          knownBugHits.join("\n  "),
-      );
-    }
+      // Walk every declared collection. The loop opens the list, harvests,
+      // opens the first entry (or the New form if the folder is empty),
+      // harvests again, and moves on.
+      for (const collection of COLLECTIONS) {
+        await page.goto(`${ADMIN_PATH}#/collections/${collection}`);
+        await expect(
+          page.getByRole("link", { name: new RegExp(`^${collection}$`, "i") }),
+        ).toBeVisible({ timeout: 30_000 });
+        await harvest();
 
-    expect(
-      failures,
-      `Admin links must respond 200/302/304 (HEAD). Failures:\n  ${failures.join(
-        "\n  ",
-      )}`,
-    ).toEqual([]);
-  });
-});
+        await openCollectionEditor(page, collection);
+        await harvest();
+      }
+
+      // ── Filter to same-origin, non-SPA URLs and HEAD each one ─────────
+      const candidates = Array.from(harvested).filter((href) => !shouldSkip(href, adminOrigin));
+
+      // Belt-and-braces: the harvested set will almost always include at
+      // least one same-origin href (the floating Live Preview link points
+      // at /preview/). If the filter ever drops to zero, that's a signal
+      // the admin shell didn't render — fail loud rather than passing
+      // vacuously.
+      expect(
+        candidates.length,
+        "Expected at least one same-origin <a href> to crawl after walking every collection",
+      ).toBeGreaterThan(0);
+
+      const failures = [];
+      const knownBugHits = [];
+      for (const url of candidates) {
+        let status;
+        try {
+          const response = await page.request.fetch(url, {
+            method: "HEAD",
+            maxRedirects: 0,
+          });
+          status = response.status();
+          if (ACCEPTED_STATUSES.has(status)) continue;
+          if (isKnownBug(url)) {
+            knownBugHits.push(`${url} → ${status} (allowlisted; see KNOWN_BUGS)`);
+            continue;
+          }
+          failures.push(`${url} → ${status}`);
+        } catch (err) {
+          failures.push(`${url} → request error: ${err.message}`);
+        }
+      }
+
+      if (knownBugHits.length) {
+        console.log(
+          `[cms-link-crawler] known-bug allowlist hits (${knownBugHits.length}):\n  ` +
+            knownBugHits.join("\n  "),
+        );
+      }
+
+      expect(
+        failures,
+        `Admin links must respond 200/302/304 (HEAD). Failures:\n  ${failures.join("\n  ")}`,
+      ).toEqual([]);
+    });
+  },
+);

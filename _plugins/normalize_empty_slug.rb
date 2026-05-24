@@ -1,4 +1,5 @@
 # frozen_string_literal: true
+
 #
 # Sveltia CMS saves `slug: ''` (empty string) to front matter when the
 # editor leaves the URL Slug field blank, rather than omitting the key.
@@ -20,13 +21,14 @@
 
 module Jekyll
   module NormalizeEmptySlug
-    DATE_PREFIX = /\A\d{4}-\d{2}-\d{2}-/.freeze
+    DATE_PREFIX = /\A\d{4}-\d{2}-\d{2}-/
 
     # `doc` is anything with `.data` (a Hash) and `.relative_path` (a String).
     # StaticFiles and other oddballs without `.data` are ignored.
     def self.apply(doc)
       return unless doc.respond_to?(:data) && doc.data.is_a?(Hash)
       return unless doc.data.key?('slug')
+
       slug = doc.data['slug']
       return unless slug.is_a?(String) && slug.strip.empty?
 
@@ -42,8 +44,10 @@ module Jekyll
 
     def self.derive_from_path(doc)
       return nil unless doc.respond_to?(:relative_path)
+
       path = doc.relative_path
       return nil unless path.is_a?(String) && !path.empty?
+
       basename = File.basename(path, File.extname(path))
       basename.sub(DATE_PREFIX, '')
     end

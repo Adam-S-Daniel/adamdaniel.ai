@@ -3,8 +3,7 @@ const { test } = require("@playwright/test");
 const fs = require("fs");
 const path = require("path");
 
-const changesPath =
-  process.env.PAGE_CHANGES_PATH || "/tmp/page-changes.json";
+const changesPath = process.env.PAGE_CHANGES_PATH || "/tmp/page-changes.json";
 
 let changes;
 try {
@@ -13,11 +12,7 @@ try {
   changes = { changed: [], new: [], unchanged: [] };
 }
 
-const allPages = [
-  ...(changes.changed || []),
-  ...(changes.new || []),
-  ...(changes.unchanged || []),
-];
+const allPages = [...(changes.changed || []), ...(changes.new || []), ...(changes.unchanged || [])];
 const PROD_BASE = "https://adamdaniel.ai";
 const OUTPUT_DIR = path.join(__dirname, "..", "screenshots", "regression");
 

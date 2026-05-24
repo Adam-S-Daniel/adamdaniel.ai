@@ -83,7 +83,9 @@ test.describe("publish-via-auto-merge.js — browser context", () => {
     expect(status).toEqual({ installed: true, kinds: ["merge"] });
   });
 
-  test("PUT /pulls/N/merge → 422 rule violation → cms/ready label POST → synthetic merged: true", async ({ page }) => {
+  test("PUT /pulls/N/merge → 422 rule violation → cms/ready label POST → synthetic merged: true", async ({
+    page,
+  }) => {
     let labelPostBody = null;
     let labelPostHeaders = null;
 
@@ -193,5 +195,4 @@ test.describe("publish-via-auto-merge.js — browser context", () => {
     expect(result.status).toBe(422);
     expect(result.body.message).toMatch(/rule violations/i);
   });
-
 });

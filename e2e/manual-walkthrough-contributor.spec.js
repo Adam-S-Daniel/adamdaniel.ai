@@ -96,8 +96,7 @@ const PROBES = [
         section: "Manual probe — login",
         step: `c1-${ctx.line}`,
         title: `Login button present (manual line ${ctx.line})`,
-        body:
-          "C1 runtime probe: confirms the login button affordance documented in the Logging in section of the contributor manual still exists at /admin/.",
+        body: "C1 runtime probe: confirms the login button affordance documented in the Logging in section of the contributor manual still exists at /admin/.",
       });
     },
   },
@@ -112,7 +111,9 @@ const PROBES = [
       await page.getByRole("button", { name: /login/i }).click();
       const expected = ["posts", "tags", "projects", "pages"];
       for (const name of expected) {
-        const link = page.getByRole("link", { name: new RegExp(`^${name}$`, "i") });
+        const link = page.getByRole("link", {
+          name: new RegExp(`^${name}$`, "i"),
+        });
         await expect(
           link,
           `Manual section §${ctx.section} (line ${ctx.line}) → Sidebar collection "${name}" missing. The manual lists Posts/Tags/Projects/Pages but the live admin sidebar doesn't render a link for "${name}".`,
@@ -122,8 +123,7 @@ const PROBES = [
         section: "Manual probe — collections",
         step: `c1-${ctx.line}`,
         title: `Sidebar collections present (manual line ${ctx.line})`,
-        body:
-          "C1 runtime probe: confirms every collection listed in the Browsing collections section of the manual (Posts, Tags, Projects, Pages) is still rendered in the live admin sidebar.",
+        body: "C1 runtime probe: confirms every collection listed in the Browsing collections section of the manual (Posts, Tags, Projects, Pages) is still rendered in the live admin sidebar.",
       });
     },
   },
@@ -139,13 +139,9 @@ const PROBES = [
       // `e2e/cms-smoke.spec.js`.
       await page.goto("/admin/index-local.html");
       await page.getByRole("button", { name: /login/i }).click();
-      await page
-        .getByRole("link", { name: /^posts$/i })
-        .waitFor({ timeout: 30_000 });
+      await page.getByRole("link", { name: /^posts$/i }).waitFor({ timeout: 30_000 });
       await page.getByRole("link", { name: /^posts$/i }).click();
-      const firstEntry = page
-        .locator('a[href*="#/collections/posts/entries/"]')
-        .first();
+      const firstEntry = page.locator('a[href*="#/collections/posts/entries/"]').first();
       await firstEntry.waitFor({ timeout: 30_000 });
       await firstEntry.click();
       await expect(page.getByLabel(/^Title$/)).toBeVisible({ timeout: 60_000 });
@@ -175,8 +171,7 @@ const PROBES = [
         section: "Manual probe — entry form",
         step: `c1-${ctx.line}`,
         title: `Posts edit form fields present (manual line ${ctx.line})`,
-        body:
-          "C1 runtime probe: confirms each of the 9 fields documented in the Editing a post section of the manual (Title, URL Slug, Date, Excerpt, Tags, Featured Image, Published, Publish Date, Body) is still rendered when opening a post.",
+        body: "C1 runtime probe: confirms each of the 9 fields documented in the Editing a post section of the manual (Title, URL Slug, Date, Excerpt, Tags, Featured Image, Published, Publish Date, Body) is still rendered when opening a post.",
       });
     },
   },
@@ -194,12 +189,8 @@ const PROBES = [
       await page.goto("/admin/index-local.html");
       await page.getByRole("button", { name: /login/i }).click();
       await page.getByRole("link", { name: /^tags$/i }).click();
-      const firstTag = page
-        .locator('a[href*="#/collections/tags/entries/"]')
-        .first();
-      const tagExists = await firstTag
-        .isVisible({ timeout: 10_000 })
-        .catch(() => false);
+      const firstTag = page.locator('a[href*="#/collections/tags/entries/"]').first();
+      const tagExists = await firstTag.isVisible({ timeout: 10_000 }).catch(() => false);
       // If no tag entries exist on disk, the manual's delete affordance
       // can't be probed — emit a soft note rather than failing on
       // empty-collection state.
@@ -222,8 +213,7 @@ const PROBES = [
         section: "Manual probe — delete",
         step: `c1-${ctx.line}`,
         title: `Delete toolbar button present (manual line ${ctx.line})`,
-        body:
-          "C1 runtime probe: confirms the Delete entry / Delete published entry toolbar affordance documented in the Deleting an entry section of the manual still renders.",
+        body: "C1 runtime probe: confirms the Delete entry / Delete published entry toolbar affordance documented in the Deleting an entry section of the manual still renders.",
       });
     },
   },
@@ -257,8 +247,7 @@ const PROBES = [
         section: "Manual probe — reviews dashboard",
         step: `c1-${ctx.line}`,
         title: `Reviews dashboard reachable (manual line ${ctx.line})`,
-        body:
-          "C1 runtime probe: confirms /admin/reviews/ still loads and renders a Reviews/Visual heading, matching the Reviewing visual regressions section of the manual.",
+        body: "C1 runtime probe: confirms /admin/reviews/ still loads and renders a Reviews/Visual heading, matching the Reviewing visual regressions section of the manual.",
       });
     },
   },
@@ -273,90 +262,91 @@ test.describe(
   // race + last-write-wins). See playwright.config.js.
   { tag: ["@admin-screenshots"] },
   () => {
-  test.describe.configure({ mode: "serial", timeout: 300_000 });
+    test.describe.configure({ mode: "serial", timeout: 300_000 });
 
-  test.beforeEach(({ page }, info) => {
-    test.skip(
-      info.project.name !== "chromium-desktop-3k",
-      "Heavy CMS setup — one project is enough for the manual probe.",
-    );
-    test.skip(
-      TARGET === "prod",
-      "Probes drive /admin/index-local.html (local_backend: true). prod has no local proxy, so login can't populate the sidebar.",
-    );
-    page.on("pageerror", (err) =>
-      console.log(`[pageerror] ${err.name}: ${err.message}`),
-    );
-    // Decap CMS uses native window.confirm() for delete and unpublish
-    // confirmations; the contributor probe asserts the Delete button is
-    // reachable and may evolve to actually click it (see manual section
-    // §"deleting an entry"). Without a persistent listener, Playwright
-    // auto-dismisses the dialog and Decap reads it as "user cancelled."
-    // See AGENTS.md "Test-Driven Design" section.
-    page.on("dialog", (d) => d.accept());
-    page.on("console", (msg) => {
-      if (msg.type() === "error") console.log(`[console.error] ${msg.text()}`);
+    test.beforeEach(({ page }, info) => {
+      test.skip(
+        info.project.name !== "chromium-desktop-3k",
+        "Heavy CMS setup — one project is enough for the manual probe.",
+      );
+      test.skip(
+        TARGET === "prod",
+        "Probes drive /admin/index-local.html (local_backend: true). prod has no local proxy, so login can't populate the sidebar.",
+      );
+      page.on("pageerror", (err) => console.log(`[pageerror] ${err.name}: ${err.message}`));
+      // Decap CMS uses native window.confirm() for delete and unpublish
+      // confirmations; the contributor probe asserts the Delete button is
+      // reachable and may evolve to actually click it (see manual section
+      // §"deleting an entry"). Without a persistent listener, Playwright
+      // auto-dismisses the dialog and Decap reads it as "user cancelled."
+      // See AGENTS.md "Test-Driven Design" section.
+      page.on("dialog", (d) => d.accept());
+      page.on("console", (msg) => {
+        if (msg.type() === "error") console.log(`[console.error] ${msg.text()}`);
+      });
     });
-  });
 
-  // Read the manual once at module load so a missing-file failure is
-  // visible at planning time rather than buried inside a probe.
-  let manualMarkdown = null;
-  let sections = [];
-  let manualMissing = false;
-  let manualSparse = false;
-  try {
-    manualMarkdown = fs.readFileSync(MANUAL_PATH, "utf8");
-    sections = parseManualSections(manualMarkdown);
-    manualSparse = isManualSparse(sections);
-  } catch (err) {
-    manualMissing = true;
-  }
-
-  test("@parity manual exists and is non-sparse (or fixme with regen pointer)", async () => {
-    if (manualMissing) {
-      test.fixme(
-        true,
-        `${MANUAL_PATH} not found. The manual is auto-generated by MANUAL_CAPTURE=1 runs (see ${REGEN_WORKFLOW}). Regenerate then re-run this spec.`,
-      );
-      return;
+    // Read the manual once at module load so a missing-file failure is
+    // visible at planning time rather than buried inside a probe.
+    let manualMarkdown;
+    let sections = [];
+    let manualMissing = false;
+    let manualSparse = false;
+    try {
+      manualMarkdown = fs.readFileSync(MANUAL_PATH, "utf8");
+      sections = parseManualSections(manualMarkdown);
+      manualSparse = isManualSparse(sections);
+    } catch {
+      manualMissing = true;
     }
-    if (manualSparse) {
-      test.fixme(
-        true,
-        `${MANUAL_PATH} has only ${sections.length} section(s). The manual is auto-generated by MANUAL_CAPTURE=1 runs (see ${REGEN_WORKFLOW}); a sparse manual means the regen workflow hasn't run since the last reset. Trigger ${REGEN_WORKFLOW} (or run MANUAL_CAPTURE=1 npx playwright test --project=chromium-desktop-3k locally) and re-run this spec.`,
-      );
-      return;
-    }
-    expect(sections.length, "manual should declare at least 3 sections").toBeGreaterThanOrEqual(3);
-  });
 
-  // Build one test per parsed section. Sections without a matching
-  // probe still land as a passing test that emits a `TODO: add probe`
-  // annotation — the scaffolding nudge the plan asks for. That keeps
-  // the per-section coverage report honest as the manual grows.
-  for (const sec of sections) {
-    const probe = findProbe(sec.title);
-    const titleLabel = probe
-      ? `${probe.name} — §${sec.title} (line ${sec.line})`
-      : `TODO: add probe for §${sec.title} (line ${sec.line})`;
-
-    test(`@parity ${titleLabel}`, async ({ page }) => {
-      if (manualMissing || manualSparse) {
-        test.fixme(true, "Manual is missing or sparse — see the gating test above.");
+    test("@parity manual exists and is non-sparse (or fixme with regen pointer)", async () => {
+      if (manualMissing) {
+        test.fixme(
+          true,
+          `${MANUAL_PATH} not found. The manual is auto-generated by MANUAL_CAPTURE=1 runs (see ${REGEN_WORKFLOW}). Regenerate then re-run this spec.`,
+        );
         return;
       }
-      if (!probe) {
-        // No probe wired up yet for this section. Emit an annotation so
-        // the per-test report carries a stable "this section needs a
-        // probe" marker rather than silently passing.
-        test.info().annotations.push({
-          type: "manual-walkthrough",
-          description: `TODO: add probe for §${sec.title} (line ${sec.line} of ${path.relative(REPO_ROOT, MANUAL_PATH)}). Wire one into PROBES in e2e/manual-walkthrough-contributor.spec.js.`,
-        });
+      if (manualSparse) {
+        test.fixme(
+          true,
+          `${MANUAL_PATH} has only ${sections.length} section(s). The manual is auto-generated by MANUAL_CAPTURE=1 runs (see ${REGEN_WORKFLOW}); a sparse manual means the regen workflow hasn't run since the last reset. Trigger ${REGEN_WORKFLOW} (or run MANUAL_CAPTURE=1 npx playwright test --project=chromium-desktop-3k locally) and re-run this spec.`,
+        );
         return;
       }
-      await probe.run(page, { section: sec.title, line: sec.line });
+      expect(sections.length, "manual should declare at least 3 sections").toBeGreaterThanOrEqual(
+        3,
+      );
     });
-  }
-});
+
+    // Build one test per parsed section. Sections without a matching
+    // probe still land as a passing test that emits a `TODO: add probe`
+    // annotation — the scaffolding nudge the plan asks for. That keeps
+    // the per-section coverage report honest as the manual grows.
+    for (const sec of sections) {
+      const probe = findProbe(sec.title);
+      const titleLabel = probe
+        ? `${probe.name} — §${sec.title} (line ${sec.line})`
+        : `TODO: add probe for §${sec.title} (line ${sec.line})`;
+
+      test(`@parity ${titleLabel}`, async ({ page }) => {
+        if (manualMissing || manualSparse) {
+          test.fixme(true, "Manual is missing or sparse — see the gating test above.");
+          return;
+        }
+        if (!probe) {
+          // No probe wired up yet for this section. Emit an annotation so
+          // the per-test report carries a stable "this section needs a
+          // probe" marker rather than silently passing.
+          test.info().annotations.push({
+            type: "manual-walkthrough",
+            description: `TODO: add probe for §${sec.title} (line ${sec.line} of ${path.relative(REPO_ROOT, MANUAL_PATH)}). Wire one into PROBES in e2e/manual-walkthrough-contributor.spec.js.`,
+          });
+          return;
+        }
+        await probe.run(page, { section: sec.title, line: sec.line });
+      });
+    }
+  },
+);

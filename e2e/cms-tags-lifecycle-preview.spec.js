@@ -59,11 +59,7 @@
 const { test, expect } = require("./base");
 const { seedDecapAuth, getPat, HOST_REPO } = require("./decap-pat");
 const { closeStaleDecapPrOnBranch } = require("./cms-fixture-pr");
-const {
-  addLabel,
-  gh,
-  waitForCmsPullRequest,
-} = require("./github-actions-poll");
+const { addLabel, gh, waitForCmsPullRequest } = require("./github-actions-poll");
 const { waitForChangeReflected } = require("./deploy-pill");
 const { previewTarget } = require("./cms-host");
 
@@ -107,9 +103,7 @@ test.describe.configure({
 // reads it as "user cancelled".
 test.beforeEach(({ page }) => {
   page.on("dialog", (d) => d.accept());
-  page.on("pageerror", (err) =>
-    console.log(`[pageerror] ${err.name}: ${err.message}`),
-  );
+  page.on("pageerror", (err) => console.log(`[pageerror] ${err.name}: ${err.message}`));
 });
 
 // Fire-and-forget safety-net cleanup. If the UI-driven delete fails
@@ -163,11 +157,8 @@ test.afterAll(async () => {
 test(
   "CMS — tags lifecycle, preview env (target PR head branch)",
   { tag: ["@admin-write"] },
-  async ({ page }, testInfo) => {
-    test.skip(
-      !getPat(),
-      "CMS_E2E_PAT not set — preview tags-lifecycle disabled.",
-    );
+  async ({ page }) => {
+    test.skip(!getPat(), "CMS_E2E_PAT not set — preview tags-lifecycle disabled.");
     test.skip(
       !PR_NUMBER || !PR_HEAD_REF,
       "PR_NUMBER / PR_HEAD_REF not set — this spec only runs in the cms-preview-loops workflow.",
@@ -184,9 +175,9 @@ test(
     await seedDecapAuth(page);
     await test.step("Load preview admin", async () => {
       await page.goto(PREVIEW_ADMIN, { waitUntil: "domcontentloaded" });
-      await expect(
-        page.getByRole("link", { name: /^Posts$/i }),
-      ).toBeVisible({ timeout: 60_000 });
+      await expect(page.getByRole("link", { name: /^Posts$/i })).toBeVisible({
+        timeout: 60_000,
+      });
     });
 
     // ── 2. CYCLE 1: create the Tags entry via Decap UI ──────────────
@@ -194,9 +185,9 @@ test(
       await page.goto(`${PREVIEW_ADMIN}#/collections/tags/new`, {
         waitUntil: "domcontentloaded",
       });
-      await expect(
-        page.getByRole("textbox", { name: /^Name$/i }),
-      ).toBeVisible({ timeout: 30_000 });
+      await expect(page.getByRole("textbox", { name: /^Name$/i })).toBeVisible({
+        timeout: 30_000,
+      });
     });
 
     await test.step("Fill Name and Save", async () => {
@@ -211,9 +202,9 @@ test(
       // `_plugins_test/auto_tag_pages_test.rb` + `tags.spec.js`.
 
       await page.getByRole("button", { name: /^Save$/i }).click();
-      await expect(
-        page.getByText(/Changes saved/i).first(),
-      ).toBeVisible({ timeout: 60_000 });
+      await expect(page.getByText(/Changes saved/i).first()).toBeVisible({
+        timeout: 60_000,
+      });
     });
 
     await test.step("Wait for the cms/tags/<slug> PR → label cms/ready", async () => {
@@ -261,14 +252,13 @@ test(
     // (now-published) editorial status from GitHub before the delete.
     await test.step("Reset Decap editorial state, then re-open the Tags entry", async () => {
       await closeStaleDecapPrOnBranch({ branch: `cms/tags/${TAG_SLUG}` });
-      await page.goto(
-        `${PREVIEW_ADMIN}#/collections/tags/entries/${TAG_SLUG}`,
-        { waitUntil: "domcontentloaded" },
-      );
+      await page.goto(`${PREVIEW_ADMIN}#/collections/tags/entries/${TAG_SLUG}`, {
+        waitUntil: "domcontentloaded",
+      });
       await page.reload({ waitUntil: "domcontentloaded" });
-      await expect(
-        page.getByRole("textbox", { name: /^Name$/i }),
-      ).toBeVisible({ timeout: 60_000 });
+      await expect(page.getByRole("textbox", { name: /^Name$/i })).toBeVisible({
+        timeout: 60_000,
+      });
     });
 
     await test.step("Click Delete published entry — confirms via dialog handler", async () => {

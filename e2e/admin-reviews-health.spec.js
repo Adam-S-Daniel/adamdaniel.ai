@@ -50,7 +50,10 @@ function makeRun(opts = {}) {
 
 // Default mock: every workflow returns one successful run. Tests can
 // override per-workflow by passing an `overrides` map keyed by filename.
-async function installMocks(page, { overrides = {}, requestLog = null, userLogin = "health-spec-user" } = {}) {
+async function installMocks(
+  page,
+  { overrides = {}, requestLog = null, userLogin = "health-spec-user" } = {},
+) {
   await page.route("https://api.github.com/**", async (route) => {
     const url = route.request().url();
     const path = new URL(url).pathname;
@@ -66,9 +69,7 @@ async function installMocks(page, { overrides = {}, requestLog = null, userLogin
     }
 
     // /repos/<owner>/<repo>/actions/workflows/<file>/runs
-    const m = path.match(
-      new RegExp(`^/repos/${REPO}/actions/workflows/([^/]+)/runs$`),
-    );
+    const m = path.match(new RegExp(`^/repos/${REPO}/actions/workflows/([^/]+)/runs$`));
     if (m) {
       const file = m[1];
       const override = overrides[file];
@@ -83,9 +84,7 @@ async function installMocks(page, { overrides = {}, requestLog = null, userLogin
           status: 200,
           contentType: "application/json",
           body: JSON.stringify({
-            workflow_runs: [
-              makeRun({ status: "in_progress", conclusion: null }),
-            ],
+            workflow_runs: [makeRun({ status: "in_progress", conclusion: null })],
           }),
         });
       }
@@ -131,178 +130,152 @@ test.describe(
   // webkit-iphone16. See playwright.config.js.
   { tag: ["@admin-read"] },
   () => {
-  test("renders one widget per known workflow with success indicator", async ({
-    page,
-  }, testInfo) => {
+    test("renders one widget per known workflow with success indicator", async ({ page }) => {
+      await setupHealthPage(page);
+      await installMocks(page);
 
-    await setupHealthPage(page);
-    await installMocks(page);
+      await page.goto("/admin/reviews/health.html");
+      await expect(page.locator("#dashboard")).toBeVisible();
 
-    await page.goto("/admin/reviews/health.html");
-    await expect(page.locator("#dashboard")).toBeVisible();
+      // Five workflow tiles, one per entry in the WORKFLOWS list.
+      const cards = page.locator(".health-card");
+      await expect(cards).toHaveCount(WORKFLOW_FILES.length);
 
-    // Five workflow tiles, one per entry in the WORKFLOWS list.
-    const cards = page.locator(".health-card");
-    await expect(cards).toHaveCount(WORKFLOW_FILES.length);
-
-    // Each tile's title + indicator must be present.
-    for (const file of WORKFLOW_FILES) {
-      const card = page.locator(`.health-card[data-workflow="${file}"]`);
-      await expect(card).toBeVisible();
-      await expect(card.locator(".health-indicator")).toBeVisible();
-      await expect(card.locator(".health-card-title")).not.toBeEmpty();
-    }
-
-    // Default mock returns successful runs for every workflow.
-    await expect(
-      page.locator(".health-card .health-indicator.health-success"),
-    ).toHaveCount(WORKFLOW_FILES.length);
-
-    await captureStep(page, {
-      section: "QA health dashboard",
-      step: "12.1",
-      title: "QA health overview",
-      body:
-        "The `/admin/reviews/health.html` dashboard renders one tile per critical workflow. Green indicators mean the most recent run succeeded; red means failure; yellow means a run is currently in progress. Click `View on GitHub` on any tile to jump to the run.",
-    });
-  });
-
-  test("failure response renders red error indicator", async ({
-    page,
-  }, testInfo) => {
-
-    await setupHealthPage(page);
-    await installMocks(page, {
-      overrides: { "deploy-production.yml": "failure" },
-    });
-
-    await page.goto("/admin/reviews/health.html");
-    await expect(page.locator("#dashboard")).toBeVisible();
-
-    const failedCard = page.locator(
-      '.health-card[data-workflow="deploy-production.yml"]',
-    );
-    await expect(failedCard).toBeVisible();
-    await expect(
-      failedCard.locator(".health-indicator.health-failure"),
-    ).toBeVisible();
-
-    // Other tiles still render successfully — one tile's failure must
-    // not poison the rest of the dashboard.
-    const others = WORKFLOW_FILES.filter((f) => f !== "deploy-production.yml");
-    for (const file of others) {
-      await expect(
-        page.locator(`.health-card[data-workflow="${file}"] .health-indicator.health-success`),
-      ).toBeVisible();
-    }
-  });
-
-  test("404 response renders graceful 'not deployed' fallback", async ({
-    page,
-  }, testInfo) => {
-
-    await setupHealthPage(page);
-    await installMocks(page, {
-      overrides: { "cms-publish-loop-prod.yml": "404" },
-    });
-
-    await page.goto("/admin/reviews/health.html");
-    await expect(page.locator("#dashboard")).toBeVisible();
-
-    const missingCard = page.locator(
-      '.health-card[data-workflow="cms-publish-loop-prod.yml"]',
-    );
-    await expect(missingCard).toBeVisible();
-    await expect(missingCard).toHaveAttribute("data-state", "missing");
-    await expect(missingCard.locator(".health-card-message")).toContainText(
-      /not yet deployed/i,
-    );
-
-    // 500 from a different workflow surfaces the generic API-error tile.
-    await page.unroute("https://api.github.com/**");
-    await installMocks(page, {
-      overrides: {
-        "cms-publish-loop-prod.yml": "404",
-        "canary-prod.yml": "500",
-      },
-    });
-    // Manually bust the in-memory cache so the second goto re-fetches.
-    await page.evaluate(() => {
-      const toDrop = [];
-      for (let i = 0; i < localStorage.length; i++) {
-        const k = localStorage.key(i);
-        if (k && k.startsWith("gh_health_cache:")) toDrop.push(k);
+      // Each tile's title + indicator must be present.
+      for (const file of WORKFLOW_FILES) {
+        const card = page.locator(`.health-card[data-workflow="${file}"]`);
+        await expect(card).toBeVisible();
+        await expect(card.locator(".health-indicator")).toBeVisible();
+        await expect(card.locator(".health-card-title")).not.toBeEmpty();
       }
-      toDrop.forEach((k) => localStorage.removeItem(k));
+
+      // Default mock returns successful runs for every workflow.
+      await expect(page.locator(".health-card .health-indicator.health-success")).toHaveCount(
+        WORKFLOW_FILES.length,
+      );
+
+      await captureStep(page, {
+        section: "QA health dashboard",
+        step: "12.1",
+        title: "QA health overview",
+        body: "The `/admin/reviews/health.html` dashboard renders one tile per critical workflow. Green indicators mean the most recent run succeeded; red means failure; yellow means a run is currently in progress. Click `View on GitHub` on any tile to jump to the run.",
+      });
     });
-    await page.reload();
-    await expect(page.locator("#dashboard")).toBeVisible();
 
-    const errorCard = page.locator('.health-card[data-workflow="canary-prod.yml"]');
-    await expect(errorCard).toHaveAttribute("data-state", "error");
-    await expect(errorCard.locator(".health-indicator.health-failure")).toBeVisible();
-  });
+    test("failure response renders red error indicator", async ({ page }) => {
+      await setupHealthPage(page);
+      await installMocks(page, {
+        overrides: { "deploy-production.yml": "failure" },
+      });
 
-  test("localStorage cache prevents re-fetch within 60s", async ({
-    page,
-  }, testInfo) => {
+      await page.goto("/admin/reviews/health.html");
+      await expect(page.locator("#dashboard")).toBeVisible();
 
-    await setupHealthPage(page);
+      const failedCard = page.locator('.health-card[data-workflow="deploy-production.yml"]');
+      await expect(failedCard).toBeVisible();
+      await expect(failedCard.locator(".health-indicator.health-failure")).toBeVisible();
 
-    const requestLog = [];
-    await installMocks(page, { requestLog });
+      // Other tiles still render successfully — one tile's failure must
+      // not poison the rest of the dashboard.
+      const others = WORKFLOW_FILES.filter((f) => f !== "deploy-production.yml");
+      for (const file of others) {
+        await expect(
+          page.locator(`.health-card[data-workflow="${file}"] .health-indicator.health-success`),
+        ).toBeVisible();
+      }
+    });
 
-    await page.goto("/admin/reviews/health.html");
-    await expect(page.locator("#dashboard")).toBeVisible();
-    // Wait for all five tiles to land.
-    await expect(page.locator(".health-card")).toHaveCount(WORKFLOW_FILES.length);
+    test("404 response renders graceful 'not deployed' fallback", async ({ page }) => {
+      await setupHealthPage(page);
+      await installMocks(page, {
+        overrides: { "cms-publish-loop-prod.yml": "404" },
+      });
 
-    // First load: one /runs request per workflow (plus /user).
-    const firstWorkflowHits = requestLog.filter((p) => p.includes("/actions/workflows/")).length;
-    expect(firstWorkflowHits).toBe(WORKFLOW_FILES.length);
+      await page.goto("/admin/reviews/health.html");
+      await expect(page.locator("#dashboard")).toBeVisible();
 
-    // Reload — the cache is fresh, so we should see ZERO additional
-    // /actions/workflows requests. /user gets re-validated, that's fine.
-    requestLog.length = 0;
-    await page.reload();
-    await expect(page.locator("#dashboard")).toBeVisible();
-    await expect(page.locator(".health-card")).toHaveCount(WORKFLOW_FILES.length);
+      const missingCard = page.locator('.health-card[data-workflow="cms-publish-loop-prod.yml"]');
+      await expect(missingCard).toBeVisible();
+      await expect(missingCard).toHaveAttribute("data-state", "missing");
+      await expect(missingCard.locator(".health-card-message")).toContainText(/not yet deployed/i);
 
-    const secondWorkflowHits = requestLog.filter((p) => p.includes("/actions/workflows/")).length;
-    expect(
-      secondWorkflowHits,
-      "second navigation within 60s should be served from localStorage cache",
-    ).toBe(0);
-  });
+      // 500 from a different workflow surfaces the generic API-error tile.
+      await page.unroute("https://api.github.com/**");
+      await installMocks(page, {
+        overrides: {
+          "cms-publish-loop-prod.yml": "404",
+          "canary-prod.yml": "500",
+        },
+      });
+      // Manually bust the in-memory cache so the second goto re-fetches.
+      await page.evaluate(() => {
+        const toDrop = [];
+        for (let i = 0; i < localStorage.length; i++) {
+          const k = localStorage.key(i);
+          if (k && k.startsWith("gh_health_cache:")) toDrop.push(k);
+        }
+        toDrop.forEach((k) => localStorage.removeItem(k));
+      });
+      await page.reload();
+      await expect(page.locator("#dashboard")).toBeVisible();
 
-  test("Refresh button busts cache and re-fetches", async ({
-    page,
-  }, testInfo) => {
+      const errorCard = page.locator('.health-card[data-workflow="canary-prod.yml"]');
+      await expect(errorCard).toHaveAttribute("data-state", "error");
+      await expect(errorCard.locator(".health-indicator.health-failure")).toBeVisible();
+    });
 
-    await setupHealthPage(page);
+    test("localStorage cache prevents re-fetch within 60s", async ({ page }) => {
+      await setupHealthPage(page);
 
-    const requestLog = [];
-    await installMocks(page, { requestLog });
+      const requestLog = [];
+      await installMocks(page, { requestLog });
 
-    await page.goto("/admin/reviews/health.html");
-    await expect(page.locator("#dashboard")).toBeVisible();
-    await expect(page.locator(".health-card")).toHaveCount(WORKFLOW_FILES.length);
+      await page.goto("/admin/reviews/health.html");
+      await expect(page.locator("#dashboard")).toBeVisible();
+      // Wait for all five tiles to land.
+      await expect(page.locator(".health-card")).toHaveCount(WORKFLOW_FILES.length);
 
-    const initialWorkflowHits = requestLog.filter((p) =>
-      p.includes("/actions/workflows/"),
-    ).length;
-    expect(initialWorkflowHits).toBe(WORKFLOW_FILES.length);
+      // First load: one /runs request per workflow (plus /user).
+      const firstWorkflowHits = requestLog.filter((p) => p.includes("/actions/workflows/")).length;
+      expect(firstWorkflowHits).toBe(WORKFLOW_FILES.length);
 
-    requestLog.length = 0;
-    await page.locator("#refresh-btn").click();
+      // Reload — the cache is fresh, so we should see ZERO additional
+      // /actions/workflows requests. /user gets re-validated, that's fine.
+      requestLog.length = 0;
+      await page.reload();
+      await expect(page.locator("#dashboard")).toBeVisible();
+      await expect(page.locator(".health-card")).toHaveCount(WORKFLOW_FILES.length);
 
-    // Wait for at least one new workflow fetch to land. The button
-    // should bust every cache key and re-issue all five requests.
-    await expect
-      .poll(
-        () =>
-          requestLog.filter((p) => p.includes("/actions/workflows/")).length,
-      )
-      .toBe(WORKFLOW_FILES.length);
-  });
-});
+      const secondWorkflowHits = requestLog.filter((p) => p.includes("/actions/workflows/")).length;
+      expect(
+        secondWorkflowHits,
+        "second navigation within 60s should be served from localStorage cache",
+      ).toBe(0);
+    });
+
+    test("Refresh button busts cache and re-fetches", async ({ page }) => {
+      await setupHealthPage(page);
+
+      const requestLog = [];
+      await installMocks(page, { requestLog });
+
+      await page.goto("/admin/reviews/health.html");
+      await expect(page.locator("#dashboard")).toBeVisible();
+      await expect(page.locator(".health-card")).toHaveCount(WORKFLOW_FILES.length);
+
+      const initialWorkflowHits = requestLog.filter((p) =>
+        p.includes("/actions/workflows/"),
+      ).length;
+      expect(initialWorkflowHits).toBe(WORKFLOW_FILES.length);
+
+      requestLog.length = 0;
+      await page.locator("#refresh-btn").click();
+
+      // Wait for at least one new workflow fetch to land. The button
+      // should bust every cache key and re-issue all five requests.
+      await expect
+        .poll(() => requestLog.filter((p) => p.includes("/actions/workflows/")).length)
+        .toBe(WORKFLOW_FILES.length);
+    });
+  },
+);

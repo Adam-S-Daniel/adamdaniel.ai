@@ -177,6 +177,10 @@ jobs:
           shopt -s nullglob
           for f in _posts/*.md; do
             slug=$(basename "$f" .md)
+            # `cat "$f" |` keeps the front-matter-stripping pipeline reading
+            # left-to-right; the extra process is negligible at build time.
+            # (SC2002 useless-cat suggestion.)
+            # shellcheck disable=SC2002
             words=$(cat "$f" | sed '/^---/,/^---/d' | wc -w)
             mins=$(( (words / 200) + 1 ))
             echo "${slug}: ${mins}" >> _data/reading_times.yml
@@ -205,7 +209,7 @@ jobs:
         uses: aws-actions/configure-aws-credentials@d979d5b3a71173a29b74b5b88418bfda9437d885  # v6.1.1 (2026-05-05)
         with:
           role-to-assume: ${{ secrets.AWS_ROLE_ARN }}
-          aws-region:     ${{ env.AWS_REGION }}
+          aws-region: ${{ env.AWS_REGION }}
 
       - name: Sync to S3
         # `--exclude` keeps the local-dev / e2e-test admin variants out

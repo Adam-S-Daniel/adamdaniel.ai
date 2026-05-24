@@ -46,8 +46,7 @@ function prodTarget() {
 // GITHUB_PR_NUMBER. `host` is "" when no number is available so the
 // caller self-skips, preserving the old hand-rolled guard's behaviour.
 function previewTarget(prNumber, env = process.env) {
-  const n =
-    prNumber || env.PR_NUMBER || env.GITHUB_PR_NUMBER || "";
+  const n = prNumber || env.PR_NUMBER || env.GITHUB_PR_NUMBER || "";
   const host = n ? previewHostFor(n) : "";
   return {
     host,

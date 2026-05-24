@@ -10,7 +10,7 @@ Personal website and blog for Adam Daniel (Freelance AI Engineer). Jekyll static
 
 ## Architecture
 
-```
+```text
 Production:   adamdaniel.ai                     → CloudFront → S3
 Preview:      preview-pr${N}.adamdaniel.ai      → CloudFront → S3 (/pr-${N}/)
 CMS:          adamdaniel.ai/admin/              → Decap CMS → GitHub OAuth → Lambda
@@ -46,7 +46,7 @@ npx playwright test e2e/glow-banding.spec.js       # single test file
 ## GitHub Actions secrets
 
 | Secret | Source | Used by |
-|---|---|---|
+| --- | --- | --- |
 | `AWS_ROLE_ARN` | bootstrap stack output | deploy-production.yml, deploy-preview.yml |
 | `PRODUCTION_CLOUDFRONT_ID` | bootstrap stack output | deploy-production.yml |
 | `PREVIEW_CLOUDFRONT_ID` | bootstrap stack output | deploy-preview.yml |
@@ -55,7 +55,7 @@ npx playwright test e2e/glow-banding.spec.js       # single test file
 ## AWS resources (us-east-1)
 
 | Resource | Name / ID |
-|---|---|
+| --- | --- |
 | CloudFormation stack | `adamdaniel-ai-bootstrap` |
 | S3 artifacts bucket | `adamdaniel-ai-cfn-artifacts` |
 | S3 production bucket | `adamdaniel-ai-production` (external, not CFN-managed) |
@@ -70,7 +70,7 @@ npx playwright test e2e/glow-banding.spec.js       # single test file
 ## Content model
 
 | Collection | Folder | Type | Key fields |
-|---|---|---|---|
+| --- | --- | --- | --- |
 | Posts | `_posts/` | folder | title, date, tags, excerpt, featured_image, published, publish_date, test_fixture (hidden) |
 | Tags | `_tags/` | folder | name, description |
 | Projects | `_projects/` | folder | title, technology, url_link, featured, images (gallery) |
@@ -132,7 +132,7 @@ Authors can drop a block of raw HTML / JS / CSS into any markdown body — usefu
 
 **Toolbar (preferred).** The Decap markdown toolbar exposes an "HTML Embed" button on every body field (registered globally via `admin/editor-component-html-embed.js`, which calls `CMS.registerEditorComponent`). Clicking it opens a code field for HTML; saving stores the block on disk wrapped in sentinel comments:
 
-```
+```text
 <!-- html-embed:start -->
 <div class="post-embed">
 …author HTML / JS / CSS…
@@ -171,6 +171,39 @@ End-to-end coverage lives in `e2e/cms-html-embed.spec.js`.
 
 Real-user monitoring is via Amazon CloudWatch RUM, deployed as a sibling CloudFormation stack `adamdaniel-ai-rum` (see `infrastructure/rum/`). The Jekyll snippet in `_includes/analytics/cloudwatch-rum.html` is a no-op unless **both** `JEKYLL_ENV=production` AND `site.analytics.cloudwatch_rum.app_monitor_id` are set, so local `jekyll serve` and PR previews stay silent. Identity-pool / app-monitor IDs are non-sensitive (visible in the rendered page source) so they live in `_config.yml`, not GitHub secrets. End-to-end test: `e2e/analytics-cloudwatch-rum.test.js`. Full deploy + tuning notes: [`ANALYTICS_SETUP.md`](ANALYTICS_SETUP.md).
 
+## Code quality
+
+Every language in the repo has a best-in-class linter + static-analyzer + style tool, configured to pass at a strong-but-pragmatic strength. The checks run in three places: locally on demand (`npm run lint`, or each tool directly), as a staged-file pre-commit guard, and in CI (`code-quality.yml`).
+
+| Language | Lint / style | Security / types | Config | CI command |
+| --- | --- | --- | --- | --- |
+| JavaScript | ESLint 10 (flat) + Prettier | `eslint-plugin-security`, `eslint-plugin-no-unsanitized` | `eslint.config.js`, `.prettierrc.json` | `eslint "e2e/**/*.js" "admin/**/*.js" "scripts/*.js" "*.config.js"` + `prettier --check` |
+| Python | Ruff (lint + format) | Bandit, mypy | `pyproject.toml` (`[tool.ruff]`/`[tool.bandit]`/`[tool.mypy]`) | `ruff check` · `ruff format --check` · `mypy` · `bandit -r oauth-proxy scripts tests -c pyproject.toml` |
+| Ruby | RuboCop (+performance) | — | `.rubocop.yml` | `rubocop` (standalone, Ruby ≥ 3.3 — see below) |
+| Shell | shfmt | ShellCheck | inline directives | `shellcheck $(git ls-files '*.sh') .githooks/pre-commit` · `shfmt -i 2 -ci -bn -d ...` |
+| YAML / Actions | yamllint | actionlint (+shellcheck on `run:`) | `.yamllint.yml` | `yamllint -c .yamllint.yml .github/` · `actionlint -ignore '...head_ref... is potentially untrusted'` |
+| CSS | Stylelint (standard) | — | `.stylelintrc.json` | `stylelint "assets/css/*.css" "admin/*.css"` |
+| Markdown | markdownlint-cli2 | — | `.markdownlint.jsonc` + `.markdownlint-cli2.jsonc` | `markdownlint-cli2` |
+
+**Line width — 100 columns, house-wide.** The formatters that reflow code all target 100: Prettier (`printWidth: 100`, on top of the otherwise-standard config), Ruff (`line-length = 100`), and RuboCop (`Layout/LineLength: Max: 100`). `.editorconfig` carries `max_line_length = 100` as the editor hint. The 80-column default wrapped Playwright method chains onto 3-4 lines each and inflated the JS line count far past what the dedup pass removed; 100 keeps statements on one line without sprawling. **Markdown and YAML opt out** (`max_line_length = off`; yamllint `line-length: disable`; markdownlint `MD013: false`) — prose, long URLs/tables, and workflow `${{ }}` expressions / SHA-pin comments run longer by nature, and rewrapping them is pure churn. CSS has no line-length rule. When adding a new code language, set its formatter's width to 100 too.
+
+**RuboCop runs standalone, NOT via the site `Gemfile`.** RuboCop's transitive dep `parallel` resolves to a release that requires Ruby ≥ 3.3, but every Jekyll-building CI job (`validate-content`, `unit`, `generate`, `deploy-preview`, the e2e web-server) installs the site `Gemfile` via `ruby/setup-ruby` on **Ruby 3.2** — so putting RuboCop in a `Gemfile` group made `bundle install` fail on 3.2 before any step ran. The lint workflow installs it with `gem install rubocop:<v> rubocop-performance:<v>` on Ruby 3.3. Keep dev-only linters out of the runtime `Gemfile`.
+
+**Deliberate rule relaxations** (each is documented in its config; never relax to hide a real bug):
+
+- **ESLint** — `security/detect-object-injection` and `security/detect-non-literal-fs-filename` are off (heuristic noise in static-site build/test/admin glue with no untrusted-request surface). The remaining `detect-*-regexp` findings are **warnings**, not errors (the current hits are linear regexes over trusted/bounded input). `no-unsanitized/property` is disabled inline at 6 admin `innerHTML` sinks that already escape via `esc()` or use constant strings.
+- **Python** — Ruff `select = E,W,F,I,B,UP,C4,SIM,S`; test trees ignore `S101/S603/S607/S105/S106/S107` (idiomatic `assert`, controlled-argv subprocess, fixture tokens). mypy is pragmatic (`ignore_missing_imports`). Bandit `# nosec` (with reason) on the OAuth proxy's hardcoded GitHub https URLs / fixture tokens.
+- **Ruby** — `Style/Documentation` off (file headers suffice); `Lint/MissingSuper` excluded for the synthetic `Jekyll::Page` subclasses; metrics tuned for generator code.
+- **YAML/Actions** — yamllint `line-length`/`document-start` off, `truthy: check-keys:false` (so `on:` stays unquoted); the test-locked configs (`admin/config*.yml`, `_config.yml`, `.github/rulesets/`) are in its `ignore:`. actionlint's two `head_ref … potentially untrusted` advisories on same-repo Decap PRs are suppressed via a precise `-ignore` regex (every other input is still flagged); intentional `run:`-block shellcheck findings carry inline `# shellcheck disable=` comments.
+- **CSS** — Stylelint relaxes `selector-class-pattern`, `no-descending-specificity`, `selector-max-specificity` for `admin/admin-mobile.css`'s intentional two-class Emotion-tie selectors (see *Mobile / responsive admin*); that file is otherwise byte-stable.
+- **Markdown** — `MD013` (line-length), `MD033` (inline HTML), `MD041`, `MD038` off for GFM docs.
+
+**CI — `code-quality.yml`** is advisory (NOT in `main.json`, so a lint-infra hiccup never blocks a merge). A `changes` job computes per-language booleans from the PR diff and the `lint` job runs only the toolchains for languages that changed; on failure it posts a gitleaks-scrubbed summary as a PR comment via the `post-failure-comment` composite, so the failure is visible inline to humans and to agents through the PR API.
+
+**Local — pre-commit hook.** `scripts/lint-staged.sh` (wired into `.githooks/pre-commit` and `.gitconfig-fragment`) lints only the **staged** files of each language, and **skips any linter whose tool is absent** — CI is the hard gate, so a contributor without the full toolchain is never blocked. Bypass one commit with `SKIP_LINT_STAGED=1`. `npm run lint` / `npm run format` cover the npm-based tools.
+
+**Repetition, dead code, constants.** The standardisation pass also de-duplicated within each language (e.g. e2e specs reuse `prodTarget()`/`previewTarget()` from `e2e/cms-host.js` rather than hardcoding hosts; the OAuth proxy's GitHub URLs/timeout are module constants), removed unused symbols (every linter's unused-import/var rule is on), and confirmed there are no orphan code files (all `_layouts`/`_includes` are referenced via `layout:`/`include`, all `scripts/` by a workflow or `package.json`). When adding code, prefer extending an existing shared helper/constant over copying.
+
 ## Workflow path-filtering rule
 
 Every workflow that triggers on `pull_request` or `push` MUST filter on its salient paths — the files and directories whose changes can actually affect what the workflow does. The goal is "if nothing salient changed, the workflow either doesn't fire OR emits a green check immediately" — never burning runner minutes (or scheduler slots) on a no-op, never blocking a merge by being absent.
@@ -197,7 +230,7 @@ missing-check trap, the stub mirror, the `cms/*` head-ref directive, and
 the verified footguns. Keep both in sync when you change path filters.
 
 | Workflow | Trigger | Path-filtering mechanism | Salient paths |
-|---|---|---|---|
+| --- | --- | --- | --- |
 | `canary-prod.yml` | `schedule`, `workflow_dispatch` | n/a (cron-only) | n/a |
 | `claude.yml` | `issue_comment`, `pull_request_review_comment`, `pull_request_review`, `issues` | n/a (event-driven, gated on `@claude` mention) | n/a |
 | `cms-delete-published-preview.yml` | `workflow_dispatch` | n/a (dispatch-only — needs a live preview env to target) | n/a. `inputs.pr_number` selects the preview env; the spec self-skips unless `CMS_E2E_PAT` + `PR_NUMBER` + `PR_HEAD_REF` are set. NOT a required check (heavy loops stay off the merge path) |
@@ -217,6 +250,7 @@ the verified footguns. Keep both in sync when you change path filters.
 | `skills-mirror.yml` | `push` and `pull_request` to `main` | `paths` (positive) | `.agents/skills/**`, `.claude/skills/**`, `scripts/{bootstrap,verify-skills-mirror,secrets-scan}.{sh,ps1}`, `tests/**`, the workflow itself, `secrets-scan.yml` |
 | `visual-regression.yml` | `pull_request` | `paths` (positive) | templates / rendering / styling: `_layouts/**`, `_includes/**`, `_plugins/**`, `_data/**`, `admin/**`, `_config.yml`, `Gemfile*`, root `index.html` / `404.html` / `robots.txt` / `preview.md`, `assets/css/**`, `assets/js/**`, `assets/images/logo.svg`; pipeline tools (`e2e/{detect-changed-pages,compute-visual-diffs,generate-video,regression-video}.{js,sh,spec.js}`, `playwright.regression.config.js`, the workflow itself). **CMS-managed content is intentionally excluded** (`_posts/**`, `_tags/**`, `_projects/**`, `pages/**`, `_e2e/**`, `assets/images/uploads/**`) — content-only PRs guarantee pixel diffs, so the regression video adds runner time without signal. |
 | `auto-resolve-newline-conflict.yml` | `workflow_run` (after `cms-editorial-workflow`), `workflow_dispatch` | n/a (event-driven, gated by script's PR allowlists) | n/a |
+| `code-quality.yml` | `pull_request`, `workflow_dispatch` | **always-run + early-skip** — a cheap `changes` job computes per-language booleans from the PR diff; the `lint` job self-skips (`if: needs.changes.outputs.any`) when no lintable file changed. NOT a required check (not in `main.json`), so it never blocks a merge | any source the linters cover: `**/*.{js,py,rb,sh,css,md}`, `.github/{workflows,actions}/**`, `pyproject.toml`, `Gemfile*`?(no — Ruby lints `_plugins*`), the lint configs (`eslint.config.js`, `.prettierrc.json`, `.rubocop.yml`, `.yamllint.yml`, `.stylelintrc.json`, `.markdownlint*.jsonc`, `.shellcheckrc`) |
 
 When you add a new workflow, append it to this table in the same commit.
 
@@ -257,6 +291,7 @@ When you add a new workflow, append it to this table in the same commit.
 6. Post/update PR comment using `<!-- adamdaniel-preview-bot -->` marker to avoid duplicates
 
 URL shown in comment:
+
 - With `PREVIEW_CLOUDFRONT_ID`: `https://preview-pr{N}.adamdaniel.ai/`
 - Without: `http://adamdaniel-ai-previews.s3-website-us-east-1.amazonaws.com/pr-{N}/` (HTTP fallback — Decap CMS won't work over this)
 
@@ -294,7 +329,7 @@ Runs **only** when `cms/ready` label is added, and **only after `validate-conten
 
 #### CMS editorial flow
 
-```
+```text
 CMS creates PR (branch: cms/draft-{timestamp})
   → validate-content runs → adds cms/draft label
   → preview deployed at preview-pr{N}.adamdaniel.ai
@@ -350,7 +385,7 @@ Uses `regression-review` GitHub Environment with required reviewers (all write-a
 #### Page detection rules (`e2e/detect-changed-pages.js`)
 
 | Changed file pattern | Mapped URL(s) |
-|---|---|
+| --- | --- |
 | `_posts/YYYY-MM-DD-{slug}.md` | `/blog/{slug}/` |
 | `_projects/{slug}.md` | `/projects/{slug}/` |
 | `_tags/{slug}.md` | `/tags/{slug}/` |
@@ -403,7 +438,7 @@ When all three pass, the spec runs against `https://adamdaniel.ai/admin/`: it re
 Tracked follow-up to PR #971. Sibling of `cms-publish-loop-preview.yml`: that workflow runs the canary-page publish loop against a PR preview env; this one runs the **three remaining real-backend loops that previously had prod-only coverage** through the same per-PR preview surface, closing the parity gap from #999:
 
 | Preview spec | Prod counterpart | Loop |
-|---|---|---|
+| --- | --- | --- |
 | `e2e/cms-publish-loop-prod-mutate-preview.spec.js` | `cms-publish-loop-prod-mutate.spec.js` | real `_posts/` body edit + publish toggle |
 | `e2e/cms-unpublish-republish-preview.spec.js` | `cms-unpublish-republish.spec.js` | `_posts/` unpublish → re-publish |
 | `e2e/cms-tags-lifecycle-preview.spec.js` | `cms-tags-lifecycle.spec.js` | Tags-collection create → publish → delete |
@@ -431,7 +466,7 @@ Cleans up automation-only artefacts that crashed test runs leak. Runs daily at 0
 **Three-tier sweep, all age-gated by `THRESHOLD_HOURS` (default 6h):**
 
 | Tier | What it sweeps | Branch deleted? | Opt-out |
-|---|---|---|---|
+| --- | --- | --- | --- |
 | 1 | Open PRs on `cms/e2e/*` or `cms/e2e-fixture/*` branches (no label needed — these prefixes have no human use case). | Yes (`gh pr close --delete-branch`). | `keep` label on the PR. |
 | 2 | Open PRs labelled `automated-test`, regardless of branch prefix. Catches `cms/posts/*` leaks from prod-mutate runs. | No (Decap reuses `cms/<col>/<slug>` per entry; the next run's `closeStaleDecapPrOnBranch` handles the handoff). | `keep` label on the PR. |
 | 3 | Branches matching the same Tier 1 prefix safelist that have NO open PR (a crashed run pushed a branch but died before opening a PR). Direct ref delete via the git refs API. | Yes (it's the whole point). | `[sweep-keep]` in the tip commit message (the PR-level `keep` label can't apply when there's no PR). |
@@ -452,7 +487,7 @@ Belt-and-suspenders for the class of bug PR #882 represents — a Decap-opened `
 **Gates (enforced in `scripts/auto-resolve-newline-conflict.js`):**
 
 | Gate | Allows |
-|---|---|
+| --- | --- |
 | PR state | `open` |
 | Mergeable state | `dirty` only (skips `clean`, `unknown`, `blocked`, etc.) |
 | Head ref | `cms/{e2e,e2e-fixture,posts,pages,projects,tags}/...` |
@@ -532,7 +567,7 @@ gh api repos/Adam-S-Daniel/adamdaniel.ai/rulesets/13985217
 Required status checks (current):
 
 | Check | Workflow | Notes |
-|---|---|---|
+| --- | --- | --- |
 | `validate-content` | `cms-editorial-workflow.yml` | Always fires (no path filter) — front-matter + Jekyll build sanity check |
 | `scan` | `secrets-scan.yml` | Always fires (gitleaks must scan every PR diff) |
 | `select`, `unit`, `parity`, `e2e (1)`, `finalize` | `e2e-tests.yml` | Fire on every PR EXCEPT those whose entire diff matches `paths-ignore` (docs-only). Required checks block such PRs from merging — owner can override, or expand the PR with a small non-doc change to satisfy the gate. `e2e (1)` is shard 1 of the dynamic matrix (always present per `pickShardCount()` + the workflow's `case "$shard_count"` block); `finalize` is the matrix roll-up (`if: !cancelled()`, `needs: [e2e]`, last step re-fails on any shard failure) — keeping both gives shard-name resilience plus a single roll-up signal |
@@ -622,6 +657,7 @@ Tests run with `fullyParallel: true` — all 8 projects execute concurrently wit
 #### Always-run baseline
 
 Cheap, deterministic, no browser:
+
 - `e2e/compute-visual-diffs.test.js` — pure pngjs unit tests for the visual-diff classifier
 - `e2e/cms-config.spec.js` — YAML structural invariants for the Decap config (editorial workflow on, every folder collection has explicit create + delete, all required fields present, etc.)
 - `e2e/visual-change-guard.spec.js` — guards against unintended visual changes
@@ -631,6 +667,7 @@ Cheap, deterministic, no browser:
 Every browser-based test in the suite captures one full-page screenshot per main-frame navigation while it runs. The `finalize` job assembles these per-test frame sequences into individual videos with a 96px-tall metadata banner above the screenshot, and concatenates them into a master `_combined.mp4` for the run.
 
 **Where things live:**
+
 - Capture fixture: `e2e/base.js` (`attachPerTestCapture`, hooks `page.on("framenavigated")`).
 - Frames during a run: `test-results/per-test-frames/<safe-test-id>/{NNNN.png,meta.json}`.
 - Assembly script: `e2e/generate-test-videos.js`.
@@ -638,6 +675,7 @@ Every browser-based test in the suite captures one full-page screenshot per main
 - CI artifact: `per-test-videos` (separate from `playwright-report`; 7-day retention).
 
 **Banner content** — three monospace lines, white on a 96px black strip ABOVE the screenshot:
+
 1. `PR #<n> · Test <X> of <Y> · <file>::<title>` — disambiguates runs and locates this test in the combined run.
 2. `Step <x> of <y>: <step name / URL fallback> · <status>` — frame-by-frame label. `x` is the 1-indexed frame within the test, `y` is the total frame count for that test. The label prefers the active `test.step()` title; for frames captured outside any `test.step()`, it falls back to the URL path of the `framenavigated` event that fired the capture. Truncated to ~110 chars to fit the banner.
 3. `project: <projectName> · <YYYY-MM-DD HH:MM:SS TZ>` — the date/time is each test's own `endTime` formatted in `America/New_York` with the TZ abbreviation (`EDT` or `EST`), NOT a single run-wide stamp.
@@ -698,7 +736,7 @@ The matrix is split into a **public-page lane** (8 projects, full browser × vie
 **Public-page lane** — runs every spec that does NOT carry an `@admin-*` tag. Each project's `grepInvert: /@admin-write\b|@admin-read\b|@admin-screenshots\b/` excludes admin specs.
 
 | Project | Browser | Viewport | Special |
-|---|---|---|---|
+| --- | --- | --- | --- |
 | `chromium-desktop-1080` | Chromium | 1920×1080 | — |
 | `chromium-laptop` | Chromium | 1366×768 | — |
 | `chromium-mobile` | Chromium | 375×667 | — |
@@ -711,7 +749,7 @@ The matrix is split into a **public-page lane** (8 projects, full browser × vie
 **Admin lane** — runs only specs tagged `@admin-write`, `@admin-read`, or `@admin-screenshots`. Public-page specs do NOT run on these projects.
 
 | Project | Browser | Viewport | Tags accepted |
-|---|---|---|---|
+| --- | --- | --- | --- |
 | `chromium-desktop-3k` | Chromium | 3000×1500 | `@admin-write` + `@admin-read` + `@admin-screenshots` |
 | `webkit-iphone16` | WebKit | 393×852 (deviceScaleFactor 3, isMobile, hasTouch) | `@admin-read` only |
 
@@ -722,7 +760,7 @@ The two admin projects intentionally cover the two browsers a real contributor u
 Specs that drive the admin UI are tagged via Playwright's `{ tag: [...] }` option on `test.describe(...)` or `test(...)`. The tag controls which projects the spec runs on:
 
 | Tag | Meaning | Runs on |
-|---|---|---|
+| --- | --- | --- |
 | `@admin-write` | Drives `/admin/*` AND mutates state (Decap Save → `cms/*` PR, decap-server FS write, etc.) | `chromium-desktop-3k` only — single browser is sufficient and writes are heavy/serial |
 | `@admin-read` | Drives `/admin/*` but is read-only (DOM contract, HTTP byte parity, mocked APIs) | `chromium-desktop-3k` + `webkit-iphone16` — engine-dependent admin UI assertions need both |
 | `@admin-screenshots` | Manual-walkthrough specs that emit `docs/manual-screenshots/*.png` via `manual-capture.js` | `chromium-desktop-3k` only — `manual-capture.js` writes to project-INDEPENDENT paths, so two parallel projects would race + last-write-wins |
@@ -768,6 +806,7 @@ Tests import `{ test, expect }` from `./base` instead of `@playwright/test`. The
 1. Import from `./base`: `const { test, expect } = require("./base");`
 2. Tests automatically run across all 8 projects — no per-test matrix setup needed.
 3. To skip a test for specific projects, read the project config via `testInfo`:
+
    ```js
    test("my test", async ({ page }, testInfo) => {
      test.skip(
@@ -777,6 +816,7 @@ Tests import `{ test, expect }` from `./base` instead of `@playwright/test`. The
      // ...
    });
    ```
+
    Don't use `matchMedia()` for this — it's unreliable under Playwright's media emulation.
 
 ### Parallelism
@@ -869,7 +909,7 @@ The composite action at `.github/actions/post-failure-comment/action.yml`:
 **Markers in use** (must be globally unique to avoid clobbering each other):
 
 | Marker | Workflow / job |
-|---|---|
+| --- | --- |
 | `e2e-failure-summary` | `e2e-tests.yml` → `finalize` (aggregates the e2e matrix) |
 | `unit-failure-summary` | `e2e-tests.yml` → `unit` |
 | `e2e-real-failure-summary` | `e2e-tests.yml` → `e2e-real` |

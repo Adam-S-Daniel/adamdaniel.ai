@@ -1,0 +1,50 @@
+# yamllint configuration for adamdaniel.ai
+#
+# Pragmatic profile that lints the GitHub Actions YAML in .github/ cleanly
+# without forcing semantics- or byte-altering rewrites. Owned by the CI/YAML
+# tooling; see the rule notes below for why each default was relaxed.
+#
+# Run:  yamllint .github/
+---
+extends: default
+
+# Files whose exact bytes are asserted by tests elsewhere in the repo. We never
+# want a `yamllint .` invocation to pressure anyone into reformatting these, so
+# they are excluded outright. (They already pass the relaxed rules below, but
+# the explicit ignore keeps that guarantee stable as those files evolve.)
+ignore: |
+  admin/config.yml
+  admin/config-local.yml
+  _config.yml
+  .github/rulesets/
+  node_modules/
+  vendor/
+
+rules:
+  # Workflows intentionally keep long, readable `run:` blocks, inline
+  # `${{ }}` expressions, and SHA-pin comments on one line. Rewrapping them
+  # would hurt readability and risk changing shell semantics, so length is
+  # not enforced.
+  line-length: disable
+
+  # `on:` is a GitHub Actions key, not the boolean `on`. Disabling key
+  # checking lets the workflow trigger map stay written as `on:` (its
+  # canonical, semantically required form) instead of being quoted.
+  truthy:
+    check-keys: false
+
+  # The repo deliberately omits the `---` document-start marker on most
+  # workflow/action files; adding it everywhere would be noisy churn with no
+  # functional benefit.
+  document-start: disable
+
+  # Existing files place explanatory comments directly under keys that have
+  # no child content (e.g. `workflow_dispatch:`), which trips the strict
+  # indentation heuristic. The style is intentional and harmless.
+  comments-indentation: disable
+
+  # Match the existing single-space comment style (e.g. `# v1.2.3`) used by
+  # the SHA-pin version annotations, rather than requiring two spaces.
+  comments:
+    require-starting-space: true
+    min-spaces-from-content: 1

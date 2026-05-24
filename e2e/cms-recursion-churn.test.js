@@ -14,11 +14,7 @@
  * at CI time instead of regressing silently in a workflow edit.
  */
 const { test, expect } = require("./base");
-const {
-  SELF_CHURN,
-  shouldRunLoop,
-  isSelfChurn,
-} = require("./cms-recursion-churn");
+const { SELF_CHURN, shouldRunLoop, isSelfChurn } = require("./cms-recursion-churn");
 const { CANARIES } = require("./canary-content");
 
 // The literal each loop spec churns to `main`. Kept here (not imported
@@ -63,9 +59,7 @@ test.describe("cms-recursion-churn decision logic", () => {
         `${loop}: a push of only self-churn files must SKIP`,
       ).toBe(false);
       for (const f of fixtures) {
-        expect(shouldRunLoop(loop, [f]), `${loop}: [${f}] must SKIP`).toBe(
-          false,
-        );
+        expect(shouldRunLoop(loop, [f]), `${loop}: [${f}] must SKIP`).toBe(false);
       }
     }
   });
@@ -80,10 +74,7 @@ test.describe("cms-recursion-churn decision logic", () => {
     ];
     for (const loop of Object.keys(SELF_CHURN)) {
       for (const real of realChanges) {
-        expect(
-          shouldRunLoop(loop, [real]),
-          `${loop}: [${real}] must RUN`,
-        ).toBe(true);
+        expect(shouldRunLoop(loop, [real]), `${loop}: [${real}] must RUN`).toBe(true);
         // Mixed: a real machinery change rides alongside canary churn.
         expect(
           shouldRunLoop(loop, [...SPEC_FIXTURES[loop], real]),
@@ -100,16 +91,10 @@ test.describe("cms-recursion-churn decision logic", () => {
     expect(isSelfChurn("host", "_e2e/canary-delete-1.md.bak")).toBe(false);
     expect(isSelfChurn("host", "_tags/e2e-tags-canary-9.md")).toBe(true);
     expect(isSelfChurn("host", "_tags/other.md")).toBe(false);
-    expect(
-      isSelfChurn("media", "assets/images/uploads/e2e-media-roundtrip-9.png"),
-    ).toBe(true);
-    expect(
-      isSelfChurn("media", "assets/images/uploads/nested/x-9.png"),
-    ).toBe(false);
+    expect(isSelfChurn("media", "assets/images/uploads/e2e-media-roundtrip-9.png")).toBe(true);
+    expect(isSelfChurn("media", "assets/images/uploads/nested/x-9.png")).toBe(false);
     // A host fixture is not a media/prod fixture (sets are disjoint).
-    expect(isSelfChurn("prod", "_posts/2024-01-02-e2e-unpublish-canary.md")).toBe(
-      false,
-    );
+    expect(isSelfChurn("prod", "_posts/2024-01-02-e2e-unpublish-canary.md")).toBe(false);
   });
 
   test("guards: unknown loop and empty/invalid changed set throw", () => {

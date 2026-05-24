@@ -31,8 +31,8 @@ const { test, expect } = require("./base");
 
 const REPO_ROOT = path.join(__dirname, "..");
 const ADMIN = path.join(REPO_ROOT, "admin");
-const INDEX_FILES = ["index.html", "index-local.html", "index-test.html"].map(
-  (f) => path.join(ADMIN, f),
+const INDEX_FILES = ["index.html", "index-local.html", "index-test.html"].map((f) =>
+  path.join(ADMIN, f),
 );
 const CONFIGS = ["config.yml", "config-local.yml", "config-test.yml"].map((f) =>
   path.join(ADMIN, f),
@@ -40,9 +40,7 @@ const CONFIGS = ["config.yml", "config-local.yml", "config-test.yml"].map((f) =>
 
 const read = (p) => fs.readFileSync(p, "utf8");
 const scriptIdx = (html, file) => {
-  const re = new RegExp(
-    `<script[^>]+src=["']${file.replace(/[.]/g, "\\.")}["'][^>]*>`,
-  );
+  const re = new RegExp(`<script[^>]+src=["']${file.replace(/[.]/g, "\\.")}["'][^>]*>`);
   const m = re.exec(html);
   return m ? m.index : -1;
 };
@@ -53,9 +51,15 @@ test.describe("Issue #1042 — admin posts UI", () => {
   // ── 1. Live-URL banner restored + correctly ordered ──────────────
   test("admin/live-url-banner.js exists and renders the testable anchor", () => {
     const p = path.join(ADMIN, "live-url-banner.js");
-    expect(fs.existsSync(p), "admin/live-url-banner.js must exist (it was deleted in #184; #1042 restores it)").toBe(true);
+    expect(
+      fs.existsSync(p),
+      "admin/live-url-banner.js must exist (it was deleted in #184; #1042 restores it)",
+    ).toBe(true);
     const src = read(p);
-    expect(/\(\s*function\s*\(\s*\)\s*\{[\s\S]+\}\s*\)\s*\(\s*\)\s*;?/.test(src), "must be a self-contained IIFE").toBe(true);
+    expect(
+      /\(\s*function\s*\(\s*\)\s*\{[\s\S]+\}\s*\)\s*\(\s*\)\s*;?/.test(src),
+      "must be a self-contained IIFE",
+    ).toBe(true);
     expect(src).toContain('id="cms-live-url-banner-link"');
     expect(src).toContain('data-testid="cms-live-url-banner-link"');
     // It must consume the single source of truth, not re-derive URLs.
@@ -77,8 +81,14 @@ test.describe("Issue #1042 — admin posts UI", () => {
       // derive defines window.LiveURL; the banner consumes it on first
       // render — derive MUST precede the banner, banner MUST precede the
       // native override (the historical, now-locked, load order).
-      expect(derive < banner, `${rel}: live-url-derive.js must load before live-url-banner.js`).toBe(true);
-      expect(banner < override, `${rel}: live-url-banner.js must load before native-preview-href.js`).toBe(true);
+      expect(
+        derive < banner,
+        `${rel}: live-url-derive.js must load before live-url-banner.js`,
+      ).toBe(true);
+      expect(
+        banner < override,
+        `${rel}: live-url-banner.js must load before native-preview-href.js`,
+      ).toBe(true);
     });
   }
 
@@ -92,15 +102,19 @@ test.describe("Issue #1042 — admin posts UI", () => {
   // ── 2. posts-list-enhance.js contract ────────────────────────────
   test("posts-list-enhance.js augments in place and hides fixtures non-destructively", () => {
     const src = read(path.join(ADMIN, "posts-list-enhance.js"));
-    expect(/\(\s*function\s*\(\s*\)\s*\{[\s\S]+\}\s*\)\s*\(\s*\)\s*;?/.test(src), "must be a self-contained IIFE").toBe(true);
+    expect(
+      /\(\s*function\s*\(\s*\)\s*\{[\s\S]+\}\s*\)\s*\(\s*\)\s*;?/.test(src),
+      "must be a self-contained IIFE",
+    ).toBe(true);
     expect(src).toMatch(/__postsListEnhanceInstalled/);
     // AUGMENT, not replace: it must select Decap's entry anchors (so
     // every existing `a[href*="…/entries/"]` spec selector still works)
     // and must NOT remove cards from the DOM.
     expect(src).toContain('a[href*="#/collections/posts/entries/"]');
-    expect(src, "must not removeChild/remove() entry cards — Decap re-mount fight + breaks .first()-click specs").not.toMatch(
-      /\.(removeChild|remove)\(/,
-    );
+    expect(
+      src,
+      "must not removeChild/remove() entry cards — Decap re-mount fight + breaks .first()-click specs",
+    ).not.toMatch(/\.(removeChild|remove)\(/);
     // Non-destructive default-hide = reorder fixtures to the end.
     expect(src).toMatch(/data-cms-ple-fixture/);
     expect(src).toMatch(/appendChild/);
@@ -159,16 +173,14 @@ test.describe("Issue #1042 — admin posts UI", () => {
       "2099-01-03-e2e-media-roundtrip.md",
     ]) {
       const fm = read(path.join(postsDir, f));
-      expect(fm, `${f} must be flagged test_fixture: true so the Automated tests filter and the list default-hide catch it`).toMatch(
-        /^test_fixture:\s*true\s*$/m,
-      );
+      expect(
+        fm,
+        `${f} must be flagged test_fixture: true so the Automated tests filter and the list default-hide catch it`,
+      ).toMatch(/^test_fixture:\s*true\s*$/m);
     }
     // Spot-check a real post is not falsely flagged (guards a future
     // copy-paste of the canary frontmatter into a real post).
-    const real = path.join(
-      postsDir,
-      "2026-05-12-introducing-gha-bench.md",
-    );
+    const real = path.join(postsDir, "2026-05-12-introducing-gha-bench.md");
     if (fs.existsSync(real)) {
       expect(read(real)).not.toMatch(/^test_fixture:\s*true\s*$/m);
     }
@@ -230,10 +242,7 @@ test.describe("Admin preview/PR links + Check-for-Preview fix", () => {
     ).toBeLessThan(src.indexOf("preview draft"));
     // Gated on a merged PR existing — an unpublished draft (no main
     // history → no le.pr) must not show "view published changes".
-    const block = src.slice(
-      src.indexOf("var publishedPr"),
-      src.indexOf("var pr ="),
-    );
+    const block = src.slice(src.indexOf("var publishedPr"), src.indexOf("var pr ="));
     expect(block).toMatch(/if \(publishedPr\)/);
   });
 

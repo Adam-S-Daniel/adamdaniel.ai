@@ -35,7 +35,13 @@ const { expect } = require("@playwright/test");
  */
 async function expectReachable(page, locator, label) {
   await expect(locator, `${label}: not visible`).toBeVisible();
-  await locator.scrollIntoViewIfNeeded().catch(() => {});
+  await locator.scrollIntoViewIfNeeded().catch((err) => {
+    // Best-effort pre-scroll: the element can detach mid-scroll (a React
+    // re-mount), but the reachability poll below re-acquires the handle
+    // each iteration, so a failed pre-scroll is not fatal. Surface it at
+    // debug level rather than swallowing it silently.
+    console.debug(`expectReachable: scroll skipped (${err.message})`);
+  });
 
   // Poll the geometry + occlusion probe: a transient layout (mid-React
   // render, an editor still showing "Loading entry…") shouldn't flake the

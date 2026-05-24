@@ -54,12 +54,8 @@
 const { test, expect } = require("./base");
 const { captureStep } = require("./manual-capture");
 const { seedDecapAuth, getPat, HOST_REPO } = require("./decap-pat");
-const { CANARIES, findCanary, makeMarker, REPO_ROOT } = require("./canary-content");
-const {
-  fetchPublicUrl,
-  gh,
-  waitForCmsPullRequest,
-} = require("./github-actions-poll");
+const { CANARIES, findCanary, makeMarker } = require("./canary-content");
+const { fetchPublicUrl, gh, waitForCmsPullRequest } = require("./github-actions-poll");
 const { seedFixtureViaPr, closeStaleDecapPrOnBranch } = require("./cms-fixture-pr");
 const { waitForChangeReflected } = require("./deploy-pill");
 const { prodTarget } = require("./cms-host");
@@ -68,8 +64,7 @@ const CANARY = findCanary("post");
 // Host triplet now resolves through the shared cms-host resolver so the
 // prod and preview test surfaces can't drift. This is the fixed-prod
 // loop; the values are byte-identical to the old literals.
-const { host: PROD_HOST, adminUrl: PROD_ADMIN, pillId: PILL_PROD } =
-  prodTarget();
+const { host: PROD_HOST, adminUrl: PROD_ADMIN, pillId: PILL_PROD } = prodTarget();
 const PUBLIC_URL = `${PROD_HOST}${CANARY.publicPath}`;
 
 // E3 — `PROD_CANARY=1` gates a read-only daily canary probe (see
@@ -162,10 +157,7 @@ async function writeCanaryViaPr({ runId, bodyText, message, prTitle, prBody, ski
   });
 }
 
-test(
-  "CMS publish loop — host repo, target main",
-  { tag: ["@admin-write"] },
-  async ({ page }, testInfo) => {
+test("CMS publish loop — host repo, target main", { tag: ["@admin-write"] }, async ({ page }) => {
   test.skip(
     PROD_CANARY,
     "PROD_CANARY=1 — daily canary probe runs the read-only @canary-readonly test instead.",
@@ -245,7 +237,9 @@ test(
     await page.goto(PROD_ADMIN, { waitUntil: "domcontentloaded" });
     // Decap renders the login button until it sees the auth in localStorage,
     // then mounts the editor. Wait for the collections sidebar.
-    await expect(page.getByRole("link", { name: /^Posts$/i })).toBeVisible({ timeout: 60_000 });
+    await expect(page.getByRole("link", { name: /^Posts$/i })).toBeVisible({
+      timeout: 60_000,
+    });
   });
 
   // ── 2. Open the canary entry ────────────────────────────────────
@@ -254,10 +248,9 @@ test(
     // /Canary/i link in the collection list — the e2e collection has
     // page/post/project canaries and the sidebar's display order
     // can't be relied on to land on the configured one (CANARY.id).
-    await page.goto(
-      `${PROD_ADMIN}#/collections/${CANARY.cmsCollection}/entries/${CANARY.slug}`,
-      { waitUntil: "domcontentloaded" },
-    );
+    await page.goto(`${PROD_ADMIN}#/collections/${CANARY.cmsCollection}/entries/${CANARY.slug}`, {
+      waitUntil: "domcontentloaded",
+    });
     await expect(page.getByRole("textbox", { name: /^Title$/i })).toBeVisible({ timeout: 30_000 });
   });
 
@@ -292,7 +285,9 @@ test(
     // after the save completes — the toolbar swaps to "Status: Draft"
     // + a separate "Publish" button. Wait for the "Changes saved"
     // status text instead of the (incorrect) toBeEnabled signal.
-    await expect(page.getByText(/Changes saved/i).first()).toBeVisible({ timeout: 60_000 });
+    await expect(page.getByText(/Changes saved/i).first()).toBeVisible({
+      timeout: 60_000,
+    });
   });
 
   // ── 4. Find the cms/... PR Decap opened ──────────────────────────
@@ -320,9 +315,9 @@ test(
     await page.getByRole("button", { name: /^Status:\s*Draft$/i }).click();
     await page.getByRole("menuitem", { name: /^Ready$/i }).click();
     // The toolbar reflects the new status — the button text flips.
-    await expect(
-      page.getByRole("button", { name: /^Status:\s*Ready$/i }),
-    ).toBeVisible({ timeout: 30_000 });
+    await expect(page.getByRole("button", { name: /^Status:\s*Ready$/i })).toBeVisible({
+      timeout: 30_000,
+    });
   });
 
   // ── 6b. Drive Publish → Publish Now via the UI ──────────────────
@@ -388,7 +383,9 @@ test(
       page,
       pillId: PILL_PROD,
       urlCheck: async () => {
-        const res = await page.request.get(PUBLIC_URL, { failOnStatusCode: false });
+        const res = await page.request.get(PUBLIC_URL, {
+          failOnStatusCode: false,
+        });
         if (res.status() !== 200) return false;
         return (await res.text()).includes(marker);
       },
@@ -402,8 +399,7 @@ test(
       section: "Verifying on the public site",
       step: "7.2",
       title: "Marker live on the production canary URL",
-      body:
-        "After the PR auto-merges and `deploy-production.yml` finishes, the canary URL on `adamdaniel.ai` reflects the edit. The deploy-status pill in `/admin/` settles to hidden once the deploy succeeds — that's the editor-facing 'change is live' signal.",
+      body: "After the PR auto-merges and `deploy-production.yml` finishes, the canary URL on `adamdaniel.ai` reflects the edit. The deploy-status pill in `/admin/` settles to hidden once the deploy succeeds — that's the editor-facing 'change is live' signal.",
     });
   });
 
@@ -424,10 +420,9 @@ test(
   await test.step("Cleanup via UI: remove marker, Save → Status:Ready → Publish Now", async () => {
     // Navigate back to the canary entry (we may have left for the
     // pill-watch step on /admin/).
-    await page.goto(
-      `${PROD_ADMIN}#/collections/${CANARY.cmsCollection}/entries/${CANARY.slug}`,
-      { waitUntil: "domcontentloaded" },
-    );
+    await page.goto(`${PROD_ADMIN}#/collections/${CANARY.cmsCollection}/entries/${CANARY.slug}`, {
+      waitUntil: "domcontentloaded",
+    });
     await expect(page.getByRole("textbox", { name: /^Title$/i })).toBeVisible({
       timeout: 30_000,
     });
@@ -456,9 +451,9 @@ test(
 
     await page.getByRole("button", { name: /^Status:\s*Draft$/i }).click();
     await page.getByRole("menuitem", { name: /^Ready$/i }).click();
-    await expect(
-      page.getByRole("button", { name: /^Status:\s*Ready$/i }),
-    ).toBeVisible({ timeout: 30_000 });
+    await expect(page.getByRole("button", { name: /^Status:\s*Ready$/i })).toBeVisible({
+      timeout: 30_000,
+    });
 
     await page.getByRole("button", { name: /^Publish$/i }).click();
     await page
@@ -474,7 +469,9 @@ test(
       page,
       pillId: P,
       urlCheck: async () => {
-        const res = await page.request.get(PUBLIC_URL, { failOnStatusCode: false });
+        const res = await page.request.get(PUBLIC_URL, {
+          failOnStatusCode: false,
+        });
         if (res.status() !== 200) return false;
         const text = await res.text();
         return !text.includes(marker) && text.includes(baselineBody);
@@ -482,7 +479,6 @@ test(
       urlTimeoutMs: 15 * 60 * 1000,
     });
   });
-
 });
 
 // ── Test-harness cleanup safety net ───────────────────────────────
@@ -506,6 +502,7 @@ test(
 // API-driven path is restricted to the harness-cleanup safety net
 // — it never replaces the UI-driven cleanup leg, only fires when
 // that leg has demonstrably failed to complete.
+// eslint-disable-next-line no-empty-pattern -- no Playwright fixtures are needed, but the second positional arg (testInfo) IS used below; the empty destructure is required to skip to it.
 test.afterAll(async ({}, testInfo) => {
   if (PROD_CANARY) return; // daily canary probe doesn't mutate
   if (!getPat()) return; // PAT-less local runs can't write anyway
@@ -568,7 +565,13 @@ test.afterAll(async ({}, testInfo) => {
   // `buildBaselineBody()` output so any divergence triggers recovery,
   // not just markers.
   const fmEnd = decoded.indexOf("\n---\n", 4);
-  const fileBody = fmEnd < 0 ? decoded : decoded.slice(fmEnd + 5).replace(/^\n+/, "").replace(/\n+$/, "");
+  const fileBody =
+    fmEnd < 0
+      ? decoded
+      : decoded
+          .slice(fmEnd + 5)
+          .replace(/^\n+/, "")
+          .replace(/\n+$/, "");
   const expectedBody = CanaryFile.baselineBody;
   const hasMarker = /e2e-publish-loop:[a-z]+:\d+/.test(decoded);
   const bodyDrift = fileBody !== expectedBody;
@@ -621,9 +624,7 @@ test.afterAll(async ({}, testInfo) => {
 // read-only contract machine-checked: if a future edit accidentally
 // routes through writeCanaryOnMain() while PROD_CANARY=1, the spec
 // throws immediately rather than silently mutating prod.
-test("@canary-readonly production canary URLs serve their baselines", async ({
-  page,
-}, testInfo) => {
+test("@canary-readonly production canary URLs serve their baselines", async ({ page }) => {
   test.skip(
     !PROD_CANARY,
     "PROD_CANARY=1 not set — canary-readonly probe is gated to the daily workflow.",
@@ -643,10 +644,7 @@ test("@canary-readonly production canary URLs serve their baselines", async ({
       // baseURL fixture (e2e/base.js → https://adamdaniel.ai). No DOM
       // navigation needed — pure HTTP, fast and deterministic.
       const res = await page.request.get(c.publicPath);
-      expect(
-        res.status(),
-        `${c.publicPath} should return 200 from prod`,
-      ).toBe(200);
+      expect(res.status(), `${c.publicPath} should return 200 from prod`).toBe(200);
       const body = await res.text();
       expect(
         body,

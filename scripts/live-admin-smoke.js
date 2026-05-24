@@ -20,79 +20,103 @@
  */
 (async function liveAdminSmoke() {
   const out = [];
-  const ok = (k, v, hint) => out.push({ check: k, status: '✓', detail: v, hint: hint || '' });
-  const bad = (k, v, hint) => out.push({ check: k, status: '✗', detail: v, hint });
-  const meh = (k, v, hint) => out.push({ check: k, status: '?', detail: v, hint });
+  const ok = (k, v, hint) => out.push({ check: k, status: "✓", detail: v, hint: hint || "" });
+  const bad = (k, v, hint) => out.push({ check: k, status: "✗", detail: v, hint });
+  const meh = (k, v, hint) => out.push({ check: k, status: "?", detail: v, hint });
 
   // ── 1. Shim is loaded ─────────────────────────────────────────────
   if (window.__publishViaAutoMergeInstalled) {
-    ok('shim installed', 'window.__publishViaAutoMergeInstalled is true');
+    ok("shim installed", "window.__publishViaAutoMergeInstalled is true");
   } else {
-    bad('shim installed', 'window.__publishViaAutoMergeInstalled is falsy',
-      'publish-via-auto-merge.js did not load. Hard-refresh (Cmd-Shift-R) to bust the 24h cache.');
+    bad(
+      "shim installed",
+      "window.__publishViaAutoMergeInstalled is falsy",
+      "publish-via-auto-merge.js did not load. Hard-refresh (Cmd-Shift-R) to bust the 24h cache.",
+    );
   }
 
   // ── 2. window.fetch is wrapped ────────────────────────────────────
   const fetchSrc = String(window.fetch);
-  if (fetchSrc.includes('origFetch') || fetchSrc.includes('matchers')) {
-    ok('fetch wrapped', 'window.fetch is the shim wrap');
+  if (fetchSrc.includes("origFetch") || fetchSrc.includes("matchers")) {
+    ok("fetch wrapped", "window.fetch is the shim wrap");
   } else {
-    bad('fetch wrapped', 'window.fetch looks native (' + fetchSrc.slice(0, 80) + ')',
-      'Shim ran but the wrap was clobbered later. Check for late scripts that reassign window.fetch.');
+    bad(
+      "fetch wrapped",
+      "window.fetch looks native (" + fetchSrc.slice(0, 80) + ")",
+      "Shim ran but the wrap was clobbered later. Check for late scripts that reassign window.fetch.",
+    );
   }
 
   // ── 3. Decap auth in localStorage ─────────────────────────────────
   let authBlob = null;
   try {
-    const raw = localStorage.getItem('decap-cms-user');
+    const raw = localStorage.getItem("decap-cms-user");
     authBlob = raw ? JSON.parse(raw) : null;
-  } catch (e) { /* ignore */ }
+  } catch {
+    /* ignore */
+  }
   if (!authBlob || !authBlob.token) {
-    meh('decap auth', 'localStorage[decap-cms-user] missing or no .token',
-      'You are not signed in. Sign in via the admin UI, then re-run this smoke.');
+    meh(
+      "decap auth",
+      "localStorage[decap-cms-user] missing or no .token",
+      "You are not signed in. Sign in via the admin UI, then re-run this smoke.",
+    );
     return print();
   } else {
-    ok('decap auth', `signed in as ${authBlob.login || '(unknown login)'}`);
+    ok("decap auth", `signed in as ${authBlob.login || "(unknown login)"}`);
   }
 
   // ── 4. Token's GitHub scopes ──────────────────────────────────────
   // GitHub returns granted scopes in the X-OAuth-Scopes response header
   // on any authenticated API call.
-  let scopes = '';
+  let scopes;
   try {
-    const r = await fetch('https://api.github.com/user', {
-      headers: { Authorization: 'token ' + authBlob.token },
+    const r = await fetch("https://api.github.com/user", {
+      headers: { Authorization: "token " + authBlob.token },
     });
-    scopes = (r.headers.get('X-OAuth-Scopes') || '').toLowerCase();
+    scopes = (r.headers.get("X-OAuth-Scopes") || "").toLowerCase();
   } catch (e) {
-    bad('token scopes', 'failed to query api.github.com/user: ' + e.message,
-      'OAuth proxy or network issue. Check Network tab for the actual response.');
+    bad(
+      "token scopes",
+      "failed to query api.github.com/user: " + e.message,
+      "OAuth proxy or network issue. Check Network tab for the actual response.",
+    );
     return print();
   }
-  const scopeList = scopes.split(',').map((s) => s.trim()).filter(Boolean);
-  ok('token scopes', JSON.stringify(scopeList));
-  const want = ['repo', 'user'];
+  const scopeList = scopes
+    .split(",")
+    .map((s) => s.trim())
+    .filter(Boolean);
+  ok("token scopes", JSON.stringify(scopeList));
+  const want = ["repo", "user"];
   for (const s of want) {
-    const have = scopeList.includes(s) ||
-      (s === 'user' && scopeList.some((x) => x.startsWith('user'))) ||
-      (s === 'repo' && scopeList.some((x) => x === 'repo' || x.startsWith('repo:')));
+    const have =
+      scopeList.includes(s) ||
+      (s === "user" && scopeList.some((x) => x.startsWith("user"))) ||
+      (s === "repo" && scopeList.some((x) => x === "repo" || x.startsWith("repo:")));
     if (have) {
-      ok('  has ' + s + ' scope', 'yes');
+      ok("  has " + s + " scope", "yes");
     } else {
-      bad('  has ' + s + ' scope', 'NO', 'CMS API calls will fail. Re-authenticate.');
+      bad("  has " + s + " scope", "NO", "CMS API calls will fail. Re-authenticate.");
     }
   }
 
   print();
 
   function print() {
-    console.log('%c live-admin-smoke ', 'background:#1f2937;color:#fff;font-weight:bold;padding:2px 8px');
+    console.log(
+      "%c live-admin-smoke ",
+      "background:#1f2937;color:#fff;font-weight:bold;padding:2px 8px",
+    );
     console.table(out);
-    const reds = out.filter((o) => o.status === '✗');
+    const reds = out.filter((o) => o.status === "✗");
     if (reds.length) {
-      console.warn('first failure:', reds[0]);
+      console.warn("first failure:", reds[0]);
     } else {
-      console.log('%c all green — if buttons still don\'t work, capture the Network tab while clicking and share', 'color:#10b981');
+      console.log(
+        "%c all green — if buttons still don't work, capture the Network tab while clicking and share",
+        "color:#10b981",
+      );
     }
   }
 })();

@@ -159,40 +159,35 @@ test.describe(
   // webkit-iphone16. See playwright.config.js.
   { tag: ["@admin-read"] },
   () => {
-  test.beforeEach(({}, testInfo) => {
-  });
+    test.beforeEach(() => {});
 
-  for (const url of CONTENT_URLS) {
-    test(`@parity no console.error or pageerror on ${url}`, async ({
-      page,
-    }) => {
-      const consoleErrors = [];
-      const pageErrors = [];
+    for (const url of CONTENT_URLS) {
+      test(`@parity no console.error or pageerror on ${url}`, async ({ page }) => {
+        const consoleErrors = [];
+        const pageErrors = [];
 
-      // Listeners must be attached BEFORE goto so we don't miss errors that
-      // fire during the initial parse/script-execute pass.
-      page.on("console", (msg) => {
-        if (msg.type() === "error") consoleErrors.push(msg.text());
+        // Listeners must be attached BEFORE goto so we don't miss errors that
+        // fire during the initial parse/script-execute pass.
+        page.on("console", (msg) => {
+          if (msg.type() === "error") consoleErrors.push(msg.text());
+        });
+        page.on("pageerror", (err) => {
+          pageErrors.push(`${err.name}: ${err.message}`);
+        });
+
+        const response = await page.goto(url, { waitUntil: "networkidle" });
+        expect(response, `goto(${url}) returned no response`).not.toBeNull();
+        expect(response.status(), `${url} should be 200`).toBe(200);
+
+        const filteredConsole = consoleErrors.filter((t) => !isAllowlisted(t));
+        const filteredPage = pageErrors.filter((t) => !isAllowlisted(t));
+        const all = [
+          ...filteredConsole.map((t) => `console.error: ${t}`),
+          ...filteredPage.map((t) => `pageerror: ${t}`),
+        ];
+
+        expect(all, `Unexpected JS errors on ${url}:\n  ${all.join("\n  ")}`).toEqual([]);
       });
-      page.on("pageerror", (err) => {
-        pageErrors.push(`${err.name}: ${err.message}`);
-      });
-
-      const response = await page.goto(url, { waitUntil: "networkidle" });
-      expect(response, `goto(${url}) returned no response`).not.toBeNull();
-      expect(response.status(), `${url} should be 200`).toBe(200);
-
-      const filteredConsole = consoleErrors.filter((t) => !isAllowlisted(t));
-      const filteredPage = pageErrors.filter((t) => !isAllowlisted(t));
-      const all = [
-        ...filteredConsole.map((t) => `console.error: ${t}`),
-        ...filteredPage.map((t) => `pageerror: ${t}`),
-      ];
-
-      expect(
-        all,
-        `Unexpected JS errors on ${url}:\n  ${all.join("\n  ")}`,
-      ).toEqual([]);
-    });
-  }
-});
+    }
+  },
+);

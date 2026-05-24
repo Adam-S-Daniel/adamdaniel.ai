@@ -149,6 +149,9 @@ jobs:
         run: |
           h=$(cat .github/ci-runner/Dockerfile Gemfile.lock package-lock.json | sha256sum | cut -c1-16)
           repo_lc=$(echo "${{ github.repository }}" | tr '[:upper:]' '[:lower:]')
+          # Per-line `>>` is intentional and reads clearly for these three
+          # distinct outputs. (SC2129 grouping suggestion.)
+          # shellcheck disable=SC2129
           echo "tag=${h}" >> "$GITHUB_OUTPUT"
           echo "repo_lc=${repo_lc}" >> "$GITHUB_OUTPUT"
           echo "image=ghcr.io/${repo_lc}/ci-runner:${h}" >> "$GITHUB_OUTPUT"

@@ -35,9 +35,9 @@ test.describe("admin/index*.html bundle invariants", () => {
 
     test(`${label}: every decap-cms unpkg URL is pinned to X.Y.Z`, () => {
       const html = fs.readFileSync(file, "utf8");
-      const decapMatches = [
-        ...html.matchAll(/https:\/\/unpkg\.com\/decap-cms[^"']*/g),
-      ].map((m) => m[0]);
+      const decapMatches = [...html.matchAll(/https:\/\/unpkg\.com\/decap-cms[^"']*/g)].map(
+        (m) => m[0],
+      );
       expect(
         decapMatches.length,
         `${label} should load the decap-cms bundle from unpkg`,
@@ -57,10 +57,9 @@ test.describe("admin/index*.html bundle invariants", () => {
       // Sveltia 0.158 silently dropped editorial-workflow support and
       // routed every Save straight to main, where branch protection
       // rejected it. Decap is the only supported bundle.
-      expect(
-        html.toLowerCase(),
-        `${label} must not reference sveltia-cms`,
-      ).not.toMatch(/sveltia-cms/);
+      expect(html.toLowerCase(), `${label} must not reference sveltia-cms`).not.toMatch(
+        /sveltia-cms/,
+      );
     });
   }
 });

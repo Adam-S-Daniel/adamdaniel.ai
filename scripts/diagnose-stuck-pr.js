@@ -52,10 +52,7 @@
 
 "use strict";
 
-const {
-  canonical,
-  HEAD_REF_ALLOWLIST,
-} = require("./auto-resolve-newline-conflict");
+const { canonical, HEAD_REF_ALLOWLIST } = require("./auto-resolve-newline-conflict");
 
 const TIMEBOX_MS = 25_000;
 const RATE_LIMIT_FLOOR = 50;
@@ -81,9 +78,7 @@ async function gh(endpoint, { headers = {}, deadline } = {}) {
     e.timebox = true;
     throw e;
   }
-  const url = endpoint.startsWith("https://")
-    ? endpoint
-    : `https://api.github.com${endpoint}`;
+  const url = endpoint.startsWith("https://") ? endpoint : `https://api.github.com${endpoint}`;
   const res = await fetch(url, {
     headers: {
       Authorization: `token ${process.env.GH_TOKEN}`,
@@ -135,7 +130,7 @@ async function tryCanonicalCollapse(repo, pr, deadline) {
       if (canonical(base) !== canonical(head)) return "real-conflict";
     }
     return "newline-only";
-  } catch (e) {
+  } catch {
     return "indeterminate";
   }
 }
@@ -155,18 +150,26 @@ async function classifyPr(repo, pr, deadline) {
           "` to resolve now)",
       );
     } else if (verdict === "real-conflict") {
-      out.push(`  - merge conflict — **not auto-resolvable** (non-newline diff); needs manual rebase`);
+      out.push(
+        `  - merge conflict — **not auto-resolvable** (non-newline diff); needs manual rebase`,
+      );
     } else {
-      out.push(`  - merge conflict — auto-resolver shape unverifiable (timebox or binary diff); inspect manually`);
+      out.push(
+        `  - merge conflict — auto-resolver shape unverifiable (timebox or binary diff); inspect manually`,
+      );
     }
   } else if (pr.mergeable_state === "blocked") {
     try {
-      const checks = await gh(
-        `/repos/${repo}/commits/${pr.head.sha}/check-runs?per_page=50`,
-        { deadline },
-      );
+      const checks = await gh(`/repos/${repo}/commits/${pr.head.sha}/check-runs?per_page=50`, {
+        deadline,
+      });
       const runs = (checks && checks.check_runs) || [];
-      const failing = runs.filter((c) => c.conclusion === "failure" || c.conclusion === "cancelled" || c.conclusion === "timed_out");
+      const failing = runs.filter(
+        (c) =>
+          c.conclusion === "failure" ||
+          c.conclusion === "cancelled" ||
+          c.conclusion === "timed_out",
+      );
       const pending = runs.filter((c) => c.status === "in_progress" || c.status === "queued");
       out.push(`  - blocked: ${failing.length} failing, ${pending.length} pending check(s)`);
       for (const c of failing.slice(0, MAX_CHECKS_SHOWN)) {
@@ -183,11 +186,17 @@ async function classifyPr(repo, pr, deadline) {
   } else if (pr.mergeable_state === "behind") {
     out.push(`  - behind: PR head is behind its base; needs a base-update or rebase to merge`);
   } else if (pr.auto_merge && pr.auto_merge.enabled_by) {
-    out.push(`  - auto-merge enabled by @${pr.auto_merge.enabled_by.login}; merging when checks pass`);
+    out.push(
+      `  - auto-merge enabled by @${pr.auto_merge.enabled_by.login}; merging when checks pass`,
+    );
   } else if (pr.mergeable_state === "clean") {
-    out.push(`  - clean: no merge conflict, but no \`cms/ready\`-class label or auto-merge intent (label-race candidate)`);
+    out.push(
+      `  - clean: no merge conflict, but no \`cms/ready\`-class label or auto-merge intent (label-race candidate)`,
+    );
   } else if (pr.mergeable_state === "unknown") {
-    out.push(`  - unknown: GitHub still computing mergeability; this run started too soon after a push`);
+    out.push(
+      `  - unknown: GitHub still computing mergeability; this run started too soon after a push`,
+    );
   }
   return out;
 }
@@ -212,10 +221,9 @@ async function diagnoseSpecificPr(repo, prNumber, deadline) {
 async function diagnoseOpenCmsPrs(repo, deadline) {
   const lines = [];
   try {
-    const prs = await gh(
-      `/repos/${repo}/pulls?state=open&per_page=100`,
-      { deadline },
-    );
+    const prs = await gh(`/repos/${repo}/pulls?state=open&per_page=100`, {
+      deadline,
+    });
     const candidates = (prs || []).filter((p) =>
       HEAD_REF_ALLOWLIST.some((r) => r.test(p.head.ref)),
     );
@@ -257,14 +265,18 @@ async function diagnoseDeployQueue(repo, deadline) {
       .slice(0, 3);
     lines.push(`#### \`deploy-production.yml\` queue`);
     lines.push(``);
-    lines.push(`- in-flight: ${inflight.length}, queued: ${queued.length}, recent-failed: ${recentFailed.length}`);
+    lines.push(
+      `- in-flight: ${inflight.length}, queued: ${queued.length}, recent-failed: ${recentFailed.length}`,
+    );
     for (const r of [...inflight, ...queued].slice(0, MAX_DEPLOY_RUNS_SHOWN)) {
       lines.push(
         `  - ${r.status === "in_progress" ? "🏃" : "🧊"} run #${r.id} — ${r.head_branch}@${r.head_sha.slice(0, 7)} → <${r.html_url}>`,
       );
     }
     for (const r of recentFailed) {
-      lines.push(`  - 💥 run #${r.id} (${r.conclusion}) — ${r.head_branch}@${r.head_sha.slice(0, 7)} → <${r.html_url}>`);
+      lines.push(
+        `  - 💥 run #${r.id} (${r.conclusion}) — ${r.head_branch}@${r.head_sha.slice(0, 7)} → <${r.html_url}>`,
+      );
     }
   } catch (e) {
     lines.push(`_couldn't fetch deploy-production runs: ${e.message.slice(0, 200)}_`);
@@ -284,7 +296,7 @@ function shouldCheckDeployQueue(waitingFor, kind) {
   return /url|public|deploy|fetchPublicUrl|reflected|live|baseline/i.test(waitingFor);
 }
 
-async function buildReport({ repo, waitingFor, waitPrNumber, kind, log }) {
+async function buildReport({ repo, waitingFor, waitPrNumber, kind }) {
   const deadline = nowDeadline();
   const lines = [];
   lines.push(`### Stuck-PR diagnostic`);
@@ -292,7 +304,9 @@ async function buildReport({ repo, waitingFor, waitPrNumber, kind, log }) {
   lines.push(`**Was waiting for:** ${waitingFor || "(unspecified)"}`);
   if (kind) lines.push(`**Wait kind:** ${kind}`);
   lines.push(``);
-  lines.push(`_This is a HEURISTIC summary. Each "verdict" cites the underlying \`mergeable_state\` and check list — audit those, not the verdict._`);
+  lines.push(
+    `_This is a HEURISTIC summary. Each "verdict" cites the underlying \`mergeable_state\` and check list — audit those, not the verdict._`,
+  );
   lines.push(``);
   if (waitPrNumber) {
     lines.push(...(await diagnoseSpecificPr(repo, waitPrNumber, deadline)));
@@ -312,14 +326,21 @@ async function main() {
     process.exit(0);
   }
   if (!process.env.GH_TOKEN) {
-    process.stdout.write(`### Stuck-PR diagnostic\n\n_GH_TOKEN unavailable; diagnostic skipped (read-only mode)._\n`);
+    process.stdout.write(
+      `### Stuck-PR diagnostic\n\n_GH_TOKEN unavailable; diagnostic skipped (read-only mode)._\n`,
+    );
     process.exit(0);
   }
   const waitingFor = process.env.WAITING_FOR || "";
   const waitPrNumber = process.env.WAIT_PR_NUMBER || null;
   const kind = process.env.WAITING_FOR_KIND || "";
   try {
-    const md = await buildReport({ repo, waitingFor, waitPrNumber, kind, log: console.error });
+    const md = await buildReport({
+      repo,
+      waitingFor,
+      waitPrNumber,
+      kind,
+    });
     process.stdout.write(md + "\n");
   } catch (e) {
     process.stdout.write(

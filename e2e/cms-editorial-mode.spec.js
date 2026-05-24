@@ -28,55 +28,60 @@ test.describe(
   // webkit-iphone16. See playwright.config.js.
   { tag: ["@admin-read"] },
   () => {
-  test.describe.configure({ mode: "serial", timeout: 180_000 });
+    test.describe.configure({ mode: "serial", timeout: 180_000 });
 
-  test.beforeEach(async ({ page }, testInfo) => {
-  });
+    test.beforeEach(async () => {});
 
-  test("Save on an existing post lands as an unpublished draft, not on main", async ({
-    page,
-  }) => {
-    await loadTestAdmin(page);
-    await page.goto(
-      `/admin/index-test.html#/collections/posts/entries/${SEED_POST_SLUG}`,
-    );
+    test("Save on an existing post lands as an unpublished draft, not on main", async ({
+      page,
+    }) => {
+      await loadTestAdmin(page);
+      await page.goto(`/admin/index-test.html#/collections/posts/entries/${SEED_POST_SLUG}`);
 
-    const titleField = page.getByLabel(/^Title$/);
-    await expect(titleField).toBeVisible({ timeout: 60_000 });
+      const titleField = page.getByLabel(/^Title$/);
+      await expect(titleField).toBeVisible({ timeout: 60_000 });
 
-    const publishedBefore = await page.evaluate(
-      (filename) => window.repoFiles?._posts?.[filename]?.content || null,
-      SEED_POST_FILENAME,
-    );
-    expect(publishedBefore).toContain(SEED_POST_TITLE);
+      const publishedBefore = await page.evaluate(
+        (filename) => window.repoFiles?._posts?.[filename]?.content || null,
+        SEED_POST_FILENAME,
+      );
+      expect(publishedBefore).toContain(SEED_POST_TITLE);
 
-    const NEW_TITLE = `${SEED_POST_TITLE} — workflow-mode probe`;
-    await titleField.fill(NEW_TITLE);
+      const NEW_TITLE = `${SEED_POST_TITLE} — workflow-mode probe`;
+      await titleField.fill(NEW_TITLE);
 
-    // In editorial-workflow mode the primary toolbar action is "Save"
-    // (drafts to a workflow branch). Simple mode would render "Publish"
-    // with a split menu instead — bug-shape parity with the Sveltia
-    // regression.
-    await page.getByRole("button", { name: /^save$/i }).first().click();
+      // In editorial-workflow mode the primary toolbar action is "Save"
+      // (drafts to a workflow branch). Simple mode would render "Publish"
+      // with a split menu instead — bug-shape parity with the Sveltia
+      // regression.
+      await page
+        .getByRole("button", { name: /^save$/i })
+        .first()
+        .click();
 
-    await expect
-      .poll(
-        () => readDraftContent(page, { collection: "posts", slug: SEED_POST_SLUG }),
-        { timeout: 30_000 },
-      )
-      .toContain(NEW_TITLE);
+      await expect
+        .poll(
+          () =>
+            readDraftContent(page, {
+              collection: "posts",
+              slug: SEED_POST_SLUG,
+            }),
+          { timeout: 30_000 },
+        )
+        .toContain(NEW_TITLE);
 
-    // The CRUCIAL assertion: the published tree must NOT have been
-    // mutated. This is what failed under Sveltia 0.158 — Save bypassed
-    // the workflow and wrote directly to main, which is exactly what
-    // mutating window.repoFiles models in this backend.
-    const publishedAfter = await page.evaluate(
-      (filename) => window.repoFiles?._posts?.[filename]?.content || null,
-      SEED_POST_FILENAME,
-    );
-    expect(
-      publishedAfter,
-      "Save under editorial_workflow must NOT mutate window.repoFiles (the published-branch state). If this content shows the new title, the bundle silently fell back to simple mode.",
-    ).toBe(publishedBefore);
-  });
-});
+      // The CRUCIAL assertion: the published tree must NOT have been
+      // mutated. This is what failed under Sveltia 0.158 — Save bypassed
+      // the workflow and wrote directly to main, which is exactly what
+      // mutating window.repoFiles models in this backend.
+      const publishedAfter = await page.evaluate(
+        (filename) => window.repoFiles?._posts?.[filename]?.content || null,
+        SEED_POST_FILENAME,
+      );
+      expect(
+        publishedAfter,
+        "Save under editorial_workflow must NOT mutate window.repoFiles (the published-branch state). If this content shows the new title, the bundle silently fell back to simple mode.",
+      ).toBe(publishedBefore);
+    });
+  },
+);

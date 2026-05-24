@@ -16,8 +16,7 @@ const { test, expect } = require("./base");
 const { jobBlocks, listWorkflows, topBlock } = require("./workflow-yaml-utils");
 
 const SECRET_RE = /secrets\.(AWS_|PRODUCTION_|PREVIEW_)/;
-const DEPENDABOT_GUARD =
-  /github\.actor\s*!=\s*'dependabot\[bot\]'/;
+const DEPENDABOT_GUARD = /github\.actor\s*!=\s*'dependabot\[bot\]'/;
 
 function isPullRequestTriggered(yaml) {
   return /^\s*pull_request:/m.test(topBlock(yaml, "on"));

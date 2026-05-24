@@ -6,9 +6,9 @@ tmp_path, run bootstrap.ps1, and assert the resulting on-disk state.
 A parse-check that runs anywhere pwsh is on PATH is also included so we catch
 syntax regressions on the Linux CI job and on local WSL runs.
 """
+
 from __future__ import annotations
 
-import os
 import shutil
 import subprocess
 import sys
@@ -41,8 +41,14 @@ def _make_skill(skills_root: Path, name: str) -> None:
 def _run_pwsh_bootstrap(repo: Path) -> subprocess.CompletedProcess:
     assert _PWSH, "pwsh/powershell required for this test"
     return subprocess.run(
-        [_PWSH, "-NoProfile", "-ExecutionPolicy", "Bypass", "-File",
-         str(repo / "scripts" / "bootstrap.ps1")],
+        [
+            _PWSH,
+            "-NoProfile",
+            "-ExecutionPolicy",
+            "Bypass",
+            "-File",
+            str(repo / "scripts" / "bootstrap.ps1"),
+        ],
         capture_output=True,
         text=True,
     )
@@ -96,7 +102,9 @@ def test_bootstrap_ps1_creates_link_when_only_agents_skills_exist(synthetic_repo
     _make_skill(synthetic_repo / ".agents" / "skills", "demo")
 
     result = _run_pwsh_bootstrap(synthetic_repo)
-    assert result.returncode == 0, f"bootstrap failed:\nstdout={result.stdout}\nstderr={result.stderr}"
+    assert result.returncode == 0, (
+        f"bootstrap failed:\nstdout={result.stdout}\nstderr={result.stderr}"
+    )
 
     mirror = synthetic_repo / ".claude" / "skills"
     assert mirror.exists(), "mirror should exist"
@@ -122,9 +130,7 @@ def test_bootstrap_ps1_aborts_on_dual_content(synthetic_repo: Path) -> None:
     legacy = synthetic_repo / ".claude" / "skills"
     legacy.mkdir(parents=True)
     (legacy / "beta").mkdir()
-    (legacy / "beta" / "SKILL.md").write_text(
-        "---\nname: beta\n---\n", encoding="utf-8"
-    )
+    (legacy / "beta" / "SKILL.md").write_text("---\nname: beta\n---\n", encoding="utf-8")
 
     result = _run_pwsh_bootstrap(synthetic_repo)
     assert result.returncode != 0, "should abort on dual-content"
