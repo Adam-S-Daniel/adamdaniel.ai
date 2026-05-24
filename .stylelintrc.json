@@ -1,0 +1,28 @@
+{
+  "extends": "stylelint-config-standard",
+  "ignoreFiles": [
+    "node_modules/**",
+    "_site/**",
+    "_site*/**",
+    "vendor/**",
+    "assets/js/**",
+    "**/*.min.css"
+  ],
+  "rules": {
+    "selector-class-pattern": null,
+    "no-descending-specificity": null,
+    "selector-max-specificity": null,
+    "property-no-vendor-prefix": null,
+    "property-no-deprecated": null
+  },
+  "overrides": [
+    {
+      "files": ["admin/*.css"],
+      "rules": {
+        "media-feature-range-notation": null,
+        "comment-empty-line-before": null,
+        "rule-empty-line-before": null
+      }
+    }
+  ]
+}
