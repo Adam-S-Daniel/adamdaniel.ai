@@ -304,6 +304,12 @@ const SPEC_RULES = {
     /^_posts\//,
     /^_layouts\/(post|default)\.html$/,
     /^_includes\//,
+    // Cleanup helper that prunes the smoke post's orphaned sitemap URLs.
+    /^e2e\/sitemap-prune\.js$/,
+  ],
+  // Pure-node unit test for the sitemap-prune cleanup helper.
+  "e2e/sitemap-prune.test.js": [
+    /^e2e\/sitemap-prune\.js$/,
   ],
   "e2e/cms-preview-url.spec.js": [
     /^admin\//,
