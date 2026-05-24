@@ -99,34 +99,32 @@ jobs:
         with:
           ref: ${{ github.event.pull_request.head.sha }}
 
-      - name: Compute CMS slug (cms/<col>/<entry> → <col>-<entry>)
+      - name: Compute CMS slug (cms/<col>/<entry> → bounded <col>-<entry>)
         id: cms_slug
         # Decap-opened editorial PRs land on `cms/<collection>/<slug>`
-        # head refs. Translate that to a DNS-safe slug so we can publish
-        # an additional `preview-cms-<slug>.adamdaniel.ai` preview that
-        # survives Decap closing & re-opening a PR for the same entry
-        # (the pr-<N> URL doesn't — N changes; the cms-<slug> URL
-        # doesn't — the entry path is stable). The CloudFront router
-        # under infrastructure/bootstrap/template.yaml maps the host to
-        # the matching S3 prefix; see docs/preview-pr-ruleset-spike.md.
+        # head refs. scripts/cms-preview-slug.sh translates that to a
+        # DNS-safe, length-bounded slug so we can publish an additional
+        # `preview-cms-<slug>.adamdaniel.ai` preview that survives Decap
+        # closing & re-opening a PR for the same entry (the pr-<N> URL
+        # doesn't — N changes; the cms-<slug> URL doesn't). The script
+        # caps the slug so `preview-cms-<slug>` stays within the 63-octet
+        # DNS-label limit; without that bound, a long entry title makes
+        # the host unresolvable and fails the per-slug deployment
+        # registration below. The CloudFront router under
+        # infrastructure/bootstrap/template.yaml maps the host to the
+        # matching S3 prefix; see docs/preview-pr-ruleset-spike.md.
         #
         # Output `slug=` is empty for non-cms branches; downstream steps
         # gate on `slug != ''` to skip the second sync/registration on
-        # regular code PRs.
+        # regular code PRs. The teardown job calls the SAME script so the
+        # two always agree on which `cms-<slug>/` prefix to clean up.
         run: |
           set -euo pipefail
-          BRANCH='${{ github.event.pull_request.head.ref }}'
-          if [[ "$BRANCH" == cms/* ]]; then
-            # Replace `/` with `-`. Lowercase is enforced by Decap's
-            # slug template, not by us — the CloudFront router's regex
-            # only matches `[a-z0-9-]`, so any uppercase surfaces as a
-            # 404 (visibly broken, by design — fail loudly rather than
-            # silently route to the wrong S3 prefix).
-            SLUG=$(printf '%s' "$BRANCH" | sed -E 's|^cms/||; s|/|-|g')
-            echo "slug=${SLUG}" >> "$GITHUB_OUTPUT"
+          SLUG=$(./scripts/cms-preview-slug.sh '${{ github.event.pull_request.head.ref }}')
+          echo "slug=${SLUG}" >> "$GITHUB_OUTPUT"
+          if [[ -n "$SLUG" ]]; then
             echo "Computed CMS slug: ${SLUG}"
           else
-            echo "slug=" >> "$GITHUB_OUTPUT"
             echo "Not a cms/* branch — skipping per-slug preview"
           fi
 
@@ -516,20 +514,25 @@ jobs:
       CLOUDFRONT_DISTRIBUTION_ID: ${{ secrets.PREVIEW_CLOUDFRONT_ID }}
 
     steps:
-      - name: Compute CMS slug (cms/<col>/<entry> → <col>-<entry>)
+      - name: Checkout
+        # Needed so scripts/cms-preview-slug.sh is on disk. Pin to the PR
+        # head SHA — the exact script version the deploy job used — so the
+        # teardown computes the identical bounded slug and removes the right
+        # `cms-<slug>/` prefix even if this PR itself changed the script.
+        uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd  # v6.0.2 (2026-01-09)
+        with:
+          ref: ${{ github.event.pull_request.head.sha }}
+
+      - name: Compute CMS slug (cms/<col>/<entry> → bounded <col>-<entry>)
         id: cms_slug
-        # Mirror the deploy-side computation so we know which (if any)
-        # alias S3 prefix to clean up in addition to pr-<N>. Both prefixes
-        # were syncd at deploy time; both need rm + invalidation now.
+        # Mirror the deploy-side computation via the SAME shared script so
+        # we agree on which (if any) alias S3 prefix to clean up in addition
+        # to pr-<N>. Both prefixes were syncd at deploy time; both need rm +
+        # invalidation now.
         run: |
           set -euo pipefail
-          BRANCH='${{ github.event.pull_request.head.ref }}'
-          if [[ "$BRANCH" == cms/* ]]; then
-            SLUG=$(printf '%s' "$BRANCH" | sed -E 's|^cms/||; s|/|-|g')
-            echo "slug=${SLUG}" >> "$GITHUB_OUTPUT"
-          else
-            echo "slug=" >> "$GITHUB_OUTPUT"
-          fi
+          SLUG=$(./scripts/cms-preview-slug.sh '${{ github.event.pull_request.head.ref }}')
+          echo "slug=${SLUG}" >> "$GITHUB_OUTPUT"
 
       - name: Configure AWS credentials
         uses: aws-actions/configure-aws-credentials@d979d5b3a71173a29b74b5b88418bfda9437d885  # v6.1.1 (2026-05-05)
