@@ -218,6 +218,13 @@ const SPEC_RULES = {
   // the direct-change rule, but listing the impl path keeps the
   // mapping explicit and survives a future rename of the test).
   "e2e/run-cms-loop.test.js": [/^e2e\/run-cms-loop\.js$/],
+  // Structural + slug-derivation invariants for the per-CMS-slug preview
+  // alias. Pure-node; selects when the shared slug script or the
+  // deploy-preview workflow it asserts against changes.
+  "e2e/deploy-preview-cms-slug.test.js": [
+    /^scripts\/cms-preview-slug\.sh$/,
+    /^\.github\/workflows\/deploy-preview\.yml$/,
+  ],
   // Prod-mutation playground (G4). Skips itself unless CMS_E2E_PAT is
   // set, so PR runs are safe — the spec just emits a skip and exits.
   // Selecting it on its own infra changes here keeps the PR matrix
