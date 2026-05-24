@@ -29,7 +29,7 @@ logger = logging.getLogger()
 logger.setLevel(logging.INFO)
 
 # ── Environment variables (set in SAM template / Lambda console) ────────────
-GITHUB_CLIENT_ID     = os.environ["GITHUB_CLIENT_ID"]
+GITHUB_CLIENT_ID = os.environ["GITHUB_CLIENT_ID"]
 GITHUB_CLIENT_SECRET = os.environ["GITHUB_CLIENT_SECRET"]
 # Scope requested from GitHub:
 #   - `repo`     read/write repo contents (PRs, labels, content API)
@@ -42,20 +42,31 @@ GITHUB_CLIENT_SECRET = os.environ["GITHUB_CLIENT_SECRET"]
 #                catches the 422 and dispatches `delete-via-pr.yml` —
 #                that POST returns 404 if the token lacks `workflow`.
 #                Without it, the Delete button silently does nothing.
-GITHUB_SCOPE         = os.environ.get("GITHUB_SCOPE", "repo,user,workflow")
+GITHUB_SCOPE = os.environ.get("GITHUB_SCOPE", "repo,user,workflow")
 # Allowed origins for the postMessage call (comma-separated list of CMS URLs).
 # Set to * during initial setup, then tighten to https://adamdaniel.ai
-ALLOWED_ORIGINS      = os.environ.get("ALLOWED_ORIGINS", "https://adamdaniel.ai")
+ALLOWED_ORIGINS = os.environ.get("ALLOWED_ORIGINS", "https://adamdaniel.ai")
+
+# GitHub OAuth endpoints (constant — never derived from user input).
+GITHUB_AUTHORIZE_URL = "https://github.com/login/oauth/authorize"
+# This is a public GitHub URL, not a credential; the literal `access_token`
+# substring trips the hardcoded-password heuristic (ruff S105 / bandit B105).
+GITHUB_TOKEN_URL = "https://github.com/login/oauth/access_token"  # noqa: S105  # nosec B105
+USER_AGENT = "adamdaniel-ai-oauth-proxy/1.0"
+HTTP_TIMEOUT_SECONDS = 10
 
 
 # ── Helpers ─────────────────────────────────────────────────────────────────
 
+
 def _cors_headers(origin: str | None = None) -> dict[str, str]:
     """Return minimal CORS headers."""
     allowed = ALLOWED_ORIGINS.split(",")
-    effective_origin = origin if (origin in allowed or "*" in allowed) else allowed[0]
+    effective_origin = (
+        origin if (origin is not None and (origin in allowed or "*" in allowed)) else allowed[0]
+    )
     return {
-        "Access-Control-Allow-Origin":  effective_origin,
+        "Access-Control-Allow-Origin": effective_origin,
         "Access-Control-Allow-Methods": "GET, OPTIONS",
         "Access-Control-Allow-Headers": "Content-Type",
     }
@@ -180,6 +191,7 @@ def _success_page(token: str, provider: str = "github") -> str:
 
 # ── Route handlers ───────────────────────────────────────────────────────────
 
+
 def handle_auth(params: dict, origin: str | None) -> dict:
     """
     Step 1 — redirect the browser to GitHub's OAuth consent screen.
@@ -188,24 +200,26 @@ def handle_auth(params: dict, origin: str | None) -> dict:
     We forward the `state` parameter through so GitHub echoes it back in the
     callback (CSRF protection).
     """
-    state  = params.get("state", "")
+    state = params.get("state", "")
     # IGNORE the CMS's scope param. Decap CMS hardcodes `repo,user` in
     # its OAuth request; that's missing `workflow`, which the shim
     # (admin/publish-via-auto-merge.js) needs to dispatch the
     # delete-via-pr workflow. Force the proxy's GITHUB_SCOPE so the
     # token GitHub issues has every scope the admin actually exercises,
     # not just the subset Decap thinks it needs.
-    scope  = GITHUB_SCOPE
+    scope = GITHUB_SCOPE
 
     github_auth_url = (
-        "https://github.com/login/oauth/authorize"
+        f"{GITHUB_AUTHORIZE_URL}"
         f"?client_id={urllib.parse.quote(GITHUB_CLIENT_ID)}"
         f"&scope={urllib.parse.quote(scope)}"
         f"&state={urllib.parse.quote(state)}"
         "&allow_signup=false"
     )
 
-    logger.info("Redirecting to GitHub OAuth (state=%s)", state[:8] + "…" if len(state) > 8 else state)
+    logger.info(
+        "Redirecting to GitHub OAuth (state=%s)", state[:8] + "…" if len(state) > 8 else state
+    )
     return _redirect(github_auth_url, origin)
 
 
@@ -217,7 +231,7 @@ def handle_callback(params: dict, origin: str | None) -> dict:
     We POST to GitHub's token endpoint and return an HTML page that
     uses postMessage to hand the token back to the CMS popup.
     """
-    code  = params.get("code", "")
+    code = params.get("code", "")
     error = params.get("error", "")
 
     if error:
@@ -227,32 +241,43 @@ def handle_callback(params: dict, origin: str | None) -> dict:
 
     if not code:
         logger.warning("Callback reached without code parameter")
-        return _html_response(_error_page("No authorisation code received."), status=400, origin=origin)
+        return _html_response(
+            _error_page("No authorisation code received."), status=400, origin=origin
+        )
 
     # Exchange code → token
-    post_data = urllib.parse.urlencode({
-        "client_id":     GITHUB_CLIENT_ID,
-        "client_secret": GITHUB_CLIENT_SECRET,
-        "code":          code,
-    }).encode("utf-8")
+    post_data = urllib.parse.urlencode(
+        {
+            "client_id": GITHUB_CLIENT_ID,
+            "client_secret": GITHUB_CLIENT_SECRET,
+            "code": code,
+        }
+    ).encode("utf-8")
 
-    req = urllib.request.Request(
-        "https://github.com/login/oauth/access_token",
+    # URL is the hardcoded GITHUB_TOKEN_URL constant (https scheme), never
+    # user-derived, so the file:/custom-scheme risk S310/B310 warns about
+    # cannot occur here.
+    req = urllib.request.Request(  # noqa: S310
+        GITHUB_TOKEN_URL,
         data=post_data,
         headers={
-            "Accept":       "application/json",
+            "Accept": "application/json",
             "Content-Type": "application/x-www-form-urlencoded",
-            "User-Agent":   "adamdaniel-ai-oauth-proxy/1.0",
+            "User-Agent": USER_AGENT,
         },
         method="POST",
     )
 
     try:
-        with urllib.request.urlopen(req, timeout=10) as resp:
+        with urllib.request.urlopen(  # noqa: S310  # nosec B310
+            req, timeout=HTTP_TIMEOUT_SECONDS
+        ) as resp:
             token_data = json.loads(resp.read().decode("utf-8"))
     except urllib.error.HTTPError as exc:
         logger.error("GitHub token exchange HTTP error: %s", exc)
-        return _html_response(_error_page(f"GitHub returned HTTP {exc.code}"), status=502, origin=origin)
+        return _html_response(
+            _error_page(f"GitHub returned HTTP {exc.code}"), status=502, origin=origin
+        )
     except Exception as exc:  # noqa: BLE001
         logger.error("Token exchange failed: %s", exc)
         return _html_response(_error_page("Token exchange failed."), status=502, origin=origin)
@@ -266,13 +291,16 @@ def handle_callback(params: dict, origin: str | None) -> dict:
     access_token = token_data.get("access_token", "")
     if not access_token:
         logger.error("GitHub response contained no access_token: %s", list(token_data.keys()))
-        return _html_response(_error_page("No access token in response."), status=502, origin=origin)
+        return _html_response(
+            _error_page("No access token in response."), status=502, origin=origin
+        )
 
     logger.info("Token exchange successful (token length=%d)", len(access_token))
     return _html_response(_success_page(access_token), origin=origin)
 
 
 # ── Lambda entry point ───────────────────────────────────────────────────────
+
 
 def handler(event: dict, context) -> dict:  # noqa: ANN001
     """
@@ -281,19 +309,22 @@ def handler(event: dict, context) -> dict:  # noqa: ANN001
     """
     # Normalise path between HTTP API and REST API payload formats
     raw_path = event.get("rawPath") or event.get("path") or "/"
-    path     = raw_path.rstrip("/").lower()
+    path = raw_path.rstrip("/").lower()
 
     # Query string parameters
     params: dict = event.get("queryStringParameters") or {}
 
     # Origin header for CORS
     headers = event.get("headers") or {}
-    origin  = headers.get("origin") or headers.get("Origin")
+    origin = headers.get("origin") or headers.get("Origin")
 
-    logger.info("Request: %s %s", event.get("requestContext", {}).get("http", {}).get("method", "GET"), raw_path)
+    # HTTP method (HTTP API payload 2.0 nests it under requestContext.http)
+    method = event.get("requestContext", {}).get("http", {}).get("method", "GET")
+
+    logger.info("Request: %s %s", method, raw_path)
 
     # Pre-flight OPTIONS
-    if event.get("requestContext", {}).get("http", {}).get("method") == "OPTIONS":
+    if method == "OPTIONS":
         return {
             "statusCode": 204,
             "headers": _cors_headers(origin),
