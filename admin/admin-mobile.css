@@ -206,4 +206,54 @@
     overflow-y: auto;
     border-bottom: 1px solid #d0d7de;
   }
+
+  /* ── 7. Media library modal ─────────────────────────────────────────
+   * The media-library modal (`StyledModal` card → `LibraryTop` header
+   * with the title + Copy Path / Download / Delete / Upload buttons,
+   * then `CardGridContainer`) is sized for desktop: the header's
+   * non-wrapping button row has a ~500px min-content width that
+   * overflows the card and runs the action buttons off the right edge
+   * of the phone (they become unreachable). Widen the card to the
+   * viewport and wrap the header + button rows so every control stays
+   * on-screen. `StyledModal` is Decap's generic modal card, so this also
+   * fits other dialogs (e.g. delete confirmations) to the phone. */
+  [class*="StyledModal"] {
+    width: calc(100vw - 1.5rem) !important;
+    max-width: calc(100vw - 1.5rem) !important;
+    min-width: 0 !important;
+    /* Keep Decap's grid layout. The header row is a FIXED height
+     * (`grid-template-rows: 120px auto`) sized for one button row; once
+     * the buttons wrap it clips them, and the wrapped row renders behind
+     * the asset grid (Delete disappears). Make the header track `auto`
+     * so it grows to its content, and keep the body track filling the
+     * rest — the asset grid is a react-window list whose height comes
+     * from that body track, so dropping the grid (display:block) would
+     * collapse it to 0 and show no images. */
+    grid-template-rows: auto minmax(0, 1fr) !important;
+  }
+  [class*="LibraryTop"],
+  [class*="RowContainer"],
+  [class*="CardGridContainer"],
+  [class*="SearchContainer"] {
+    max-width: 100% !important;
+    min-width: 0 !important;
+  }
+  /* The header has a fixed one-row height; once the buttons wrap to a
+   * second row, the extra row overflows the (grid) cell and is hidden
+   * behind the search bar — so "Delete selected" disappears. Let the
+   * header grow to fit the wrapped rows. */
+  [class*="LibraryTop"] {
+    height: auto !important;
+    min-height: 0 !important;
+  }
+  [class*="RowContainer"],
+  [class*="ButtonsContainer"] {
+    flex-wrap: wrap !important;
+    row-gap: 0.5rem;
+  }
+  /* Action buttons keep their natural width and wrap as whole units
+   * (Copy Path / Download / Delete / Upload), rather than being clipped. */
+  [class*="ButtonsContainer"] > * {
+    flex: 0 0 auto !important;
+  }
 }

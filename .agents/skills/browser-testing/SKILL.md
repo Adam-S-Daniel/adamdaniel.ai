@@ -249,6 +249,24 @@ test.afterAll(async () => {
 
 An earlier iteration used Sveltia CMS for its UX improvements, but Sveltia ≤ 0.158 silently ignores `publish_mode: editorial_workflow`. With branch protection on `main`, every Save returned "Repository rule violations found." Decap implements the editorial workflow correctly — each Save lands on a `cms/...` branch and opens a PR — so we swapped back. See PR #48.
 
+## Visual reachability: `toBeVisible()` is not enough
+
+A passing `toBeVisible()` only proves an element has non-zero size and isn't `display:none` / `visibility:hidden` / `opacity:0`. It does **not** prove the element is *usable*. Two regressions have shipped past it in the Decap admin:
+
+- **Clipped off-screen** — a toolbar/modal control rendered past the viewport's right edge on a phone (the editor toolbar's Save/Publish/Delete; the media-library action buttons). "Visible" to Playwright, unreachable to the user.
+- **Occluded** — another element paints on top (the media-library "Delete selected" button rendered *behind* the asset grid once the header's fixed-height row overflowed). "Visible", but covered.
+
+Use **`expectReachable(page, locator, label)`** from `e2e/ui-visibility.js` for any control a user must be able to tap. It asserts the element is visible, sits within the viewport horizontally, and is the topmost element at its center point (`document.elementFromPoint`). It polls, so a mid-render / "Loading entry…" transient doesn't flake the check, while a persistent clip or occlusion still fails.
+
+```js
+const { expectReachable } = require("./ui-visibility");
+await expectReachable(page, page.getByRole("button", { name: /^Save$/ }), "editor Save button");
+```
+
+**Run admin reachability checks at BOTH admin resolutions.** The admin UI is exercised on two surfaces — `chromium-desktop-3k` (3000×1500) and `webkit-iphone16` (393×852) — and a control reachable on one can be clipped/occluded on the other (that's exactly the iPhone-only bugs above). Tag the spec `@admin-read` and do **not** pin a viewport with `setViewportSize`, so it runs at each project's native resolution. `e2e/admin-no-occlusion.spec.js` is the worked example: it checks the collection list, entry editor, editorial-workflow board, and media-library modal. **Every new admin screen — or new control on an existing screen — must add its key controls there.**
+
+When a control's region can be occluded only by *content* (e.g. the media grid populated with assets — which the in-browser test-repo backend uploads unreliably), assert the layout *fact* instead of staging the occluder: e.g. the header isn't clipped (`scrollHeight <= clientHeight`) and the controls sit within the header's box. See the media-library test in `admin-no-occlusion.spec.js`.
+
 ## Diff-aware spec selection
 
 The full matrix is 8 projects × ~25 specs. A content-only edit shouldn't pay for the cross-browser admin-CMS specs, the preview-bridge specs, or the CloudFront router specs — those tests can't possibly be affected. `e2e/select-specs.js` reads the PR's `git diff --name-only origin/main...HEAD` and returns one of three scopes:
