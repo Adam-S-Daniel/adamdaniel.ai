@@ -273,6 +273,7 @@ process_file() {
       local repo_path="${BASH_REMATCH[3]}"
       local sha="${BASH_REMATCH[4]}"
       local gap="${BASH_REMATCH[5]}"
+      # shellcheck disable=SC2034  # group 6 (existing comment) named for parity with USES_RE; build_new_line regenerates it.
       local existing_comment="${BASH_REMATCH[6]:-}"
 
       # API repo is just owner/repo (first path segment).
@@ -288,8 +289,8 @@ process_file() {
 
       if [[ "$new_line" != "$line" ]]; then
         SUMMARY_LINES+=("${file}:${NR:-?}: ${owner}/${repo_path}@${sha:0:7}")
-        SUMMARY_LINES+=("  - ${line#${prefix}}")
-        SUMMARY_LINES+=("  + ${new_line#${prefix}}")
+        SUMMARY_LINES+=("  - ${line#"${prefix}"}")
+        SUMMARY_LINES+=("  + ${new_line#"${prefix}"}")
         file_changed=1
         ANY_CHANGE=1
       fi

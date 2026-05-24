@@ -56,6 +56,7 @@ info "Create OIDC provider: ${CREATE_OIDC_PROVIDER}"
 # ── Auto-detect Route53 hosted zone if not specified ───────────────────────
 if [[ -z "$HOSTED_ZONE_ID" ]]; then
   info "Looking up Route53 hosted zone for adamdaniel.ai…"
+  # shellcheck disable=SC2016  # backticks are JMESPath literal syntax in --query, not shell expansion.
   HOSTED_ZONE_ID=$(aws route53 list-hosted-zones-by-name \
     --dns-name "adamdaniel.ai" \
     --query 'HostedZones[?Name==`adamdaniel.ai.`].Id' \
