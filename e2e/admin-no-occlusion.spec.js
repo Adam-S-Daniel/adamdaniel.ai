@@ -197,6 +197,30 @@ test.describe(
         header.overflowing,
         `Media-library action buttons overflow below the header (into the asset grid), hiding them: ${JSON.stringify(header.overflowing)}`,
       ).toEqual([]);
+
+      // 3. The asset grid must keep its height. Decap's asset list is a
+      //    react-window virtual list whose height comes from the modal's
+      //    grid body track; dropping the modal to display:block collapses
+      //    that track to 0 so NO images render (regressed on this PR).
+      //    Assert the modal stays a grid and its body region (the empty-
+      //    state message here, the card list when populated) fills below
+      //    the header — no upload needed.
+      const body = await page.evaluate(() => {
+        const sm = document.querySelector('[class*="StyledModal"]');
+        const region = sm && sm.children[1]; // [0] = header, [1] = asset area
+        return {
+          display: sm ? getComputedStyle(sm).display : null,
+          regionH: region ? Math.round(region.getBoundingClientRect().height) : 0,
+        };
+      });
+      expect(
+        body.display,
+        "media modal must stay a CSS grid — display:block collapses the virtualized asset grid to 0 height and no images render",
+      ).toBe("grid");
+      expect(
+        body.regionH,
+        `media asset region collapsed to ${body.regionH}px — the grid's body track lost its height, so images won't render`,
+      ).toBeGreaterThan(150);
     });
   },
 );

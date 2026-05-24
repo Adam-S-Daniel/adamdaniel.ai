@@ -221,14 +221,15 @@
     width: calc(100vw - 1.5rem) !important;
     max-width: calc(100vw - 1.5rem) !important;
     min-width: 0 !important;
-    /* Decap lays the modal out as a grid with a fixed-height header row.
-     * On a phone the header needs to grow (its buttons wrap to a second
-     * row), but a grid track won't, so the wrapped row — including
-     * "Delete selected" — gets hidden behind the asset grid. Drop the
-     * grid to normal block flow and let the whole modal scroll. */
-    display: block !important;
-    max-height: calc(100vh - 2rem) !important;
-    overflow-y: auto !important;
+    /* Keep Decap's grid layout. The header row is a FIXED height
+     * (`grid-template-rows: 120px auto`) sized for one button row; once
+     * the buttons wrap it clips them, and the wrapped row renders behind
+     * the asset grid (Delete disappears). Make the header track `auto`
+     * so it grows to its content, and keep the body track filling the
+     * rest — the asset grid is a react-window list whose height comes
+     * from that body track, so dropping the grid (display:block) would
+     * collapse it to 0 and show no images. */
+    grid-template-rows: auto minmax(0, 1fr) !important;
   }
   [class*="LibraryTop"],
   [class*="RowContainer"],
