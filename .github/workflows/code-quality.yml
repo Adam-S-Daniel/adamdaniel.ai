@@ -1,0 +1,229 @@
+# Code-quality lint + static-analysis gate.
+#
+# Runs the per-language linters / static-security / style tools that the
+# repo standardised on (see AGENTS.md "Code quality"). Each language's
+# checks run ONLY when files of that language changed (a `changes` job
+# computes per-language booleans from the PR diff), so an unrelated PR
+# emits a fast green check without spinning up every toolchain.
+#
+# NOT a required status check (intentionally): it is not listed in
+# .github/rulesets/main.json, so a transient lint-infra hiccup never
+# blocks a merge. The signal is advisory-but-loud — on failure the job
+# posts a gitleaks-scrubbed summary as a PR comment (same
+# post-failure-comment composite e2e-tests.yml uses), so the failure is
+# visible inline to humans and to agents via the PR API.
+#
+# All `uses:` are pinned to the exact SHAs already vetted elsewhere in
+# this repo (no new actions introduced → no cooling-off needed).
+name: code-quality
+
+on:
+  pull_request:
+    branches: [main]
+  workflow_dispatch:
+
+permissions:
+  contents: read
+  pull-requests: write
+
+concurrency:
+  group: code-quality-${{ github.event.pull_request.number || github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  # ── Which languages changed? ──────────────────────────────────────
+  # One git-diff pass → per-language booleans. The lint job gates each
+  # tool step on the matching output so nothing runs for a language the
+  # PR didn't touch.
+  changes:
+    runs-on: ubuntu-latest
+    outputs:
+      any: ${{ steps.detect.outputs.any }}
+      js: ${{ steps.detect.outputs.js }}
+      py: ${{ steps.detect.outputs.py }}
+      rb: ${{ steps.detect.outputs.rb }}
+      sh: ${{ steps.detect.outputs.sh }}
+      yaml: ${{ steps.detect.outputs.yaml }}
+      css: ${{ steps.detect.outputs.css }}
+      md: ${{ steps.detect.outputs.md }}
+    steps:
+      - name: Checkout
+        uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd  # v6.0.2 (2026-01-09)
+        with:
+          fetch-depth: 0
+
+      - name: Detect changed languages
+        id: detect
+        env:
+          BASE_REF: ${{ github.base_ref }}
+        run: |
+          set -euo pipefail
+          # On workflow_dispatch there is no PR base; lint everything.
+          if [ -z "${BASE_REF:-}" ]; then
+            for k in any js py rb sh yaml css md; do
+              echo "${k}=true" >> "$GITHUB_OUTPUT"
+            done
+            echo "No base ref (manual run) — linting all languages."
+            exit 0
+          fi
+          git fetch --no-tags --depth=1 origin "$BASE_REF"
+          CHANGED="$(git diff --name-only "origin/${BASE_REF}...HEAD")"
+          echo "Changed files:"
+          echo "$CHANGED"
+          match() { echo "$CHANGED" | grep -qE "$1"; }
+          js=false; py=false; rb=false; sh=false; yaml=false; css=false; md=false
+          match '(^|/)(e2e|admin|scripts)/.*\.js$|\.config\.js$|^eslint\.config\.js$|^\.prettierrc\.json$|^package(-lock)?\.json$' && js=true
+          match '\.py$|^pyproject\.toml$' && py=true
+          match '^_plugins(_test)?/.*\.rb$|^\.rubocop\.yml$' && rb=true
+          match '\.sh$|^\.githooks/|^\.shellcheckrc$' && sh=true
+          match '^\.github/(workflows|actions)/.*\.ya?ml$|^\.github/dependabot\.yml$|^\.yamllint\.yml$' && yaml=true
+          match '\.css$|^\.stylelintrc\.json$' && css=true
+          match '\.md$|^\.markdownlint(-cli2)?\.jsonc$' && md=true
+          any=false
+          for v in "$js" "$py" "$rb" "$sh" "$yaml" "$css" "$md"; do
+            [ "$v" = true ] && any=true
+          done
+          {
+            echo "js=$js"; echo "py=$py"; echo "rb=$rb"; echo "sh=$sh"
+            echo "yaml=$yaml"; echo "css=$css"; echo "md=$md"; echo "any=$any"
+          } >> "$GITHUB_OUTPUT"
+
+  lint:
+    needs: changes
+    if: ${{ needs.changes.outputs.any == 'true' }}
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout
+        uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd  # v6.0.2 (2026-01-09)
+
+      # ── JavaScript: eslint + prettier ──────────────────────────────
+      - name: npm ci
+        if: ${{ needs.changes.outputs.js == 'true' || needs.changes.outputs.css == 'true' || needs.changes.outputs.md == 'true' }}
+        run: npm ci --no-audit --no-fund 2>&1 | tee -a /tmp/lint.log
+
+      - name: ESLint
+        if: ${{ needs.changes.outputs.js == 'true' }}
+        run: |
+          set -o pipefail
+          npx eslint "e2e/**/*.js" "admin/**/*.js" "scripts/*.js" "*.config.js" 2>&1 | tee -a /tmp/lint.log
+
+      - name: Prettier (check)
+        if: ${{ needs.changes.outputs.js == 'true' }}
+        run: |
+          set -o pipefail
+          npx prettier --check "e2e/**/*.js" "admin/**/*.js" "scripts/*.js" "*.config.js" 2>&1 | tee -a /tmp/lint.log
+
+      # ── CSS: stylelint ─────────────────────────────────────────────
+      - name: Stylelint
+        if: ${{ needs.changes.outputs.css == 'true' }}
+        run: |
+          set -o pipefail
+          npx stylelint "assets/css/*.css" "admin/*.css" 2>&1 | tee -a /tmp/lint.log
+
+      # ── Markdown: markdownlint-cli2 ────────────────────────────────
+      - name: markdownlint
+        if: ${{ needs.changes.outputs.md == 'true' }}
+        run: |
+          set -o pipefail
+          npx markdownlint-cli2 2>&1 | tee -a /tmp/lint.log
+
+      # ── Python: ruff + mypy + bandit ───────────────────────────────
+      - name: Install Python tools
+        if: ${{ needs.changes.outputs.py == 'true' }}
+        run: |
+          python3 -m pip install --quiet --user \
+            'ruff==0.15.8' 'bandit==1.9.4' 'mypy==1.19.1'
+          echo "$HOME/.local/bin" >> "$GITHUB_PATH"
+
+      - name: Ruff (lint + format)
+        if: ${{ needs.changes.outputs.py == 'true' }}
+        run: |
+          set -o pipefail
+          ruff check 2>&1 | tee -a /tmp/lint.log
+          ruff format --check 2>&1 | tee -a /tmp/lint.log
+
+      - name: mypy
+        if: ${{ needs.changes.outputs.py == 'true' }}
+        run: |
+          set -o pipefail
+          mypy 2>&1 | tee -a /tmp/lint.log
+
+      - name: Bandit
+        if: ${{ needs.changes.outputs.py == 'true' }}
+        run: |
+          set -o pipefail
+          bandit -r oauth-proxy scripts tests -c pyproject.toml 2>&1 | tee -a /tmp/lint.log
+
+      # ── Ruby: rubocop (standalone, Ruby 3.3 — parallel needs >=3.3) ─
+      - name: Setup Ruby
+        if: ${{ needs.changes.outputs.rb == 'true' }}
+        uses: ruby/setup-ruby@97ecb7b512899eb71ab1bf2310a624c6f1589ac6  # v1.308.0 (2026-05-16)
+        with:
+          ruby-version: '3.3'
+
+      - name: RuboCop
+        if: ${{ needs.changes.outputs.rb == 'true' }}
+        run: |
+          set -o pipefail
+          gem install --no-document rubocop -v 1.86.2 rubocop-performance -v 1.26.1 2>&1 | tee -a /tmp/lint.log
+          rubocop 2>&1 | tee -a /tmp/lint.log
+
+      # ── Shell: shellcheck + shfmt ──────────────────────────────────
+      - name: Install shell tools
+        if: ${{ needs.changes.outputs.sh == 'true' }}
+        run: |
+          set -euo pipefail
+          sudo apt-get update -qq
+          sudo apt-get install -y -qq shellcheck
+          curl -fsSL "https://github.com/mvdan/sh/releases/download/v3.10.0/shfmt_v3.10.0_linux_amd64" \
+            -o "$HOME/.local/bin/shfmt"
+          chmod +x "$HOME/.local/bin/shfmt"
+          echo "$HOME/.local/bin" >> "$GITHUB_PATH"
+
+      - name: ShellCheck + shfmt
+        if: ${{ needs.changes.outputs.sh == 'true' }}
+        run: |
+          set -o pipefail
+          # shellcheck disable=SC2046  # word-splitting the file list is intended
+          shellcheck $(git ls-files '*.sh') .githooks/pre-commit 2>&1 | tee -a /tmp/lint.log
+          # shellcheck disable=SC2046
+          shfmt -i 2 -ci -bn -d $(git ls-files '*.sh') .githooks/pre-commit 2>&1 | tee -a /tmp/lint.log
+
+      # ── YAML / Actions: yamllint + actionlint ──────────────────────
+      - name: Install YAML tools
+        if: ${{ needs.changes.outputs.yaml == 'true' }}
+        run: |
+          set -euo pipefail
+          python3 -m pip install --quiet --user 'yamllint==1.38.0'
+          curl -fsSL "https://github.com/rhysd/actionlint/releases/download/v1.7.7/actionlint_1.7.7_linux_amd64.tar.gz" \
+            | tar -xz -C "$HOME/.local/bin" actionlint
+          echo "$HOME/.local/bin" >> "$GITHUB_PATH"
+
+      - name: yamllint + actionlint
+        if: ${{ needs.changes.outputs.yaml == 'true' }}
+        run: |
+          set -o pipefail
+          yamllint -c .yamllint.yml .github/ 2>&1 | tee -a /tmp/lint.log
+          # The two head-ref "potentially untrusted" advisories are
+          # reviewed false positives on same-repo Decap PRs (see
+          # AGENTS.md "Code quality"); keep flagging every other input.
+          actionlint -ignore '"github\.(event\.pull_request\.head\.ref|head_ref)" is potentially untrusted' 2>&1 | tee -a /tmp/lint.log
+
+      # ── Surface failures inline (gitleaks-scrubbed) ────────────────
+      - name: Post failure summary
+        if: ${{ failure() && github.event_name == 'pull_request' }}
+        uses: ./.github/actions/post-failure-comment
+        with:
+          mode: post
+          log-file: /tmp/lint.log
+          marker: code-quality-failure-summary
+          title: code-quality
+          gitleaks-version: 8.30.1
+
+      - name: Resolve failure summary on success
+        if: ${{ success() && github.event_name == 'pull_request' }}
+        uses: ./.github/actions/post-failure-comment
+        with:
+          mode: resolve
+          marker: code-quality-failure-summary
+          title: code-quality
