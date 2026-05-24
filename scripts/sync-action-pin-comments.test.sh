@@ -22,9 +22,13 @@ FAIL=0
 
 # ANSI off if not a tty.
 if [[ -t 1 ]]; then
-  GREEN=$'\e[32m'; RED=$'\e[31m'; RESET=$'\e[0m'
+  GREEN=$'\e[32m'
+  RED=$'\e[31m'
+  RESET=$'\e[0m'
 else
-  GREEN=""; RED=""; RESET=""
+  GREEN=""
+  RED=""
+  RESET=""
 fi
 
 assert_eq() {
@@ -204,11 +208,13 @@ assert_eq "test1: --check does not modify file" "$ORIG_HASH" "$NEW_HASH"
 case "$CHECK_OUT" in
   *"would update"*)
     echo "${GREEN}PASS${RESET} test1: --check stdout mentions pending updates"
-    PASS=$((PASS + 1)) ;;
+    PASS=$((PASS + 1))
+    ;;
   *)
     echo "${RED}FAIL${RESET} test1: --check stdout missing 'would update'"
     echo "stdout: $CHECK_OUT"
-    FAIL=$((FAIL + 1)) ;;
+    FAIL=$((FAIL + 1))
+    ;;
 esac
 
 # ---------- Test 2: real run rewrites stale + comment-less, leaves rest ----------
@@ -227,11 +233,13 @@ assert_eq "test3: re-run no diff" "$HASH_BEFORE_RERUN" "$HASH_AFTER_RERUN"
 case "$RERUN_OUT" in
   *"no changes"*)
     echo "${GREEN}PASS${RESET} test3: re-run stdout says 'no changes'"
-    PASS=$((PASS + 1)) ;;
+    PASS=$((PASS + 1))
+    ;;
   *)
     echo "${RED}FAIL${RESET} test3: re-run stdout missing 'no changes'"
     echo "stdout: $RERUN_OUT"
-    FAIL=$((FAIL + 1)) ;;
+    FAIL=$((FAIL + 1))
+    ;;
 esac
 
 # ---------- Test 4: --check on already-clean tree exits 0 ----------
@@ -243,10 +251,12 @@ assert_eq "test4: --check on clean tree exits 0" "0" "$CHECK2_RC"
 case "$CHECK2_OUT" in
   *"no changes"*)
     echo "${GREEN}PASS${RESET} test4: --check on clean tree says 'no changes'"
-    PASS=$((PASS + 1)) ;;
+    PASS=$((PASS + 1))
+    ;;
   *)
     echo "${RED}FAIL${RESET} test4: --check on clean tree missing 'no changes'"
-    FAIL=$((FAIL + 1)) ;;
+    FAIL=$((FAIL + 1))
+    ;;
 esac
 
 # ---------- Test 5: no-tag fallback is also idempotent ----------
@@ -256,11 +266,13 @@ NO_TAG_LINE="$(grep -F '(no tag found)' "$FIXTURE_BEFORE" | head -1)"
 case "$NO_TAG_LINE" in
   *"# (no tag found)")
     echo "${GREEN}PASS${RESET} test5: (no tag found) marker preserved"
-    PASS=$((PASS + 1)) ;;
+    PASS=$((PASS + 1))
+    ;;
   *)
     echo "${RED}FAIL${RESET} test5: (no tag found) marker missing or malformed"
     echo "got: $NO_TAG_LINE"
-    FAIL=$((FAIL + 1)) ;;
+    FAIL=$((FAIL + 1))
+    ;;
 esac
 
 # ---------- Summary ----------

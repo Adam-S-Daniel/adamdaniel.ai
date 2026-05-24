@@ -37,13 +37,16 @@ YELLOW='\033[1;33m'
 RED='\033[0;31m'
 NC='\033[0m'
 
-info()    { echo -e "${BLUE}[INFO]${NC}  $*"; }
+info() { echo -e "${BLUE}[INFO]${NC}  $*"; }
 success() { echo -e "${GREEN}[OK]${NC}    $*"; }
-warn()    { echo -e "${YELLOW}[WARN]${NC}  $*"; }
-error()   { echo -e "${RED}[ERROR]${NC} $*" >&2; exit 1; }
+warn() { echo -e "${YELLOW}[WARN]${NC}  $*"; }
+error() {
+  echo -e "${RED}[ERROR]${NC} $*" >&2
+  exit 1
+}
 
 # ── Validate required env vars ────────────────────────────────────────────
-[[ -z "${GITHUB_CLIENT_ID:-}"     ]] && error "GITHUB_CLIENT_ID is not set"
+[[ -z "${GITHUB_CLIENT_ID:-}" ]] && error "GITHUB_CLIENT_ID is not set"
 [[ -z "${GITHUB_CLIENT_SECRET:-}" ]] && error "GITHUB_CLIENT_SECRET is not set"
 
 # ── Move to script directory ──────────────────────────────────────────────
@@ -63,15 +66,15 @@ info "Deploying to AWS…"
 
 DEPLOY_ARGS=(
   --template-file .aws-sam/build/template.yaml
-  --stack-name    "$STACK_NAME"
-  --region        "$AWS_REGION"
-  --capabilities  CAPABILITY_IAM
+  --stack-name "$STACK_NAME"
+  --region "$AWS_REGION"
+  --capabilities CAPABILITY_IAM
   --no-confirm-changeset
   --parameter-overrides
-    "GitHubClientId=${GITHUB_CLIENT_ID}"
-    "GitHubClientSecret=${GITHUB_CLIENT_SECRET}"
-    "AllowedOrigins=${ALLOWED_ORIGINS}"
-    "GitHubScope=${GITHUB_SCOPE}"
+  "GitHubClientId=${GITHUB_CLIENT_ID}"
+  "GitHubClientSecret=${GITHUB_CLIENT_SECRET}"
+  "AllowedOrigins=${ALLOWED_ORIGINS}"
+  "GitHubScope=${GITHUB_SCOPE}"
 )
 
 # Resolve S3 bucket for artifacts (SAM managed or pre-existing)

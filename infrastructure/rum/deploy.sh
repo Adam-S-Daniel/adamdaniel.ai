@@ -33,9 +33,12 @@ YELLOW='\033[1;33m'
 RED='\033[0;31m'
 NC='\033[0m'
 
-info()    { echo -e "${BLUE}[INFO]${NC}  $*"; }
+info() { echo -e "${BLUE}[INFO]${NC}  $*"; }
 success() { echo -e "${GREEN}[OK]${NC}    $*"; }
-error()   { echo -e "${RED}[ERROR]${NC} $*" >&2; exit 1; }
+error() {
+  echo -e "${RED}[ERROR]${NC} $*" >&2
+  exit 1
+}
 
 # ── Validate prerequisites ─────────────────────────────────────────────────
 command -v aws >/dev/null 2>&1 || error "AWS CLI not found. Install: https://docs.aws.amazon.com/cli/latest/userguide/getting-started-install.html"
@@ -49,9 +52,9 @@ info "Deploying stack: ${STACK_NAME} to ${AWS_REGION}"
 # ── Deploy ─────────────────────────────────────────────────────────────────
 aws cloudformation deploy \
   --template-file template.yaml \
-  --stack-name    "$STACK_NAME" \
-  --region        "$AWS_REGION" \
-  --capabilities  CAPABILITY_IAM \
+  --stack-name "$STACK_NAME" \
+  --region "$AWS_REGION" \
+  --capabilities CAPABILITY_IAM \
   --no-fail-on-empty-changeset
 
 # ── Fetch outputs ──────────────────────────────────────────────────────────

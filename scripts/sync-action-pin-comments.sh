@@ -48,11 +48,19 @@ WORKFLOWS_DIR=".github/workflows"
 
 while [[ $# -gt 0 ]]; do
   case "$1" in
-    --check) CHECK_MODE=1; shift ;;
+    --check)
+      CHECK_MODE=1
+      shift
+      ;;
     --workflows-dir)
-      WORKFLOWS_DIR="${2:?--workflows-dir requires a value}"; shift 2 ;;
-    --workflows-dir=*) WORKFLOWS_DIR="${1#--workflows-dir=}"; shift ;;
-    -h|--help)
+      WORKFLOWS_DIR="${2:?--workflows-dir requires a value}"
+      shift 2
+      ;;
+    --workflows-dir=*)
+      WORKFLOWS_DIR="${1#--workflows-dir=}"
+      shift
+      ;;
+    -h | --help)
       sed -n '2,/^set -uo pipefail/p' "$0" | sed -E 's/^# ?//;/^set/d'
       exit 0
       ;;
@@ -226,7 +234,7 @@ resolve_pin() {
 
 USES_RE='^([[:space:]]*-?[[:space:]]*uses:[[:space:]]+)([A-Za-z0-9._-]+)/([A-Za-z0-9._/-]+)@([0-9a-f]{40})([[:space:]]*)(#.*)?[[:space:]]*$'
 
-declare -a SUMMARY_LINES=()  # human-readable summary
+declare -a SUMMARY_LINES=() # human-readable summary
 ANY_CHANGE=0
 
 # Re-emit a refreshed line. Preserves the exact "spaces between SHA
@@ -254,7 +262,8 @@ build_new_line() {
 # FILE_CHANGED=1 if anything would change.
 process_file() {
   local file="$1"
-  local tmp; tmp="$(mktemp)"
+  local tmp
+  tmp="$(mktemp)"
   local file_changed=0
 
   while IFS= read -r line || [[ -n "$line" ]]; do

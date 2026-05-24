@@ -35,10 +35,13 @@ YELLOW='\033[1;33m'
 RED='\033[0;31m'
 NC='\033[0m'
 
-info()    { echo -e "${BLUE}[INFO]${NC}  $*"; }
+info() { echo -e "${BLUE}[INFO]${NC}  $*"; }
 success() { echo -e "${GREEN}[OK]${NC}    $*"; }
-warn()    { echo -e "${YELLOW}[WARN]${NC}  $*"; }
-error()   { echo -e "${RED}[ERROR]${NC} $*" >&2; exit 1; }
+warn() { echo -e "${YELLOW}[WARN]${NC}  $*"; }
+error() {
+  echo -e "${RED}[ERROR]${NC} $*" >&2
+  exit 1
+}
 
 # ── Validate prerequisites ─────────────────────────────────────────────────
 command -v aws >/dev/null 2>&1 || error "AWS CLI not found. Install: https://docs.aws.amazon.com/cli/latest/userguide/getting-started-install.html"
@@ -64,14 +67,14 @@ fi
 # ── Deploy ─────────────────────────────────────────────────────────────────
 aws cloudformation deploy \
   --template-file template.yaml \
-  --stack-name    "$STACK_NAME" \
-  --region        "$AWS_REGION" \
-  --capabilities  CAPABILITY_NAMED_IAM \
+  --stack-name "$STACK_NAME" \
+  --region "$AWS_REGION" \
+  --capabilities CAPABILITY_NAMED_IAM \
   --no-fail-on-empty-changeset \
   --parameter-overrides \
-    "CreateOIDCProvider=${CREATE_OIDC_PROVIDER}" \
-    "HostedZoneId=${HOSTED_ZONE_ID}" \
-    "PreviewDomainName=*.adamdaniel.ai"
+  "CreateOIDCProvider=${CREATE_OIDC_PROVIDER}" \
+  "HostedZoneId=${HOSTED_ZONE_ID}" \
+  "PreviewDomainName=*.adamdaniel.ai"
 
 # ── Fetch outputs ──────────────────────────────────────────────────────────
 info "Fetching stack outputs…"
