@@ -1,0 +1,81 @@
+# RuboCop configuration scoped to this repo's Ruby surface: the Jekyll
+# plugins in _plugins/ and their plain-Ruby unit tests in _plugins_test/.
+# Nothing else in the repo is Ruby, so the Include list is deliberately
+# narrow and the generated _site/, vendored gems, and node_modules are
+# excluded outright.
+#
+# CI runs:  bundle exec rubocop
+
+plugins:
+  - rubocop-performance
+
+AllCops:
+  TargetRubyVersion: 3.3
+  NewCops: enable
+  # Lint only our own Ruby. Without an explicit Include, RuboCop's default
+  # glob would also try to lint Ruby it finds under vendored/build dirs.
+  Include:
+    - '_plugins/**/*.rb'
+    - '_plugins_test/**/*.rb'
+  Exclude:
+    - 'vendor/**/*'
+    - 'node_modules/**/*'
+    - '_site/**/*'
+    - '.bundle/**/*'
+
+# ── Style ────────────────────────────────────────────────────────────────
+
+# The existing code uses dangling trailing commas on multiline literals so
+# diffs that add an element touch one line, not two. Enforce that idiom
+# consistently rather than RuboCop's default of forbidding them.
+Style/TrailingCommaInArguments:
+  EnforcedStyleForMultiline: consistent_comma
+Style/TrailingCommaInArrayLiteral:
+  EnforcedStyleForMultiline: consistent_comma
+Style/TrailingCommaInHashLiteral:
+  EnforcedStyleForMultiline: consistent_comma
+
+# Every module/class here is preceded by a file-level comment block
+# explaining its purpose (see the headers in each _plugins/ file). A
+# duplicate per-class doc comment would be noise, so don't require one.
+Style/Documentation:
+  Enabled: false
+
+# The plain-Ruby test files intentionally define several tiny throwaway
+# fixtures at the top level (a Struct stand-in, a fake Liquid context, a
+# fake Jekyll doc). Splitting each into its own file would scatter a
+# single test's setup, so allow multiple per file in tests only.
+Style/OneClassPerFile:
+  Exclude:
+    - '_plugins_test/**/*.rb'
+
+# ── Metrics ────────────────────────────────────────────────────────────────
+# Jekyll generators/initializers are legitimately a bit longer than a
+# typical helper (they assemble Page objects field-by-field and shape
+# data). Keep the cops on as guardrails but with limits that fit
+# idiomatic Jekyll plugin code rather than forcing churn on working code.
+
+Metrics/MethodLength:
+  Max: 25
+Metrics/AbcSize:
+  Max: 25
+Metrics/CyclomaticComplexity:
+  Max: 9
+Metrics/PerceivedComplexity:
+  Max: 9
+# The plain-Ruby test files run their assertions inside one top-level
+# block per file; that is the intended shape, not a smell.
+Metrics/BlockLength:
+  Exclude:
+    - '_plugins_test/**/*.rb'
+
+# ── Lint ────────────────────────────────────────────────────────────────
+# Jekyll::Page subclasses (TagPage, FeedPage) deliberately do NOT call
+# super in #initialize: the parent's initializer expects a different
+# signature and reads files from disk, whereas these synthetic pages set
+# their own ivars and call #process. Calling super would break them. This
+# is the documented Jekyll plugin idiom for generated pages.
+Lint/MissingSuper:
+  Exclude:
+    - '_plugins/auto_tag_pages.rb'
+    - '_plugins/tag_feeds.rb'
