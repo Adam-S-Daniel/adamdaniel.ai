@@ -20,7 +20,7 @@ collections — you can **create**, **edit**, and **delete** entries in
 each from the CMS UI:
 
 | Collection | What it holds | When to use it |
-|---|---|---|
+| --- | --- | --- |
 | **Posts** | Blog articles in `_posts/` | Anything dated; goes on `/blog/` |
 | **Tags** | Tag descriptions in `_tags/` | Optional — only needed if you want a description on a tag's archive page |
 | **Projects** | Portfolio entries in `_projects/` | Featured work shown on `/projects/` |
@@ -76,7 +76,7 @@ The two fields decide *when* the post goes live:
 So:
 
 | Published | Publish Date | Result |
-|---|---|---|
+| --- | --- | --- |
 | OFF | (blank) | Permanent draft — manually publish later |
 | OFF | future timestamp | Auto-publish at that time |
 | ON | (anything) | Live on next deploy |
@@ -115,7 +115,7 @@ and the post form has a **Published** toggle field. They look similar.
 They aren't.
 
 | Dimension | What it controls | Where it lives |
-|---|---|---|
+| --- | --- | --- |
 | **Status** (Draft / In Review / Ready) | Whether the *PR* gets merged into its base branch | Decap's editorial workflow — translates to the `cms/draft` / `cms/ready` PR labels in `cms-editorial-workflow.yml`. Auto-merge fires on `cms/ready`. |
 | **Published** toggle | Whether the *post*, once on its base branch, is rendered on the live site | A custom front-matter field. Jekyll filters `published: false` out of `site.posts` at build time. |
 
@@ -134,7 +134,7 @@ When you edit a post via `/admin/` on the production site
 branch off `main` and opens a PR back into `main`.
 
 | Status | Published | Result |
-|---|---|---|
+| --- | --- | --- |
 | Draft / In Review | OFF or ON | PR open against `main`, not merged. Nothing on the live site. |
 | Ready | OFF | PR auto-merges into `main`. Post sits in the repo on `main` but **stays hidden** on the live site. |
 | Ready | ON | PR auto-merges into `main`. Post goes live on the next deploy (~1 min). |
@@ -149,7 +149,7 @@ patched `backend.branch` to point at that PR's head ref (e.g.
 `restore-decap-cms` and PRs into `restore-decap-cms` — **not** `main`.
 
 | Status | Published | Result |
-|---|---|---|
+| --- | --- | --- |
 | Draft / In Review | OFF or ON | PR open against the preview branch. Visible only on `preview-pr<N>`. |
 | Ready | OFF or ON | PR auto-merges into the preview branch. The change shows up on `preview-pr<N>.adamdaniel.ai` once the preview redeploys (~1 min). **Does not affect production.** |
 
@@ -252,7 +252,7 @@ Browsing or re-using a previously uploaded image:
 ## 8. Troubleshooting
 
 | Symptom | Likely cause | Fix |
-|---|---|---|
+| --- | --- | --- |
 | "Login with GitHub" loops back to the login screen | Browser blocked third-party cookies for the OAuth proxy | Allow cookies for `*.execute-api.us-east-1.amazonaws.com`, or use a different browser |
 | `+ Create` button missing on a folder collection | Either you're not signed in (Decap hides write affordances when there's no GitHub token), or someone removed `create: true` / `delete: true` from `admin/config.yml` | Sign out and back in; verify the config has both flags explicitly set |
 | Saved a post but it's not on the live site | **Published** toggle is OFF (draft), or the PR hasn't been approved yet (editorial workflow) | Either flip Published to ON, or finish the review flow: change the PR label from `cms/draft` to `cms/ready` and approve the visual regression in the dashboard |

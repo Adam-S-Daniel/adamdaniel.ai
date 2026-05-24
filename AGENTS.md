@@ -10,7 +10,7 @@ Personal website and blog for Adam Daniel (Freelance AI Engineer). Jekyll static
 
 ## Architecture
 
-```
+```text
 Production:   adamdaniel.ai                     → CloudFront → S3
 Preview:      preview-pr${N}.adamdaniel.ai      → CloudFront → S3 (/pr-${N}/)
 CMS:          adamdaniel.ai/admin/              → Decap CMS → GitHub OAuth → Lambda
@@ -46,7 +46,7 @@ npx playwright test e2e/glow-banding.spec.js       # single test file
 ## GitHub Actions secrets
 
 | Secret | Source | Used by |
-|---|---|---|
+| --- | --- | --- |
 | `AWS_ROLE_ARN` | bootstrap stack output | deploy-production.yml, deploy-preview.yml |
 | `PRODUCTION_CLOUDFRONT_ID` | bootstrap stack output | deploy-production.yml |
 | `PREVIEW_CLOUDFRONT_ID` | bootstrap stack output | deploy-preview.yml |
@@ -55,7 +55,7 @@ npx playwright test e2e/glow-banding.spec.js       # single test file
 ## AWS resources (us-east-1)
 
 | Resource | Name / ID |
-|---|---|
+| --- | --- |
 | CloudFormation stack | `adamdaniel-ai-bootstrap` |
 | S3 artifacts bucket | `adamdaniel-ai-cfn-artifacts` |
 | S3 production bucket | `adamdaniel-ai-production` (external, not CFN-managed) |
@@ -70,7 +70,7 @@ npx playwright test e2e/glow-banding.spec.js       # single test file
 ## Content model
 
 | Collection | Folder | Type | Key fields |
-|---|---|---|---|
+| --- | --- | --- | --- |
 | Posts | `_posts/` | folder | title, date, tags, excerpt, featured_image, published, publish_date, test_fixture (hidden) |
 | Tags | `_tags/` | folder | name, description |
 | Projects | `_projects/` | folder | title, technology, url_link, featured, images (gallery) |
@@ -132,7 +132,7 @@ Authors can drop a block of raw HTML / JS / CSS into any markdown body — usefu
 
 **Toolbar (preferred).** The Decap markdown toolbar exposes an "HTML Embed" button on every body field (registered globally via `admin/editor-component-html-embed.js`, which calls `CMS.registerEditorComponent`). Clicking it opens a code field for HTML; saving stores the block on disk wrapped in sentinel comments:
 
-```
+```text
 <!-- html-embed:start -->
 <div class="post-embed">
 …author HTML / JS / CSS…
@@ -197,7 +197,7 @@ missing-check trap, the stub mirror, the `cms/*` head-ref directive, and
 the verified footguns. Keep both in sync when you change path filters.
 
 | Workflow | Trigger | Path-filtering mechanism | Salient paths |
-|---|---|---|---|
+| --- | --- | --- | --- |
 | `canary-prod.yml` | `schedule`, `workflow_dispatch` | n/a (cron-only) | n/a |
 | `claude.yml` | `issue_comment`, `pull_request_review_comment`, `pull_request_review`, `issues` | n/a (event-driven, gated on `@claude` mention) | n/a |
 | `cms-delete-published-preview.yml` | `workflow_dispatch` | n/a (dispatch-only — needs a live preview env to target) | n/a. `inputs.pr_number` selects the preview env; the spec self-skips unless `CMS_E2E_PAT` + `PR_NUMBER` + `PR_HEAD_REF` are set. NOT a required check (heavy loops stay off the merge path) |
@@ -257,6 +257,7 @@ When you add a new workflow, append it to this table in the same commit.
 6. Post/update PR comment using `<!-- adamdaniel-preview-bot -->` marker to avoid duplicates
 
 URL shown in comment:
+
 - With `PREVIEW_CLOUDFRONT_ID`: `https://preview-pr{N}.adamdaniel.ai/`
 - Without: `http://adamdaniel-ai-previews.s3-website-us-east-1.amazonaws.com/pr-{N}/` (HTTP fallback — Decap CMS won't work over this)
 
@@ -294,7 +295,7 @@ Runs **only** when `cms/ready` label is added, and **only after `validate-conten
 
 #### CMS editorial flow
 
-```
+```text
 CMS creates PR (branch: cms/draft-{timestamp})
   → validate-content runs → adds cms/draft label
   → preview deployed at preview-pr{N}.adamdaniel.ai
@@ -350,7 +351,7 @@ Uses `regression-review` GitHub Environment with required reviewers (all write-a
 #### Page detection rules (`e2e/detect-changed-pages.js`)
 
 | Changed file pattern | Mapped URL(s) |
-|---|---|
+| --- | --- |
 | `_posts/YYYY-MM-DD-{slug}.md` | `/blog/{slug}/` |
 | `_projects/{slug}.md` | `/projects/{slug}/` |
 | `_tags/{slug}.md` | `/tags/{slug}/` |
@@ -403,7 +404,7 @@ When all three pass, the spec runs against `https://adamdaniel.ai/admin/`: it re
 Tracked follow-up to PR #971. Sibling of `cms-publish-loop-preview.yml`: that workflow runs the canary-page publish loop against a PR preview env; this one runs the **three remaining real-backend loops that previously had prod-only coverage** through the same per-PR preview surface, closing the parity gap from #999:
 
 | Preview spec | Prod counterpart | Loop |
-|---|---|---|
+| --- | --- | --- |
 | `e2e/cms-publish-loop-prod-mutate-preview.spec.js` | `cms-publish-loop-prod-mutate.spec.js` | real `_posts/` body edit + publish toggle |
 | `e2e/cms-unpublish-republish-preview.spec.js` | `cms-unpublish-republish.spec.js` | `_posts/` unpublish → re-publish |
 | `e2e/cms-tags-lifecycle-preview.spec.js` | `cms-tags-lifecycle.spec.js` | Tags-collection create → publish → delete |
@@ -431,7 +432,7 @@ Cleans up automation-only artefacts that crashed test runs leak. Runs daily at 0
 **Three-tier sweep, all age-gated by `THRESHOLD_HOURS` (default 6h):**
 
 | Tier | What it sweeps | Branch deleted? | Opt-out |
-|---|---|---|---|
+| --- | --- | --- | --- |
 | 1 | Open PRs on `cms/e2e/*` or `cms/e2e-fixture/*` branches (no label needed — these prefixes have no human use case). | Yes (`gh pr close --delete-branch`). | `keep` label on the PR. |
 | 2 | Open PRs labelled `automated-test`, regardless of branch prefix. Catches `cms/posts/*` leaks from prod-mutate runs. | No (Decap reuses `cms/<col>/<slug>` per entry; the next run's `closeStaleDecapPrOnBranch` handles the handoff). | `keep` label on the PR. |
 | 3 | Branches matching the same Tier 1 prefix safelist that have NO open PR (a crashed run pushed a branch but died before opening a PR). Direct ref delete via the git refs API. | Yes (it's the whole point). | `[sweep-keep]` in the tip commit message (the PR-level `keep` label can't apply when there's no PR). |
@@ -452,7 +453,7 @@ Belt-and-suspenders for the class of bug PR #882 represents — a Decap-opened `
 **Gates (enforced in `scripts/auto-resolve-newline-conflict.js`):**
 
 | Gate | Allows |
-|---|---|
+| --- | --- |
 | PR state | `open` |
 | Mergeable state | `dirty` only (skips `clean`, `unknown`, `blocked`, etc.) |
 | Head ref | `cms/{e2e,e2e-fixture,posts,pages,projects,tags}/...` |
@@ -532,7 +533,7 @@ gh api repos/Adam-S-Daniel/adamdaniel.ai/rulesets/13985217
 Required status checks (current):
 
 | Check | Workflow | Notes |
-|---|---|---|
+| --- | --- | --- |
 | `validate-content` | `cms-editorial-workflow.yml` | Always fires (no path filter) — front-matter + Jekyll build sanity check |
 | `scan` | `secrets-scan.yml` | Always fires (gitleaks must scan every PR diff) |
 | `select`, `unit`, `parity`, `e2e (1)`, `finalize` | `e2e-tests.yml` | Fire on every PR EXCEPT those whose entire diff matches `paths-ignore` (docs-only). Required checks block such PRs from merging — owner can override, or expand the PR with a small non-doc change to satisfy the gate. `e2e (1)` is shard 1 of the dynamic matrix (always present per `pickShardCount()` + the workflow's `case "$shard_count"` block); `finalize` is the matrix roll-up (`if: !cancelled()`, `needs: [e2e]`, last step re-fails on any shard failure) — keeping both gives shard-name resilience plus a single roll-up signal |
@@ -622,6 +623,7 @@ Tests run with `fullyParallel: true` — all 8 projects execute concurrently wit
 #### Always-run baseline
 
 Cheap, deterministic, no browser:
+
 - `e2e/compute-visual-diffs.test.js` — pure pngjs unit tests for the visual-diff classifier
 - `e2e/cms-config.spec.js` — YAML structural invariants for the Decap config (editorial workflow on, every folder collection has explicit create + delete, all required fields present, etc.)
 - `e2e/visual-change-guard.spec.js` — guards against unintended visual changes
@@ -631,6 +633,7 @@ Cheap, deterministic, no browser:
 Every browser-based test in the suite captures one full-page screenshot per main-frame navigation while it runs. The `finalize` job assembles these per-test frame sequences into individual videos with a 96px-tall metadata banner above the screenshot, and concatenates them into a master `_combined.mp4` for the run.
 
 **Where things live:**
+
 - Capture fixture: `e2e/base.js` (`attachPerTestCapture`, hooks `page.on("framenavigated")`).
 - Frames during a run: `test-results/per-test-frames/<safe-test-id>/{NNNN.png,meta.json}`.
 - Assembly script: `e2e/generate-test-videos.js`.
@@ -638,6 +641,7 @@ Every browser-based test in the suite captures one full-page screenshot per main
 - CI artifact: `per-test-videos` (separate from `playwright-report`; 7-day retention).
 
 **Banner content** — three monospace lines, white on a 96px black strip ABOVE the screenshot:
+
 1. `PR #<n> · Test <X> of <Y> · <file>::<title>` — disambiguates runs and locates this test in the combined run.
 2. `Step <x> of <y>: <step name / URL fallback> · <status>` — frame-by-frame label. `x` is the 1-indexed frame within the test, `y` is the total frame count for that test. The label prefers the active `test.step()` title; for frames captured outside any `test.step()`, it falls back to the URL path of the `framenavigated` event that fired the capture. Truncated to ~110 chars to fit the banner.
 3. `project: <projectName> · <YYYY-MM-DD HH:MM:SS TZ>` — the date/time is each test's own `endTime` formatted in `America/New_York` with the TZ abbreviation (`EDT` or `EST`), NOT a single run-wide stamp.
@@ -698,7 +702,7 @@ The matrix is split into a **public-page lane** (8 projects, full browser × vie
 **Public-page lane** — runs every spec that does NOT carry an `@admin-*` tag. Each project's `grepInvert: /@admin-write\b|@admin-read\b|@admin-screenshots\b/` excludes admin specs.
 
 | Project | Browser | Viewport | Special |
-|---|---|---|---|
+| --- | --- | --- | --- |
 | `chromium-desktop-1080` | Chromium | 1920×1080 | — |
 | `chromium-laptop` | Chromium | 1366×768 | — |
 | `chromium-mobile` | Chromium | 375×667 | — |
@@ -711,7 +715,7 @@ The matrix is split into a **public-page lane** (8 projects, full browser × vie
 **Admin lane** — runs only specs tagged `@admin-write`, `@admin-read`, or `@admin-screenshots`. Public-page specs do NOT run on these projects.
 
 | Project | Browser | Viewport | Tags accepted |
-|---|---|---|---|
+| --- | --- | --- | --- |
 | `chromium-desktop-3k` | Chromium | 3000×1500 | `@admin-write` + `@admin-read` + `@admin-screenshots` |
 | `webkit-iphone16` | WebKit | 393×852 (deviceScaleFactor 3, isMobile, hasTouch) | `@admin-read` only |
 
@@ -722,7 +726,7 @@ The two admin projects intentionally cover the two browsers a real contributor u
 Specs that drive the admin UI are tagged via Playwright's `{ tag: [...] }` option on `test.describe(...)` or `test(...)`. The tag controls which projects the spec runs on:
 
 | Tag | Meaning | Runs on |
-|---|---|---|
+| --- | --- | --- |
 | `@admin-write` | Drives `/admin/*` AND mutates state (Decap Save → `cms/*` PR, decap-server FS write, etc.) | `chromium-desktop-3k` only — single browser is sufficient and writes are heavy/serial |
 | `@admin-read` | Drives `/admin/*` but is read-only (DOM contract, HTTP byte parity, mocked APIs) | `chromium-desktop-3k` + `webkit-iphone16` — engine-dependent admin UI assertions need both |
 | `@admin-screenshots` | Manual-walkthrough specs that emit `docs/manual-screenshots/*.png` via `manual-capture.js` | `chromium-desktop-3k` only — `manual-capture.js` writes to project-INDEPENDENT paths, so two parallel projects would race + last-write-wins |
@@ -768,6 +772,7 @@ Tests import `{ test, expect }` from `./base` instead of `@playwright/test`. The
 1. Import from `./base`: `const { test, expect } = require("./base");`
 2. Tests automatically run across all 8 projects — no per-test matrix setup needed.
 3. To skip a test for specific projects, read the project config via `testInfo`:
+
    ```js
    test("my test", async ({ page }, testInfo) => {
      test.skip(
@@ -777,6 +782,7 @@ Tests import `{ test, expect }` from `./base` instead of `@playwright/test`. The
      // ...
    });
    ```
+
    Don't use `matchMedia()` for this — it's unreliable under Playwright's media emulation.
 
 ### Parallelism
@@ -869,7 +875,7 @@ The composite action at `.github/actions/post-failure-comment/action.yml`:
 **Markers in use** (must be globally unique to avoid clobbering each other):
 
 | Marker | Workflow / job |
-|---|---|
+| --- | --- |
 | `e2e-failure-summary` | `e2e-tests.yml` → `finalize` (aggregates the e2e matrix) |
 | `unit-failure-summary` | `e2e-tests.yml` → `unit` |
 | `e2e-real-failure-summary` | `e2e-tests.yml` → `e2e-real` |

@@ -5,7 +5,7 @@ how the layers compose. Read this if you're adding a feature, debugging a
 flaky run, or deciding whether a new test belongs in an existing spec or a
 new one.
 
-```
+```text
         ┌─ pure structural ─────────┐
         │  YAML, regex, AST checks  │ ALWAYS RUN  (no browser, no Jekyll)
         ├──────────────────────────┤
@@ -69,7 +69,7 @@ lane (`TEST_LANE=local` drives `e2e`/`e2e-admin`, `TEST_LANE=real` drives
 `all` | `subset` | `skip`:
 
 | Change | Local scope | Result |
-|---|---|---|
+| --- | --- | --- |
 | Push to `main` | — | selector bypassed; full matrix |
 | Fanout file (`_layouts/`, `_includes/`, `_config.yml`, `assets/css/`, `_plugins/`, `Gemfile*`, `package*.json`, `e2e/base.js`, `playwright*.config.js`, `.github/workflows/e2e-tests.yml`) | `all` | full 8-project matrix; on the **real** lane this is *not* `all` but a subset of every `@lane:real` spec |
 | A changed `e2e/*.spec.js`/`*.test.js` | `subset` | that spec adds itself (then lane-filtered) |
@@ -88,7 +88,7 @@ at runtime unless their env opt-in is set — so they execute end-to-end
 only in their dedicated workflow:
 
 | Spec(s) | Env gate | Set by |
-|---|---|---|
+| --- | --- | --- |
 | `cms-publish-loop`, `cms-delete-published`, `cms-unpublish-republish`, `cms-tags-lifecycle` | `RUN_HOST_REPO_PUBLISH_LOOP=1` + `CMS_E2E_PAT` | `cms-publish-loop-host.yml` (nightly/dispatch) |
 | `cms-publish-loop-preview`, `cms-delete-published-preview` | `PR_NUMBER` + `PR_HEAD_REF` + `CMS_E2E_PAT` | `cms-publish-loop-preview.yml` / `cms-delete-published-preview.yml` (dispatch) |
 | `cms-publish-loop-prod-mutate-preview`, `cms-unpublish-republish-preview`, `cms-tags-lifecycle-preview` (issue #999 preview-parity) | `PR_NUMBER` + `PR_HEAD_REF` + `CMS_E2E_PAT` | `cms-preview-loops.yml` (dispatch) |
@@ -140,7 +140,7 @@ two lists drift.
 ## 3. Categories and which workflow runs them
 
 | Workflow | Triggers | Specs |
-|---|---|---|
+| --- | --- | --- |
 | `e2e-tests.yml` | PR, push to main | All `e2e/*.spec.js` and `e2e/*.test.js` (subset gated by selector on PRs) |
 | `visual-regression.yml` | PR | Uses its own `playwright.regression.config.js` and `e2e/regression-video.spec.js` only |
 | `cms-editorial-workflow.yml` | Every PR (no path/branch filter — `validate-content` must always report for the ruleset) | Front-matter validation in-line (no specs invoked) |
@@ -157,7 +157,7 @@ These guard the YAML / template / JSON contracts that everything
 downstream depends on. Listed in `select-specs.js`'s `ALWAYS_RUN`.
 
 | Spec | Tests | Catches |
-|---|---|---|
+| --- | --- | --- |
 | [`e2e/cms-config.spec.js`](../e2e/cms-config.spec.js) | 11 | Posts collection has expected fields, every folder collection has explicit `create: true` + `delete: true`, editorial workflow is on, `media_folder`/`public_folder` are flat + template-free + consistent (`public_folder == "/" + media_folder`), hint text mentions `/preview/?collection=posts`, projects has multi-image gallery, tags has name+description, pages has permalink+published. |
 | [`e2e/compute-visual-diffs.test.js`](../e2e/compute-visual-diffs.test.js) | 7 | Pixel-diff math (`pixelDiffRatio`, `classifyDiff`) for the visual-regression dashboard — pure pngjs, deterministic. |
 | [`e2e/visual-change-guard.spec.js`](../e2e/visual-change-guard.spec.js) | 1 | Visual regression snapshot updates are within bounds (no monster diffs slipped in unreviewed). |
@@ -167,7 +167,7 @@ downstream depends on. Listed in `select-specs.js`'s `ALWAYS_RUN`.
 ### B. Plugin and proxy unit tests (Ruby / Python, no browser)
 
 | File | Tests | Catches |
-|---|---|---|
+| --- | --- | --- |
 | [`_plugins_test/auto_tag_pages_test.rb`](../_plugins_test/auto_tag_pages_test.rb) | 8 | `summarise()` correctly partitions curated vs in-line tags, sorts/dedups, normalises slugs, handles edge cases (nil tags, non-Latin names). The Jekyll-integration path is not exercised; that's covered by `cms-publish-flow.spec.js`. |
 | [`_plugins_test/normalize_empty_slug_test.rb`](../_plugins_test/normalize_empty_slug_test.rb) | 9 | `normalize_empty_slug.rb` doesn't strip a real slug, does fall through to a date-derived slug when blank, etc. |
 | [`oauth-proxy/test_lambda.py`](../oauth-proxy/test_lambda.py) | 13 | OAuth proxy Lambda: `/health`, `/auth` redirects to GitHub with the right scope, `/callback` returns the `authorization:github:success:<JSON>` postMessage HTML, OPTIONS preflight CORS, GitHub-token-error handling. |
@@ -179,7 +179,7 @@ external consumers (RSS, search, screen readers, the visual-regression
 showcase) depend on.
 
 | Spec | Tests | Catches |
-|---|---|---|
+| --- | --- | --- |
 | [`e2e/blog-post.spec.js`](../e2e/blog-post.spec.js) | 3 | `/blog/<slug>/` renders post title exactly once, no spurious featured image when front matter is empty, single `<title>` in head. |
 | [`e2e/tags.spec.js`](../e2e/tags.spec.js) | 7 | `/tags/` lists curated tags, every curated tag has its archive page, an archive without matching posts shows the empty-state placeholder, the homepage tag cloud renders. |
 | [`e2e/not-found.spec.js`](../e2e/not-found.spec.js) | 2 | Missing URL returns HTTP 404 with the proper `404.html` chrome. |
@@ -192,7 +192,7 @@ The `/preview/` page is rendered by the real Jekyll layouts and consumed
 by `admin/preview-bridge.js`. Two angles cover its contract.
 
 | Spec | Tests | Catches |
-|---|---|---|
+| --- | --- | --- |
 | [`e2e/preview-shell.spec.js`](../e2e/preview-shell.spec.js) | 13 | `/preview/` serves 200 with site chrome, switches layouts via `?collection=`, applies postMessage / BroadcastChannel updates, refuses cross-origin messages, renders markdown widgets (images, lists, code), is `noindex`. Chromium-desktop only — DOM contract, not visual. |
 | [`e2e/preview-bridge.spec.js`](../e2e/preview-bridge.spec.js) | 3 | The bridge registers a `postSave` listener with `window.CMS`, broadcasts entry data via BroadcastChannel, exposes the preview-URL helper. Stubbed `window.CMS` — no Decap boot. |
 | [`e2e/preview-config-patch.spec.js`](../e2e/preview-config-patch.spec.js) | 4 | `scripts/patch-preview-config.sh` rewrites `site_url`, `display_url`, `backend.branch` correctly and leaves `preview_path` alone. |
@@ -204,7 +204,7 @@ Decap's editor DOM is identical across viewports — running these on the
 gated to `chromium-desktop-3k` in its `beforeEach`.
 
 | Spec | Tests | Catches |
-|---|---|---|
+| --- | --- | --- |
 | [`e2e/cms-smoke.spec.js`](../e2e/cms-smoke.spec.js) | 2 | (1) Decap admin loads → login → create a Tag → file lands at `_tags/<slug>.md` with expected front matter → delete via editor → file removed. (2) Open an existing Posts entry; every label declared in the schema appears in the rendered form (Title, URL Slug, Date, Excerpt, Tags, Featured Image, Published, Publish Date, Body), at least 4 visible inputs/textareas, Title input's `color` differs from its `background-color` (theme contrast). |
 | [`e2e/cms-publish-flow.spec.js`](../e2e/cms-publish-flow.spec.js) | 1 | True end-to-end: Decap admin → create a new post (Title, slug, body, inline tag, Published toggle) → click Publish now → file appears in `_posts/` → run `bundle exec jekyll build` → GET `/blog/<slug>/` → `.post-header h1` and `.post-content` match what was typed → GET `/tags/<inline-tag>/` → auto-generated archive lists the new post. Cleans up `_posts/` and `_site/` artifacts in `afterAll`. **This is the only test that proves the full create-and-publish loop works.** |
 | [`e2e/admin-reviews-auth.spec.js`](../e2e/admin-reviews-auth.spec.js) | 1 | `/admin/reviews/` completes the Decap-style OAuth handshake (popup posts `authorizing:github`, dashboard echoes back, popup releases `authorization:github:success:<JSON>`, dashboard parses the token). Skipping any step leaves the popup spinning. |
@@ -218,7 +218,7 @@ projects (cross-browser × cross-viewport sanity); admin screens are
 gated to chromium-desktop-3k.
 
 | Snapshot | Catches |
-|---|---|
+| --- | --- |
 | `homepage` | Landing-page chrome, glow gradient, tag cloud |
 | `blog-post` | Post layout — header, body, footer, prose typography |
 | `tags-index` | `/tags/` curation list |
@@ -241,7 +241,7 @@ inline. The specs pull the function source out of the YAML and run it in
 Node, so the template stays the single source of truth.
 
 | Spec | Tests | Catches |
-|---|---|---|
+| --- | --- | --- |
 | [`e2e/cloudfront-preview-router.spec.js`](../e2e/cloudfront-preview-router.spec.js) | 7 | Viewer-request function maps `Host: preview-pr<N>.adamdaniel.ai` to S3 key prefix `/pr-<N>/`; leaves apex and unrelated subdomains alone; handles multi-digit PR numbers; no-host edge case. |
 | [`e2e/cloudfront-preview-location-fixer.spec.js`](../e2e/cloudfront-preview-location-fixer.spec.js) | 9 | Viewer-response function strips the `/pr-<N>/` prefix from `Location` headers (so S3's trailing-slash redirects don't leak the internal key space); leaves cross-origin redirects, non-redirects, and apex hosts untouched. |
 
@@ -274,7 +274,7 @@ What this suite does *not* yet cover:
 
 ## 6. Per-spec quick reference
 
-```
+```text
 ALWAYS-RUN (no browser):
   cms-config.spec.js              YAML invariants                   11 tests
   compute-visual-diffs.test.js    pngjs pixel math                   7 tests
@@ -318,7 +318,7 @@ REGRESSION-VIDEO (separate config, visual-regression.yml only):
 
 ## 7. Adding a new test — decision tree
 
-```
+```text
 Is the thing you're testing a YAML / JSON / template invariant?
   → cms-config.spec.js (or a new always-run structural spec)
 

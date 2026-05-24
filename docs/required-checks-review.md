@@ -9,7 +9,7 @@ per-test screenshot videos (#143), and Dependabot comment-sync (#144/#145/#146).
 
 `gh api repos/Adam-S-Daniel/adamdaniel.ai/rulesets/13985217` (May 2026):
 
-```
+```yaml
 required_status_checks:
   - validate-content
   - scan
@@ -31,7 +31,7 @@ authoritative and correct; this PR reconciles the in-tree JSON to match.
 ## Per-check assessment
 
 | Check | Workflow | PR behaviour | Always-fires? | Required today | Should be required? | Rationale |
-|---|---|---|---|---|---|---|
+| --- | --- | --- | --- | --- | --- | --- |
 | `validate-content` | cms-editorial-workflow | always (no `paths:`) | yes | YES | YES | <2 min budget, gates content correctness, no missing-check risk. Keep. |
 | `scan` | secrets-scan | always (no `paths:`) | yes | YES | YES | Secret-leak gate must run on every diff. Keep. |
 | `select` | e2e-tests | runs except docs-only PRs (`paths-ignore` on the workflow) | yes when e2e fires | YES | YES | Drives shard fanout; e2e is meaningless without it. Keep. |
@@ -66,7 +66,7 @@ authoritative and correct; this PR reconciles the in-tree JSON to match.
 
 Final required list (8 → 7 → 7-with-finalize, see migration steps):
 
-```
+```text
 validate-content
 scan
 select
@@ -109,7 +109,7 @@ finalize
 
    Expected output (one per line, in this order):
 
-   ```
+   ```text
    validate-content
    scan
    select

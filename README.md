@@ -6,7 +6,7 @@ Built with Jekyll + Decap CMS, deployed to S3 + CloudFront with an AWS Lambda OA
 
 ## Architecture
 
-```
+```text
 adamdaniel.ai
 ├── Jekyll site          (S3 + CloudFront, custom domain)
 ├── Decap CMS            (/admin/ — headless CMS backed by this repo)
@@ -32,6 +32,7 @@ CREATE_OIDC_PROVIDER=false bash infrastructure/bootstrap/deploy.sh
 ```
 
 Then add the stack outputs as GitHub Actions secrets (repo → Settings → Secrets → Actions):
+
 - `AWS_ROLE_ARN` — the IAM role ARN for OIDC auth
 - `PREVIEW_CLOUDFRONT_ID` — the CloudFront distribution ID for preview cache invalidation
 
@@ -44,7 +45,7 @@ provisioned.
 ## Content Model
 
 | Collection | Type | Key Fields |
-|---|---|---|
+| --- | --- | --- |
 | **Posts** | Entry (folder: `_posts/`) | title, body, date, tags, excerpt, featured_image, published, publish_date |
 | **Tags** | Entry (folder: `_tags/`) | name, description |
 | **Projects** | Entry (folder: `_projects/`) | title, description, images, url_link, technology, featured |
@@ -60,11 +61,12 @@ provisioned.
 
 Decap CMS is configured at `/admin/config.yml`. To activate:
 
-1. **Create a GitHub OAuth App** at https://github.com/settings/developers
+1. **Create a GitHub OAuth App** at <https://github.com/settings/developers>
    - Homepage URL: `https://adamdaniel.ai`
    - Callback URL: *(set after deploying the OAuth proxy — see below)*
 
 2. **Deploy the OAuth proxy** (see `oauth-proxy/README.md`)
+
    ```bash
    cd oauth-proxy
    export GITHUB_CLIENT_ID=your_id
@@ -73,6 +75,7 @@ Decap CMS is configured at `/admin/config.yml`. To activate:
    ```
 
 3. **Update `admin/config.yml`** with the deployed API URL:
+
    ```yaml
    backend:
      name: github
@@ -116,7 +119,7 @@ Cost: roughly **$0.10/month** at this site's traffic. Full setup, sampling, rete
 ## GitHub Actions
 
 | Workflow | Trigger | What it does |
-|---|---|---|
+| --- | --- | --- |
 | `deploy-production.yml` | Push to `main` | Builds Jekyll, syncs to S3, invalidates CloudFront |
 | `deploy-preview.yml` | PR open/update | Builds Jekyll, syncs to preview S3 prefix, posts URL comment |
 | `cms-editorial-workflow.yml` | PR from CMS | Validates front matter, applies `cms/draft` label; auto-merges on `cms/ready` |
@@ -131,7 +134,7 @@ Cost: roughly **$0.10/month** at this site's traffic. Full setup, sampling, rete
 Most workflows declare path filters on their triggers so diffs which can't possibly affect a given workflow's output never allocate a runner. See [`AGENTS.md` § Salient paths per workflow](AGENTS.md#salient-paths-per-workflow) for the full per-workflow table; key entries:
 
 | Workflow | Filter | Effect |
-|---|---|---|
+| --- | --- | --- |
 | `deploy-production.yml` | `paths-ignore` (push to `main`) | Skips the prod deploy when a push only touches docs, test/CI tooling, non-Jekyll infra, or unrelated workflow files. The workflow's own file is salient. `workflow_dispatch` ignores `paths-ignore`. |
 | `visual-regression.yml` | `paths` (positive list) | Runs only on template / styling / admin / pipeline-tooling changes. **CMS-managed content paths are intentionally excluded** (`_posts/**`, `_tags/**`, `_projects/**`, `pages/**`, `_e2e/**`, `assets/images/uploads/**`) — content-only PRs (the kind every CMS Save produces) guarantee pixel diffs by design, so the regression video adds runner time without signal. Mixed PRs that also touch a template path still trigger the workflow. |
 | `e2e-tests.yml` | `paths-ignore` (PR + push to `main`) | Coarse-skip for docs-only / unrelated-CI-only diffs. `e2e/select-specs.js` still does the fine-grained "which specs to run" cut at runtime for diffs that *do* affect anything testable. |
@@ -153,6 +156,7 @@ The `github-pages` entries are dormant history from before the 2026-03-15 cutove
 ### Preview Environments
 
 PR previews are deployed to S3 and served via CloudFront with HTTPS:
+
 - URL pattern: `https://preview-pr{N}.adamdaniel.ai/` (paths identical to prod)
 - Bucket: `adamdaniel-ai-previews` (one prefix per PR: `/pr-{N}/`)
 - CDN: single CloudFront distribution with wildcard ACM cert
@@ -160,6 +164,7 @@ PR previews are deployed to S3 and served via CloudFront with HTTPS:
 - Teardown: auto-deleted when the PR is closed/merged
 
 Required secrets:
+
 - `AWS_ROLE_ARN` (see [AWS Bootstrap](#aws-bootstrap-one-time-setup))
 - `PREVIEW_CLOUDFRONT_ID` — CloudFront distribution ID (output from bootstrap stack)
 
@@ -209,7 +214,7 @@ whether content reaches the live site. They look similar in the UI
 but gate two different things:
 
 | Dimension | What it controls | Where it lives |
-|---|---|---|
+| --- | --- | --- |
 | **Status** (Draft / In Review / Ready) | Whether the *PR* gets merged into its base branch | Decap's editorial workflow — translates to `cms/draft` / `cms/ready` PR labels in `cms-editorial-workflow.yml`. Auto-merge fires on `cms/ready`. |
 | **Published** toggle | Whether the *post*, once on its base branch, is rendered on the live site | Custom front-matter field. Jekyll filters `published: false` out of `site.posts` at build time. |
 
@@ -225,7 +230,7 @@ branch (`preview-pr<N>.adamdaniel.ai`) instead of production
 ## Branches
 
 | Branch / pattern | Created by | Merges into | What it represents |
-|---|---|---|---|
+| --- | --- | --- | --- |
 | `main` | the only long-lived branch | — (production) | Single source of truth. Every push triggers `deploy-production.yml`. |
 | `feature/*` *(by convention)* | a developer | `main` | Code changes (workflows, CSS, plugins, infra). PR previews live at `preview-pr<N>.adamdaniel.ai`. **The current example: `restore-decap-cms` (PR #48).** |
 | `cms/<collection>/<slug>` | Decap, when editing on `adamdaniel.ai/admin/` | `main` | A single CMS edit in editorial workflow. Auto-merges to `main` once `cms/ready` is set and checks pass. Production-bound. |
@@ -244,7 +249,7 @@ Folders grouped by purpose. Anything not listed is incidental.
 ### Content (what lives on the live site)
 
 | Path | Holds |
-|---|---|
+| --- | --- |
 | `_posts/` | Blog posts. Filename `YYYY-MM-DD-<slug>.md` is required by Jekyll; live URL is `/blog/<slug>/` (no date prefix, see `_config.yml`'s `permalink`). |
 | `_tags/` | Curated tag descriptions. Optional — `auto_tag_pages.rb` synthesises archive pages for any tag a post uses. |
 | `_projects/` | Project case studies. |
@@ -254,7 +259,7 @@ Folders grouped by purpose. Anything not listed is incidental.
 ### Appearance (how it looks)
 
 | Path | Holds |
-|---|---|
+| --- | --- |
 | `_layouts/` | Page templates (`default.html`, `post.html`, `page.html`, `project.html`, `preview.html`). Changes here re-render every page that uses the layout. |
 | `_includes/` | Partial templates (header, footer, head, etc.) reused across layouts. |
 | `assets/css/` | Stylesheets compiled into the site CSS. |
@@ -265,14 +270,14 @@ Folders grouped by purpose. Anything not listed is incidental.
 ### Editorial / CMS surface
 
 | Path | Holds |
-|---|---|
+| --- | --- |
 | `admin/` | Decap CMS shell — `index.html` (production), `index-local.html` (local dev), `config.yml` / `config-local.yml`, `preview-bridge.js`, `custom.css`, the `reviews/` dashboard. |
 | `preview.md` + `_layouts/preview.html` | The live-preview shell at `/preview/` that the admin's preview bridge feeds. |
 
 ### Site framework
 
 | Path | Holds |
-|---|---|
+| --- | --- |
 | `_config.yml`, `Gemfile` | Jekyll configuration and Ruby dependencies. |
 | `_plugins/` | Site-build Ruby plugins (`auto_tag_pages.rb`, `normalize_empty_slug.rb`). |
 | `_plugins_test/` | Plain-Ruby unit tests for `_plugins/`. |
@@ -281,7 +286,7 @@ Folders grouped by purpose. Anything not listed is incidental.
 ### Tests
 
 | Path | Holds |
-|---|---|
+| --- | --- |
 | `e2e/` | Playwright specs + helpers. See [`docs/TESTING.md`](docs/TESTING.md) for the per-spec walkthrough. |
 | `playwright.config.js`, `playwright.regression.config.js` | Test runner configuration. |
 | `oauth-proxy/test_lambda.py` | OAuth Lambda unit tests. |
@@ -289,7 +294,7 @@ Folders grouped by purpose. Anything not listed is incidental.
 ### Infrastructure
 
 | Path | Holds |
-|---|---|
+| --- | --- |
 | `infrastructure/bootstrap/` | One-time AWS setup (CloudFormation templates, deploy scripts). |
 | `oauth-proxy/` | AWS Lambda + API Gateway implementing the GitHub OAuth handshake Decap requires. |
 | `.github/workflows/` | CI/CD: deploy-production, deploy-preview, e2e-tests, visual-regression, cms-editorial-workflow, publish-scheduled-posts. |
@@ -298,7 +303,7 @@ Folders grouped by purpose. Anything not listed is incidental.
 
 ## Branching Strategy (visual)
 
-```
+```text
 main                                  ← production (deploys automatically)
  ├─ feature/*                         ← code changes (e.g. restore-decap-cms)
  │   └─ cms/<collection>/<slug>       ← CMS edits made on the feature's preview admin
