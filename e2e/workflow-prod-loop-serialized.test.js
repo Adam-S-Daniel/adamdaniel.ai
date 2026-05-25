@@ -1,23 +1,26 @@
 // @lane: local — pure-fs lint of workflow YAML; no browser, no network
 /*
- * Regression guard for #1101 + the changed-files recursion gate. The
- * three real-prod-mutating loop workflows must (a) share ONE
- * concurrency lane so they can never run concurrently (a parallel pair
+ * Regression guard for #1101 + #1178 + the changed-files recursion
+ * gate. The three real-prod-mutating loop workflows must (a) put ONE
+ * shared concurrency lane on each heavy loop job — NOT the workflow
+ * (#1178) — so the loops can never run concurrently (a parallel pair
  * races deploy-production and blows each other's URL-reflect budgets —
- * observed on merge 3dbade7), (b) gate on the await-prod-deploy
- * composite so a post-merge push never drives a stale (not-yet-deployed)
- * prod site, and (c) gate on the cms-recursion-gate composite via a
- * cheap `recursion-gate` job so the loop never re-fires on its own
- * Decap auto-merge (run 26108485428 — the old `publish: ` head-commit
- * guard could not see Decap's `Update Post "…"` squash template). Same
- * ethos as #1053's ALWAYS_RUN guard: make the invariant fail loud at CI
- * time instead of silently regressing in a workflow edit months later.
+ * observed on merge 3dbade7) while the cheap `recursion-gate` job, which
+ * carries no concurrency, runs OUTSIDE the lane; (b) gate on the
+ * await-prod-deploy composite so a post-merge push never drives a stale
+ * (not-yet-deployed) prod site; and (c) gate on the cms-recursion-gate
+ * composite via that `recursion-gate` job so the loop never re-fires on
+ * its own Decap auto-merge (run 26108485428 — the old `publish: `
+ * head-commit guard could not see Decap's `Update Post "…"` squash
+ * template). Same ethos as #1053's ALWAYS_RUN guard: make the invariant
+ * fail loud at CI time instead of silently regressing in a workflow edit
+ * months later.
  */
 const fs = require("node:fs");
 const path = require("node:path");
 const yaml = require("js-yaml");
 const { test, expect } = require("./base");
-const { readWorkflow, topBlock } = require("./workflow-yaml-utils");
+const { readWorkflow, jobSubBlock } = require("./workflow-yaml-utils");
 
 const REPO_ROOT = path.resolve(__dirname, "..");
 
@@ -44,30 +47,58 @@ const BUILD_IMAGE_USES = "./.github/workflows/ci-runner-image.yml";
 const asArray = (v) => (Array.isArray(v) ? v : v == null ? [] : [v]);
 
 test.describe("real-prod loop workflows are serialized + deploy-gated (#1101)", () => {
-  test("all three share ONE concurrency group, cancel-in-progress:false", () => {
+  test("each loop JOB shares ONE concurrency group, cancel-in-progress:false (no workflow-level lane — #1178)", () => {
     for (const wf of LOOP_WORKFLOWS) {
       const doc = yaml.load(readWorkflow(wf));
-      expect(doc.concurrency, `${wf} must declare concurrency`).toBeTruthy();
+      // #1178: the lane MUST live on the heavy loop job, not the
+      // workflow, so the cheap recursion-gate job runs outside it and a
+      // recursion-skipped loop never enters the lane at all.
       expect(
-        doc.concurrency.group,
-        `${wf} concurrency.group must be the shared lane so the three real-prod loops are mutually exclusive (#1101)`,
+        doc.concurrency,
+        `${wf} must NOT declare workflow-level concurrency — the lane belongs on the ${LOOPS[wf].job} job so recursion-gate runs outside it (#1178)`,
+      ).toBeFalsy();
+      const loopJob = doc.jobs[LOOPS[wf].job];
+      expect(
+        loopJob && loopJob.concurrency,
+        `${wf}: the ${LOOPS[wf].job} job must declare job-level concurrency (#1178)`,
+      ).toBeTruthy();
+      expect(
+        loopJob.concurrency.group,
+        `${wf}: ${LOOPS[wf].job} concurrency.group must be the shared lane so the three real-prod loops are mutually exclusive (#1101)`,
       ).toBe(SHARED_GROUP);
       expect(
-        doc.concurrency["cancel-in-progress"],
-        `${wf} must NOT cancel-in-progress — a real-prod loop killed mid-flow can leave the canary dirty; queue instead (#1101)`,
+        loopJob.concurrency["cancel-in-progress"],
+        `${wf}: ${LOOPS[wf].job} must NOT cancel-in-progress — a real-prod loop killed mid-flow can leave the canary dirty; queue instead (#1101)`,
       ).toBe(false);
+      // The whole point of #1178: the gate job must stay OUT of the lane
+      // so its skip decision is instant regardless of lane state.
+      const gateJob = doc.jobs[GATE_JOB];
+      expect(
+        gateJob && gateJob.concurrency,
+        `${wf}: ${GATE_JOB} must NOT declare concurrency — it runs outside the lane so the skip decision is computed immediately (#1178)`,
+      ).toBeFalsy();
     }
   });
 
-  test("the concurrency block is byte-identical across the three (drift guard)", () => {
-    const blocks = LOOP_WORKFLOWS.map((wf) => topBlock(readWorkflow(wf), "concurrency").trim());
+  test("the loop job's concurrency block is byte-identical across the three (drift guard)", () => {
+    // Extract each heavy loop job's job-level `concurrency:` sub-block
+    // (#1178 moved it off the workflow). Byte-identical across the three
+    // keeps a partial edit (e.g. flipping cancel-in-progress in one, or
+    // tweaking the comment) from silently desynchronising the lane.
+    const blocks = LOOP_WORKFLOWS.map((wf) =>
+      jobSubBlock(readWorkflow(wf), LOOPS[wf].job, "concurrency").trim(),
+    );
+    expect(
+      blocks[0],
+      "cms-publish-loop-prod.yml prod-mutate job must declare a concurrency block (#1178)",
+    ).toBeTruthy();
     expect(
       blocks[1],
-      "cms-media-roundtrip.yml concurrency block drifted from cms-publish-loop-prod.yml — keep them byte-identical (#1101)",
+      "cms-media-roundtrip.yml media-roundtrip job concurrency block drifted from cms-publish-loop-prod.yml's prod-mutate — keep them byte-identical (#1101/#1178)",
     ).toBe(blocks[0]);
     expect(
       blocks[2],
-      "cms-publish-loop-host.yml concurrency block drifted from cms-publish-loop-prod.yml — keep them byte-identical (#1101)",
+      "cms-publish-loop-host.yml host-loop job concurrency block drifted from cms-publish-loop-prod.yml's prod-mutate — keep them byte-identical (#1101/#1178)",
     ).toBe(blocks[0]);
   });
 

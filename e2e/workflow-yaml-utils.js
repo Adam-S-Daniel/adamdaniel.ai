@@ -60,6 +60,30 @@ function jobBlock(yaml, name) {
   return out.join("\n");
 }
 
+// Pull a block nested inside a named job — e.g. a job-level
+// `concurrency:` block. `indent` is the leading-space count of the
+// nested key (4 for a direct property of a two-space job head). Mirrors
+// topBlock, but scoped to one job and to a deeper indent: it captures
+// the key line + every deeper-indented line (children and interleaved
+// comments) and stops at the first non-blank line whose indent is <=
+// the key's (the next sibling property). Returns "" when the job or key
+// is absent.
+function jobSubBlock(yaml, jobName, key, indent = 4) {
+  const job = jobBlock(yaml, jobName);
+  if (job == null) return "";
+  const lines = job.split("\n");
+  const head = new RegExp(`^ {${indent}}${key}:`);
+  const start = lines.findIndex((l) => head.test(l));
+  if (start === -1) return "";
+  const out = [lines[start]];
+  for (let i = start + 1; i < lines.length; i++) {
+    const l = lines[i];
+    if (l.trim() !== "" && l.match(/^ */)[0].length <= indent) break;
+    out.push(l);
+  }
+  return out.join("\n");
+}
+
 // Walk every two-space-indent job under `jobs:`. Each entry carries
 // the leading comment block immediately above the job head — used by
 // the dependabot-skip lint to recognise an explicit allow-list comment.
@@ -124,6 +148,7 @@ module.exports = {
   WORKFLOW_DIR,
   jobBlock,
   jobBlocks,
+  jobSubBlock,
   listWorkflows,
   readWorkflow,
   runBlocks,

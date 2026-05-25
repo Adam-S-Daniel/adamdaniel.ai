@@ -42,10 +42,11 @@ on:
     # all: cms-publish-loop-prod.yml and cms-media-roundtrip.yml are
     # `push`-to-main (post-merge) + workflow_dispatch only (2493c2e —
     # they moved off cron/per-PR). All three now serialize through the
-    # shared `prod-mutating-loop` concurrency group (see the
-    # `concurrency:` block below and #1101), so the old "stagger them
-    # an hour apart on a 12/13/14/15 cron ladder" rationale no longer
-    # applies — mutual exclusion is structural, not time-based. The
+    # shared `prod-mutating-loop` concurrency group declared on each
+    # loop's heavy job (see the `host-loop` job's `concurrency:` block
+    # below, #1101 + #1178), so the old "stagger them an hour apart on a
+    # 12/13/14/15 cron ladder" rationale no longer applies — mutual
+    # exclusion is structural, not time-based. The
     # only other cron-driven prod mutator is publish-scheduled-posts.yml
     # (14:00); two hours clear of this one is incidental headroom now,
     # not load-bearing.
@@ -106,25 +107,6 @@ defaults:
     # Force bash so those scripts work inside the Playwright container.
     shell: bash
 
-concurrency:
-  # SHARED repo-wide lane for ALL real-prod-mutating loop workflows
-  # (cms-publish-loop-prod / cms-media-roundtrip / cms-publish-loop-host).
-  # GHA concurrency groups are keyed by string ACROSS workflows, so a
-  # single constant group makes the three mutually exclusive: only one
-  # real-prod loop can run at a time, whatever the trigger (push /
-  # workflow_dispatch / host's daily cron all converge here). They each
-  # mutate prod through Decap → cms-PR → auto-merge → deploy-production
-  # and a parallel pair races deploy-production's `group: production`,
-  # blowing each other's URL-reflect budgets (#1101 — observed: 3 loops
-  # 13:42→13:59 on merge 3dbade7, 2 failed). cancel-in-progress:false
-  # queues rather than killing an in-flight loop (cancelling mid-flow
-  # can leave the canary dirty); a stuck run holds the lane up to its
-  # timeout-minutes, which is bounded and far cheaper than the collision.
-  # This block MUST stay byte-identical in all three workflows —
-  # enforced by e2e/workflow-prod-loop-serialized.test.js.
-  group: prod-mutating-loop
-  cancel-in-progress: false
-
 jobs:
   # Changed-files recursion gate. Replaces the old `publish: `
   # head-commit guard, which Decap's own `Update/Delete <Collection>
@@ -137,11 +119,12 @@ jobs:
   # + a `git diff` membership test. A push whose only changed files are
   # this loop's own canary churn skips the heavy job; schedule/dispatch
   # always run; any ambiguity fails OPEN (never silently skip a real
-  # change). Runs inside the shared `prod-mutating-loop` lane (the
-  # concurrency block is workflow-level + byte-identical across the
-  # three — #1101): ~15-25 s lane occupancy on a skip vs. a full
-  # real-prod loop. Job-level concurrency so the gate runs OUTSIDE the
-  # lane is a deliberate follow-up (it touches the #1101 invariant).
+  # change). The `prod-mutating-loop` lane now lives on the heavy loop
+  # job, not the workflow (#1178), so this gate runs OUTSIDE the lane:
+  # its skip decision is computed immediately even while a real loop
+  # holds the lane, and a recursion-skipped loop never enters the lane
+  # at all — ~15-25 s of its own (uncontended) runtime on a skip vs. a
+  # full real-prod loop.
   recursion-gate:
     runs-on: ubuntu-latest
     outputs:
@@ -174,6 +157,30 @@ jobs:
   host-loop:
     needs: [recursion-gate, build-image]
     runs-on: ubuntu-latest
+    concurrency:
+      # SHARED lane for ALL real-prod-mutating loop workflows
+      # (cms-publish-loop-prod / cms-media-roundtrip / cms-publish-loop-host).
+      # Declared on the HEAVY LOOP JOB, not the workflow (#1178): the cheap
+      # recursion-gate job has no concurrency, so it runs OUTSIDE this lane
+      # — its skip decision is computed immediately even while a real loop
+      # holds the lane, and a recursion-skipped loop is `if:`-skipped before
+      # it ever enters the lane (zero lane occupancy for recursion). GHA
+      # keys concurrency groups by string ACROSS workflows, so one constant
+      # group on these three loop jobs keeps them mutually exclusive: only
+      # one real-prod loop runs at a time, whatever the trigger (push /
+      # workflow_dispatch / host's daily cron all converge here). They each
+      # mutate prod through Decap → cms-PR → auto-merge → deploy-production
+      # and a parallel pair races deploy-production's `group: production`,
+      # blowing each other's URL-reflect budgets (#1101 — observed: 3 loops
+      # 13:42→13:59 on merge 3dbade7, 2 failed). cancel-in-progress:false
+      # queues rather than killing an in-flight loop (cancelling mid-flow
+      # can leave the canary dirty); a stuck run holds the lane up to its
+      # timeout-minutes, which is bounded and far cheaper than the collision.
+      # This block MUST stay byte-identical across all three workflows AND
+      # remain on the loop job (NOT the workflow) — enforced by
+      # e2e/workflow-prod-loop-serialized.test.js.
+      group: prod-mutating-loop
+      cancel-in-progress: false
     # Prebaked ci-runner image — apt deps + Ruby + Gemfile.lock gems +
     # warm npm cache + gitleaks baked in, replacing the previous
     # Setup Node + `npm ci` steps inline. Browsers + their apt deps
