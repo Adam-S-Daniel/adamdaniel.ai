@@ -6,17 +6,26 @@
  * bypass the required-checks list. (Audit finding #26.)
  */
 const { test, expect } = require("./base");
-const { readWorkflow } = require("./workflow-yaml-utils");
+const { readWorkflow, parseYaml, allStrings } = require("./workflow-yaml-utils");
 
-function stripComments(yaml) {
-  return yaml
+// Every script / expression / github-script body the workflow carries,
+// joined. Reading these off the parsed tree (rather than grepping the
+// raw file) means YAML comments are already gone and an aliased value
+// is still seen. Shell `#` comments inside a run: block are stripped
+// separately where they'd otherwise read as live commands.
+function scripts(yaml) {
+  return allStrings(parseYaml(yaml)).join("\n");
+}
+
+function stripShellComments(text) {
+  return text
     .split("\n")
     .filter((l) => !/^\s*#/.test(l))
     .join("\n");
 }
 
 test("no unconditional `gh pr merge --merge|--squash` (without --auto)", () => {
-  const code = stripComments(readWorkflow("cms-editorial-workflow.yml"));
+  const code = stripShellComments(scripts(readWorkflow("cms-editorial-workflow.yml")));
   // Each `gh pr merge ...` call ends at the next newline / pipe / &&.
   const re = /gh\s+pr\s+merge\b([^\n;|&]*)/g;
   let m;
@@ -28,5 +37,7 @@ test("no unconditional `gh pr merge --merge|--squash` (without --auto)", () => {
 });
 
 test("enablePullRequestAutoMerge GraphQL mutation IS used", () => {
-  expect(readWorkflow("cms-editorial-workflow.yml")).toMatch(/enablePullRequestAutoMerge\b/);
+  expect(scripts(readWorkflow("cms-editorial-workflow.yml"))).toMatch(
+    /enablePullRequestAutoMerge\b/,
+  );
 });

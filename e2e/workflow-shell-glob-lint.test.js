@@ -16,7 +16,7 @@
 const fs = require("node:fs");
 const path = require("node:path");
 const { test, expect } = require("./base");
-const { listWorkflows, runBlocks } = require("./workflow-yaml-utils");
+const { listWorkflows, runScripts } = require("./workflow-yaml-utils");
 
 // Match `for VAR in REST; do`. REST is a glob iteration when it
 // contains shell glob metacharacters and isn't a bash array expansion.
@@ -48,8 +48,8 @@ function loopBody(bodyLines, startIdx) {
 
 for (const file of listWorkflows()) {
   const yaml = fs.readFileSync(file, "utf8");
-  for (const block of runBlocks(yaml)) {
-    const bodyLines = block.body.split("\n");
+  for (const block of runScripts(yaml)) {
+    const bodyLines = block.script.split("\n");
     for (let k = 0; k < bodyLines.length; k++) {
       const line = bodyLines[k];
       if (!/^\s*for\s+\w+\s+in\b/.test(line)) continue;
@@ -59,12 +59,12 @@ for (const file of listWorkflows()) {
       const inner = loopBody(bodyLines, k);
       const safe = /shopt\s+-s\s+nullglob\b/.test(before) || /\[\[?\s+-[efd]\s+["']?\$/.test(inner);
 
-      const label = `${path.basename(file)} :: line ${block.startLine + k} :: ` + line.trim();
+      const label = `${path.basename(file)} :: line ${block.line + k} :: ` + line.trim();
       test(`shell glob loop is empty-safe (${label})`, () => {
         expect(
           safe,
           `Loop '${line.trim()}' in ${path.basename(file)} (run-block ` +
-            `starting at line ${block.startLine}) needs either ` +
+            `starting at line ${block.line}) needs either ` +
             `'shopt -s nullglob' earlier in the same run: block, or a ` +
             `'[ -e "$VAR" ]' guard inside the loop body — otherwise an ` +
             `empty glob falls through to the literal pattern.`,

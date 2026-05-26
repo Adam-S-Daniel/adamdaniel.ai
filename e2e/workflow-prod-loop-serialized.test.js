@@ -18,9 +18,8 @@
  */
 const fs = require("node:fs");
 const path = require("node:path");
-const yaml = require("js-yaml");
 const { test, expect } = require("./base");
-const { readWorkflow, jobSubBlock } = require("./workflow-yaml-utils");
+const { readWorkflow, parseYaml, jobSubBlock } = require("./workflow-yaml-utils");
 
 const REPO_ROOT = path.resolve(__dirname, "..");
 
@@ -49,7 +48,7 @@ const asArray = (v) => (Array.isArray(v) ? v : v == null ? [] : [v]);
 test.describe("real-prod loop workflows are serialized + deploy-gated (#1101)", () => {
   test("each loop JOB shares ONE concurrency group, cancel-in-progress:false (no workflow-level lane — #1178)", () => {
     for (const wf of LOOP_WORKFLOWS) {
-      const doc = yaml.load(readWorkflow(wf));
+      const doc = parseYaml(readWorkflow(wf));
       // #1178: the lane MUST live on the heavy loop job, not the
       // workflow, so the cheap recursion-gate job runs outside it and a
       // recursion-skipped loop never enters the lane at all.
@@ -104,7 +103,7 @@ test.describe("real-prod loop workflows are serialized + deploy-gated (#1101)", 
 
   test("each workflow has exactly the recursion-gate + build-image + loop jobs", () => {
     for (const wf of LOOP_WORKFLOWS) {
-      const doc = yaml.load(readWorkflow(wf));
+      const doc = parseYaml(readWorkflow(wf));
       const names = Object.keys(doc.jobs);
       expect(
         names.sort(),
@@ -115,7 +114,7 @@ test.describe("real-prod loop workflows are serialized + deploy-gated (#1101)", 
 
   test("each workflow's build-image job is the reusable ci-runner-image workflow", () => {
     for (const wf of LOOP_WORKFLOWS) {
-      const doc = yaml.load(readWorkflow(wf));
+      const doc = parseYaml(readWorkflow(wf));
       const buildJob = doc.jobs[BUILD_IMAGE_JOB];
       expect(
         buildJob,
@@ -130,7 +129,7 @@ test.describe("real-prod loop workflows are serialized + deploy-gated (#1101)", 
 
   test("each loop job awaits the prod deploy on push, gated to push events", () => {
     for (const wf of LOOP_WORKFLOWS) {
-      const doc = yaml.load(readWorkflow(wf));
+      const doc = parseYaml(readWorkflow(wf));
       // `actions: read` is required for the gate's REST query of the
       // Deploy to Production run.
       expect(
@@ -177,7 +176,7 @@ test.describe("real-prod loop workflows are serialized + deploy-gated (#1101)", 
       fs.existsSync(actionPath),
       `${actionPath} must exist (referenced by the loop workflows)`,
     ).toBe(true);
-    const action = yaml.load(fs.readFileSync(actionPath, "utf8"));
+    const action = parseYaml(fs.readFileSync(actionPath, "utf8"));
     expect(action.runs && action.runs.using).toBe("composite");
   });
 });
@@ -185,7 +184,7 @@ test.describe("real-prod loop workflows are serialized + deploy-gated (#1101)", 
 test.describe("changed-files recursion gate wiring (run 26108485428)", () => {
   test("each workflow has a recursion-gate job using the composite + fetch-depth:2", () => {
     for (const wf of LOOP_WORKFLOWS) {
-      const doc = yaml.load(readWorkflow(wf));
+      const doc = parseYaml(readWorkflow(wf));
       const gateJob = doc.jobs[GATE_JOB];
       expect(gateJob, `${wf} must define the ${GATE_JOB} job`).toBeTruthy();
 
@@ -224,7 +223,7 @@ test.describe("changed-files recursion gate wiring (run 26108485428)", () => {
 
   test("each loop job needs the gate and is gated on its output", () => {
     for (const wf of LOOP_WORKFLOWS) {
-      const doc = yaml.load(readWorkflow(wf));
+      const doc = parseYaml(readWorkflow(wf));
       const loopJob = doc.jobs[LOOPS[wf].job];
       expect(
         asArray(loopJob.needs),
@@ -255,7 +254,7 @@ test.describe("changed-files recursion gate wiring (run 26108485428)", () => {
       `${actionPath} must exist (referenced by the loop workflows)`,
     ).toBe(true);
     const raw = fs.readFileSync(actionPath, "utf8");
-    const action = yaml.load(raw);
+    const action = parseYaml(raw);
     expect(action.runs && action.runs.using).toBe("composite");
     // Bash + node only — no nested `uses:` to keep it clean for the
     // repo's SHA-pin convention (mirrors await-prod-deploy).

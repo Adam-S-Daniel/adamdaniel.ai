@@ -8,19 +8,39 @@
  * a chance to fail. (Audit finding #13.)
  */
 const { test, expect } = require("./base");
-const { readWorkflow, jobBlock, topBlock } = require("./workflow-yaml-utils");
+const { readWorkflow, parseYaml } = require("./workflow-yaml-utils");
 
-test("auto-merge-when-ready needs validate-content", () => {
-  const block = jobBlock(readWorkflow("cms-editorial-workflow.yml"), "auto-merge-when-ready");
-  expect(block, "auto-merge-when-ready job not found").not.toBeNull();
-  expect(block).toMatch(/needs:\s*validate-content/);
+function autoMergeJob() {
+  return parseYaml(readWorkflow("cms-editorial-workflow.yml")).jobs["auto-merge-when-ready"];
+}
+
+// `needs: validate-content` was deliberately removed (see the workflow:
+// enablePullRequestAutoMerge only sets merge *intent* — GitHub waits for
+// the required-status-checks ruleset, which includes validate-content,
+// before actually merging, so a needs edge was redundant AND re-coupled
+// this job to the cancel-in-progress bug it was split out to avoid).
+// The previous text-grep version of this test passed only because it
+// matched that explanatory comment, not the structure; parsing the YAML
+// shows there is no needs edge, so the guard is inverted to its real
+// current invariant: nobody may re-add the needs.
+test("auto-merge-when-ready does NOT need validate-content (ordering via required checks)", () => {
+  const job = autoMergeJob();
+  expect(job, "auto-merge-when-ready job not found").toBeTruthy();
+  const needs = job.needs == null ? [] : Array.isArray(job.needs) ? job.needs : [job.needs];
+  expect(
+    needs,
+    "auto-merge-when-ready must NOT `needs: validate-content` — ordering is " +
+      "delegated to the required-status-checks ruleset; a needs edge re-" +
+      "introduces the cancel-in-progress coupling (see the workflow comment).",
+  ).not.toContain("validate-content");
 });
 
 test("auto-merge-when-ready fires only on labeled cms/ready", () => {
-  const block = jobBlock(readWorkflow("cms-editorial-workflow.yml"), "auto-merge-when-ready");
-  expect(block).not.toBeNull();
-  expect(block).toMatch(/github\.event\.action\s*==\s*'labeled'/);
-  expect(block).toMatch(/github\.event\.label\.name\s*==\s*'cms\/ready'/);
+  const job = autoMergeJob();
+  expect(job).toBeTruthy();
+  const cond = JSON.stringify(job);
+  expect(cond).toMatch(/github\.event\.action\s*==\s*'labeled'/);
+  expect(cond).toMatch(/github\.event\.label\.name\s*==\s*'cms\/ready'/);
 });
 
 test("validate-content has no pull_request paths filter (required check must always report)", () => {
@@ -29,15 +49,17 @@ test("validate-content has no pull_request paths filter (required check must alw
   // workflow by `paths:`, a feature-branch PR that doesn't touch CMS
   // content never produces the check, the merge stays BLOCKED forever,
   // and the auto-merge regression issue #79 was meant to fix returns.
-  const yaml = readWorkflow("cms-editorial-workflow.yml");
-  const onBlock = topBlock(yaml, "on");
-  expect(onBlock, "on: block not found").not.toBeNull();
-  // Match `paths:` only at the indent level of the pull_request event
-  // (4 spaces) — ignores `paths:` inside `paths-ignore:` or unrelated
-  // nested keys.
-  const offendingLine = onBlock.split(/\r?\n/).find((l) => /^\s{4}paths:\s*$/.test(l));
+  const on = parseYaml(readWorkflow("cms-editorial-workflow.yml")).on;
+  const pullRequest = on && typeof on === "object" ? on.pull_request : null;
+  // `paths-ignore:` is fine; only a positive `paths:` filter would make
+  // the check vanish on non-CMS diffs.
+  const hasPathsFilter = !!(
+    pullRequest &&
+    typeof pullRequest === "object" &&
+    "paths" in pullRequest
+  );
   expect(
-    offendingLine,
+    hasPathsFilter,
     "cms-editorial-workflow.yml must NOT gate `validate-content` by paths — see comment block in the workflow.",
-  ).toBeUndefined();
+  ).toBe(false);
 });

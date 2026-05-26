@@ -1,6 +1,7 @@
 // @lane: local — fs reads of admin/config*.yml + drives the local /admin shell
 const fs = require("node:fs");
 const path = require("node:path");
+const YAML = require("yaml");
 const { test, expect } = require("./base");
 
 // Locks the posts-collection list summary template across all three Decap
@@ -46,44 +47,27 @@ const CONFIGS = [
 // same parsed-date machinery as the `slug:` template (proven correct
 // cross-engine; locked by cms-permalink-contract.spec.js).
 const EXPECTED_SUMMARY =
-  '    summary: "{{title}} ({{year}}-{{month}}-{{day}})' +
+  "{{title}} ({{year}}-{{month}}-{{day}})" +
   "{{published | ternary('', ' — DRAFT')}}" +
-  "{{publish_date | ternary(' — Scheduled', '')}}\"";
+  "{{publish_date | ternary(' — Scheduled', '')}}";
 
 const DRAFT_CLAUSE = "{{published | ternary('', ' — DRAFT')}}";
 const SCHEDULED_CLAUSE = "{{publish_date | ternary(' — Scheduled', '')}}";
 
-function readConfig(file) {
-  return fs.readFileSync(file, "utf8");
+function parseConfig(file) {
+  return YAML.parse(fs.readFileSync(file, "utf8")) || {};
 }
 
-function findCollection(yml, name) {
-  // Same chunking strategy as e2e/cms-config.spec.js — split on the
-  // `  - name:` collection-separator lines and pick the chunk whose
-  // first key matches.
-  const lines = yml.split(/\r?\n/);
-  const starts = [];
-  lines.forEach((line, idx) => {
-    if (/^\s{2}-\s+name:\s*\S+/.test(line)) starts.push(idx);
-  });
-  starts.push(lines.length);
-  for (let i = 0; i < starts.length - 1; i++) {
-    const chunk = lines.slice(starts[i], starts[i + 1]).join("\n");
-    const m = chunk.match(/^\s{2}-\s+name:\s*(\S+)/);
-    if (m && m[1] === name) return chunk;
-  }
-  return null;
+function findCollection(cfg, name) {
+  return ((cfg && cfg.collections) || []).find((c) => c && c.name === name) || null;
 }
 
-function findSummaryLine(collectionChunk) {
-  // The summary key sits at indent 4 inside a collection block. Return
-  // the literal line so the assertion is on the exact bytes the spec is
-  // locking — not a parsed/normalised form.
-  const lines = collectionChunk.split(/\r?\n/);
-  for (const line of lines) {
-    if (/^\s{4}summary:/.test(line)) return line;
-  }
-  return null;
+// The collection's `summary:` template value — the string Decap renders
+// per entry — or null when unset. Locking the value (not the YAML line
+// bytes) is what keeps the three configs rendering an identical list
+// label; quoting / indentation style is irrelevant to the result.
+function summaryOf(collection) {
+  return collection && collection.summary != null ? String(collection.summary) : null;
 }
 
 test.describe(
@@ -99,10 +83,9 @@ test.describe(
       const label = path.relative(REPO_ROOT, configPath);
 
       test(`${label}: posts.summary line equals the locked template verbatim`, () => {
-        const yml = readConfig(configPath);
-        const posts = findCollection(yml, "posts");
+        const posts = findCollection(parseConfig(configPath), "posts");
         expect(posts, "posts collection must exist").not.toBeNull();
-        const summary = findSummaryLine(posts);
+        const summary = summaryOf(posts);
         expect(summary, "posts collection must declare a summary template").not.toBeNull();
         // The literal template is shared across all three configs — drift
         // between them would mean the local / test runs render a different
@@ -111,9 +94,8 @@ test.describe(
       });
 
       test(`${label}: posts.summary surfaces both DRAFT and Scheduled states`, () => {
-        const yml = readConfig(configPath);
-        const posts = findCollection(yml, "posts");
-        const summary = findSummaryLine(posts);
+        const posts = findCollection(parseConfig(configPath), "posts");
+        const summary = summaryOf(posts);
         // The DRAFT clause is the new contribution (D3) — `published: false`
         // appends " — DRAFT" so editors see the state at a glance in the
         // Posts list. The Scheduled clause was already there; locking both

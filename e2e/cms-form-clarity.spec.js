@@ -18,62 +18,33 @@
  */
 const fs = require("node:fs");
 const path = require("node:path");
+const YAML = require("yaml");
 const { test, expect } = require("./base");
 
 const REPO_ROOT = path.join(__dirname, "..");
 
-// ── Pure-Node yaml-ish parser ────────────────────────────────────────
+// ── Config readers ───────────────────────────────────────────────────
 //
-// Same shape as e2e/cms-config.spec.js: split the config into collection
-// chunks (indent-2 list items keyed by `name:`), then split each chunk
-// into field chunks (indent-6 list items keyed by `name:`), then pull
-// the `hint:` line out by regex. Hints are single-line strings in this
-// repo, so a full YAML library is overkill.
+// The configs are parsed with the real YAML library, so a field's
+// `hint:` is read as the value Decap actually shows — independent of
+// quoting style, line length, or any future anchors — rather than
+// scraped off the line by regex.
 
-function readConfig(file) {
-  return fs.readFileSync(file, "utf8");
+function parseConfig(file) {
+  return YAML.parse(fs.readFileSync(file, "utf8")) || {};
 }
 
-function findCollection(yml, name) {
-  const lines = yml.split(/\r?\n/);
-  const starts = [];
-  lines.forEach((line, idx) => {
-    if (/^\s{2}-\s+name:\s*\S+/.test(line)) starts.push(idx);
-  });
-  starts.push(lines.length);
-  for (let i = 0; i < starts.length - 1; i++) {
-    const chunk = lines.slice(starts[i], starts[i + 1]).join("\n");
-    const m = chunk.match(/^\s{2}-\s+name:\s*(\S+)/);
-    if (m && m[1] === name) return chunk;
-  }
-  return null;
+function findCollection(cfg, name) {
+  return ((cfg && cfg.collections) || []).find((c) => c && c.name === name) || null;
 }
 
-function findField(collectionChunk, fieldName) {
-  const lines = collectionChunk.split(/\r?\n/);
-  const starts = [];
-  lines.forEach((line, idx) => {
-    if (/^\s{6}-\s+name:\s*\S+/.test(line)) starts.push(idx);
-  });
-  starts.push(lines.length);
-  for (let i = 0; i < starts.length - 1; i++) {
-    const chunk = lines.slice(starts[i], starts[i + 1]).join("\n");
-    const m = chunk.match(/^\s{6}-\s+name:\s*(\S+)/);
-    if (m && m[1] === fieldName) return chunk;
-  }
-  return null;
+function findField(collection, fieldName) {
+  return ((collection && collection.fields) || []).find((f) => f && f.name === fieldName) || null;
 }
 
-function hintFor(yml, collectionName, fieldName) {
-  const collection = findCollection(yml, collectionName);
-  if (!collection) return null;
-  const field = findField(collection, fieldName);
-  if (!field) return null;
-  // `hint: "…"` — the value is always quoted in this repo's configs.
-  // Match the literal between the surrounding double quotes on the
-  // hint line at indent 8.
-  const m = field.match(/^\s{8}hint:\s*"((?:[^"\\]|\\.)*)"\s*$/m);
-  return m ? m[1] : null;
+function hintFor(cfg, collectionName, fieldName) {
+  const field = findField(findCollection(cfg, collectionName), fieldName);
+  return field && field.hint != null ? String(field.hint) : null;
 }
 
 // ── Expected snapshots ───────────────────────────────────────────────
@@ -209,11 +180,11 @@ test.describe(
 
     for (const { file, label, expected } of FIXTURES) {
       test(`${label}: every locked hint matches its expected literal`, () => {
-        const yml = readConfig(file);
+        const cfg = parseConfig(file);
         const mismatches = [];
         for (const [collection, fields] of Object.entries(expected)) {
           for (const [field, expectedHint] of Object.entries(fields)) {
-            const actual = hintFor(yml, collection, field);
+            const actual = hintFor(cfg, collection, field);
             if (actual !== expectedHint) {
               mismatches.push({
                 path: `${collection}.${field}`,

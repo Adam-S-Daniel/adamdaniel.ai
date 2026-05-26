@@ -35,8 +35,8 @@ const CANARY_PATHS = CANARIES.map((c) => c.path);
 // loop key → glob patterns. `*` matches WITHIN one path segment only
 // (never `/`); every pattern is full-path anchored. The only globs
 // here are exact paths plus one `prefix-*.<ext>` form per throw-away
-// fixture, so a tiny in-module matcher beats pulling in minimatch
-// (mirrors e2e/workflow-yaml-utils.js's dependency-free ethos).
+// fixture, so a tiny in-module matcher beats pulling in minimatch for
+// this handful of trivial patterns.
 const SELF_CHURN = {
   // cms-publish-loop-host.yml runs FOUR specs serially:
   host: [

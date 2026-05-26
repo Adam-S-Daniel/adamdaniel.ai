@@ -6,17 +6,14 @@
  * extra signal. (Audit finding #20.)
  */
 const { test, expect } = require("./base");
-const { readWorkflow, topBlock } = require("./workflow-yaml-utils");
+const { readWorkflow, parseYaml, events } = require("./workflow-yaml-utils");
 
 test("e2e-tests.yml does not trigger on push", () => {
-  const code = topBlock(readWorkflow("e2e-tests.yml"), "on")
-    .split("\n")
-    .filter((l) => !/^\s*#/.test(l)) // comments may legitimately mention "push"
-    .join("\n");
+  const triggers = events(parseYaml(readWorkflow("e2e-tests.yml")).on);
   expect(
-    code,
+    triggers,
     "e2e-tests.yml must not declare a `push:` trigger — the PR run is " +
       "already a required check on main, so push runs are redundant " +
       "double-billing.",
-  ).not.toMatch(/^\s*push:/m);
+  ).not.toContain("push");
 });
