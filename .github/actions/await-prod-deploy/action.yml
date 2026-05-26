@@ -135,7 +135,16 @@ runs:
 
         # 3. deploy-production success ≠ edge serving it yet (CloudFront
         #    invalidation lag). Confirm the user-facing truth: prod
-        #    /admin/commit.json reports this SHA.
+        #    /admin/commit.json reports THIS SHA *or a newer descendant*.
+        #    A descendant means main advanced past this merge (a sibling/
+        #    canary merge deployed while this lane-serialized loop waited
+        #    its turn) so prod is AHEAD of the merge — the opposite of
+        #    stale, so proceeding is correct (#1101's "never drive a stale
+        #    prod" still holds). Requiring an EXACT match instead timed out
+        #    spuriously whenever prod moved forward during the wait
+        #    (#1714: prod-mutate run 26473129148 — prod sat 15 commits
+        #    ahead of the merge for the full reflect window).
+        rel=""
         end=$(( $(date +%s) + AD_REFLECT_TIMEOUT_S ))
         while [ "$(date +%s)" -lt "$end" ]; do
           live="$(curl -fsS --max-time 15 "$AD_COMMIT_URL" 2>/dev/null | jget sha || true)"
@@ -143,8 +152,18 @@ runs:
             echo "$AD_COMMIT_URL now serves $AD_SHA — prod is live with the merge; proceeding."
             echo "::endgroup::"; exit 0
           fi
-          echo "prod commit.json sha=${live:-<unreachable>} (want $AD_SHA) — waiting for CloudFront…"
+          if [ -n "$live" ]; then
+            # GitHub compare base...head: status "ahead" ⇒ head (live)
+            # contains base (AD_SHA) plus more commits ⇒ prod is a
+            # descendant of the merge ⇒ ahead, not stale ⇒ proceed.
+            rel="$(api "/repos/$AD_REPO/compare/$AD_SHA...$live" 2>/dev/null | jget status || true)"
+            if [ "$rel" = "ahead" ]; then
+              echo "$AD_COMMIT_URL serves $live — a descendant of $AD_SHA (prod is ahead of the merge, not stale); proceeding."
+              echo "::endgroup::"; exit 0
+            fi
+          fi
+          echo "prod commit.json sha=${live:-<unreachable>} (want $AD_SHA or newer; compare=${rel:-?}) — waiting for CloudFront…"
           sleep 15
         done
-        echo "::error::Deploy $run_id succeeded but $AD_COMMIT_URL never served $AD_SHA within ${AD_REFLECT_TIMEOUT_S}s (CDN/invalidation stuck)."
+        echo "::error::Deploy $run_id succeeded but $AD_COMMIT_URL never served $AD_SHA or a newer descendant within ${AD_REFLECT_TIMEOUT_S}s (CDN/invalidation stuck, or prod diverged from the merge)."
         echo "::endgroup::"; exit 1
