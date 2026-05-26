@@ -179,6 +179,41 @@ test.describe("real-prod loop workflows are serialized + deploy-gated (#1101)", 
     const action = parseYaml(fs.readFileSync(actionPath, "utf8"));
     expect(action.runs && action.runs.using).toBe("composite");
   });
+
+  test("await-prod-deploy tolerates prod being AHEAD of the merge (descendant) — #1714", () => {
+    // A lane-serialized loop can reach its CDN-reflect check after prod
+    // has advanced past the triggering SHA (a sibling/canary merge
+    // deployed during the lane wait). prod is then a DESCENDANT of the
+    // merge — ahead, not stale — so the gate must proceed, not time out
+    // (run 26473129148 timed out 600s against an exact-SHA match while
+    // prod sat 15 commits ahead). Lock the descendant-accept logic.
+    const actionPath = path.join(
+      REPO_ROOT,
+      ".github",
+      "actions",
+      "await-prod-deploy",
+      "action.yml",
+    );
+    const action = parseYaml(fs.readFileSync(actionPath, "utf8"));
+    const shell = ((action.runs && action.runs.steps) || [])
+      .map((s) => String((s && s.run) || ""))
+      .join("\n");
+    expect(shell, "await-prod-deploy must define a run step").toBeTruthy();
+    // Exact-SHA fast path retained.
+    expect(shell, "await-prod-deploy must keep the exact-SHA reflect fast path").toContain(
+      '"$live" = "$AD_SHA"',
+    );
+    // Must consult the compare API (base=merge, head=live) ...
+    expect(
+      shell,
+      "await-prod-deploy must query the compare API to detect prod-ahead (#1714)",
+    ).toMatch(/compare\/\$AD_SHA\.\.\.\$live/);
+    // ... and proceed when prod is a descendant (compare status 'ahead').
+    expect(
+      shell,
+      "await-prod-deploy must proceed when prod is a descendant of the merge (compare status 'ahead') — #1714",
+    ).toContain('"$rel" = "ahead"');
+  });
 });
 
 test.describe("changed-files recursion gate wiring (run 26108485428)", () => {
