@@ -1,6 +1,8 @@
 const fs = require("node:fs");
 const path = require("node:path");
+const YAML = require("yaml");
 const { test, expect } = require("./base");
+const { parseYaml } = require("./workflow-yaml-utils");
 
 // Locks in the "content-only PRs do not trigger visual regression"
 // invariant of .github/workflows/visual-regression.yml.
@@ -46,33 +48,14 @@ const REQUIRED_PATHS = [
 ];
 
 function readPathsList() {
-  const yml = fs.readFileSync(WORKFLOW, "utf8");
-  // Extract the `paths:` block under the pull_request trigger. The
-  // workflow uses workflow-level `on.pull_request.paths` only — there
-  // is no second `paths:` elsewhere — so a single regex match is safe.
-  const match = yml.match(/^\s{4}paths:\s*\n((?:\s{6}- [^\n]*\n|\s*#[^\n]*\n|\s*\n)+)/m);
-  if (!match) {
-    throw new Error("could not locate the `paths:` block in visual-regression.yml");
+  // The workflow's `on.pull_request.paths` list, straight off the parsed
+  // tree — the parser handles quoting, inline comments, and any anchors.
+  const on = parseYaml(fs.readFileSync(WORKFLOW, "utf8")).on;
+  const paths = on && on.pull_request && on.pull_request.paths;
+  if (!Array.isArray(paths)) {
+    throw new Error("could not locate the `on.pull_request.paths` list in visual-regression.yml");
   }
-  const block = match[1];
-  return block
-    .split("\n")
-    .map((line) => line.trim())
-    .filter((line) => line.startsWith("- "))
-    .map((line) => {
-      // Strip leading "- ", strip any trailing `# inline comment`,
-      // then strip surrounding quotes.
-      let v = line.slice(2).trim();
-      // Trailing inline comment: `'value' # because reasons` →  remove
-      // ` # ...` only when preceded by whitespace (so the `#` inside a
-      // quoted value, were that ever a thing here, would survive).
-      const hashIdx = v.indexOf(" #");
-      if (hashIdx !== -1) v = v.slice(0, hashIdx).trim();
-      if ((v.startsWith("'") && v.endsWith("'")) || (v.startsWith('"') && v.endsWith('"'))) {
-        return v.slice(1, -1);
-      }
-      return v;
-    });
+  return paths.map(String);
 }
 
 test.describe("visual-regression workflow: content-only PRs are skipped", () => {
@@ -99,14 +82,13 @@ test.describe("visual-regression workflow: content-only PRs are skipped", () => 
   test("CMS collection folders match the forbidden list", () => {
     // Sanity check: if a new collection is added to admin/config.yml,
     // its folder should also be added to FORBIDDEN_PATHS above.
-    const cfg = fs.readFileSync(path.join(__dirname, "..", "admin", "config.yml"), "utf8");
-    // Folder lines look like:    folder: _posts
-    const folderRe = /^\s{4}folder:\s*([^\s]+)\s*$/gm;
-    const folders = [];
-    let m;
-    while ((m = folderRe.exec(cfg)) !== null) {
-      folders.push(m[1]);
-    }
+    const cfg = YAML.parse(
+      fs.readFileSync(path.join(__dirname, "..", "admin", "config.yml"), "utf8"),
+    );
+    const folders = ((cfg && cfg.collections) || [])
+      .map((c) => c && c.folder)
+      .filter(Boolean)
+      .map(String);
     expect(folders.length, "admin/config.yml has at least one collection folder").toBeGreaterThan(
       0,
     );

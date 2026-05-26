@@ -3,6 +3,7 @@ const fs = require("node:fs");
 const path = require("node:path");
 const { test, expect } = require("./base");
 const { SEED_POST_SLUG, loadTestAdmin } = require("./cms-test-backend");
+const { parseYaml, allStrings } = require("./workflow-yaml-utils");
 
 // Audit finding #1: the editor and the merge-gate workflow must agree
 // on the EXACT label string that flips a CMS PR from draft → ready.
@@ -25,13 +26,24 @@ const { SEED_POST_SLUG, loadTestAdmin } = require("./cms-test-backend");
 const REPO_ROOT = path.join(__dirname, "..");
 const WORKFLOW = path.join(REPO_ROOT, ".github/workflows/cms-editorial-workflow.yml");
 
+// The label tokens live inside string values — the `if:` expression and
+// the github-script `createLabel(...)` JS — so we parse the workflow and
+// search those resolved strings rather than grepping raw file text. That
+// keeps the expression/JS regexes (which match content, not YAML shape)
+// while being robust to anchors and never matching a commented mention.
+function workflowStrings(yml) {
+  return allStrings(parseYaml(yml)).join("\n");
+}
+
 function readyLabelFromWorkflow(yml) {
-  const m = yml.match(/github\.event\.label\.name\s*==\s*['"]([^'"]+)['"]/);
+  const m = workflowStrings(yml).match(/github\.event\.label\.name\s*==\s*['"]([^'"]+)['"]/);
   return m ? m[1] : null;
 }
 
 function labelsCreatedByValidateContent(yml) {
-  return [...yml.matchAll(/createLabel\([^)]*name:\s*['"]([^'"]+)['"]/g)].map((m) => m[1]);
+  return [...workflowStrings(yml).matchAll(/createLabel\([^)]*name:\s*['"]([^'"]+)['"]/g)].map(
+    (m) => m[1],
+  );
 }
 
 test.describe(

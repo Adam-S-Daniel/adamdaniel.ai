@@ -10,30 +10,28 @@
  * (Audit chat-finding #7.)
  */
 const { test, expect } = require("./base");
-const { readWorkflow } = require("./workflow-yaml-utils");
+const { readWorkflow, runScripts } = require("./workflow-yaml-utils");
 
-// Pull every step block (split on `- name:`) whose body mentions
-// commit.json — that's the deployed-build pill writer.
-function commitJsonStepBlocks(yaml) {
-  // eslint-disable-next-line no-useless-escape -- `\Z` is a literal end-of-input fallback in the lookahead alternation; kept verbatim to preserve the existing step-block split behavior.
-  const stepRe = /-\s+name:[^\n]*\n([\s\S]*?)(?=^\s*-\s+name:|^\s{2}\S|\Z)/gm;
-  const blocks = [];
-  let m;
-  while ((m = stepRe.exec(yaml)) !== null) {
-    if (m[0].includes("commit.json")) blocks.push(m[0]);
-  }
-  return blocks;
+// Every `run:` script that writes the deployed-build pill's commit.json
+// — pulled from the parsed workflow, so it sees the script GitHub
+// actually runs regardless of YAML shape.
+function commitJsonScripts(yaml) {
+  return runScripts(yaml)
+    .map((r) => r.script)
+    .filter((s) => s.includes("commit.json"));
 }
 
-function stripComments(yaml) {
-  return yaml
+// Drop shell comment lines so a `# … github.sha …` explainer inside the
+// script never counts as an offender.
+function stripComments(script) {
+  return script
     .split("\n")
     .filter((l) => !/^\s*#/.test(l))
     .join("\n");
 }
 
 for (const wf of ["deploy-preview.yml", "deploy-production.yml"]) {
-  const steps = commitJsonStepBlocks(readWorkflow(wf));
+  const steps = commitJsonScripts(readWorkflow(wf));
 
   test(`${wf} writes commit.json`, () => {
     expect(

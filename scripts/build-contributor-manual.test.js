@@ -7,7 +7,7 @@ const assert = require("node:assert/strict");
 const {
   buildManual,
   groupBySection,
-  parseSimpleYaml,
+  parseOverrides,
   sortSections,
   sortSteps,
 } = require("./build-contributor-manual");
@@ -102,7 +102,7 @@ test("buildManual produces a placeholder when no records exist", () => {
   assert.ok(md.includes("No captured steps yet"));
 });
 
-test("parseSimpleYaml extracts section_order and section_intros", () => {
+test("parseOverrides extracts section_order and section_intros", () => {
   const yaml = `# manual-overrides.yml
 section_order:
   - Logging in
@@ -112,7 +112,7 @@ section_intros:
     Visit /admin/ to open the editor.
     The login uses GitHub OAuth.
 `;
-  const out = parseSimpleYaml(yaml);
+  const out = parseOverrides(yaml);
   assert.deepEqual(out.section_order, ["Logging in", "Editing"]);
   assert.match(out.section_intros["Logging in"], /Visit \/admin\//);
 });

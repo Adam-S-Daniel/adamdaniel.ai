@@ -18,6 +18,7 @@
  */
 const fs = require("node:fs");
 const path = require("node:path");
+const YAML = require("yaml");
 
 const REPO_ROOT = path.resolve(__dirname, "..");
 const CAPTURE_DIR = path.join(REPO_ROOT, "manual-capture");
@@ -42,84 +43,28 @@ function readAllRecords() {
 function readOverrides() {
   if (!fs.existsSync(OVERRIDES_FILE)) return { section_order: [], section_intros: {} };
   try {
-    const yaml = fs.readFileSync(OVERRIDES_FILE, "utf8");
-    return parseSimpleYaml(yaml);
+    return parseOverrides(fs.readFileSync(OVERRIDES_FILE, "utf8"));
   } catch (_) {
     return { section_order: [], section_intros: {} };
   }
 }
 
 /**
- * Tiny YAML subset parser — avoids depending on js-yaml. Supports:
- *   key: value
- *   key:
- *     - item
- *     - item
- *   key:
- *     subkey: |
- *       multi-line value
+ * Parse docs/manual-overrides.yml into { section_order, section_intros }.
+ * A real YAML parse (the `yaml` library) — block scalars, quoting, and
+ * any future anchors are handled by the parser instead of the hand-rolled
+ * line scanner this used to be. The shape is normalised so a malformed or
+ * partial file still yields usable defaults.
  */
-function parseSimpleYaml(text) {
-  const obj = { section_order: [], section_intros: {} };
-  const lines = text.split(/\r?\n/);
-  let mode = null;
-  let currentKey = null;
-  let buffer = [];
-  // Block content must be indented STRICTLY MORE than the key that opened
-  // the block (the standard YAML rule). Keys live at 2 spaces, so block
-  // lines need ≥3. Without that gate, the parser treats a sibling key like
-  // `  Editing a post: |` as content of the previous block.
-  for (let i = 0; i < lines.length; i++) {
-    const raw = lines[i];
-    const line = raw.replace(/\s+$/, "");
-    if (line === "" || line.startsWith("#")) continue;
-    if (mode === "block" && /^\s{3,}\S/.test(raw) && !/^\S/.test(raw)) {
-      buffer.push(raw.replace(/^\s{2,}/, ""));
-      continue;
-    } else if (mode === "block") {
-      obj.section_intros[currentKey] = buffer.join("\n");
-      mode = null;
-      currentKey = null;
-      buffer = [];
-    }
-    const sectionOrder = line.match(/^section_order:/);
-    if (sectionOrder) {
-      while (i + 1 < lines.length && /^\s+-\s+/.test(lines[i + 1])) {
-        i++;
-        const m = lines[i].match(/^\s+-\s+(.*)$/);
-        if (m) obj.section_order.push(m[1].replace(/^["']|["']$/g, ""));
-      }
-      continue;
-    }
-    const intro = line.match(/^section_intros:/);
-    if (intro) {
-      // Inside section_intros, scan every line that is either a key
-      // (`  Foo: |`) or block content (≥3 spaces); stop at the first
-      // top-level token. Intermediate block content is handled by the
-      // outer-loop block branch on the next iteration, so we only need
-      // to detect new keys here.
-      while (
-        i + 1 < lines.length &&
-        (/^\s{2}\S/.test(lines[i + 1]) || /^\s{3,}\S/.test(lines[i + 1]))
-      ) {
-        i++;
-        const km = lines[i].match(/^\s{2}([^:]+):\s*\|/);
-        if (km) {
-          if (mode === "block") {
-            obj.section_intros[currentKey] = buffer.join("\n");
-            buffer = [];
-          }
-          mode = "block";
-          currentKey = km[1].trim();
-        } else if (mode === "block" && /^\s{3,}\S/.test(lines[i])) {
-          buffer.push(lines[i].replace(/^\s{2,}/, ""));
-        }
-      }
-      continue;
-    }
-  }
-  if (mode === "block") obj.section_intros[currentKey] = buffer.join("\n");
-  return obj;
+function parseOverrides(text) {
+  const parsed = YAML.parse(text) || {};
+  return {
+    section_order: Array.isArray(parsed.section_order) ? parsed.section_order : [],
+    section_intros:
+      parsed.section_intros && typeof parsed.section_intros === "object"
+        ? parsed.section_intros
+        : {},
+  };
 }
 
 function groupBySection(records) {
@@ -261,7 +206,7 @@ if (require.main === module) main();
 module.exports = {
   buildManual,
   groupBySection,
-  parseSimpleYaml,
+  parseOverrides,
   readAllRecords,
   sortSections,
   sortSteps,

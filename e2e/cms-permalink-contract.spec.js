@@ -1,6 +1,7 @@
 // @lane: local — cross-checks Decap config + Jekyll permalink output via local fs
 const fs = require("node:fs");
 const path = require("node:path");
+const YAML = require("yaml");
 const { test, expect } = require("./base");
 
 // E2 — Permalink contract cross-check.
@@ -37,7 +38,7 @@ const { test, expect } = require("./base");
 // the override fallback. Tags / projects / pages / e2e templates round-trip
 // → pass directly.
 //
-// Pure-Node spec — no browser, no servers, just file I/O and string parse.
+// Pure-Node spec — no browser, no servers, just file I/O and YAML parse.
 
 const REPO_ROOT = path.join(__dirname, "..");
 const ADMIN_CONFIG = path.join(REPO_ROOT, "admin/config.yml");
@@ -57,46 +58,33 @@ function readText(file) {
   return fs.readFileSync(file, "utf8");
 }
 
-// Find a top-level collection chunk in admin/config.yml. The chunk runs from
-// `  - name: <coll>` to the next collection start (or EOF).
-function findCollection(yml, name) {
-  const lines = yml.split(/\r?\n/);
-  const starts = [];
-  lines.forEach((line, idx) => {
-    if (/^\s{2}-\s+name:\s*\S+/.test(line)) starts.push(idx);
-  });
-  starts.push(lines.length);
-  for (let i = 0; i < starts.length - 1; i++) {
-    const chunk = lines.slice(starts[i], starts[i + 1]).join("\n");
-    const m = chunk.match(/^\s{2}-\s+name:\s*(\S+)/);
-    if (m && m[1] === name) return chunk;
-  }
-  return null;
+// Find a collection by name in the parsed admin/config.yml. Decap
+// collections are a YAML list of objects — return the object, or null
+// when absent.
+function findCollection(adminCfg, name) {
+  const cols = (adminCfg && adminCfg.collections) || [];
+  return cols.find((c) => c && c.name === name) || null;
 }
 
-// Pull a single top-level key (e.g. `slug:` / `preview_path:`) out of a
-// collection chunk. Strips quoting if present.
-function readKey(chunk, key) {
-  const re = new RegExp(`^\\s{4}${key}:\\s*['"]?([^'"\\n]+?)['"]?\\s*$`, "m");
-  const m = chunk.match(re);
-  return m ? m[1] : null;
+// Read a single key (e.g. `slug` / `preview_path`) off a collection
+// object, as a string, or null when absent.
+function readKey(collection, key) {
+  const v = collection && collection[key];
+  return v == null ? null : String(v);
 }
 
-// Pull the per-collection permalink from _config.yml. Top-level posts live at
-// the document root; collection-typed entries live under
-// `collections.<name>.permalink`.
-function jekyllPermalinkFor(jekyllYml, collection) {
-  if (collection === "posts") {
-    const m = jekyllYml.match(/^permalink:\s*(\S+)\s*$/m);
-    return m ? m[1] : null;
-  }
-  // Match `<name>:` block at indent 2 inside `collections:` and pull the
-  // `permalink:` line within it.
-  const re = new RegExp(`^\\s{2}${collection}:\\s*$([\\s\\S]*?)(?=^\\S|^\\s{2}\\S)`, "m");
-  const block = jekyllYml.match(re);
-  if (!block) return null;
-  const m = block[1].match(/^\s+permalink:\s*(\S+)\s*$/m);
-  return m ? m[1] : null;
+// The per-collection permalink template from the parsed _config.yml.
+// Top-level posts render at the document-root `permalink:`; other
+// collection-typed entries live under `collections.<name>.permalink`.
+function jekyllPermalinkFor(jekyllCfg, collection) {
+  const v =
+    collection === "posts"
+      ? jekyllCfg && jekyllCfg.permalink
+      : jekyllCfg &&
+        jekyllCfg.collections &&
+        jekyllCfg.collections[collection] &&
+        jekyllCfg.collections[collection].permalink;
+  return v == null ? null : String(v);
 }
 
 // Substitute `{{year}}`, `{{month}}`, `{{day}}`, `{{slug}}` from the synthetic
@@ -151,13 +139,13 @@ const COLLECTIONS = [
 test.describe("CMS permalink contract — Decap two-pass vs Jekyll", () => {
   for (const { name, jekyllKey } of COLLECTIONS) {
     test(`${name} — Decap preview URL matches Jekyll URL (or override is loaded)`, () => {
-      const adminYml = readText(ADMIN_CONFIG);
-      const jekyllYml = readText(JEKYLL_CONFIG);
-      const chunk = findCollection(adminYml, name);
-      expect(chunk, `admin/config.yml must define collection "${name}"`).not.toBeNull();
+      const adminCfg = YAML.parse(readText(ADMIN_CONFIG));
+      const jekyllCfg = YAML.parse(readText(JEKYLL_CONFIG));
+      const coll = findCollection(adminCfg, name);
+      expect(coll, `admin/config.yml must define collection "${name}"`).not.toBeNull();
 
-      const slugTemplate = readKey(chunk, "slug") || "{{slug}}";
-      const previewPath = readKey(chunk, "preview_path");
+      const slugTemplate = readKey(coll, "slug") || "{{slug}}";
+      const previewPath = readKey(coll, "preview_path");
 
       // Tags collection ships without a preview_path — there's no "View
       // Live" button to break, so the contract has nothing to assert. The
@@ -192,7 +180,7 @@ test.describe("CMS permalink contract — Decap two-pass vs Jekyll", () => {
         return;
       }
 
-      const permalink = jekyllPermalinkFor(jekyllYml, jekyllKey);
+      const permalink = jekyllPermalinkFor(jekyllCfg, jekyllKey);
       expect(
         permalink,
         `_config.yml must define a permalink for collection "${jekyllKey}"`,

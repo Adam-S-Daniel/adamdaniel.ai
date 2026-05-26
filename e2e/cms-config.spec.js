@@ -1,6 +1,7 @@
 // @lane: local — pure-fs invariants on admin/config*.yml; no browser navigation
 const fs = require("node:fs");
 const path = require("node:path");
+const YAML = require("yaml");
 const { test, expect } = require("./base");
 
 // Locks in the editor-experience invariants of the Decap CMS configs.
@@ -24,41 +25,21 @@ const CONFIGS = [
   path.join(REPO_ROOT, "admin/config-test.yml"),
 ];
 
-function readConfig(file) {
-  return fs.readFileSync(file, "utf8");
+// Parse a Decap config file with the real YAML parser, so collections,
+// fields, widgets, hints, and any future anchors are read as structure
+// rather than scraped line-by-line.
+function parseConfig(file) {
+  return YAML.parse(fs.readFileSync(file, "utf8")) || {};
 }
 
-function findCollection(yml, name) {
-  // Crude but sufficient: split on collection separators (`  - name:` lines
-  // at indent 2) and pick the chunk whose first key matches `name`.
-  const lines = yml.split(/\r?\n/);
-  const starts = [];
-  lines.forEach((line, idx) => {
-    if (/^\s{2}-\s+name:\s*\S+/.test(line)) starts.push(idx);
-  });
-  starts.push(lines.length);
-  for (let i = 0; i < starts.length - 1; i++) {
-    const chunk = lines.slice(starts[i], starts[i + 1]).join("\n");
-    const m = chunk.match(/^\s{2}-\s+name:\s*(\S+)/);
-    if (m && m[1] === name) return chunk;
-  }
-  return null;
+// A collection object by name (Decap `collections:` is a YAML list).
+function findCollection(cfg, name) {
+  return ((cfg && cfg.collections) || []).find((c) => c && c.name === name) || null;
 }
 
-function findField(collectionChunk, fieldName) {
-  // Field rows look like `      - name: foo` at indent 6.
-  const lines = collectionChunk.split(/\r?\n/);
-  const starts = [];
-  lines.forEach((line, idx) => {
-    if (/^\s{6}-\s+name:\s*\S+/.test(line)) starts.push(idx);
-  });
-  starts.push(lines.length);
-  for (let i = 0; i < starts.length - 1; i++) {
-    const chunk = lines.slice(starts[i], starts[i + 1]).join("\n");
-    const m = chunk.match(/^\s{6}-\s+name:\s*(\S+)/);
-    if (m && m[1] === fieldName) return chunk;
-  }
-  return null;
+// A field object by name within a collection (`fields:` is a YAML list).
+function findField(collection, fieldName) {
+  return ((collection && collection.fields) || []).find((f) => f && f.name === fieldName) || null;
 }
 
 test.describe("Decap CMS config invariants", () => {
@@ -84,13 +65,11 @@ test.describe("Decap CMS config invariants", () => {
       // broken images in posts and a literal `{{year}}` "Copy Path" in
       // the Media library. We verify the structural invariant that
       // actually makes uploads resolve, not a templated string.
-      const yml = readConfig(configPath);
-      const mediaM = yml.match(/^media_folder:\s*["']?([^"'\n]+?)["']?\s*$/m);
-      const publicM = yml.match(/^public_folder:\s*["']?([^"'\n]+?)["']?\s*$/m);
-      expect(mediaM, "media_folder must be set").not.toBeNull();
-      expect(publicM, "public_folder must be set").not.toBeNull();
-      const mediaFolder = mediaM[1];
-      const publicFolder = publicM[1];
+      const cfg = parseConfig(configPath);
+      expect(cfg.media_folder, "media_folder must be set").toBeTruthy();
+      expect(cfg.public_folder, "public_folder must be set").toBeTruthy();
+      const mediaFolder = String(cfg.media_folder);
+      const publicFolder = String(cfg.public_folder);
 
       // No template tokens anywhere — they cannot be resolved by the
       // standalone Media library and desync the on-disk vs. URL path.
@@ -114,8 +93,7 @@ test.describe("Decap CMS config invariants", () => {
     });
 
     test(`${label}: posts collection has no editor-facing reading_time field`, () => {
-      const yml = readConfig(configPath);
-      const posts = findCollection(yml, "posts");
+      const posts = findCollection(parseConfig(configPath), "posts");
       expect(posts, "posts collection must exist").not.toBeNull();
       // reading_time is auto-calculated at build time; surfacing it in the
       // editor is misleading because any value is overwritten on deploy.
@@ -123,58 +101,55 @@ test.describe("Decap CMS config invariants", () => {
     });
 
     test(`${label}: posts.tags widget allows inline creation`, () => {
-      const yml = readConfig(configPath);
-      const posts = findCollection(yml, "posts");
+      const posts = findCollection(parseConfig(configPath), "posts");
       const tags = findField(posts, "tags");
       expect(tags, "posts.tags field must exist").not.toBeNull();
       // Decap's relation widget only picks from existing entries —
       // inline creation requires the list-of-strings widget. The
       // auto_tag_pages plugin generates archive pages for any string
       // tag, so we don't need a curated `_tags/` entry up front.
-      expect(tags).toMatch(/widget:\s*list/);
-      expect(tags).not.toMatch(/widget:\s*relation/);
+      expect(tags.widget).toBe("list");
+      expect(tags.widget).not.toBe("relation");
     });
 
     test(`${label}: posts.published hint clarifies precedence over publish_date`, () => {
-      const yml = readConfig(configPath);
-      const posts = findCollection(yml, "posts");
+      const posts = findCollection(parseConfig(configPath), "posts");
       const published = findField(posts, "published");
       expect(published, "posts.published field must exist").not.toBeNull();
       // Editors must be able to predict which field wins — the hint should
       // call out that `published: true` publishes immediately and that the
       // scheduled date only fires when this toggle is left off.
-      expect(published.toLowerCase()).toMatch(/leave.*off|off.*to schedule/);
+      expect(String(published.hint || "").toLowerCase()).toMatch(/leave.*off|off.*to schedule/);
     });
 
     test(`${label}: posts.body hint surfaces the real-layout /preview/ URL`, () => {
-      const yml = readConfig(configPath);
-      const posts = findCollection(yml, "posts");
+      const posts = findCollection(parseConfig(configPath), "posts");
       const body = findField(posts, "body");
       expect(body, "posts.body field must exist").not.toBeNull();
       // The /preview/ route renders draft content using the real Jekyll
       // layouts — strictly better than the in-editor markdown preview, but
       // there's no in-CMS UI for it, so it has to live in the hint text.
-      expect(body).toContain("/preview/?collection=posts");
+      expect(String(body.hint || "")).toContain("/preview/?collection=posts");
     });
   }
 
   test("admin/config.yml enables the editorial workflow", () => {
-    const yml = readConfig(path.join(REPO_ROOT, "admin/config.yml"));
+    const cfg = parseConfig(path.join(REPO_ROOT, "admin/config.yml"));
     // Without this, every Save commits straight to main and bypasses the
     // PR-based draft → preview → visual-regression-approval pipeline that
     // the rest of the system (cms-editorial-workflow.yml, the cms/draft
     // and cms/ready labels, /admin/reviews/) is built around.
-    expect(yml).toMatch(/^publish_mode:\s*editorial_workflow\b/m);
+    expect(cfg.publish_mode).toBe("editorial_workflow");
   });
 
   test("admin/config-test.yml uses test-repo backend with editorial workflow", () => {
-    const yml = readConfig(path.join(REPO_ROOT, "admin/config-test.yml"));
+    const cfg = parseConfig(path.join(REPO_ROOT, "admin/config-test.yml"));
     // The whole point of this config is to exercise the editorial
     // workflow + GitHub-style backend code path that local_backend
     // forces off. If either of these regresses, cms-editorial-workflow.spec.js
     // reverts to testing nothing meaningfully different from cms-smoke.
-    expect(yml).toMatch(/^\s+name:\s*test-repo\b/m);
-    expect(yml).toMatch(/^publish_mode:\s*editorial_workflow\b/m);
+    expect(cfg.backend && cfg.backend.name).toBe("test-repo");
+    expect(cfg.publish_mode).toBe("editorial_workflow");
   });
 
   // ── Editor capability invariants ─────────────────────────────────────
@@ -187,60 +162,61 @@ test.describe("Decap CMS config invariants", () => {
     const label = path.relative(REPO_ROOT, configPath);
 
     test(`${label}: each content collection allows create + delete`, () => {
-      const yml = readConfig(configPath);
+      const cfg = parseConfig(configPath);
       // Tags / Posts / Projects / Pages must all be folder collections
       // with create + delete explicitly true so editors get the full
       // CRUD affordances in the Decap UI. Spelling them out keeps the
       // intent visible in the YAML — defaults can shift between major
       // versions.
       for (const name of ["posts", "tags", "projects", "pages"]) {
-        const chunk = findCollection(yml, name);
+        const chunk = findCollection(cfg, name);
         expect(chunk, `${name} collection must exist`).not.toBeNull();
-        expect(chunk).toMatch(/^\s{4}folder:\s*\S+/m);
-        expect(chunk).toMatch(/^\s{4}create:\s*true/m);
-        expect(chunk).toMatch(/^\s{4}delete:\s*true/m);
+        expect(chunk.folder, `${name} must be a folder collection`).toBeTruthy();
+        expect(chunk.create, `${name} must set create: true`).toBe(true);
+        expect(chunk.delete, `${name} must set delete: true`).toBe(true);
       }
     });
 
     test(`${label}: posts collection exposes title, date, body, tags, featured_image`, () => {
-      const yml = readConfig(configPath);
-      const posts = findCollection(yml, "posts");
+      const posts = findCollection(parseConfig(configPath), "posts");
       for (const f of ["title", "date", "body", "tags", "featured_image", "published"]) {
         expect(findField(posts, f), `posts.${f} field must exist`).not.toBeNull();
       }
       const featured = findField(posts, "featured_image");
-      expect(featured).toMatch(/widget:\s*image/);
+      expect(featured.widget).toBe("image");
     });
 
     test(`${label}: projects collection exposes a multi-image gallery`, () => {
-      const yml = readConfig(configPath);
-      const projects = findCollection(yml, "projects");
+      const projects = findCollection(parseConfig(configPath), "projects");
       const images = findField(projects, "images");
       expect(images, "projects.images field must exist").not.toBeNull();
       // List widget with a nested image field — the standard Decap
       // recipe for "an ordered, repeatable image gallery" (drag-to-
-      // reorder, individual remove).
-      expect(images).toMatch(/widget:\s*list/);
-      expect(images).toMatch(/widget:\s*image/);
+      // reorder, individual remove). The nested field can be declared
+      // singular (`field:`) or as a one-element `fields:` list.
+      expect(images.widget).toBe("list");
+      const nested = images.field ? [images.field] : images.fields || [];
+      expect(
+        nested.some((f) => f && f.widget === "image"),
+        "projects.images must nest an image field",
+      ).toBe(true);
     });
 
     test(`${label}: tags collection exposes name + description`, () => {
-      const yml = readConfig(configPath);
-      const tags = findCollection(yml, "tags");
+      const tags = findCollection(parseConfig(configPath), "tags");
       expect(findField(tags, "name"), "tags.name must exist").not.toBeNull();
       expect(findField(tags, "description"), "tags.description must exist").not.toBeNull();
     });
 
     test(`${label}: pages collection exposes title, body, permalink, published`, () => {
-      const yml = readConfig(configPath);
-      const pages = findCollection(yml, "pages");
+      const pages = findCollection(parseConfig(configPath), "pages");
       for (const f of ["title", "body", "permalink", "published"]) {
         expect(findField(pages, f), `pages.${f} must exist`).not.toBeNull();
       }
       // Permalink is now a string (editor-visible) rather than hidden,
       // since editors creating new pages need to set it.
       const permalink = findField(pages, "permalink");
-      expect(permalink).toMatch(/widget:\s*string/);
+      expect(permalink.widget).toBe("string");
     });
 
     // ── Audit finding #19: relation-widget creep ─────────────────────
@@ -253,11 +229,11 @@ test.describe("Decap CMS config invariants", () => {
     // posts.tags-specific check above would only catch the tags
     // field).
     test(`${label}: no widget: relation appears anywhere in the config`, () => {
-      const yml = readConfig(configPath);
+      const cfg = parseConfig(configPath);
       expect(
-        yml,
+        JSON.stringify(cfg),
         "the relation widget is incompatible with the auto_tag_pages plugin (it requires every value to be a curated entry); use list/string instead",
-      ).not.toMatch(/widget:\s*relation\b/);
+      ).not.toContain('"widget":"relation"');
     });
   }
 
@@ -277,11 +253,9 @@ test.describe("Decap CMS config invariants", () => {
   // PER-ENTRY permalink convention enforced by admin/config.yml's
   // `pages.permalink.pattern` default ("/pages/<slug>/").
 
-  function previewPathFor(yml, collection) {
-    const chunk = findCollection(yml, collection);
-    if (!chunk) return null;
-    const m = chunk.match(/^\s{4}preview_path:\s*['"]?([^'"\n]+?)['"]?\s*$/m);
-    return m ? m[1] : null;
+  function previewPathFor(cfg, collection) {
+    const c = findCollection(cfg, collection);
+    return c && c.preview_path != null ? String(c.preview_path) : null;
   }
 
   // The earlier "preview_path round-trips" test that lived here substituted
@@ -299,22 +273,23 @@ test.describe("Decap CMS config invariants", () => {
     // admin/config.yml's `pages.permalink.default` produces a path of
     // the same shape preview_path generates, so an editor who accepts
     // the default doesn't end up with a "View on Live Site" 404.
-    const adminYml = readConfig(path.join(REPO_ROOT, "admin/config.yml"));
-    const previewPath = previewPathFor(adminYml, "pages");
+    const cfg = parseConfig(path.join(REPO_ROOT, "admin/config.yml"));
+    const previewPath = previewPathFor(cfg, "pages");
     expect(previewPath).not.toBeNull();
 
     const decapPreviewURL = previewPath.replace(/\{\{slug\}\}/g, "foo-bar");
     expect(decapPreviewURL).toBe("/pages/foo-bar/");
 
-    const permalinkField = findField(findCollection(adminYml, "pages"), "permalink");
-    const defaultMatch = permalinkField.match(/^\s+default:\s*['"]?([^'"\n]+?)['"]?\s*$/m);
+    const permalinkField = findField(findCollection(cfg, "pages"), "permalink");
+    const permalinkDefault =
+      permalinkField && permalinkField.default != null ? String(permalinkField.default) : null;
     expect(
-      defaultMatch,
+      permalinkDefault,
       "pages.permalink should ship a `default:` so the New Page form pre-fills a sensible value",
     ).not.toBeNull();
     expect(
-      decapPreviewURL.startsWith(defaultMatch[1]),
-      `pages preview URL ${decapPreviewURL} must live under the permalink default ${defaultMatch[1]}`,
+      decapPreviewURL.startsWith(permalinkDefault),
+      `pages preview URL ${decapPreviewURL} must live under the permalink default ${permalinkDefault}`,
     ).toBe(true);
   });
 });

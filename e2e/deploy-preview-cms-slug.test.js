@@ -2,6 +2,7 @@ const fs = require("node:fs");
 const path = require("node:path");
 const { execFileSync } = require("node:child_process");
 const { test, expect } = require("./base");
+const { parseYaml, allStrings } = require("./workflow-yaml-utils");
 
 // Locks in the per-CMS-slug preview alias structure of
 // .github/workflows/deploy-preview.yml — added per the spike at
@@ -20,15 +21,29 @@ const { test, expect } = require("./base");
 //   5. The PR-comment step surfaces the slug-derived URL as an
 //      additional row when applicable.
 //
-// The workflow-structure invariants are pure-text greps against the
-// workflow file; the slug-derivation invariants run the real script.
+// The workflow-structure invariants are asserted off the parsed
+// workflow — job/step shape structurally, and shell/JS shapes against
+// the parser's resolved string values; the slug-derivation invariants
+// run the real script.
 
 const WORKFLOW = path.join(__dirname, "..", ".github", "workflows", "deploy-preview.yml");
 
 const SLUG_SCRIPT = path.join(__dirname, "..", "scripts", "cms-preview-slug.sh");
 
-function readWorkflow() {
-  return fs.readFileSync(WORKFLOW, "utf8");
+function workflow() {
+  return parseYaml(fs.readFileSync(WORKFLOW, "utf8"));
+}
+
+// Every script/expression/JS string the workflow carries, joined. Shell
+// and github-script content checks run against this — the tokens that
+// actually execute, with YAML comments already dropped.
+function workflowStrings() {
+  return allStrings(workflow()).join("\n");
+}
+
+// Flat list of every step across every job (for structural step lints).
+function allSteps() {
+  return Object.values(workflow().jobs || {}).flatMap((j) => (j && j.steps) || []);
 }
 
 // Run the real shared script the workflow calls. Invoked via `bash` so the
@@ -39,10 +54,9 @@ function slug(branch) {
 
 test.describe("deploy-preview workflow: per-CMS-slug preview alias", () => {
   test("both jobs derive cms_slug via the shared cms-preview-slug.sh", () => {
-    const yml = readWorkflow();
     // Exactly two call sites — one in deploy-preview, one in
     // teardown-preview — so they can never disagree on the slug shape.
-    const matches = yml.match(/\.\/scripts\/cms-preview-slug\.sh/g) || [];
+    const matches = workflowStrings().match(/\.\/scripts\/cms-preview-slug\.sh/g) || [];
     expect(
       matches.length,
       `expected exactly two cms-preview-slug.sh call sites (deploy + teardown); found ${matches.length}`,
@@ -50,58 +64,57 @@ test.describe("deploy-preview workflow: per-CMS-slug preview alias", () => {
   });
 
   test("both jobs check out the repo so the shared script is on disk", () => {
-    const yml = readWorkflow();
     // The deploy job always checked out; teardown now must too (it has no
     // build step that would otherwise put scripts/ on disk). Two checkouts
     // total guards against a future edit dropping the teardown one and
     // breaking the slug computation at PR-close.
-    const matches = yml.match(/uses: actions\/checkout@/g) || [];
+    const checkouts = allSteps().filter(
+      (s) => s && typeof s.uses === "string" && s.uses.startsWith("actions/checkout@"),
+    );
     expect(
-      matches.length,
-      `expected a Checkout in both deploy + teardown; found ${matches.length}`,
+      checkouts.length,
+      `expected a Checkout in both deploy + teardown; found ${checkouts.length}`,
     ).toBe(2);
   });
 
   test("deploy syncs the cms-<slug> S3 prefix", () => {
-    const yml = readWorkflow();
-    expect(yml, "missing `s3://${PREVIEW_BUCKET}/cms-${SLUG}/` sync").toMatch(
+    expect(workflowStrings(), "missing `s3://${PREVIEW_BUCKET}/cms-${SLUG}/` sync").toMatch(
       /s3:\/\/\$\{PREVIEW_BUCKET\}\/cms-\$\{?SLUG\}?\//,
     );
   });
 
   test("deploy gates the slug sync on `cms_slug.outputs.slug != ''`", () => {
-    const yml = readWorkflow();
     // Without this gate, every regular code PR would attempt to sync
     // an empty `cms-/` prefix, which would either no-op-fail (best
     // case) or pollute the bucket (worst).
-    expect(
-      yml,
-      "missing `if: steps.cms_slug.outputs.slug != ''` gate on the cms-slug sync",
-    ).toMatch(
-      /Sync to S3 — per-CMS-slug alias[\s\S]{0,400}if:\s*steps\.cms_slug\.outputs\.slug\s*!=\s*''/,
+    const sync = allSteps().find((s) =>
+      String((s && s.name) || "").includes("Sync to S3 — per-CMS-slug alias"),
     );
+    expect(sync, "missing the `Sync to S3 — per-CMS-slug alias` step").toBeTruthy();
+    expect(
+      String(sync.if || ""),
+      "missing `if: steps.cms_slug.outputs.slug != ''` gate on the cms-slug sync",
+    ).toMatch(/steps\.cms_slug\.outputs\.slug\s*!=\s*''/);
   });
 
   test("deploy registers a `preview-cms-<slug>` GitHub Deployment", () => {
-    const yml = readWorkflow();
-    expect(yml, "missing `environment: \\`preview-cms-${slug}\\`` deployment registration").toMatch(
-      /environment:\s*`preview-cms-\$\{slug\}`/,
-    );
+    expect(
+      workflowStrings(),
+      "missing `environment: \\`preview-cms-${slug}\\`` deployment registration",
+    ).toMatch(/environment:\s*`preview-cms-\$\{slug\}`/);
   });
 
   test("teardown removes the cms-<slug> S3 prefix", () => {
-    const yml = readWorkflow();
-    expect(yml, "missing `aws s3 rm s3://${PREVIEW_BUCKET}/cms-${SLUG}/`").toMatch(
+    expect(workflowStrings(), "missing `aws s3 rm s3://${PREVIEW_BUCKET}/cms-${SLUG}/`").toMatch(
       /aws s3 rm "?s3:\/\/\$\{PREVIEW_BUCKET\}\/cms-\$\{SLUG\}\/"?\s+--recursive/,
     );
   });
 
   test("invalidation step is gated to the cms-<slug> path conditionally", () => {
-    const yml = readWorkflow();
     // Both deploy + teardown invalidation steps should add the
     // `/cms-${SLUG}/*` path only when SLUG is non-empty. Look for the
     // shared pattern.
-    const matches = yml.match(/PATHS\+=\("\/cms-\$\{SLUG\}\/\*"\)/g) || [];
+    const matches = workflowStrings().match(/PATHS\+=\("\/cms-\$\{SLUG\}\/\*"\)/g) || [];
     expect(
       matches.length,
       "expected both deploy + teardown to conditionally add the cms-slug path to the invalidation batch",
@@ -109,11 +122,10 @@ test.describe("deploy-preview workflow: per-CMS-slug preview alias", () => {
   });
 
   test("PR-comment renders the cms-slug alias URL when applicable", () => {
-    const yml = readWorkflow();
     // The comment-builder branches on `slug` and renders an extra
     // table row mentioning the alias URL.
     expect(
-      yml,
+      workflowStrings(),
       "PR comment is missing the cms-slug alias row — editors won't see the stable URL",
     ).toMatch(/CMS slug alias[\s\S]{0,200}stable across draft cycles/);
   });
