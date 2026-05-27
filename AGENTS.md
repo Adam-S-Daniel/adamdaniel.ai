@@ -2,6 +2,10 @@
 
 Personal website and blog for Adam Daniel (Freelance AI Engineer). Jekyll static site with Decap CMS, AWS OAuth proxy, and PR preview environments.
 
+## Scope & Boundaries
+
+- **Stay within the requested scope.** Only act on the explicitly requested scope (e.g. user-level vs repo-level placement). When in doubt about scope, confirm before proceeding.
+
 ## Test-Driven Design
 
 - **Red-green TDD.** Write a failing test first, then make it pass, then refactor. Always follow this cycle.
@@ -24,6 +28,10 @@ Function strips the same prefix from `Location` headers so S3's
 trailing-slash redirects (e.g. `/admin` → `/admin/`) don't leak the
 internal key space. Pages on preview and prod share the same
 root-relative URL structure (no `/pr-N/` in any visible URL).
+
+## Environment / WSL
+
+- **No `sudo` in the non-interactive shell.** Do NOT run `sudo` commands inside the non-interactive bash session — they fail because no password prompt is available. Instead, output the `sudo` commands for the user to run manually in their own terminal.
 
 ## Key commands
 
@@ -294,6 +302,10 @@ A multi-event workflow branches *inside* the expression (it can't use `if:`, whi
 **Context limit:** `run-name:` may reference **only** the `github` and `inputs` contexts — `vars`/`env`/`secrets`/`steps`/`jobs`/`runner` are unavailable, and it can't read job/step outputs. Dispatch inputs declared `type: boolean` arrive as real booleans, so `inputs.dry_run && ' — dry-run' || ''` works. Echoing attacker-controllable fields (e.g. a fork PR title) is safe — run-name is display-only text, never executed or rendered as markup.
 
 `e2e/workflow-run-name.test.js` (`@lane: local`) lint-locks this: every workflow must declare a non-empty, dynamic (`${{`) `run-name:`, and every multi-event workflow must branch on `github.event_name ==` / `github.event.action ==`. (A hypothetical pure-`workflow_call`-only workflow would never show its own run-name and could be exempted; none exist today.)
+
+## CI / GitHub Actions
+
+- **Validate workflow / composite-action YAML before committing.** Quote `description` and other string values that contain special characters, and parse the file with the [`yaml`](https://www.npmjs.com/package/yaml) library or `yamllint` before committing — never eyeball it. (Complements the parser rule under Code quality, which governs how tests/scripts *read* these files at runtime.)
 
 ## Workflows
 
