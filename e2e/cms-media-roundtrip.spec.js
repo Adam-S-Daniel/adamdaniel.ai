@@ -72,7 +72,7 @@ const {
 } = require("./github-actions-poll");
 const { waitForChangeReflected } = require("./deploy-pill");
 const { resolveCmsTarget } = require("./cms-host");
-const { readPublishedFlag, forcePublishedFalse, loudBail } = require("./fixture-baseline");
+const { readPublishedFlag, reconstructBaseline, loudBail } = require("./fixture-baseline");
 const { setPublished, saveEntry } = require("./cms-editor-ui");
 
 const REPO_ROOT = path.resolve(__dirname, "..");
@@ -207,16 +207,23 @@ function readFeaturedImage(text) {
   return m[1].trim().replace(/^['"]|['"]$/g, "");
 }
 
-// The canonical baseline file text. Read from disk so a doc-body edit
-// to the committed fixture flows into the cleanup commit without a
-// code change here — but NEVER trust its `published:` value. The
-// committed file ships `published: false` + `featured_image: ""`;
-// forcing `published: false` here is what makes the loop self-heal
-// instead of re-writing `published: true` and skipping into a green
-// check forever (#1053). Idempotent once the fixture is checked in
-// false.
+// The canonical baseline file text — the full file (front matter
+// forced `published: false` + `featured_image: ""` + canonical body),
+// now a code-pinned CONSTANT via `reconstructBaseline` rather than a
+// read of the on-disk body (#1771 step 3). Previously this was
+// `forcePublishedFalse(readFileSync(FIXTURE_ABS))`, which copied the
+// committed body verbatim — the same self-perpetuating Slate round-trip
+// corruption the mutation-canary twin hit (a green run re-types the
+// body through Decap's `widget: markdown` editor, the next run re-
+// derives its baseline from the mangled result). Sourcing it from the
+// frozen canonical means the reset / safety-net always writes canonical
+// bytes, so a green run leaves the committed body byte-identical to
+// canonical. `published: false` is baked into the canonical, preserving
+// the #1053 self-heal (never trust an on-disk `published: true`). The
+// drift-lint in e2e/canary-content.test.js locks the committed file to
+// this.
 function buildBaselineFileText() {
-  return forcePublishedFalse(fs.readFileSync(FIXTURE_ABS, "utf8"), FIXTURE_PATH);
+  return reconstructBaseline(FIXTURE_PATH);
 }
 
 function todayUtcIso() {
@@ -273,7 +280,7 @@ test(
       return;
     }
     if (initialPublished === true) {
-      // Loop self-heals main (buildBaselineFileText forces
+      // Loop self-heals main (the canonical baseline is
       // `published: false`), but a checked-in `published: true` is a
       // source-of-truth misconfiguration and the exact #1053 stuck
       // state. Fail loudly on a scheduled run so a human fixes it.

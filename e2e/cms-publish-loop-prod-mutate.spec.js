@@ -76,7 +76,7 @@ const {
 const { waitForChangeReflected } = require("./deploy-pill");
 const { setPublished, saveEntry } = require("./cms-editor-ui");
 const { prodTarget } = require("./cms-host");
-const { readPublishedFlag, forcePublishedFalse, loudBail } = require("./fixture-baseline");
+const { readPublishedFlag, reconstructBaseline, loudBail } = require("./fixture-baseline");
 
 const REPO_ROOT = path.resolve(__dirname, "..");
 const FIXTURE_PATH = "_posts/2099-01-01-e2e-mutation-canary.md";
@@ -186,19 +186,26 @@ async function writeFixtureOnMain({ fileText, message }) {
 // `readPublishedFlag` is shared from ./fixture-baseline (#1053 DRY'd
 // the five per-spec copies into one implementation).
 
-// Build the canonical "baseline" file text — the file with
-// `published: false`, ready to be re-committed by the cleanup step.
+// Build the canonical "baseline" file text — the full file (front
+// matter forced `published: false` + canonical body), ready to be
+// re-committed by the reset / cleanup / safety-net steps.
 //
-// We re-read the fixture from disk so a documentation-body edit to the
-// checked-in file still flows into the cleanup commit without a code
-// change here — but we NEVER trust its `published:` value. The fixture
-// ships `published: true` (so a human opening the file previews the
-// rendered post); forcing it false here is exactly what makes the loop
-// self-heal instead of being a fixed point that re-writes
-// `published: true`, skips on the next run's guard, and reports green
-// forever (#1053). Idempotent once the fixture is checked in false.
+// This is now a code-pinned CONSTANT via `reconstructBaseline`, NOT a
+// read of the on-disk body (#1771 step 3). Previously this was
+// `forcePublishedFalse(readFileSync(FIXTURE_ABS))`, which copied the
+// committed body verbatim — but a green run re-types that body through
+// Decap's `widget: markdown` Slate editor, whose round-trip double-
+// spaces lines and backtick-escapes code spans on Save, and the NEXT
+// run re-derived its baseline from that mangled body. That self-
+// perpetuating corruption is exactly what #1771 removes: the safety
+// net now always writes CANONICAL bytes, so even if the UI cleanup
+// mangles the body, the committed fixture is restored byte-identical
+// to the frozen canonical (PROD_FIXTURES_CANON). Forcing `published:
+// false` is baked into the canonical, so the #1053 self-heal property
+// (never trust an on-disk `published: true`) is preserved. The drift-
+// lint in e2e/canary-content.test.js locks the committed file to this.
 function buildBaselineFileText() {
-  return forcePublishedFalse(fs.readFileSync(FIXTURE_ABS, "utf8"), FIXTURE_PATH);
+  return reconstructBaseline(FIXTURE_PATH);
 }
 
 // Today's date as YYYY-MM-DD in UTC. Compared lexicographically
@@ -252,7 +259,7 @@ test(
       return;
     }
     if (initialPublished === true) {
-      // The loop self-heals main (buildBaselineFileText forces
+      // The loop self-heals main (the canonical baseline is
       // `published: false`), but a checked-in `published: true` is a
       // source-of-truth misconfiguration: the file would serve publicly
       // until a deploy drops it, and it is exactly the state that used
