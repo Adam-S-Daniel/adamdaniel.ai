@@ -45,14 +45,19 @@ const SELF_CHURN = {
     "_posts/2024-01-02-e2e-unpublish-canary.md", //  cms-unpublish-republish.spec.js
     "_tags/e2e-tags-canary-*.md", //                 cms-tags-lifecycle.spec.js (throw-away)
   ],
-  // cms-media-roundtrip.yml runs cms-media-roundtrip.spec.js:
+  // cms-media-roundtrip.yml runs cms-media-roundtrip.spec.js. Ephemeral
+  // per-run post + throw-away upload, both segment-anchored prefix globs
+  // (#1771 step 4): the spec CREATES + DELETES them within a run, so each
+  // create/delete auto-merge to main is the loop feeding itself.
   media: [
-    "_posts/2099-01-03-e2e-media-roundtrip.md", //          fixture
-    "assets/images/uploads/e2e-media-roundtrip-*.png", //   throw-away upload
+    "_posts/2099-12-31-e2e-media-roundtrip-*.md", //         ephemeral per-run post
+    "assets/images/uploads/e2e-media-roundtrip-*.png", //    throw-away upload
   ],
-  // cms-publish-loop-prod.yml runs cms-publish-loop-prod-mutate.spec.js:
+  // cms-publish-loop-prod.yml runs cms-publish-loop-prod-mutate.spec.js.
+  // Ephemeral per-run born-published post (#1771 step 4) — the create AND
+  // delete auto-merges back to main are the loop's own self-churn.
   prod: [
-    "_posts/2099-01-01-e2e-mutation-canary.md", //          fixture
+    "_posts/2099-12-31-e2e-prod-mutate-*.md", //             ephemeral per-run post
   ],
 };
 

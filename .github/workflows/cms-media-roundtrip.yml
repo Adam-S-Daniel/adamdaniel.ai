@@ -34,8 +34,13 @@ run-name: >-
 # `PROD_PLAYGROUND_MODE`. While prod is a "full mutation playground",
 # set it to `true`. When prod stops being a playground, set it to
 # `false` (or unset it) — the workflow keeps reporting success on
-# runs (no real mutation) and the fixture file
-# `_posts/2099-01-03-e2e-media-roundtrip.md` stays in-tree as docs.
+# runs (no real mutation).
+#
+# #1771 step 4: the spec now CREATES + DELETES an EPHEMERAL,
+# born-published per-run post (`_posts/2099-12-31-e2e-media-roundtrip-<runId>.md`)
+# plus a per-run uploaded image, rather than mutating a persistent
+# committed fixture in place. Resting state is absence (404); a killed
+# run leaks at most one inert post + upload the daily sweeper reaps.
 
 on:
   schedule:
@@ -45,13 +50,17 @@ on:
     paths:
       - .github/workflows/cms-media-roundtrip.yml
       - e2e/cms-media-roundtrip.spec.js
+      # #1771 step 4: the ephemeral per-run post is built in code, not
+      # committed, so the spec's fixture source is this module (the old
+      # `_posts/2099-01-03-e2e-media-roundtrip.md` salient path retired
+      # with the persistent fixture).
+      - e2e/prod-mutate-fixture.js
       - e2e/decap-pat.js
       - e2e/github-actions-poll.js
       - e2e/deploy-pill.js
       - e2e/cms-fixture-pr.js
       - e2e/base.js
       - admin/**
-      - _posts/2099-01-03-e2e-media-roundtrip.md
       - playwright.config.js
       - package.json
       - package-lock.json

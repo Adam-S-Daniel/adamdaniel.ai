@@ -129,12 +129,15 @@ test.describe("Issue #1042 — admin posts UI", () => {
 
   test("fixture detection matches the canary slugs, not the real post", () => {
     // Lock the intended classification independent of the source: dated
-    // e2e canary slugs are fixtures; a normal post is not.
+    // e2e canary slugs are fixtures; a normal post is not. Includes the
+    // ephemeral per-run prod-loop posts (#1771 step 4) — they are created +
+    // deleted within a run, never committed, but a mid-run Posts list must
+    // still classify them as fixtures and default-hide them.
     const FIXTURE_SLUG_RE = /^\d{4}-\d{2}-\d{2}-e2e-/i;
     for (const slug of [
       "2024-01-02-e2e-unpublish-canary",
-      "2099-01-01-e2e-mutation-canary",
-      "2099-01-03-e2e-media-roundtrip",
+      "2099-12-31-e2e-prod-mutate-1779999999999",
+      "2099-12-31-e2e-media-roundtrip-1779999999999",
     ]) {
       expect(FIXTURE_SLUG_RE.test(slug), `${slug} must be detected as a fixture`).toBe(true);
     }
@@ -167,11 +170,13 @@ test.describe("Issue #1042 — admin posts UI", () => {
 
   test("canary _posts carry test_fixture: true; the real post does not", () => {
     const postsDir = path.join(REPO_ROOT, "_posts");
-    for (const f of [
-      "2024-01-02-e2e-unpublish-canary.md",
-      "2099-01-01-e2e-mutation-canary.md",
-      "2099-01-03-e2e-media-roundtrip.md",
-    ]) {
+    // Only the toggle-only unpublish canary is a PERSISTENT committed
+    // `_posts/` fixture now: #1771 step 4 retired the prod-mutate +
+    // media canaries for EPHEMERAL per-run posts (created + deleted within
+    // a run, never committed). The ephemeral posts are ALSO born with
+    // `test_fixture: true` — locked in e2e/prod-mutate-fixture.test.js
+    // ("the post is BORN published, noindex, sitemap:false, test_fixture").
+    for (const f of ["2024-01-02-e2e-unpublish-canary.md"]) {
       const fm = read(path.join(postsDir, f));
       expect(
         fm,

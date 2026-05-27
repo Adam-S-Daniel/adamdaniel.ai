@@ -28,11 +28,11 @@ const SPEC_FIXTURES = {
     "_tags/e2e-tags-canary-1779206559297.md", // cms-tags-lifecycle.spec.js (runId-suffixed)
   ],
   media: [
-    "_posts/2099-01-03-e2e-media-roundtrip.md", // cms-media-roundtrip.spec.js:77
+    "_posts/2099-12-31-e2e-media-roundtrip-1779206766920.md", // ephemeral per-run post (runId-suffixed)
     "assets/images/uploads/e2e-media-roundtrip-1779206766920.png", // throw-away upload
   ],
   prod: [
-    "_posts/2099-01-01-e2e-mutation-canary.md", // cms-publish-loop-prod-mutate.spec.js:85
+    "_posts/2099-12-31-e2e-prod-mutate-1779206766920.md", // ephemeral per-run post (runId-suffixed)
   ],
 };
 

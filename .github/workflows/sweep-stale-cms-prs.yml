@@ -373,3 +373,83 @@ jobs:
               --label "automated" | grep -oE '[0-9]+$')
             echo "::notice::Opened cleanup PR #${PR_NUM} on branch ${BRANCH}"
           fi
+
+      - name: Sweep stale ephemeral prod-loop `_posts/` + upload orphans left on main
+        # #1771 step 4 made the prod-mutate + media-roundtrip loops create
+        # + delete EPHEMERAL born-published per-run posts
+        # (`_posts/2099-12-31-e2e-prod-mutate-<runId>.md` /
+        # `_posts/2099-12-31-e2e-media-roundtrip-<runId>.md`) plus a per-run
+        # uploaded image (`assets/images/uploads/e2e-media-roundtrip-<runId>.png`).
+        # A crashed run that died before its existence-only-delete afterAll
+        # leaks at most ONE inert, uniquely-named orphan of each — never a
+        # corrupt shared baseline. This tier mirrors the `_e2e/canary-delete-*`
+        # sweep above: list the orphans older than the same threshold and
+        # route them through a single `cms/e2e-fixture/sweep-…` PR labelled
+        # `cms/ready` + `automated`, which auto-merges via the
+        # editorial-workflow. (No label gate — these names are NEVER
+        # human-authored; `test_fixture: true` + the unique prefixes are the
+        # convention.) Same `!inputs.dry_run` boolean-comparison guard as the
+        # canary-delete sweep (run #25500298081's false-positive lesson).
+        if: ${{ !inputs.dry_run }}
+        env:
+          GH_TOKEN: ${{ secrets.CMS_E2E_PAT }}
+          GH_REPO: Adam-S-Daniel/adamdaniel.ai
+          THRESHOLD_HOURS: ${{ inputs.threshold_hours || 6 }}
+        run: |
+          set -euo pipefail
+          THRESHOLD_TS=$(date -u -d "${THRESHOLD_HOURS} hours ago" +%s)
+
+          # Ephemeral prod-loop posts: both per-run prefixes under _posts/.
+          post_files=$(gh api '/repos/Adam-S-Daniel/adamdaniel.ai/contents/_posts?ref=main' --jq \
+            '.[] | select(.name | startswith("2099-12-31-e2e-prod-mutate-") or startswith("2099-12-31-e2e-media-roundtrip-")) | .path')
+          # Per-run media uploads from the media round-trip spec.
+          upload_files=$(gh api '/repos/Adam-S-Daniel/adamdaniel.ai/contents/assets/images/uploads?ref=main' --jq \
+            '.[] | select(.name | startswith("e2e-media-roundtrip-") and endswith(".png")) | .path')
+          files=$(printf '%s\n%s\n' "$post_files" "$upload_files" | grep -v '^$' || true)
+
+          if [ -z "$files" ]; then
+            echo "::notice::No stale ephemeral prod-loop orphans on main."
+            exit 0
+          fi
+
+          RUN_ID=$(date -u +%s)
+          BRANCH="cms/e2e-fixture/sweep-prod-loop-${RUN_ID}"
+
+          MAIN_SHA=$(gh api /repos/Adam-S-Daniel/adamdaniel.ai/git/ref/heads/main --jq '.object.sha')
+
+          BRANCH_CREATED=false
+          for path in $files; do
+            last_commit=$(gh api "/repos/Adam-S-Daniel/adamdaniel.ai/commits?path=${path}&per_page=1" --jq '.[0].commit.committer.date')
+            last_ts=$(date -u -d "$last_commit" +%s)
+            if [ "$last_ts" -ge "$THRESHOLD_TS" ]; then
+              echo "skip ${path} — $(( ($(date -u +%s) - last_ts) / 60 )) min old"
+              continue
+            fi
+            age_h=$(( ($(date -u +%s) - last_ts) / 3600 ))
+            echo "delete ${path} — ${age_h}h old"
+
+            if [ "$BRANCH_CREATED" = "false" ]; then
+              gh api /repos/Adam-S-Daniel/adamdaniel.ai/git/refs \
+                -f "ref=refs/heads/${BRANCH}" \
+                -f "sha=${MAIN_SHA}" >/dev/null
+              BRANCH_CREATED=true
+            fi
+
+            sha=$(gh api "/repos/Adam-S-Daniel/adamdaniel.ai/contents/${path}?ref=${BRANCH}" --jq '.sha')
+            gh api "/repos/Adam-S-Daniel/adamdaniel.ai/contents/${path}" \
+              -X DELETE \
+              -f "message=chore(sweep): remove stale ${path} (${age_h}h old)" \
+              -f "sha=${sha}" \
+              -f "branch=${BRANCH}" >/dev/null
+          done
+
+          if [ "$BRANCH_CREATED" = "true" ]; then
+            PR_NUM=$(gh pr create \
+              --title "chore(sweep): remove stale ephemeral prod-loop orphans" \
+              --body "Automated cleanup by \`.github/workflows/sweep-stale-cms-prs.yml\`. The deleted files are throw-away ephemeral posts / uploads from \`cms-publish-loop-prod-mutate.spec.js\` / \`cms-media-roundtrip.spec.js\` (#1771 step 4) runs that crashed before their existence-only-delete cleanup could fire. Auto-merges via the \`cms/ready\` label." \
+              --head "${BRANCH}" \
+              --base main \
+              --label "cms/ready" \
+              --label "automated" | grep -oE '[0-9]+$')
+            echo "::notice::Opened cleanup PR #${PR_NUM} on branch ${BRANCH}"
+          fi
