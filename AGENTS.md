@@ -43,6 +43,20 @@ npx playwright test --project chromium-desktop-1080 # single project (public lan
 npx playwright test e2e/glow-banding.spec.js       # single test file
 ```
 
+**Running the admin (`@admin-read` / `@admin-write`) e2e lane in a sandboxed / Claude-Code-web session.** Three gotchas bite in that order; CI hits none of them (it has the egress proxy's CA, prebaked browsers, and a working Jekyll):
+
+1. **Decap never mounts — only the static "PENDING" banner, no Login button.** The `/admin` shells load the Decap bundle from `https://unpkg.com/decap-cms@…`; the sandbox's egress TLS proxy presents a CA that Playwright's bundled Chromium/WebKit don't trust, so the `<script src>` dies with `net::ERR_CERT_AUTHORITY_INVALID` (`curl` works — it trusts the system CA bundle; the browser doesn't). **Fix:** run with a throwaway config that sets `use.ignoreHTTPSErrors: true` — `playwright.localcert.config.js` is **gitignored** (CI has no such proxy, and the flag doesn't change the rendered DOM / aria tree):
+
+   ```js
+   // playwright.localcert.config.js  (sandbox-only; gitignored)
+   const base = require("./playwright.config.js");
+   module.exports = { ...base, use: { ...base.use, ignoreHTTPSErrors: true } };
+   ```
+
+   then `npx playwright test e2e/<spec> --config=playwright.localcert.config.js`.
+2. **`bundle exec jekyll` → "command not found: jekyll" (rbenv shim not rehashed).** Don't fight it: build once with the full-path binary (`"$(rbenv which jekyll 2>/dev/null || echo /opt/rbenv/versions/*/bin/jekyll)" build`) and start the two servers **manually** — `npx serve _site -l 4000 --no-clipboard` + `npx decap-server`. Playwright's `webServer.reuseExistingServer` (true off-CI) then sees ports 4000/8081 already up and skips its own failing `bundle exec jekyll build` command.
+3. **WebKit launch fails with missing `.so`s** (`libflite…`, `libwebpdemux…`). Once: `npx playwright install-deps webkit` (needs apt/root).
+
 ## GitHub Actions secrets
 
 | Secret | Source | Used by |
