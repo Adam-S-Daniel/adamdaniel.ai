@@ -12,7 +12,11 @@ permalink: /blog/
     </div>
   </div>
 
-  {% assign published_posts = site.posts | where: "published", true %}
+  {%- comment -%} Exclude e2e test-fixture canaries (test_fixture: true): a
+  prod-mutation/media loop spec briefly flips one to published: true to verify
+  the publish→deploy→URL chain, but it must not appear in the blog index — it
+  still serves at its own /blog/<slug>/ URL. See _config.yml `future: true`. {%- endcomment -%}
+  {% assign published_posts = site.posts | where: "published", true | where_exp: "post", "post.test_fixture != true" %}
   {% if published_posts.size > 0 %}
   <ul class="post-list">
     {% for post in published_posts %}

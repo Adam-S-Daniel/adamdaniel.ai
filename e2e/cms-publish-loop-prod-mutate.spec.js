@@ -538,7 +538,14 @@ test.afterAll(async () => {
   }
   const decoded = Buffer.from(current.content, "base64").toString("utf8");
   const stillPublished = readPublishedFlag(decoded) === true;
-  const hasMarker = /e2e-publish-loop:[a-z]+:\d+/.test(decoded);
+  // Match THIS spec's marker shape: makeProdMarker() emits
+  // `e2e-prod-mutate:<slug>:<runId>` (slug has hyphens, runId is digits).
+  // The old pattern looked for `e2e-publish-loop:` — a different spec's
+  // marker — so this safety-net check was always false (it relied solely
+  // on `stillPublished`). Use the real prod-mutate marker so a crashed
+  // run that left ONLY a body marker (published already reset) is also
+  // cleaned.
+  const hasMarker = /e2e-prod-mutate:[a-z0-9-]+:\d+/.test(decoded);
   if (!stillPublished && !hasMarker) {
     console.log(
       "[cleanup-harness] prod-mutate fixture at baseline; UI cleanup succeeded — no safety net needed",

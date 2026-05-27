@@ -15,7 +15,11 @@ title: Home
     </div>
   </section>
 
-  {% assign featured_posts = site.posts | where: "published", true | limit: 3 %}
+  {%- comment -%} Exclude e2e test-fixture canaries (test_fixture: true) so a
+  loop spec briefly publishing one (e.g. _posts/2099-*-e2e-*-canary) never
+  surfaces it on the homepage — it still serves at its own /blog/<slug>/ URL
+  for the spec to verify. See _config.yml `future: true`. {%- endcomment -%}
+  {% assign featured_posts = site.posts | where: "published", true | where_exp: "post", "post.test_fixture != true" | limit: 3 %}
   {% if featured_posts.size > 0 %}
   <section style="padding: 4rem 0; border-top: 1px solid var(--border);">
     <div class="container">
