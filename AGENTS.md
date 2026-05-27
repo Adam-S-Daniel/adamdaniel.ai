@@ -512,7 +512,10 @@ Cleans up automation-only artefacts that crashed test runs leak. Runs daily at 0
 | 2 | Open PRs labelled `automated-test`, regardless of branch prefix. Catches `cms/posts/*` leaks from prod-mutate runs. | No (Decap reuses `cms/<col>/<slug>` per entry; the next run's `closeStaleDecapPrOnBranch` handles the handoff). | `keep` label on the PR. |
 | 3 | Branches matching the same Tier 1 prefix safelist that have NO open PR (a crashed run pushed a branch but died before opening a PR). Direct ref delete via the git refs API. | Yes (it's the whole point). | `[sweep-keep]` in the tip commit message (the PR-level `keep` label can't apply when there's no PR). |
 
-A separate job step (`if: !inputs.dry_run`) sweeps stale `_e2e/canary-delete-*` fixtures left on `main` by opening a `cms/e2e-fixture/sweep-…` PR labelled `cms/ready`, which auto-merges via the editorial-workflow.
+Two further content-sweep steps (`if: !inputs.dry_run`) reap throw-away fixtures left on `main`, each by opening a `cms/e2e-fixture/sweep-…` PR labelled `cms/ready` + `automated` that auto-merges via the editorial-workflow:
+
+- **`_e2e/canary-delete-*`** — the throw-away delete fixtures from `cms-delete-published.spec.js`.
+- **Ephemeral prod-loop orphans (#1771 step 4)** — `_posts/2099-12-31-e2e-prod-mutate-<runId>.md`, `_posts/2099-12-31-e2e-media-roundtrip-<runId>.md`, and the per-run uploads `assets/images/uploads/e2e-media-roundtrip-<runId>.png`. The prod-mutate + media loops now create + delete a born-published, uniquely-pathed post per run (resting state = absence/404); a crashed run that died before its existence-only-delete `afterAll` leaks at most one inert, uniquely-named orphan of each, which this tier collects.
 
 **Pagination convention.** `gh pr list` defaults to `--limit 30` and silently truncates above that — `--paginate` is NOT a flag for `gh pr list` (gh-api-only). Every `gh pr list` in this workflow uses `--limit 1000` for top-level listing or `--limit 1` for existence checks. `gh api` calls that return arrays use `--paginate` with `?per_page=100`. New listing calls in this or related workflows MUST follow this convention; a 31st-orphan-silently-survives bug is invisible until the orphan rate climbs and is hard to diagnose because the workflow looks like it succeeded.
 
