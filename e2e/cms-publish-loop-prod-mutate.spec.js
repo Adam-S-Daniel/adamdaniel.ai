@@ -461,12 +461,21 @@ test(
         timeout: 30_000,
       });
 
-      const publishedToggle = page.getByRole("checkbox", {
-        name: /^Published$/i,
-      });
+      // Decap renders the Published widget as role="switch" (NOT a
+      // checkbox); state is exposed via aria-checked. This cleanup leg had
+      // drifted to getByRole("checkbox") + uncheck() — the exact bug
+      // cms-unpublish-republish.spec.js hit and fixed in PR #407 — so it
+      // found nothing and failed EVERY run once the forward leg stopped
+      // timing out (#1723: the future-date fix let the spec finally reach
+      // cleanup). Mirror the forward "Toggle Published → ON" leg and the
+      // proven unpublish spec: switch role, toggled via aria-checked.
+      const publishedToggle = page.getByRole("switch", { name: /^Published$/i }).first();
       await expect(publishedToggle).toBeVisible({ timeout: 30_000 });
-      await publishedToggle.uncheck();
-      await expect(publishedToggle).not.toBeChecked();
+      const cleanupAriaChecked = await publishedToggle.getAttribute("aria-checked");
+      if (cleanupAriaChecked !== "false") {
+        await publishedToggle.click();
+      }
+      await expect(publishedToggle).toHaveAttribute("aria-checked", "false", { timeout: 5_000 });
 
       const body = page.locator('[role="textbox"][contenteditable="true"]').last();
       await body.click();
