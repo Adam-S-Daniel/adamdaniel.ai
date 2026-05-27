@@ -44,7 +44,7 @@
 
 const { test, expect } = require("./base");
 const { seedDecapAuth, getPat, HOST_REPO } = require("./decap-pat");
-const { gh } = require("./github-actions-poll");
+const { gh, makeDeployQueueExtender } = require("./github-actions-poll");
 const {
   createBranchFromMain,
   deleteFileOnBranch,
@@ -278,6 +278,7 @@ test(
         // checks + deploy-production + CloudFront propagation under
         // runner contention. Matches cms-publish-loop / prod-mutate.
         urlTimeoutMs: 15 * 60 * 1000,
+        onBudgetExhausted: makeDeployQueueExtender(),
       });
     });
 
@@ -318,6 +319,7 @@ test(
           return res.status() === 404;
         },
         urlTimeoutMs: 15 * 60 * 1000,
+        onBudgetExhausted: makeDeployQueueExtender(),
       });
     });
   },

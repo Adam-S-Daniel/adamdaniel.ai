@@ -67,7 +67,12 @@ const path = require("node:path");
 const { test, expect } = require("./base");
 const { seedDecapAuth, getPat, HOST_REPO } = require("./decap-pat");
 const { closeStaleDecapPrOnBranch } = require("./cms-fixture-pr");
-const { addLabel, gh, waitForCmsPullRequest } = require("./github-actions-poll");
+const {
+  addLabel,
+  gh,
+  waitForCmsPullRequest,
+  makeDeployQueueExtender,
+} = require("./github-actions-poll");
 const { waitForChangeReflected } = require("./deploy-pill");
 const { prodTarget } = require("./cms-host");
 const { readPublishedFlag, forcePublishedFalse, loudBail } = require("./fixture-baseline");
@@ -430,6 +435,7 @@ test(
           return (await res.text()).includes(marker);
         },
         urlTimeoutMs: 15 * 60 * 1000,
+        onBudgetExhausted: makeDeployQueueExtender(),
       });
     });
 
@@ -500,6 +506,7 @@ test(
           return s >= 400 && s < 500;
         },
         urlTimeoutMs: 15 * 60 * 1000,
+        onBudgetExhausted: makeDeployQueueExtender(),
       });
     });
   },

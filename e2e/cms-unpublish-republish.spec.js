@@ -60,7 +60,7 @@ const path = require("node:path");
 const fs = require("node:fs");
 const { test, expect } = require("./base");
 const { seedDecapAuth, getPat, HOST_REPO } = require("./decap-pat");
-const { gh } = require("./github-actions-poll");
+const { gh, makeDeployQueueExtender } = require("./github-actions-poll");
 const { waitForChangeReflected } = require("./deploy-pill");
 const { prodTarget } = require("./cms-host");
 const { readPublishedFlag, forcePublishedFalse } = require("./fixture-baseline");
@@ -263,6 +263,7 @@ test(
         pillId: PILL_PROD,
         urlCheck: async () => urlServesPost(page),
         urlTimeoutMs: 15 * 60 * 1000,
+        onBudgetExhausted: makeDeployQueueExtender(),
       });
     });
 
@@ -299,6 +300,7 @@ test(
         pillId: PILL_PROD,
         urlCheck: async () => url404s(page),
         urlTimeoutMs: 15 * 60 * 1000,
+        onBudgetExhausted: makeDeployQueueExtender(),
       });
     });
   },
