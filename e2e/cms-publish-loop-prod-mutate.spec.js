@@ -41,22 +41,41 @@
  * `sitemap: false` (a born-published post that briefly serves never leaks
  * to search), and `test_fixture: true` (hidden from the Posts list).
  *
- * Both the CREATE and the DELETE legs merge via the `cms/ready` label →
- * cms-editorial-workflow `auto-merge-when-ready`, NOT Decap's "Publish
- * Now": this repo gates cms-PR merges on required checks, so Publish Now's
- * immediate-merge attempt is blocked by branch protection while checks are
- * pending and never lands (verified run 26512944320; PR #1774). The editor
- * UI is still fully driven (fill form, toggle Published, Save / Delete);
- * only the merge trigger is the label.
+ * The CREATE leg publishes through Decap's editor (Status → Ready →
+ * Publish → "Publish now"), exactly like the proven
+ * cms-delete-published.spec.js. Publish Now is what transitions Decap's
+ * editor into the PUBLISHED state — without it the entry stays a NEW
+ * editorial draft (isNewEntry=true, hasUnpublishedChanges=true) and the
+ * delete leg only ever sees "Delete unpublished entry", which removes the
+ * draft branch and NOT the file on main, so the URL never 404s (the
+ * iteration-1/2 failure of this spec). The merge still lands via
+ * cms-editorial-workflow `auto-merge-when-ready`: Status:Ready applies
+ * `decap-cms/pending_publish` (engages auto-merge), and Publish Now's
+ * synchronous merge attempt is 422'd by branch protection while required
+ * checks are pending — admin/publish-via-auto-merge.js catches that 422
+ * and adds the `cms/ready` label, re-engaging the SAME auto-merge job. The
+ * PR then lands once checks pass (commit prefix `publish:` preserved). This
+ * is the proven prod path; cms-delete-published.spec.js's green host-loop
+ * runs land their merge exactly this way. (Historical note: the earlier
+ * "NOT Publish Now / run 26512944320 / PR #1774" guidance was about the
+ * OLD in-place-edit cleanup-merge, a different scenario; it does not apply
+ * to this ephemeral create→serve→UI-delete flow, where Publish Now is
+ * required for the UI delete to remove from main.)
+ *
+ * The explicit `cms/ready` labelling of the create PR (and the delete PR)
+ * is kept as belt-and-braces so auto-merge is engaged even if the shim's
+ * 422→label recovery is delayed; it is idempotent with the labels Decap
+ * already applies. The editor UI is fully driven (fill form, toggle
+ * Published, Publish Now, Delete).
  *
  * Flow:
  *   1. Create a born-published ephemeral post via the Decap "+ New Post"
- *      UI (Title + URL Slug + Date 2099-12-31 + Body + Published ON), Save
- *      → cms/posts/<dated-slug> PR.
- *   2. Label cms/ready → auto-merge → deploy-production.
+ *      UI (Title + URL Slug + Date 2099-12-31 + Body + Published ON),
+ *      Save → Status:Ready → Publish Now → cms/posts/<dated-slug> PR.
+ *   2. Label cms/ready (belt-and-braces) → auto-merge → deploy-production.
  *   3. Assert /blog/<slug>/ serves 200 with this run's marker.
- *   4. Delete via the Decap "Delete published entry" UI → cms PR →
- *      cms/ready → auto-merge → deploy-production.
+ *   4. Re-open the entry, Delete via the Decap "Delete published entry"
+ *      UI → cms PR → cms/ready → auto-merge → deploy-production.
  *   5. Assert /blog/<slug>/ 404s.
  *   afterAll: existence-only delete (if the post is STILL on main, open a
  *   labelled removal PR via removeFixtureViaPr). No content-restore — the
@@ -80,7 +99,7 @@ const {
   makeDeployQueueExtender,
 } = require("./github-actions-poll");
 const { waitForChangeReflected } = require("./deploy-pill");
-const { setPublished, saveEntry, clickEditorDelete } = require("./cms-editor-ui");
+const { setPublished, saveEntry, publishViaUi, clickEditorDelete } = require("./cms-editor-ui");
 const { prodTarget } = require("./cms-host");
 const { loudBail } = require("./fixture-baseline");
 const { EPHEMERAL_DATE, buildProdMutatePost } = require("./prod-mutate-fixture");
@@ -242,12 +261,28 @@ test(
       await saveEntry(page);
     });
 
+    await test.step("Status:Ready → Publish Now (transitions Decap to PUBLISHED, engages auto-merge)", async () => {
+      // publishViaUi (shared, #1723) drives Status:Draft → Ready then
+      // Publish → "Publish now" — the exact create-leg flow the proven
+      // cms-delete-published.spec.js uses. This is what puts Decap's editor
+      // into the PUBLISHED state so the later delete leg surfaces "Delete
+      // published entry" (a delete-from-main PR), not "Delete unpublished
+      // entry" (which would only drop the draft branch and never 404 the
+      // URL). The merge lands via auto-merge-when-ready: Status:Ready
+      // applies decap-cms/pending_publish, and Publish Now's synchronous
+      // merge is 422'd by branch protection → admin/publish-via-auto-merge.js
+      // adds cms/ready, re-engaging the same auto-merge job. We also label
+      // cms/ready explicitly below as belt-and-braces.
+      await publishViaUi(page);
+    });
+
     // ── 4. Find the cms/... PR Decap opened, label cms/ready ─────────
-    // Set cms/ready directly on the cms PR. cms-editorial-workflow.yml
-    // enables auto-merge once required checks pass; the PR merges into
-    // main → deploy-production fires. We do NOT use Decap's "Publish Now"
-    // (its immediate-merge is blocked by branch protection while checks
-    // are pending and never lands — run 26512944320 / PR #1774).
+    // Belt-and-braces: also set cms/ready directly on the cms PR. The
+    // Publish-Now shim already adds cms/ready on its 422 recovery and
+    // Status:Ready applies decap-cms/pending_publish, both of which engage
+    // cms-editorial-workflow.yml's auto-merge-when-ready; this explicit
+    // label guarantees auto-merge is enabled even if the shim's recovery is
+    // delayed. addLabel is idempotent, so a duplicate is a no-op.
     await test.step("Wait for Decap to open the create cms/... PR, label cms/ready", async () => {
       const pr = await waitForCmsPullRequest({
         base: "main",

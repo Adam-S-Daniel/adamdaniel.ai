@@ -106,18 +106,22 @@ async function publishViaUi(page) {
 //   !hasUnpublishedChanges && !isModification        → "Delete published entry"
 //   simple mode (local backend)                      → "Delete entry" / "Delete new entry"
 //
-// The ephemeral prod canaries (#1771 step 4) publish via the `cms/ready`
-// label, NOT Decap's "Publish Now" — so the external auto-merge lands the
-// post on main while Decap's editor still holds it as a brand-new
-// editorial-workflow draft (isNewEntry=true, hasUnpublishedChanges=true).
-// That state surfaces "Delete unpublished entry", which the earlier
-// `/delete (published )?entry/i` locator never matched — the click timed
-// out at 30s and the run failed (first prod run of the ephemeral leg).
-// The proven cms-delete-published.spec.js reached "Delete published entry"
-// only because it publishes via Publish Now first.
+// History (#1771 follow-up): the ephemeral prod canaries originally
+// published via the `cms/ready` label only, NOT Decap's "Publish Now" — so
+// the external auto-merge landed the post on main while Decap's editor
+// still held it as a brand-new editorial-workflow draft (isNewEntry=true,
+// hasUnpublishedChanges=true). That state surfaces "Delete unpublished
+// entry", which the earlier `/delete (published )?entry/i` locator never
+// matched — the click timed out at 30s and the run failed; and even after
+// the locator was widened, that label deletes only the draft branch (never
+// the file on main), so the URL never 404'd. The fix (this follow-up) is
+// that BOTH ephemeral specs now publish via Status:Ready → Publish Now
+// (publishViaUi), exactly like the proven cms-delete-published.spec.js, so
+// Decap reaches the PUBLISHED state and the delete leg hits "Delete
+// published entry" → a delete-from-main PR.
 //
-// Match ALL five label variants so the click works regardless of which
-// editorial state Decap shows. The control is a real <button> (the styled
+// Match ALL five label variants anyway so the click is robust regardless of
+// which editorial state Decap shows. The control is a real <button> (the styled
 // `ToolbarButton` is `styled("button")` in the bundle), so getByRole
 // finds it. Pin a timeout so a future UI shape change fails fast with a
 // clear error instead of pegging the runner until the outer test timeout.
