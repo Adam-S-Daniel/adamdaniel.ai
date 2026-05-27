@@ -1,4 +1,4 @@
-// @lane: real — mutates a real prod _posts/ entry through Decap → GitHub
+// @lane: real — creates + deletes a real, ephemeral prod _posts/ entry through Decap → GitHub
 // @select-skip-when-head-ref-prefix: cms/
 //
 // On `cms/*` PRs (Decap-opened editorial PRs) this spec self-skips at
@@ -8,65 +8,71 @@
 
 /*
  * Real-browser, real-HTTP, real-GitHub end-to-end test for the full
- * Decap CMS publish loop on prod, but mutating a REAL `_posts/` entry
- * (not just the `_e2e/` canary subset). G4 from the "happy hopper"
- * plan.
+ * Decap CMS publish loop on prod against a REAL `_posts/` entry — now an
+ * EPHEMERAL, born-published, hard-deleted per-run post (#1771 step 4).
  *
- * allowed: literal slug used for known fixture
- *   The fixture is _posts/2099-01-01-e2e-mutation-canary.md and its
- *   public URL `/blog/e2e-mutation-canary/` appears in step labels
- *   and assertion messages throughout this spec.
+ * Why ephemeral (the #1771 redesign):
+ *   The loop used to mutate a single PERSISTENT committed fixture
+ *   (`_posts/2099-01-01-e2e-mutation-canary.md`) in place — toggle
+ *   `published`, append a body marker, then revert. A transient failure
+ *   on the revert leg (a GitHub 500 on the afterAll Contents-API restore,
+ *   run 26511130712) left that one shared cell corrupted on `main`; and
+ *   because the next run re-derived its baseline from the same on-disk
+ *   body, the corruption was self-perpetuating — wedging the loop until a
+ *   human hand-edited the file. Step 4 removes the CLASS of bug: each run
+ *   CREATES a uniquely-pathed post, publishes it, asserts it serves, then
+ *   DELETES it. Resting state is ABSENCE (404), and absence has no corrupt
+ *   variant. A killed run leaks at most ONE inert, uniquely-named orphan
+ *   (`_posts/2099-12-31-e2e-prod-mutate-<runId>.md`), swept by
+ *   sweep-stale-cms-prs.yml — never a shared corrupt baseline. No loop
+ *   ever reads a path it also writes (the #1771 invariant).
  *
- * Premise: while `prod` is a "full mutation playground" — i.e. nobody
- * is reading the site for SEO — exercising the publish loop against
- * the same paths a real contributor uses gives a stronger signal than
- * the `_e2e/` canary alone. The canary collection has its own layout
- * and is excluded from feeds/sitemap; a real `_posts/` entry goes
- * through `_layouts/post.html`, surfaces in the blog index, and
- * exercises the same code paths a content edit would hit.
+ * Fidelity: the real chain (Decap UI create → cms PR → auto-merge →
+ * deploy-production → CloudFront → serve → delete → 404) is preserved
+ * end-to-end and exercised MORE faithfully — it now covers a real
+ * contributor's #1 action (write a new post + publish), then delete,
+ * rather than re-editing one persistent file. The "re-edit an
+ * already-published post" signal is kept by the persistent `_e2e/` canary
+ * in cms-publish-loop.spec.js (#1771 step 5).
  *
- * Sunset path: this spec runs only when the workflow's repo variable
- * `PROD_PLAYGROUND_MODE=true`. When prod stops being a playground,
- * flip the variable off; the workflow skips itself and the fixture
- * file stays in-tree as documentation.
+ * Born-published + future-dated: the post ships `published: true`, date
+ * `2099-12-31` (serves the same way the old `2099-01-01` canary did, via
+ * `_config.yml`'s `future: true`), `robots: noindex,nofollow` +
+ * `sitemap: false` (a born-published post that briefly serves never leaks
+ * to search), and `test_fixture: true` (hidden from the Posts list).
  *
- * Hard guards (CRITICAL — see plan G4):
- *   1. Fixture file `_posts/2099-01-01-e2e-mutation-canary.md` MUST
- *      exist on disk at test start. Missing → `test.fixme()` with a
- *      clear "fixture missing" message.
- *   2. Front-matter `published:` MUST be `false` at test start. If
- *      it's `true`, a previous run crashed mid-flow and the URL is
- *      currently public — `test.fixme()` so a human resets it.
- *   3. The fixture date `2099-01-01` MUST still be in the future. If
- *      someone is reading this spec in 2099, fail kindly — change the
- *      filename to a later date or retire the spec.
+ * Both the CREATE and the DELETE legs merge via the `cms/ready` label →
+ * cms-editorial-workflow `auto-merge-when-ready`, NOT Decap's "Publish
+ * Now": this repo gates cms-PR merges on required checks, so Publish Now's
+ * immediate-merge attempt is blocked by branch protection while checks are
+ * pending and never lands (verified run 26512944320; PR #1774). The editor
+ * UI is still fully driven (fill form, toggle Published, Save / Delete);
+ * only the merge trigger is the label.
  *
  * Flow:
- *   0. Reset fixture to baseline (`published: false`) via Contents API.
- *   1. Confirm `/blog/e2e-mutation-canary/` 404s before driving admin.
- *   2. Drive prod admin with PAT-seeded session.
- *   3. Navigate to the post entry, toggle Published → ON, Save.
- *   4. Wait for the `cms/...` PR Decap opens.
- *   5. Wait for `validate-content` to succeed.
- *   6. Add `cms/ready` label, wait for auto-merge + merge.
- *   7. Wait for `deploy-production.yml` to succeed on main.
- *   8. Fetch `/blog/e2e-mutation-canary/` — assert 200 + expected body.
- *   9. Cleanup: write `published: false` back via Contents API.
+ *   1. Create a born-published ephemeral post via the Decap "+ New Post"
+ *      UI (Title + URL Slug + Date 2099-12-31 + Body + Published ON), Save
+ *      → cms/posts/<dated-slug> PR.
+ *   2. Label cms/ready → auto-merge → deploy-production.
+ *   3. Assert /blog/<slug>/ serves 200 with this run's marker.
+ *   4. Delete via the Decap "Delete published entry" UI → cms PR →
+ *      cms/ready → auto-merge → deploy-production.
+ *   5. Assert /blog/<slug>/ 404s.
+ *   afterAll: existence-only delete (if the post is STILL on main, open a
+ *   labelled removal PR via removeFixtureViaPr). No content-restore — the
+ *   resting state is absence.
  *
  * Gating:
  *   - `CMS_E2E_PAT` must be set.
+ *   - `RUN_PROD_MUTATE_PLAYGROUND=1` (set only in cms-publish-loop-prod.yml).
  *   - `chromium-desktop-3k` only.
- *   - Workflow gated on `vars.PROD_PLAYGROUND_MODE == 'true'` so the
- *     spec doesn't run by accident outside the scheduled cron.
  *
  * IMPORTANT: do NOT run this spec locally against prod. It mutates the
- * real production tree. The workflow runs it on a schedule.
+ * real production tree. The workflow runs it on a schedule/post-merge.
  */
-const fs = require("node:fs");
-const path = require("node:path");
 const { test, expect } = require("./base");
 const { seedDecapAuth, getPat, HOST_REPO } = require("./decap-pat");
-const { closeStaleDecapPrOnBranch } = require("./cms-fixture-pr");
+const { closeStaleDecapPrOnBranch, removeFixtureViaPr } = require("./cms-fixture-pr");
 const {
   addLabel,
   gh,
@@ -76,31 +82,23 @@ const {
 const { waitForChangeReflected } = require("./deploy-pill");
 const { setPublished, saveEntry } = require("./cms-editor-ui");
 const { prodTarget } = require("./cms-host");
-const { readPublishedFlag, reconstructBaseline, loudBail } = require("./fixture-baseline");
-
-const REPO_ROOT = path.resolve(__dirname, "..");
-const FIXTURE_PATH = "_posts/2099-01-01-e2e-mutation-canary.md";
-const FIXTURE_ABS = path.join(REPO_ROOT, FIXTURE_PATH);
-const FIXTURE_SLUG = "e2e-mutation-canary";
-const FIXTURE_TITLE = "E2E Mutation Canary";
-const FIXTURE_DATE = "2099-01-01";
-const PUBLIC_PATH = `/blog/${FIXTURE_SLUG}/`;
+const { loudBail } = require("./fixture-baseline");
+const { EPHEMERAL_DATE, buildProdMutatePost } = require("./prod-mutate-fixture");
 
 // Fixed-prod loop, resolved through the shared cms-host resolver
 // (byte-identical to the old literals) so prod/preview can't drift.
 const { host: PROD_HOST, adminUrl: PROD_ADMIN, pillId: PILL_PROD } = prodTarget();
-const PUBLIC_URL = `${PROD_HOST}${PUBLIC_PATH}`;
+
 // Read-only daily probe gate — set in canary-prod.yml. The afterAll
-// harness consults this so the probe never tries to write to main.
+// safety net consults this so the probe never tries to write to main.
 const PROD_CANARY = process.env.PROD_CANARY === "1";
 
-// Same envelope as cms-publish-loop.spec.js — the validate-content +
-// auto-merge + deploy-production + CloudFront invalidation chain caps
-// out around 12-15 minutes when runners are warm. Two URL waits
-// (forward + cleanup) at 15 min each + setup ≈ 40 min worst case
-// budget; typical happy-path run still completes in ~10-12 min.
-// Retries explicitly disabled — this test mutates real prod state;
-// retries just re-run the same broken chain after another 40 min.
+// Two editorial-workflow auto-merge cycles (create + delete), each
+// roughly validate-content + auto-merge + deploy-production + CloudFront
+// (~12-15 min when runners are warm), plus the in-browser drive of both
+// chains and two URL waits at 15 min each. 40 min envelope. Retries
+// disabled — this mutates real prod; a retry re-runs the same broken
+// chain after another 40 min.
 const TEST_TIMEOUT_MS = 40 * 60 * 1000;
 
 test.describe.configure({
@@ -109,233 +107,81 @@ test.describe.configure({
   retries: 0,
 });
 
-// Marker that goes into the body so the test can assert "this exact
-// run produced what's at the public URL." Distinct from the `_e2e/`
-// canary marker so the two specs can't accidentally read each other's
-// state if their cron windows overlap.
-function makeProdMarker(runId) {
-  return `e2e-prod-mutate:${FIXTURE_SLUG}:${runId}`;
-}
+// Module-scoped handle so the afterAll safety-net can see the
+// runId/slug/filePath the test generated. The forward DELETE leg IS the
+// cleanup; if it succeeds the file is gone from main and the harness
+// no-ops. If the test threw mid-flow, the harness opens a removal PR so
+// the next run starts clean (and the sweeper reaps anything older).
+let pendingFixture = null;
 
-function toContentBase64(text) {
-  return Buffer.from(text, "utf8").toString("base64");
-}
-
-async function fetchFixtureFromMain({ retries = 0 } = {}) {
-  // `retries` defaults to 0 so read-only callers are unchanged; the
-  // mutating writeFixtureOnMain path passes retries:5 (#1771 step 1).
-  return gh(`/repos/${HOST_REPO}/contents/${FIXTURE_PATH}?ref=main`, { retries });
-}
-
-/**
- * Write a complete fixture body to main via the Contents API. The
- * caller passes the entire file (front matter + body) so the cleanup
- * step can force `published: false` regardless of what state the
- * editor left it in.
- *
- * Optimistic-concurrency retry: GitHub's Contents API requires the
- * caller to submit the current blob SHA; if main advances between
- * our `fetchFixtureFromMain()` and the PUT, the API rejects with
- * 409 ("is at <new> but expected <stale>"). The race window is
- * narrow but real — concurrent harness cleanups from other workers
- * and any unrelated commit landing on main can both trip it.
- *
- * Resolution: catch a 409, re-fetch the SHA, retry the PUT. Cap
- * at 4 attempts (1 initial + 3 retries) to bound runtime; in
- * practice a single retry succeeds because main is rarely advancing
- * faster than ~1 commit/sec, and our PUT is idempotent (writing
- * the same baseline content yields the same end state regardless
- * of which retry wins).
- */
-async function writeFixtureOnMain({ fileText, message }) {
-  const MAX_ATTEMPTS = 4;
-  let lastErr;
-  for (let attempt = 1; attempt <= MAX_ATTEMPTS; attempt++) {
-    // retries:5 — absorb a transient GitHub 5xx/secondary-rate blip on
-    // the safety-net read+write so a single flaky API tick can't abort
-    // the cleanup and leave a corrupt fixture on main (#1771 step 1).
-    // The 409 optimistic-concurrency conflict stays handled by this
-    // outer re-fetch-SHA loop, NOT the gh() retry.
-    const current = await fetchFixtureFromMain({ retries: 5 });
-    try {
-      return await gh(`/repos/${HOST_REPO}/contents/${FIXTURE_PATH}`, {
-        method: "PUT",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({
-          message,
-          content: toContentBase64(fileText),
-          sha: current.sha,
-          branch: "main",
-        }),
-        retries: 5,
-      });
-    } catch (err) {
-      lastErr = err;
-      if (err && err.status === 409 && attempt < MAX_ATTEMPTS) {
-        console.warn(
-          `[writeFixtureOnMain] 409 conflict on attempt ${attempt}; re-fetching SHA and retrying (main advanced under us)`,
-        );
-        continue;
-      }
-      throw err;
-    }
+async function fileExistsOnMain(filePath) {
+  try {
+    await gh(`/repos/${HOST_REPO}/contents/${filePath}?ref=main`);
+    return true;
+  } catch (e) {
+    if (/\b404\b/.test(String(e.message))) return false;
+    throw e;
   }
-  throw lastErr;
-}
-
-// `readPublishedFlag` is shared from ./fixture-baseline (#1053 DRY'd
-// the five per-spec copies into one implementation).
-
-// Build the canonical "baseline" file text — the full file (front
-// matter forced `published: false` + canonical body), ready to be
-// re-committed by the reset / cleanup / safety-net steps.
-//
-// This is now a code-pinned CONSTANT via `reconstructBaseline`, NOT a
-// read of the on-disk body (#1771 step 3). Previously this was
-// `forcePublishedFalse(readFileSync(FIXTURE_ABS))`, which copied the
-// committed body verbatim — but a green run re-types that body through
-// Decap's `widget: markdown` Slate editor, whose round-trip double-
-// spaces lines and backtick-escapes code spans on Save, and the NEXT
-// run re-derived its baseline from that mangled body. That self-
-// perpetuating corruption is exactly what #1771 removes: the safety
-// net now always writes CANONICAL bytes, so even if the UI cleanup
-// mangles the body, the committed fixture is restored byte-identical
-// to the frozen canonical (PROD_FIXTURES_CANON). Forcing `published:
-// false` is baked into the canonical, so the #1053 self-heal property
-// (never trust an on-disk `published: true`) is preserved. The drift-
-// lint in e2e/canary-content.test.js locks the committed file to this.
-function buildBaselineFileText() {
-  return reconstructBaseline(FIXTURE_PATH);
-}
-
-// Today's date as YYYY-MM-DD in UTC. Compared lexicographically
-// against the fixture's ISO date string — string comparison works as
-// intended for ISO 8601 dates.
-function todayUtcIso() {
-  return new Date().toISOString().slice(0, 10);
 }
 
 test(
-  "CMS publish loop — prod mutation playground (real _posts/ entry)",
+  "CMS publish loop — prod mutation playground (ephemeral born-published _posts/ entry)",
   { tag: ["@admin-write"] },
   async ({ page }) => {
     // Only the dedicated cms-publish-loop-prod.yml workflow opts in via
-    // RUN_PROD_MUTATE_PLAYGROUND=1. Without this gate the spec also
-    // runs inside the e2e-tests.yml shard 1, force-pushing concurrent
-    // commits to the same cms/posts/2099-… branch and cancelling each
-    // other's validate-content runs. This is a legitimate "not my
-    // workflow" skip — keep it a plain green test.skip, and FIRST so a
-    // shard-1 PR run exits here before reaching the loud guards below.
+    // RUN_PROD_MUTATE_PLAYGROUND=1. Without this gate the spec also runs
+    // inside e2e-tests.yml shard 1. Legitimate "not my workflow" skip —
+    // plain green test.skip, FIRST so a shard-1 PR run exits here before
+    // the loud guards below.
     test.skip(
       process.env.RUN_PROD_MUTATE_PLAYGROUND !== "1",
       "RUN_PROD_MUTATE_PLAYGROUND not set — only the cms-publish-loop-prod workflow runs this spec.",
     );
 
-    // ── Hard guards (run inside the test so failures show up in the
-    // test report, not as silent worker bring-up errors) ───────────
-    // Past this point the spec is SUPPOSED to run. `loudBail` makes an
-    // unmet precondition a red failure on a schedule/workflow_dispatch
-    // run (and a green test.fixme on local/PR runs, as before) — #1053:
-    // a non-running scheduled loop must never masquerade as green.
+    // Decap's "Delete published entry" flow uses a native window.confirm.
+    // Register the handler BEFORE any interaction so it's never too late.
+    page.on("dialog", (d) => d.accept());
+
+    // ── Hard guard ─────────────────────────────────────────────────
+    // Past the gate above the spec is SUPPOSED to run. `loudBail` makes
+    // an unmet precondition a red failure on a schedule/dispatch run (and
+    // a green test.fixme on local/PR), so a non-running scheduled loop
+    // never masquerades as green (#1053). The ephemeral design has no
+    // committed fixture / `published:` precondition to check (the post is
+    // born fresh each run) — only the PAT is required.
     if (!getPat()) {
       loudBail(test, "CMS_E2E_PAT not set — prod-mutation playground cannot run.");
       return;
     }
-    if (!fs.existsSync(FIXTURE_ABS)) {
-      loudBail(
-        test,
-        `Fixture ${FIXTURE_PATH} is missing — the prod-mutation playground spec needs the file to drive a publish loop. Restore it from git history or re-add per plan G4.`,
-      );
-      return;
-    }
-
-    const initialFileText = fs.readFileSync(FIXTURE_ABS, "utf8");
-    const initialPublished = readPublishedFlag(initialFileText);
-    if (initialPublished === null) {
-      loudBail(
-        test,
-        `Fixture ${FIXTURE_PATH} has no parseable 'published:' front-matter line — fix before retrying.`,
-      );
-      return;
-    }
-    if (initialPublished === true) {
-      // The loop self-heals main (the canonical baseline is
-      // `published: false`), but a checked-in `published: true` is a
-      // source-of-truth misconfiguration: the file would serve publicly
-      // until a deploy drops it, and it is exactly the state that used
-      // to skip-and-report-green for ~10 days (#1053). Fail loudly on a
-      // scheduled run so a human fixes the committed fixture.
-      loudBail(
-        test,
-        `Fixture ${FIXTURE_PATH} is checked in 'published: true'. The loop force-resets main, but the committed fixture MUST be 'published: false' (see #1053). Flip it back on main.`,
-      );
-      return;
-    }
-    if (todayUtcIso() >= FIXTURE_DATE) {
-      loudBail(
-        test,
-        `Be kind in 2099: the date-based fixture ${FIXTURE_PATH} (${FIXTURE_DATE}) is past its expiry. Either move the date forward or retire this spec.`,
-      );
-      return;
-    }
 
     const runId = Date.now();
-    const marker = makeProdMarker(runId);
-    const baselineFileText = buildBaselineFileText();
+    const built = buildProdMutatePost({ runId });
+    const { slug, filePath, marker, title, body } = built;
+    const publicUrl = `${PROD_HOST}${built.publicPath}`;
+    // Decap's posts `slug:` template is `{{year}}-{{month}}-{{day}}-{{slug}}`,
+    // so the on-disk file slug (and the entry deeplink segment / Decap
+    // branch) is the dated slug.
+    const fileSlug = `${EPHEMERAL_DATE}-${slug}`;
+    const decapBranch = `cms/posts/${fileSlug}`;
+    pendingFixture = { runId, slug, filePath };
 
-    // ── 0a. Close any stale Decap editorial-workflow PR on the
-    // post's fixed branch ──────────────────────────────────────────
-    // Decap reuses cms/posts/<slug> per entry, so a prior run that
-    // crashed at any stage past Save can leave a PR with a non-Draft
-    // editorial-workflow label. On the next run the Save pushes onto
-    // the same branch — labels persist — Decap shows "Status: Ready"
-    // instead of "Status: Draft" — the step-6 button-wait below times
-    // out at 15 min. See docs/.../cms-stuck-pr-triage skill for the
-    // full diagnostic. Resetting the PR here lets Decap open a fresh
-    // decap-cms/draft on the next Save.
-    await test.step("Close any stale Decap editorial-workflow PR on the post branch", async () => {
-      // Decap's branch shape for a Posts entry is
-      // `cms/posts/<file-slug>`, where <file-slug> matches the
-      // YYYY-MM-DD-<slug> filename without the .md extension.
-      const fileSlug = FIXTURE_PATH.replace(/^_posts\//, "").replace(/\.md$/, "");
-      await closeStaleDecapPrOnBranch({ branch: `cms/posts/${fileSlug}` });
+    test.info().annotations.push({ type: "fixture-path", description: filePath });
+
+    // ── 0. Close any stale Decap PR on the (unique) post branch ──────
+    // The branch is per-run-unique (the slug carries the runId), so a
+    // stale-label carryover is structurally impossible — but a retry of
+    // the SAME runId could leave a half-open PR. Best-effort reset.
+    await test.step("Close any stale Decap PR on the post branch", async () => {
+      await closeStaleDecapPrOnBranch({ branch: decapBranch });
     });
 
-    // ── 0. Reset fixture to baseline before the run ─────────────────
-    // The previous run may have crashed mid-flow; force a clean start
-    // with `published: false` and the canonical body. Idempotent — if
-    // main is already at baseline, the API write is a no-op (Contents
-    // API treats matching content as a 200 with no new commit).
-    await test.step("Reset fixture to baseline (published: false) via Contents API", async () => {
-      const current = await fetchFixtureFromMain();
-      const remoteBody = Buffer.from(current.content, "base64").toString("utf8");
-      const remotePublished = readPublishedFlag(remoteBody);
-      if (remotePublished !== false || remoteBody !== baselineFileText) {
-        await writeFixtureOnMain({
-          fileText: baselineFileText,
-          message: `test(prod-mutate): reset fixture baseline before run ${runId}`,
-        });
-      }
-    });
-
-    // ── 1. Confirm the URL 404s before driving admin ────────────────
-    // With `published: false`, Jekyll skips the file entirely so the
-    // URL returns the site's 404 page. If we observe a 200 here, the
-    // baseline reset didn't take — bail out before mutating prod.
-    await test.step("Confirm /blog/e2e-mutation-canary/ 404s while published: false", async () => {
-      // Wait up to 6 minutes for the latest deploy to remove the page
-      // (in the rare case the previous run left published: true).
-      const deadline = Date.now() + 6 * 60 * 1000;
-      let lastStatus = "unknown";
-      while (Date.now() < deadline) {
-        const res = await fetch(PUBLIC_URL, { cache: "no-store" });
-        lastStatus = `${res.status}`;
-        if (res.status === 404) return;
-        await new Promise((r) => setTimeout(r, 8000));
-      }
-      throw new Error(
-        `Expected ${PUBLIC_URL} to 404 before driving admin (published: false should drop the file from the build), got ${lastStatus}.`,
-      );
+    // ── 1. Confirm the URL 404s before creating (unique per-run name) ─
+    await test.step("Confirm /blog/<slug>/ 404s before driving admin (unique per-run path)", async () => {
+      const res = await fetch(publicUrl, { cache: "no-store" });
+      expect(
+        res.status,
+        `${publicUrl} must not exist yet (unique per-run name) — got ${res.status}`,
+      ).toBe(404);
     });
 
     // ── 2. Pre-seed Decap auth and load prod admin ──────────────────
@@ -347,96 +193,82 @@ test(
       });
     });
 
-    // ── 3. Open the post, toggle Published, save ────────────────────
-    await test.step("Navigate to the mutation canary post", async () => {
-      // Direct entry URL is deterministic and bypasses collection-list
-      // ordering/visibility. admin/posts-list-enhance.js hides the
-      // automated-test fixtures from the Posts list by DEFAULT (#1042),
-      // so the canary is intentionally not clickable from the list —
-      // navigate straight to it (same pattern as the cleanup step below
-      // and cms-unpublish-republish.spec.js).
-      const fileSlug = FIXTURE_PATH.replace(/^_posts\//, "").replace(/\.md$/, "");
-      await page.goto(`${PROD_ADMIN}#/collections/posts/entries/${fileSlug}`, {
+    // ── 3. Create the born-published ephemeral post via the New Post UI
+    await test.step("Open + New Post form (collections/posts/new)", async () => {
+      // Direct URL nav to the posts collection's new-entry form is more
+      // deterministic than clicking "+ New Post" from the list (no
+      // listing-render race; the same route the button navigates to).
+      await page.goto(`${PROD_ADMIN}#/collections/posts/new`, {
         waitUntil: "domcontentloaded",
       });
-      const titleBox = page.getByRole("textbox", { name: /^Title$/i });
-      await expect(titleBox).toBeVisible({ timeout: 30_000 });
-      // Confirm we deep-linked to the right canary.
-      await expect(titleBox).toHaveValue(new RegExp(FIXTURE_TITLE, "i"));
+      await expect(page.getByRole("textbox", { name: /^Title$/i })).toBeVisible({
+        timeout: 30_000,
+      });
     });
 
-    await test.step("Append run marker to body", async () => {
-      // The body widget is a markdown editor. Appending a run-unique
-      // marker lets the assertion at the end confirm we're seeing
-      // *this* run's output, not a stale cache hit from the previous.
-      // The pinned Decap version no longer exposes "Body" as the
-      // textbox's accessible name — mirror cms-publish-flow.spec.js
-      // and grab the last contenteditable textbox on the page.
-      const body = page.locator('[role="textbox"][contenteditable="true"]').last();
-      await body.click();
-      await body.press("End");
-      await body.pressSequentially(`\n\n${marker}\n`);
+    await test.step("Fill Title, URL Slug, Date (2099-12-31), Body", async () => {
+      await page.getByRole("textbox", { name: /^Title$/i }).fill(title);
+
+      // Explicit slug so the on-disk file slug (and thus the cms branch +
+      // public URL) is deterministic and carries the runId. Decap's
+      // `{{year}}-{{month}}-{{day}}-{{slug}}` template prepends the date.
+      await page.getByLabel(/^URL Slug/).fill(slug);
+
+      // Future date so the post serves only because `_config.yml` sets
+      // `future: true` (the same mechanism the retired 2099 canaries
+      // used). The datetime widget renders an <input type="datetime-local">
+      // accepting YYYY-MM-DDTHH:mm (precedent: cms-scheduled-post.spec.js).
+      await page.getByLabel(/^Date/).fill(`${EPHEMERAL_DATE}T00:00`);
+
+      // The body widget is a markdown (Slate) editor. A Slate round-trip
+      // can mangle the body, but this post is ephemeral and deleted, so it
+      // doesn't matter — the run marker also lives in the SLUG (structural)
+      // and that is what the URL assertion keys on.
+      const bodyEditor = page.locator('[role="textbox"][contenteditable="true"]').last();
+      await bodyEditor.click();
+      await bodyEditor.pressSequentially(body.trim());
     });
 
-    await test.step("Toggle Published → ON", async () => {
+    await test.step("Toggle Published → ON (born live)", async () => {
       // The Published widget is a switch (role="switch"), toggled via
-      // aria-checked — see e2e/cms-editor-ui.js (shared so the
-      // selector can't drift, #1723).
+      // aria-checked — see e2e/cms-editor-ui.js (shared so the selector
+      // can't drift, #1723).
       await setPublished(page, true, { visibleTimeout: 15_000 });
     });
 
     await test.step("Save (opens cms/... PR)", async () => {
-      await page.getByRole("button", { name: /^Save$/i }).click();
-      // In editorial_workflow mode (prod admin), Save stays disabled
-      // after the save completes — the toolbar swaps to "Status: Draft"
-      // + a separate "Publish" button. Wait for the "Changes saved"
-      // status text instead of the (incorrect) toBeEnabled signal.
-      await expect(page.getByText(/Changes saved/i).first()).toBeVisible({
-        timeout: 60_000,
-      });
+      // saveEntry clicks Save + waits for the "Changes saved" toast — the
+      // canonical "cms PR was opened" signal in editorial_workflow mode.
+      await saveEntry(page);
     });
 
-    // ── 4. Find the cms/... PR Decap opened ─────────────────────────
-    let pr;
-    await test.step("Wait for Decap to open the cms/... PR", async () => {
-      pr = await waitForCmsPullRequest({
+    // ── 4. Find the cms/... PR Decap opened, label cms/ready ─────────
+    // Set cms/ready directly on the cms PR. cms-editorial-workflow.yml
+    // enables auto-merge once required checks pass; the PR merges into
+    // main → deploy-production fires. We do NOT use Decap's "Publish Now"
+    // (its immediate-merge is blocked by branch protection while checks
+    // are pending and never lands — run 26512944320 / PR #1774).
+    await test.step("Wait for Decap to open the create cms/... PR, label cms/ready", async () => {
+      const pr = await waitForCmsPullRequest({
         base: "main",
-        filePath: FIXTURE_PATH,
-        canaryMarker: marker,
+        filePath,
+        canaryMarker: slug, // the dated slug appears in the file path / added lines
         timeoutMs: 5 * 60 * 1000,
       });
-      expect(pr.number, "Decap PR number").toBeGreaterThan(0);
-    });
-
-    // ── 5. Apply cms/ready and wait for the deploy-status pill ──────
-    // Set cms/ready directly on the cms PR. cms-editorial-workflow.yml
-    // sees it, enables auto-merge once required checks pass, and the
-    // PR merges into main → deploy-production fires.
-    //
-    // Wait for the prod deploy-status pill spinner→settled lifecycle
-    // as the editor-facing ground truth that the chain landed. No
-    // GitHub API peeks (waitForWorkflowRun, waitForMerge,
-    // waitForAutoMergeEnabled) — the pill is the user contract; if
-    // the pill misses its in-progress window or stays spinning past
-    // success, that IS the regression we want to catch.
-    await test.step("Label PR cms/ready", async () => {
+      expect(pr.number, "Decap create PR number").toBeGreaterThan(0);
       await addLabel({ prNumber: pr.number, label: "cms/ready" });
     });
 
-    // ── Wait for the URL to surface the marker (and pill terminal) ──
-    // STAY on the entry editor view — the pill is injected there.
-    // Poll the public URL until it contains the marker; watch the pill
-    // for failure transitions and assert it lands in terminal hidden
-    // state. Don't gate on the pill's in_progress spinner — fast
-    // deploys often pass entirely between two 30-s pill polls.
-    await test.step("Wait for /blog/e2e-mutation-canary/ to surface the marker (and pill terminal-hidden)", async () => {
+    // ── 5. Wait for the URL to serve the marker (pill terminal-hidden) ─
+    // STAY on the entry editor view — the deploy-status pill is injected
+    // there. Poll the public URL until it serves this run's marker; watch
+    // the pill for failure transitions and assert it lands terminal-hidden.
+    await test.step("Wait for /blog/<slug>/ to serve 200 + run marker (pill terminal-hidden)", async () => {
       await waitForChangeReflected({
         page,
         pillId: PILL_PROD,
         urlCheck: async () => {
-          const res = await page.request.get(PUBLIC_URL, {
-            failOnStatusCode: false,
-          });
+          const res = await page.request.get(publicUrl, { failOnStatusCode: false });
           if (res.status() !== 200) return false;
           return (await res.text()).includes(marker);
         },
@@ -445,70 +277,102 @@ test(
       });
     });
 
-    // ── 9. Cleanup via Decap UI: toggle Published OFF, restore body, ──
-    // then merge the SAME way as the forward leg: cms/ready →
-    // cms-editorial-workflow `auto-merge-when-ready`, which WAITS for the
-    // cms PR's required checks before merging. We do NOT use Decap's
-    // "Publish Now" button: this repo's cms PRs gate the merge on required
-    // checks, so Publish Now's immediate-merge attempt is blocked by branch
-    // protection while checks are pending and never lands (#1723 verify run
-    // 26512944320). The editor UI (toggle + body + Save) is still fully
-    // exercised — symmetric with the forward leg; only the merge trigger
-    // matches it. This leg does NOT write main directly; the afterAll
-    // harness is the Contents-API safety net.
-    // Per AGENTS.md "no back doors in setup or cleanup either."
-    await test.step("Cleanup via UI: toggle Published → OFF, restore body, Save → cms/ready → auto-merge", async () => {
-      // A bare goto to the hash route is a same-document SPA change that
-      // does NOT reload Decap's editorial state from GitHub — so the
-      // cleanup Save can silently fail to open a fresh cms PR (run
-      // #26006678919). Close any stale branch/PR server-side, then force a
-      // full document reload. Mirrors the preview twin's proven cleanup.
-      const fileSlug = FIXTURE_PATH.replace(/^_posts\//, "").replace(/\.md$/, "");
-      await closeStaleDecapPrOnBranch({ branch: `cms/posts/${fileSlug}` });
+    // ── 6. Delete the post via the Decap UI ──────────────────────────
+    await test.step("Navigate to the ephemeral post entry for the delete leg", async () => {
+      // After Save/auto-merge Decap may unmount the editor; navigate
+      // explicitly to the entry's editor URL so the delete menu is on a
+      // known DOM. The dated file slug is deterministic.
       await page.goto(`${PROD_ADMIN}#/collections/posts/entries/${fileSlug}`, {
         waitUntil: "domcontentloaded",
       });
-      await page.reload({ waitUntil: "domcontentloaded" });
       await expect(page.getByRole("textbox", { name: /^Title$/i })).toBeVisible({
         timeout: 30_000,
       });
+    });
 
-      // Toggle Published OFF via the shared switch helper (this leg had
-      // drifted to getByRole("checkbox") — see e2e/cms-editor-ui.js, #1723).
-      await setPublished(page, false);
+    await test.step("Click Delete published entry → opens delete cms/... PR", async () => {
+      // Decap renders "Delete published entry" either as a top-level
+      // button or inside the entry-status menu, depending on entry state.
+      // Try the direct button first; fall back to the status menu. Pin a
+      // timeout on every action so a UI shape change fails in 30 s, not
+      // 40 min (run 25473784039).
+      const trigger = page.getByRole("button", { name: /delete (published )?entry/i }).first();
+      if (await trigger.isVisible({ timeout: 5_000 }).catch(() => false)) {
+        await trigger.click({ timeout: 30_000 });
+      } else {
+        await page
+          .getByRole("button", { name: /^(Status:|Published$|In Review$|Ready$|Draft$)/i })
+          .first()
+          .click({ timeout: 30_000 });
+        await page
+          .getByRole("menuitem", { name: /delete (published )?entry/i })
+          .first()
+          .click({ timeout: 30_000 });
+      }
+      // The persistent page.on("dialog") accepts the native confirm. If
+      // Decap uses an in-page modal instead, click its confirm button.
+      await page
+        .getByRole("button", { name: /^(delete|confirm|yes|ok)$/i })
+        .first()
+        .click({ timeout: 5_000 })
+        .catch(() => {
+          /* native confirm handled by the persistent dialog listener */
+        });
+    });
 
-      // Restore the canonical baseline body (drops this run's marker).
-      // baselineFileText is the whole .md (front matter + body); slice off
-      // the front matter so we paste only the body portion.
-      const body = page.locator('[role="textbox"][contenteditable="true"]').last();
-      await body.click();
-      await page.keyboard.press("Control+A");
-      await page.keyboard.press("Backspace");
-      const fmEnd = baselineFileText.indexOf("\n---\n", 4);
-      const baselineBodyOnly = baselineFileText.slice(fmEnd + 5).trim();
-      await body.pressSequentially(baselineBodyOnly + "\n");
+    // ── 7. Label the delete PR cms/ready (if Decap opened one) ───────
+    // Decap's GitHub backend may commit the delete directly to main via
+    // the git data API OR open a cms/* PR (version-dependent). Mirror
+    // cms-media-roundtrip's delete handling: if a cms/* PR appears whose
+    // diff removes this file, label it cms/ready so auto-merge fires;
+    // otherwise the direct commit already triggered deploy-production.
+    // Either way the ground truth is the URL going 404.
+    await test.step("Label the delete cms/... PR cms/ready if Decap opened one", async () => {
+      const deadline = Date.now() + 90_000;
+      while (Date.now() < deadline) {
+        let prs = [];
+        try {
+          prs = await gh(`/repos/${HOST_REPO}/pulls?state=open&base=main&per_page=50`);
+        } catch (_) {
+          /* transient — retry */
+        }
+        const cmsPrs = (prs || []).filter(
+          (pr) => pr.head && typeof pr.head.ref === "string" && pr.head.ref.startsWith("cms/"),
+        );
+        let labelled = false;
+        for (const pr of cmsPrs) {
+          let files;
+          try {
+            files = await gh(`/repos/${HOST_REPO}/pulls/${pr.number}/files?per_page=100`);
+          } catch (_) {
+            continue;
+          }
+          const removesPost = files.some((f) => f.filename === filePath && f.status === "removed");
+          if (removesPost) {
+            try {
+              await addLabel({ prNumber: pr.number, label: "cms/ready" });
+            } catch (e) {
+              console.warn(
+                `[prod-mutate-delete] could not label PR #${pr.number}: ${e && e.message}`,
+              );
+            }
+            labelled = true;
+            break;
+          }
+        }
+        if (labelled) break;
+        await new Promise((r) => setTimeout(r, 6000));
+      }
+      // Not finding a PR is fine — Decap committed the delete straight to main.
+    });
 
-      await saveEntry(page);
-
-      // Match on the forward run's unique marker: the cleanup commit
-      // REMOVES it, so it is guaranteed to appear as a `-` line in this
-      // PR's FIXTURE_PATH patch (the preview twin relies on the same).
-      const cleanupPr = await waitForCmsPullRequest({
-        base: "main",
-        filePath: FIXTURE_PATH,
-        canaryMarker: marker,
-        timeoutMs: 5 * 60 * 1000,
-      });
-      await addLabel({ prNumber: cleanupPr.number, label: "cms/ready" });
-
-      // Wait for the URL to 4xx (post unpublished, file restored).
+    // ── 8. Wait for the URL to 404 (pill terminal-hidden) ────────────
+    await test.step("Wait for /blog/<slug>/ to 404 (post deleted, pill terminal-hidden)", async () => {
       await waitForChangeReflected({
         page,
         pillId: PILL_PROD,
         urlCheck: async () => {
-          const res = await page.request.get(PUBLIC_URL, {
-            failOnStatusCode: false,
-          });
+          const res = await page.request.get(publicUrl, { failOnStatusCode: false });
           const s = res.status();
           return s >= 400 && s < 500;
         },
@@ -516,54 +380,64 @@ test(
         onBudgetExhausted: makeDeployQueueExtender(),
       });
     });
+
+    // Defensive: clearer error if something raced past the urlCheck gate.
+    await test.step("Confirm the post's public URL 404s (final)", async () => {
+      const res = await fetch(publicUrl, { cache: "no-store" });
+      expect(
+        res.status,
+        `${publicUrl} must 4xx after the UI delete + deploy`,
+      ).toBeGreaterThanOrEqual(400);
+      expect(res.status, `${publicUrl} must 4xx (not 5xx) after delete`).toBeLessThan(500);
+    });
   },
 );
 
-// ── Test-harness cleanup safety net ───────────────────────────────
-// Mirrors cms-publish-loop.spec.js's afterAll. Reads the fixture
-// from main; if it's not at baseline (`published: true` still set,
-// or marker still present in body), opens the API write to restore
-// it. Skips when the fixture is already at baseline.
+// ── Test-harness cleanup safety net — existence-only DELETE ───────────
+// #1771 step 4 makes this an existence-only delete, NOT a content
+// restore: the forward DELETE leg IS the cleanup. If the test body
+// completed, the post is gone from main and `fileExistsOnMain` returns
+// false → the harness no-ops. If the test threw mid-flow, the
+// uniquely-named ephemeral post may still be on main; open a labelled
+// removal PR (same auto-merge path the forward leg uses) so the next run
+// starts clean. A 500 here leaks ONE inert, uniquely-named orphan the
+// daily sweeper reaps — never a corrupt shared baseline. Per AGENTS.md's
+// harness-hygiene carve-out, this API path is harness cleanup, not the
+// behaviour under test (the primary delete leg is UI-driven).
 test.afterAll(async () => {
   if (PROD_CANARY) return;
   if (!getPat()) return;
   // Mirror the test-body skip: this hook recovers from a failed
-  // mid-mutation in THIS run. Outside the cms-publish-loop-prod
-  // workflow the body never runs, so there's nothing to clean up
-  // — and reading the canary from e.g. e2e-real while a parallel
-  // prod-mutate is mid-flight races the Contents API SHA. Only
-  // cleanup in the same context that owns the mutation.
+  // mid-flow run in THIS spec's owning workflow only. Outside it the body
+  // never ran, so there's nothing to clean up.
   if (process.env.RUN_PROD_MUTATE_PLAYGROUND !== "1") return;
-  let current;
-  try {
-    current = await fetchFixtureFromMain();
-  } catch (e) {
-    console.warn(
-      `[cleanup-harness] couldn't read ${FIXTURE_PATH} from main; skipping safety net: ${e && e.message}`,
-    );
-    return;
-  }
-  const decoded = Buffer.from(current.content, "base64").toString("utf8");
-  const stillPublished = readPublishedFlag(decoded) === true;
-  // Match THIS spec's marker shape: makeProdMarker() emits
-  // `e2e-prod-mutate:<slug>:<runId>` (slug has hyphens, runId is digits).
-  // The old pattern looked for `e2e-publish-loop:` — a different spec's
-  // marker — so this safety-net check was always false (it relied solely
-  // on `stillPublished`). Use the real prod-mutate marker so a crashed
-  // run that left ONLY a body marker (published already reset) is also
-  // cleaned.
-  const hasMarker = /e2e-prod-mutate:[a-z0-9-]+:\d+/.test(decoded);
-  if (!stillPublished && !hasMarker) {
+  if (!pendingFixture) return; // test never ran (skipped)
+
+  const { filePath, slug, runId } = pendingFixture;
+  const stillThere = await fileExistsOnMain(filePath).catch(() => false);
+  if (!stillThere) {
     console.log(
-      "[cleanup-harness] prod-mutate fixture at baseline; UI cleanup succeeded — no safety net needed",
+      `[cleanup-harness] ${filePath} gone from main; UI delete succeeded — no safety net needed`,
     );
     return;
   }
   console.warn(
-    `[cleanup-harness] fixture on main is mutated (published=${stillPublished}, marker=${hasMarker}); restoring via Contents API`,
+    `[cleanup-harness] ${filePath} still on main after the test; opening removal PR (existence-only delete, #1771 step 4)`,
   );
-  await writeFixtureOnMain({
-    fileText: buildBaselineFileText(),
-    message: `test(prod-mutate): harness safety-net reset of fixture (UI cleanup left mutation)`,
-  });
+  try {
+    await removeFixtureViaPr({
+      slug,
+      runId,
+      filePath,
+      message: `test(prod-mutate): cleanup leftover ephemeral post run ${runId}`,
+      prTitle: `test(prod-mutate): cleanup leftover ephemeral post run ${runId}`,
+      prBody:
+        "Existence-only cleanup PR opened by `cms-publish-loop-prod-mutate.spec.js` after a " +
+        "test failure left the throw-away ephemeral post on main. Auto-merges via `cms/ready` " +
+        "(#1771 step 4 — resting state is absence/404).",
+    });
+    console.warn(`[cleanup-harness] removed ${filePath} via removal PR`);
+  } catch (e) {
+    console.warn(`[cleanup-harness] could not remove ${filePath}: ${e && e.message}`);
+  }
 });

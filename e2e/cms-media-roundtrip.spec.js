@@ -1,4 +1,4 @@
-// @lane: real — uploads a real image + mutates a real prod _posts/ entry through Decap → GitHub
+// @lane: real — uploads a real image + creates/deletes an ephemeral prod _posts/ entry through Decap → GitHub
 // @select-skip-when-head-ref-prefix: cms/
 //
 // On `cms/*` PRs (Decap-opened editorial PRs) this spec self-skips at
@@ -8,62 +8,64 @@
 
 /*
  * Real-browser, real-HTTP, real-GitHub, real-production-deploy
- * end-to-end test for the FULL media lifecycle, driven entirely
- * through the Decap UI with NO backdoors and NO assumptions:
+ * end-to-end test for the FULL media lifecycle, driven entirely through
+ * the Decap UI — now against an EPHEMERAL, born-published, hard-deleted
+ * per-run post (#1771 step 4) instead of a persistent committed fixture:
  *
- *   1. Upload a unique image via the Media UI (the Featured Image
- *      widget's media library — the same picker the standalone Media
- *      page uses) and attach it to a real `_posts/` entry.
- *   2. Publish through the editorial workflow (Save → Status: Ready),
- *      let auto-merge + deploy-production run.
- *   3. Assert the post page on https://adamdaniel.ai renders the
- *      image AND that the image URL itself fetches 200 with real
- *      bytes. (This is the exact bug the flat-media-folder change
- *      fixes: a post referencing an image URL that 404s.)
- *   4. Remove the image from the post, unpublish, publish again; wait
- *      for the post to stop serving.
+ *   1. Create a born-published ephemeral `_posts/` entry via the "+ New
+ *      Post" UI, uploading a unique image via the Media UI (the Featured
+ *      Image widget's media library) and attaching it.
+ *   2. Save → cms PR → label cms/ready → auto-merge + deploy-production.
+ *   3. Assert the post page on https://adamdaniel.ai renders the image
+ *      AND that the image URL itself fetches 200 with real bytes. (This is
+ *      the exact bug the flat-media-folder change fixes: a post
+ *      referencing an image URL that 404s.)
+ *   4. DELETE the post via the Decap UI → cms PR → cms/ready → auto-merge.
  *   5. Delete the uploaded asset via the standalone Media UI.
- *   6. Assert the image's live URL 404s.
+ *   6. Assert the post 404s and the image's live URL 404s.
  *
- * Why this exists on top of the local upload specs: the local specs
- * (cms-image-upload / cms-featured-image-lifecycle / cms-inline-image
- * / cms-project-gallery) prove the flat media_folder resolves on a
- * local Jekyll build. This spec proves it on the REAL production site
- * through the REAL GitHub backend and the REAL deploy pipeline,
- * including the standalone Media library's delete path — none of
- * which a local-backend spec can exercise. The user asked
- * specifically for this: "no assuming something you see in GitHub is
- * reflected in the live app."
+ * Why ephemeral (the #1771 redesign): the persistent fixture
+ * (`_posts/2099-01-03-e2e-media-roundtrip.md`) shared the same
+ * self-perpetuating-corruption bug as the prod-mutate twin — a transient
+ * failure on the in-place revert left a corrupt shared cell on main, and
+ * the next run re-derived its baseline from it. Step 4 removes the class:
+ * each run creates a uniquely-pathed post + a uniquely-named image, and
+ * deletes both. Resting state is ABSENCE (404). A killed run leaks at most
+ * ONE inert orphan post (`_posts/2099-12-31-e2e-media-roundtrip-<runId>.md`)
+ * + ONE orphan upload, both swept by sweep-stale-cms-prs.yml — never a
+ * corrupt shared baseline. No loop reads a path it also writes.
  *
- * No backdoors: every product step the user enumerated (upload, add
- * to post, publish, remove, delete) goes through the real Decap UI.
- * The Contents-API baseline reset + the afterAll safety net are
- * test-harness HYGIENE (resetting fixture state between runs), not
- * the behaviour under test — mirrors the established pattern in
- * cms-publish-loop-prod-mutate.spec.js, which AGENTS.md blesses.
+ * Both merge legs go via the `cms/ready` label → cms-editorial-workflow
+ * `auto-merge-when-ready`, NOT Decap's "Publish Now" (this repo gates cms
+ * PRs on required checks; Publish Now's immediate-merge is blocked by
+ * branch protection while checks are pending and never lands — run
+ * 26512944320 / PR #1774). The editor UI is fully driven; only the merge
+ * trigger is the label.
  *
- * Hard guards (mirrors prod-mutate):
- *   1. Fixture file MUST exist on disk at test start.
- *   2. Front-matter `published:` MUST be `false` at start. `true`
- *      means a previous run crashed mid-flow → test.fixme().
- *   3. The fixture date 2099-01-03 MUST still be in the future.
+ * Why this exists on top of the local upload specs: the local specs prove
+ * the flat media_folder resolves on a local Jekyll build. This spec proves
+ * it on the REAL production site through the REAL GitHub backend and the
+ * REAL deploy pipeline, including the standalone Media library's delete
+ * path. The Contents-API afterAll safety net is test-harness HYGIENE
+ * (existence-only delete of a leftover post/upload), not the behaviour
+ * under test — see AGENTS.md's harness-hygiene carve-out.
  *
  * Gating:
  *   - `CMS_E2E_PAT` must be set.
- *   - `RUN_PROD_MUTATE_PLAYGROUND=1` (same gate as the prod-mutate
- *     spec) so it only runs in cms-media-roundtrip.yml and never
- *     inside the per-PR e2e matrix or recursively on its own cms/* PR.
+ *   - `RUN_PROD_MUTATE_PLAYGROUND=1` (same gate as the prod-mutate spec)
+ *     so it only runs in cms-media-roundtrip.yml and never inside the
+ *     per-PR e2e matrix or recursively on its own cms/* PR.
  *   - chromium-desktop-3k only.
  *
- * IMPORTANT: do NOT run this spec locally against prod. It mutates
- * the real production tree (a _posts/ entry + an upload). The
- * workflow runs it on a schedule.
+ * IMPORTANT: do NOT run this spec locally against prod. It mutates the
+ * real production tree (a _posts/ entry + an upload). The workflow runs
+ * it on a schedule.
  */
 const fs = require("node:fs");
 const path = require("node:path");
 const { test, expect } = require("./base");
 const { seedDecapAuth, getPat, HOST_REPO } = require("./decap-pat");
-const { closeStaleDecapPrOnBranch } = require("./cms-fixture-pr");
+const { closeStaleDecapPrOnBranch, removeFixtureViaPr } = require("./cms-fixture-pr");
 const {
   addLabel,
   gh,
@@ -72,33 +74,20 @@ const {
 } = require("./github-actions-poll");
 const { waitForChangeReflected } = require("./deploy-pill");
 const { resolveCmsTarget } = require("./cms-host");
-const { readPublishedFlag, reconstructBaseline, loudBail } = require("./fixture-baseline");
+const { loudBail } = require("./fixture-baseline");
 const { setPublished, saveEntry } = require("./cms-editor-ui");
+const { EPHEMERAL_DATE, buildMediaRoundtripPost } = require("./prod-mutate-fixture");
 
-const REPO_ROOT = path.resolve(__dirname, "..");
-const FIXTURE_PATH = "_posts/2099-01-03-e2e-media-roundtrip.md";
-const FIXTURE_ABS = path.join(REPO_ROOT, FIXTURE_PATH);
-const FIXTURE_SLUG = "e2e-media-roundtrip";
-const FIXTURE_TITLE = "E2E Media Roundtrip";
-const FIXTURE_DATE = "2099-01-03";
-// Decap's `slug:` template is "{{year}}-{{month}}-{{day}}-{{slug}}",
-// so the on-disk file slug (and the entry deeplink segment) is this.
-const FILE_SLUG = "2099-01-03-e2e-media-roundtrip";
-const DECAP_BRANCH = `cms/posts/${FILE_SLUG}`;
-const PUBLIC_PATH = `/blog/${FIXTURE_SLUG}/`;
-
-// Parameterized target: CMS_TARGET=preview (+ PR_NUMBER) drives the
-// PR's preview-pr<N> surface; anything else keeps the prod default, so
-// the existing prod workflow is behaviour-preserving with no new env.
-// The local names stay PROD_* to keep this large spec's body and diff
-// minimal — the *value* is whatever resolveCmsTarget() picks (prod or
-// preview), which is the point of the parameterization.
+// Parameterized target: CMS_TARGET=preview (+ PR_NUMBER) drives the PR's
+// preview-pr<N> surface; anything else keeps the prod default, so the
+// existing prod workflow is behaviour-preserving with no new env. The
+// local names stay PROD_* to keep this large spec's diff minimal — the
+// *value* is whatever resolveCmsTarget() picks (prod or preview).
 const { host: PROD_HOST, adminUrl: PROD_ADMIN, pillId: PILL_PROD } = resolveCmsTarget();
-const PUBLIC_URL = `${PROD_HOST}${PUBLIC_PATH}`;
 
-// Source bytes for the upload. We re-upload these under a per-run
-// unique filename so the 404-after-delete assertion is unambiguous
-// and concurrent/looping runs can't collide on the same asset.
+// Source bytes for the upload. Re-uploaded under a per-run unique name so
+// the 404-after-delete assertion is unambiguous and looping runs can't
+// collide on the same asset.
 const SOURCE_FIXTURE_PNG = path.join(__dirname, "fixtures", "tiny-pixel.png");
 const UPLOADS_DIR = "assets/images/uploads";
 
@@ -106,12 +95,10 @@ const UPLOADS_DIR = "assets/images/uploads";
 // safety net consults this so the probe never tries to write to main.
 const PROD_CANARY = process.env.PROD_CANARY === "1";
 
-// validate-content + auto-merge + deploy-production + CloudFront
-// invalidation caps ~12-15 min when runners are warm. This spec has
-// THREE deploy waits (attach → live, remove → 404 post, delete →
-// 404 image) at 15 min each + setup ≈ 55 min worst case; typical
-// happy path completes in ~25-30 min. Retries disabled — this
-// mutates real prod; a retry just re-runs the same broken chain.
+// One full real-prod loop: create+attach → live, delete post → 404,
+// delete image → 404. Three deploy waits at 15 min each + setup ≈ 55 min
+// worst case; typical happy path ~25-30 min. Retries disabled — mutates
+// real prod; a retry re-runs the same broken chain.
 const TEST_TIMEOUT_MS = 55 * 60 * 1000;
 
 test.describe.configure({
@@ -120,66 +107,22 @@ test.describe.configure({
   retries: 0,
 });
 
-function toContentBase64(text) {
-  return Buffer.from(text, "utf8").toString("base64");
-}
+// Module-scoped handle for the afterAll existence-only-delete safety net.
+let pendingFixture = null;
 
-async function fetchFixtureFromMain({ retries = 0 } = {}) {
-  // `retries` defaults to 0 so read-only callers are unchanged; the
-  // mutating writeFixtureOnMain path passes retries:5 (#1771 step 1).
-  return gh(`/repos/${HOST_REPO}/contents/${FIXTURE_PATH}?ref=main`, { retries });
-}
-
-/**
- * Write the whole fixture file to main via the Contents API, with the
- * same optimistic-concurrency retry as cms-publish-loop-prod-mutate:
- * GitHub rejects a stale blob SHA with 409 if main advanced under us.
- * The owner PAT (CMS_E2E_PAT) can write to main directly via the
- * repo-owner ruleset bypass on main (main.json carries a pull_request
- * rule and empty bypass_actors, so direct-main writes come from the
- * owner's bypass — NOT the cms-feature-branches ruleset, whose
- * ref_name.include does not cover refs/heads/main). This is harness
- * hygiene, not the behaviour under test.
- */
-async function writeFixtureOnMain({ fileText, message }) {
-  const MAX_ATTEMPTS = 4;
-  let lastErr;
-  for (let attempt = 1; attempt <= MAX_ATTEMPTS; attempt++) {
-    // retries:5 — absorb a transient GitHub 5xx/secondary-rate blip on
-    // the safety-net read+write (#1771 step 1). The 409 optimistic-
-    // concurrency conflict stays handled by this outer re-fetch-SHA
-    // loop, NOT the gh() retry.
-    const current = await fetchFixtureFromMain({ retries: 5 });
-    try {
-      return await gh(`/repos/${HOST_REPO}/contents/${FIXTURE_PATH}`, {
-        method: "PUT",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({
-          message,
-          content: toContentBase64(fileText),
-          sha: current.sha,
-          branch: "main",
-        }),
-        retries: 5,
-      });
-    } catch (err) {
-      lastErr = err;
-      if (err && err.status === 409 && attempt < MAX_ATTEMPTS) {
-        console.warn(
-          `[writeFixtureOnMain] 409 on attempt ${attempt}; re-fetching SHA and retrying`,
-        );
-        continue;
-      }
-      throw err;
-    }
+async function fileExistsOnMain(filePath) {
+  try {
+    await gh(`/repos/${HOST_REPO}/contents/${encodeURI(filePath)}?ref=main`);
+    return true;
+  } catch (e) {
+    if (/\b404\b/.test(String(e.message))) return false;
+    throw e;
   }
-  throw lastErr;
 }
 
-// Best-effort: delete a media file from main via the Contents API.
-// Only used by the afterAll safety net to remove a per-run upload the
-// UI delete leg didn't manage to remove. Never part of the behaviour
-// under test (step 13 deletes via the Media UI).
+// Best-effort: delete a media file from main via the Contents API. Only
+// used by the afterAll safety net to remove a per-run upload the UI delete
+// leg didn't manage to remove. Never part of the behaviour under test.
 async function deleteFileFromMainIfPresent(filePath, message) {
   let current;
   try {
@@ -196,176 +139,63 @@ async function deleteFileFromMainIfPresent(filePath, message) {
   return true;
 }
 
-// `readPublishedFlag` is shared from ./fixture-baseline (#1053 DRY'd
-// the five per-spec copies into one implementation).
-
-// The trimmed, unquoted `featured_image:` value, or "" if the line is
-// absent / empty. Baseline is the empty string.
-function readFeaturedImage(text) {
-  const m = text.match(/^featured_image:\s*(.*)$/m);
-  if (!m) return "";
-  return m[1].trim().replace(/^['"]|['"]$/g, "");
-}
-
-// The canonical baseline file text — the full file (front matter
-// forced `published: false` + `featured_image: ""` + canonical body),
-// now a code-pinned CONSTANT via `reconstructBaseline` rather than a
-// read of the on-disk body (#1771 step 3). Previously this was
-// `forcePublishedFalse(readFileSync(FIXTURE_ABS))`, which copied the
-// committed body verbatim — the same self-perpetuating Slate round-trip
-// corruption the mutation-canary twin hit (a green run re-types the
-// body through Decap's `widget: markdown` editor, the next run re-
-// derives its baseline from the mangled result). Sourcing it from the
-// frozen canonical means the reset / safety-net always writes canonical
-// bytes, so a green run leaves the committed body byte-identical to
-// canonical. `published: false` is baked into the canonical, preserving
-// the #1053 self-heal (never trust an on-disk `published: true`). The
-// drift-lint in e2e/canary-content.test.js locks the committed file to
-// this.
-function buildBaselineFileText() {
-  return reconstructBaseline(FIXTURE_PATH);
-}
-
-function todayUtcIso() {
-  return new Date().toISOString().slice(0, 10);
-}
-
-function isBaseline(text) {
-  return (
-    readPublishedFlag(text) === false &&
-    readFeaturedImage(text) === "" &&
-    !/e2e-media-roundtrip-\d+\.png/.test(text)
-  );
-}
-
 test(
-  "CMS media round trip — upload via Media UI → live on adamdaniel.ai → delete via Media UI → 404",
+  "CMS media round trip — create ephemeral post + upload via Media UI → live → delete post + image → 404",
   { tag: ["@admin-write"] },
   async ({ page }) => {
-    // Reuse the prod-mutate gate so this spec only runs in its
-    // dedicated workflow and self-skips inside the per-PR e2e matrix
-    // and on its own cms/* PR (recursion guard). Legitimate "not my
-    // workflow" green skip — keep it plain and FIRST so a shard-1 PR
-    // run exits here before reaching the loud guards below.
+    // Reuse the prod-mutate gate so this spec only runs in its dedicated
+    // workflow and self-skips inside the per-PR e2e matrix and on its own
+    // cms/* PR. Plain green "not my workflow" skip, FIRST so a shard-1 PR
+    // run exits here before the loud guard below.
     test.skip(
       process.env.RUN_PROD_MUTATE_PLAYGROUND !== "1",
       "RUN_PROD_MUTATE_PLAYGROUND not set — only cms-media-roundtrip.yml runs this spec.",
     );
 
     // Decap delete (and some confirm) flows use native window.confirm.
-    // Register the handler BEFORE any interaction so it's never too
-    // late (page.once after the click auto-dismisses).
+    // Register BEFORE any interaction so it's never too late.
     page.on("dialog", (d) => d.accept());
 
-    // ── Hard guards ───────────────────────────────────────────────
-    // Past the gate above the spec is SUPPOSED to run. `loudBail`
-    // makes an unmet precondition a red failure on a schedule/
-    // workflow_dispatch run (green test.fixme on local/PR, as before)
-    // — #1053: a non-running scheduled loop must never report green.
+    // ── Hard guard ─────────────────────────────────────────────────
+    // The ephemeral design has no committed fixture / `published:`
+    // precondition (the post is born fresh each run) — only the PAT.
     if (!getPat()) {
       loudBail(test, "CMS_E2E_PAT not set — media round-trip cannot run.");
       return;
     }
-    if (!fs.existsSync(FIXTURE_ABS)) {
-      loudBail(test, `Fixture ${FIXTURE_PATH} is missing — restore it from git history.`);
-      return;
-    }
-    const initialText = fs.readFileSync(FIXTURE_ABS, "utf8");
-    const initialPublished = readPublishedFlag(initialText);
-    if (initialPublished === null) {
-      loudBail(
-        test,
-        `Fixture ${FIXTURE_PATH} has no parseable 'published:' line — fix before retrying.`,
-      );
-      return;
-    }
-    if (initialPublished === true) {
-      // Loop self-heals main (the canonical baseline is
-      // `published: false`), but a checked-in `published: true` is a
-      // source-of-truth misconfiguration and the exact #1053 stuck
-      // state. Fail loudly on a scheduled run so a human fixes it.
-      loudBail(
-        test,
-        `Fixture ${FIXTURE_PATH} is checked in 'published: true'. The loop force-resets main, but the committed fixture MUST be 'published: false' (see #1053). Flip it back on main.`,
-      );
-      return;
-    }
-    if (todayUtcIso() >= FIXTURE_DATE) {
-      loudBail(
-        test,
-        `Be kind in 2099: ${FIXTURE_PATH} (${FIXTURE_DATE}) is past its expiry. Move the date forward or retire this spec.`,
-      );
-      return;
-    }
-
-    // The whole round trip reads and writes the fixture's state on
-    // `main`. On the PR that INTRODUCES this fixture it isn't on main
-    // yet (chicken-and-egg) and fetchFixtureFromMain() 404s. That's
-    // expected, not a failure: skip cleanly here. Once this PR merges,
-    // the scheduled / workflow_dispatch cms-media-roundtrip run
-    // exercises the real round trip. Same philosophy as the
-    // disk/`published:`/date hard guards above.
-    let fixtureOnMain = true;
-    try {
-      await fetchFixtureFromMain();
-    } catch (e) {
-      if (e && e.status === 404) fixtureOnMain = false;
-      else throw e;
-    }
-    if (!fixtureOnMain) {
-      test.fixme(
-        true,
-        `${FIXTURE_PATH} is not on main yet — this is the PR that introduces it. ` +
-          `Merge to main; the scheduled / workflow_dispatch cms-media-roundtrip ` +
-          `run then exercises the real upload → publish → delete round trip.`,
-      );
-      return;
-    }
 
     const runId = Date.now();
+    const built = buildMediaRoundtripPost({ runId });
+    const { slug, filePath, title, body } = built;
+    const publicUrl = `${PROD_HOST}${built.publicPath}`;
+    // Decap's posts `slug:` template prepends the date; this is the
+    // on-disk file slug (entry deeplink segment / Decap branch).
+    const fileSlug = `${EPHEMERAL_DATE}-${slug}`;
+    const decapBranch = `cms/posts/${fileSlug}`;
+
     const imageName = `e2e-media-roundtrip-${runId}.png`;
     const imagePath = `${UPLOADS_DIR}/${imageName}`;
     const imagePublicUrl = `/${imagePath}`;
     const imageUrlAbs = `${PROD_HOST}${imagePublicUrl}`;
     const imageBuffer = fs.readFileSync(SOURCE_FIXTURE_PNG);
-    const baselineFileText = buildBaselineFileText();
 
-    // ── 0a. Reset any stale Decap PR on the post's fixed branch ──
+    pendingFixture = { runId, slug, filePath, imagePath, imageName };
+    test.info().annotations.push({ type: "fixture-path", description: filePath });
+
+    // ── 0. Close any stale Decap PR on the (unique) post branch ──────
     await test.step("Close any stale Decap PR on the post branch", async () => {
-      await closeStaleDecapPrOnBranch({ branch: DECAP_BRANCH });
+      await closeStaleDecapPrOnBranch({ branch: decapBranch });
     });
 
-    // ── 0b. Reset fixture to baseline ─────────────────────────────
-    await test.step("Reset fixture to baseline (published:false, no featured_image) via Contents API", async () => {
-      const current = await fetchFixtureFromMain();
-      const remote = Buffer.from(current.content, "base64").toString("utf8");
-      if (!isBaseline(remote) || remote !== baselineFileText) {
-        await writeFixtureOnMain({
-          fileText: baselineFileText,
-          message: `test(media-roundtrip): reset fixture baseline before run ${runId}`,
-        });
-      }
-    });
-
-    // ── 1. Confirm clean pre-state on the live site ───────────────
+    // ── 1. Confirm clean pre-state on the live site (unique names) ───
     await test.step("Confirm post 404s and image URL 404s before driving admin", async () => {
-      const deadline = Date.now() + 6 * 60 * 1000;
-      let postStatus = "unknown";
-      while (Date.now() < deadline) {
-        const res = await fetch(PUBLIC_URL, { cache: "no-store" });
-        postStatus = `${res.status}`;
-        if (res.status === 404) break;
-        await new Promise((r) => setTimeout(r, 8000));
-      }
-      expect(
-        postStatus,
-        `${PUBLIC_URL} must 404 before the run (published:false should drop it)`,
-      ).toBe("404");
+      const res = await fetch(publicUrl, { cache: "no-store" });
+      expect(res.status, `${publicUrl} must not exist yet (unique per-run name)`).toBe(404);
       const imgRes = await fetch(imageUrlAbs, { cache: "no-store" });
       expect(imgRes.status, `${imageUrlAbs} must not exist yet (unique per-run name)`).toBe(404);
     });
 
-    // ── 2. Load prod admin (PAT-seeded session, no OAuth popup) ───
+    // ── 2. Load prod admin (PAT-seeded session, no OAuth popup) ──────
     await seedDecapAuth(page);
     await test.step("Load production admin", async () => {
       await page.goto(PROD_ADMIN, { waitUntil: "domcontentloaded" });
@@ -374,28 +204,32 @@ test(
       });
     });
 
-    // ── 3. Open the post entry ────────────────────────────────────
-    await test.step("Open the media round-trip post", async () => {
-      // Direct entry URL is deterministic. admin/posts-list-enhance.js
-      // hides automated-test fixtures from the Posts list by DEFAULT
-      // (#1042), so navigate to the canary directly (same pattern as
-      // the steps below and cms-unpublish-republish.spec.js).
-      await page.goto(`${PROD_ADMIN}#/collections/posts/entries/${FILE_SLUG}`, {
+    // ── 3. Create the born-published ephemeral post via the New Post UI
+    await test.step("Open + New Post form (collections/posts/new)", async () => {
+      await page.goto(`${PROD_ADMIN}#/collections/posts/new`, {
         waitUntil: "domcontentloaded",
       });
-      const titleBox = page.getByRole("textbox", { name: /^Title$/i });
-      await expect(titleBox).toBeVisible({ timeout: 30_000 });
-      // Confirm we deep-linked to the right canary.
-      await expect(titleBox).toHaveValue(new RegExp(FIXTURE_TITLE, "i"));
+      await expect(page.getByRole("textbox", { name: /^Title$/i })).toBeVisible({
+        timeout: 30_000,
+      });
     });
 
-    // ── 4. Upload via the Media UI + attach to the post ───────────
-    // Click the Featured Image widget's "Choose Image" → Decap opens
-    // the SAME MediaLibrary modal the standalone Media page uses →
-    // drive its hidden <input type=file> with a per-run-unique
-    // filename → confirm the selection back into the field. This is
-    // exactly "upload a small image using the media UI, then add the
-    // image to a post" with no shortcut.
+    await test.step("Fill Title, URL Slug, Date (2099-12-31), Body", async () => {
+      await page.getByRole("textbox", { name: /^Title$/i }).fill(title);
+      await page.getByLabel(/^URL Slug/).fill(slug);
+      await page.getByLabel(/^Date/).fill(`${EPHEMERAL_DATE}T00:00`);
+      const bodyEditor = page.locator('[role="textbox"][contenteditable="true"]').last();
+      await bodyEditor.click();
+      await bodyEditor.pressSequentially(body.trim());
+    });
+
+    // ── 4. Upload via the Media UI + attach to the post ──────────────
+    // Click the Featured Image widget's "Choose Image" → Decap opens the
+    // SAME MediaLibrary modal the standalone Media page uses → drive its
+    // hidden <input type=file> with a per-run-unique filename → confirm
+    // the selection back into the field. This is exactly "upload a small
+    // image using the media UI, then add the image to a post" with no
+    // shortcut.
     await test.step("Upload a unique image via the Media UI and attach it", async () => {
       await page
         .getByRole("button", { name: /choose (an |different )?image/i })
@@ -411,9 +245,8 @@ test(
       const insertBtn = page.getByRole("button", { name: /^(choose selected|insert)$/i }).first();
       await expect(insertBtn).toBeVisible({ timeout: 30_000 });
       await insertBtn.click();
-      // The widget must now reflect the upload. Decap renders the
-      // chosen path; assert it surfaces the unique filename so we
-      // know the attach actually took before we Save.
+      // The widget must now reflect the upload. Assert it surfaces the
+      // unique filename so we know the attach took before we Save.
       await expect
         .poll(async () => (await page.locator("body").innerText()).includes(imageName), {
           timeout: 30_000,
@@ -421,46 +254,37 @@ test(
         .toBe(true);
     });
 
-    // ── 5. Publish (toggle on, Save, Status → Ready) ──────────────
-    await test.step("Toggle Published → ON", async () => {
+    await test.step("Toggle Published → ON (born live)", async () => {
       await setPublished(page, true, { visibleTimeout: 15_000 });
     });
 
-    await test.step("Save → Status: Ready (engages auto-merge)", async () => {
+    await test.step("Save (opens cms/... PR)", async () => {
       await saveEntry(page);
-      // Advance to Ready (engages auto-merge); this leg does NOT click
-      // Publish → publish now (the cms/ready label drives the merge), so
-      // it is intentionally not publishViaUi.
-      await page.getByRole("button", { name: /^Status:\s*Draft$/i }).click();
-      await page.getByRole("menuitem", { name: /^Ready$/i }).click();
-      await expect(page.getByRole("button", { name: /^Status:\s*Ready$/i })).toBeVisible({
-        timeout: 30_000,
-      });
     });
 
-    // ── 6. Find the cms/... PR Decap opened ───────────────────────
-    await test.step("Wait for Decap to open the cms/... PR (attach)", async () => {
-      // The .md diff now contains `featured_image:
-      // /assets/images/uploads/<imageName>` — match on that.
+    // ── 5. Find the create cms/... PR, label cms/ready ───────────────
+    await test.step("Wait for Decap to open the create cms/... PR, label cms/ready", async () => {
+      // The .md diff contains `featured_image:
+      // /assets/images/uploads/<imageName>` AND the dated slug — match on
+      // the image name (unique per run).
       const pr = await waitForCmsPullRequest({
         base: "main",
-        filePath: FIXTURE_PATH,
+        filePath,
         canaryMarker: imageName,
         timeoutMs: 5 * 60 * 1000,
       });
-      expect(pr.number, "Decap attach PR number").toBeGreaterThan(0);
+      expect(pr.number, "Decap create PR number").toBeGreaterThan(0);
+      await addLabel({ prNumber: pr.number, label: "cms/ready" });
     });
 
-    // ── 7. Wait until the image is LIVE on adamdaniel.ai ──────────
+    // ── 6. Wait until the image is LIVE on adamdaniel.ai ─────────────
     // STAY on the entry editor (the deploy-status pill mounts there).
     await test.step("Wait for the post to render the image on adamdaniel.ai", async () => {
       await waitForChangeReflected({
         page,
         pillId: PILL_PROD,
         urlCheck: async () => {
-          const res = await page.request.get(PUBLIC_URL, {
-            failOnStatusCode: false,
-          });
+          const res = await page.request.get(publicUrl, { failOnStatusCode: false });
           if (res.status() !== 200) return false;
           return (await res.text()).includes(imagePublicUrl);
         },
@@ -469,14 +293,11 @@ test(
       });
     });
 
-    // ── 8. The image URL itself must resolve 200 with real bytes ──
-    // This is THE assertion the whole flat-media-folder fix exists
-    // for: the URL the post references must actually serve the image,
-    // not 404.
+    // ── 7. The image URL itself must resolve 200 with real bytes ─────
+    // THE assertion the whole flat-media-folder fix exists for: the URL
+    // the post references must actually serve the image, not 404.
     await test.step("Fetch the image URL on the live site — must be 200 with bytes", async () => {
-      const res = await page.request.get(imageUrlAbs, {
-        failOnStatusCode: false,
-      });
+      const res = await page.request.get(imageUrlAbs, { failOnStatusCode: false });
       expect(
         res.status(),
         `${imageUrlAbs} must resolve 200 on the live site (broken-image regression guard)`,
@@ -489,60 +310,77 @@ test(
       ).toBeGreaterThan(0);
     });
 
-    // ── 9. Remove the image from the post + unpublish, publish ────
-    await test.step("Remove the image from the post, unpublish, Save → Ready", async () => {
-      await page.goto(`${PROD_ADMIN}#/collections/posts/entries/${FILE_SLUG}`, {
+    // ── 8. Delete the post via the Decap UI ──────────────────────────
+    await test.step("Navigate to the ephemeral post for the delete leg", async () => {
+      await page.goto(`${PROD_ADMIN}#/collections/posts/entries/${fileSlug}`, {
         waitUntil: "domcontentloaded",
       });
       await expect(page.getByRole("textbox", { name: /^Title$/i })).toBeVisible({
         timeout: 30_000,
       });
-
-      // Clear the Featured Image widget. Decap renders a remove/clear
-      // control next to the chosen-image preview. We click it, then
-      // VERIFY the field actually cleared (poll the rendered field
-      // for the absence of the filename) — no silent pass.
-      const removeBtn = page
-        .getByRole("button", {
-          name: /^(remove|clear|remove image|delete)$/i,
-        })
-        .first();
-      await expect(
-        removeBtn,
-        "Featured Image widget must expose a remove/clear control",
-      ).toBeVisible({ timeout: 30_000 });
-      await removeBtn.click();
-      await expect
-        .poll(async () => (await page.locator("body").innerText()).includes(imageName), {
-          timeout: 20_000,
-        })
-        .toBe(false);
-
-      await setPublished(page, false, { visibleTimeout: 15_000 });
-
-      await saveEntry(page);
-      // Advance to Ready (engages auto-merge); like the publish leg this
-      // does NOT click Publish → publish now (the cms/ready label drives
-      // the merge), so it is intentionally not publishViaUi.
-      await page.getByRole("button", { name: /^Status:\s*Draft$/i }).click();
-      await page.getByRole("menuitem", { name: /^Ready$/i }).click();
-      await expect(page.getByRole("button", { name: /^Status:\s*Ready$/i })).toBeVisible({
-        timeout: 30_000,
-      });
     });
 
-    await test.step("Wait for Decap to open the cms/... PR (remove)", async () => {
-      // The removal patch DELETES the `featured_image:
-      // /assets/images/uploads/<imageName>` line — the patch text
-      // still contains imageName (on the `-` line), so the same
-      // marker disambiguates this run's PR.
-      const pr = await waitForCmsPullRequest({
-        base: "main",
-        filePath: FIXTURE_PATH,
-        canaryMarker: imageName,
-        timeoutMs: 5 * 60 * 1000,
-      });
-      expect(pr.number, "Decap remove PR number").toBeGreaterThan(0);
+    await test.step("Click Delete published entry → opens delete cms/... PR", async () => {
+      const trigger = page.getByRole("button", { name: /delete (published )?entry/i }).first();
+      if (await trigger.isVisible({ timeout: 5_000 }).catch(() => false)) {
+        await trigger.click({ timeout: 30_000 });
+      } else {
+        await page
+          .getByRole("button", { name: /^(Status:|Published$|In Review$|Ready$|Draft$)/i })
+          .first()
+          .click({ timeout: 30_000 });
+        await page
+          .getByRole("menuitem", { name: /delete (published )?entry/i })
+          .first()
+          .click({ timeout: 30_000 });
+      }
+      await page
+        .getByRole("button", { name: /^(delete|confirm|yes|ok)$/i })
+        .first()
+        .click({ timeout: 5_000 })
+        .catch(() => {
+          /* native confirm handled by the persistent dialog listener */
+        });
+    });
+
+    // ── 9. Label the post-delete PR cms/ready if Decap opened one ────
+    // Decap may commit the delete directly to main via the git data API
+    // OR open a cms/* PR. Handle both: label a PR that removes this file,
+    // else the direct commit already triggered deploy-production.
+    await test.step("Label the post-delete cms/... PR cms/ready if Decap opened one", async () => {
+      const deadline = Date.now() + 90_000;
+      while (Date.now() < deadline) {
+        let prs = [];
+        try {
+          prs = await gh(`/repos/${HOST_REPO}/pulls?state=open&base=main&per_page=50`);
+        } catch (_) {
+          /* transient — retry */
+        }
+        const cmsPrs = (prs || []).filter(
+          (pr) => pr.head && typeof pr.head.ref === "string" && pr.head.ref.startsWith("cms/"),
+        );
+        let labelled = false;
+        for (const pr of cmsPrs) {
+          let files;
+          try {
+            files = await gh(`/repos/${HOST_REPO}/pulls/${pr.number}/files?per_page=100`);
+          } catch (_) {
+            continue;
+          }
+          const removesPost = files.some((f) => f.filename === filePath && f.status === "removed");
+          if (removesPost) {
+            try {
+              await addLabel({ prNumber: pr.number, label: "cms/ready" });
+            } catch (e) {
+              console.warn(`[media-delete] could not label PR #${pr.number}: ${e && e.message}`);
+            }
+            labelled = true;
+            break;
+          }
+        }
+        if (labelled) break;
+        await new Promise((r) => setTimeout(r, 6000));
+      }
     });
 
     await test.step("Wait for the post to stop serving (4xx)", async () => {
@@ -550,9 +388,7 @@ test(
         page,
         pillId: PILL_PROD,
         urlCheck: async () => {
-          const res = await page.request.get(PUBLIC_URL, {
-            failOnStatusCode: false,
-          });
+          const res = await page.request.get(publicUrl, { failOnStatusCode: false });
           const s = res.status();
           return s >= 400 && s < 500;
         },
@@ -561,17 +397,9 @@ test(
       });
     });
 
-    // ── 10. Delete the uploaded asset via the standalone Media UI ─
+    // ── 10. Delete the uploaded asset via the standalone Media UI ────
     await test.step("Delete the image via the standalone Media library UI", async () => {
-      await page.goto(`${PROD_ADMIN}#/media`, {
-        waitUntil: "domcontentloaded",
-      });
-      // The asset card carries the filename. Find it, select it, and
-      // delete via the library's Delete control. We don't assume the
-      // exact card markup — locate by the filename text, click it to
-      // select, then click the Delete button the library shows for a
-      // selected asset. The dialog handler registered up top accepts
-      // the native confirm.
+      await page.goto(`${PROD_ADMIN}#/media`, { waitUntil: "domcontentloaded" });
       const card = page.getByText(imageName, { exact: false }).first();
       await expect(
         card,
@@ -584,8 +412,6 @@ test(
         "Media library must expose a Delete control for the selected asset",
       ).toBeVisible({ timeout: 30_000 });
       await deleteBtn.click();
-      // The card must disappear from the library — proves the delete
-      // was accepted client-side before we wait on the live URL.
       await expect
         .poll(async () => (await page.locator("body").innerText()).includes(imageName), {
           timeout: 30_000,
@@ -593,13 +419,12 @@ test(
         .toBe(false);
     });
 
-    // ── 11. Drive the delete through to the live site ─────────────
-    // Decap's GitHub backend may commit the media delete directly to
-    // main OR open a cms/* PR (version-dependent). Don't assume —
-    // handle both: if a cms/* PR appears whose diff removes the
-    // image file, label it cms/ready so auto-merge fires; otherwise
-    // the direct commit already triggered deploy-production. Either
-    // way, the ground truth is the live URL going 404.
+    // ── 11. Drive the image delete through to the live site ──────────
+    // Decap's GitHub backend may commit the media delete directly to main
+    // OR open a cms/* PR. If a cms/* PR appears whose diff removes the
+    // image file, label it cms/ready so auto-merge fires; otherwise the
+    // direct commit already triggered deploy-production. Ground truth is
+    // the live image URL going 404.
     await test.step("Label the media-delete PR cms/ready if Decap opened one", async () => {
       const deadline = Date.now() + 90_000;
       while (Date.now() < deadline) {
@@ -636,25 +461,19 @@ test(
         if (labelled) break;
         await new Promise((r) => setTimeout(r, 6000));
       }
-      // Not finding a PR is fine — Decap committed straight to main.
+      // Not finding a PR is fine — Decap committed the delete straight to main.
     });
 
     await test.step("Wait for the image URL to 404 on adamdaniel.ai", async () => {
-      // Back to the entry editor so the deploy-status pill is mounted
-      // (the /media route has no toolbar/pill).
-      await page.goto(`${PROD_ADMIN}#/collections/posts/entries/${FILE_SLUG}`, {
-        waitUntil: "domcontentloaded",
-      });
-      await expect(page.getByRole("textbox", { name: /^Title$/i })).toBeVisible({
-        timeout: 30_000,
-      });
+      // Back to a stable pill-mount route. The deleted post's editor is
+      // gone; the /media route has no pill, so navigate to the Posts list.
+      await page.goto(`${PROD_ADMIN}#/collections/posts`, { waitUntil: "domcontentloaded" });
+      await expect(page.getByRole("link", { name: /^Posts$/i })).toBeVisible({ timeout: 60_000 });
       await waitForChangeReflected({
         page,
         pillId: PILL_PROD,
         urlCheck: async () => {
-          const res = await page.request.get(imageUrlAbs, {
-            failOnStatusCode: false,
-          });
+          const res = await page.request.get(imageUrlAbs, { failOnStatusCode: false });
           return res.status() === 404;
         },
         urlTimeoutMs: 15 * 60 * 1000,
@@ -662,75 +481,70 @@ test(
       });
     });
 
-    // ── 12. Final ground-truth assertions ─────────────────────────
+    // ── 12. Final ground-truth assertions ────────────────────────────
     await test.step("Assert image URL 404s and post 4xx (final)", async () => {
       const imgRes = await fetch(imageUrlAbs, { cache: "no-store" });
       expect(imgRes.status, `${imageUrlAbs} must 404 after the Media-UI delete`).toBe(404);
-      const postRes = await fetch(PUBLIC_URL, { cache: "no-store" });
+      const postRes = await fetch(publicUrl, { cache: "no-store" });
       expect(
         postRes.status >= 400 && postRes.status < 500,
-        `${PUBLIC_URL} must 4xx after unpublish`,
+        `${publicUrl} must 4xx after delete`,
       ).toBe(true);
     });
   },
 );
 
-// ── Test-harness cleanup safety net ───────────────────────────────
-// Mirrors cms-publish-loop-prod-mutate.spec.js. Reads the fixture
-// from main; if it isn't at baseline (still published, still has a
-// featured_image, or carries a run image reference) restore it. Also
-// removes a leftover per-run upload if the Media-UI delete leg didn't
-// land. Skips entirely when not in this spec's owning workflow.
+// ── Test-harness cleanup safety net — existence-only DELETE ───────────
+// #1771 step 4: existence-only delete, NOT a content restore. The forward
+// DELETE legs ARE the cleanup. If the test completed, the post + upload
+// are gone and the harness no-ops. If the test threw mid-flow, remove a
+// leftover ephemeral post (via a labelled removal PR — same auto-merge
+// path) and any leftover per-run upload (direct Contents-API delete). A
+// failure here leaks at most ONE inert post + ONE upload the daily sweeper
+// reaps — never a corrupt shared baseline. Per AGENTS.md's harness-hygiene
+// carve-out, this API path is cleanup, not the behaviour under test.
 test.afterAll(async () => {
   if (PROD_CANARY) return;
   if (!getPat()) return;
   if (process.env.RUN_PROD_MUTATE_PLAYGROUND !== "1") return;
+  if (!pendingFixture) return; // test never ran (skipped)
 
-  let current;
-  try {
-    current = await fetchFixtureFromMain();
-  } catch (e) {
+  const { filePath, slug, runId, imagePath } = pendingFixture;
+
+  // Leftover ephemeral post → labelled removal PR.
+  const postStillThere = await fileExistsOnMain(filePath).catch(() => false);
+  if (postStillThere) {
     console.warn(
-      `[cleanup-harness] couldn't read ${FIXTURE_PATH} from main; skipping: ${e && e.message}`,
+      `[cleanup-harness] ${filePath} still on main; opening removal PR (existence-only delete, #1771 step 4)`,
     );
-    return;
-  }
-  const decoded = Buffer.from(current.content, "base64").toString("utf8");
-  if (!isBaseline(decoded)) {
-    console.warn("[cleanup-harness] fixture on main not at baseline; restoring via Contents API");
     try {
-      await writeFixtureOnMain({
-        fileText: buildBaselineFileText(),
-        message:
-          "test(media-roundtrip): harness safety-net reset of fixture (UI cleanup left mutation)",
+      await removeFixtureViaPr({
+        slug,
+        runId,
+        filePath,
+        message: `test(media-roundtrip): cleanup leftover ephemeral post run ${runId}`,
+        prTitle: `test(media-roundtrip): cleanup leftover ephemeral post run ${runId}`,
+        prBody:
+          "Existence-only cleanup PR opened by `cms-media-roundtrip.spec.js` after a test " +
+          "failure left the throw-away ephemeral post on main. Auto-merges via `cms/ready` " +
+          "(#1771 step 4 — resting state is absence/404).",
       });
+      console.warn(`[cleanup-harness] removed ${filePath} via removal PR`);
     } catch (e) {
-      console.warn(`[cleanup-harness] fixture restore failed: ${e && e.message}`);
+      console.warn(`[cleanup-harness] could not remove ${filePath}: ${e && e.message}`);
     }
   } else {
-    console.log("[cleanup-harness] media-roundtrip fixture at baseline — UI cleanup succeeded");
+    console.log(`[cleanup-harness] ${filePath} gone from main; UI delete succeeded`);
   }
 
-  // Sweep any leftover per-run uploads (UI delete leg didn't land, or
-  // the test crashed before it). The name pattern is unique to this
-  // spec so this can't touch real media.
+  // Leftover per-run upload → direct Contents-API delete (the name is
+  // unique to this run so this can't touch real media).
   try {
-    const dir = await gh(`/repos/${HOST_REPO}/contents/${UPLOADS_DIR}?ref=main`);
-    const leftovers = (Array.isArray(dir) ? dir : []).filter(
-      (f) => f.type === "file" && /^e2e-media-roundtrip-\d+\.png$/.test(f.name),
+    await deleteFileFromMainIfPresent(
+      imagePath,
+      `test(media-roundtrip): harness safety-net delete of leftover upload ${path.basename(imagePath)}`,
     );
-    for (const f of leftovers) {
-      try {
-        await deleteFileFromMainIfPresent(
-          `${UPLOADS_DIR}/${f.name}`,
-          `test(media-roundtrip): harness safety-net delete of leftover upload ${f.name}`,
-        );
-        console.warn(`[cleanup-harness] removed leftover upload ${f.name}`);
-      } catch (e) {
-        console.warn(`[cleanup-harness] couldn't remove ${f.name}: ${e && e.message}`);
-      }
-    }
   } catch (e) {
-    console.warn(`[cleanup-harness] couldn't list ${UPLOADS_DIR}: ${e && e.message}`);
+    console.warn(`[cleanup-harness] couldn't remove ${imagePath}: ${e && e.message}`);
   }
 });
