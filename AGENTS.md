@@ -961,6 +961,28 @@ When a real-prod loop spec mutates a `_posts/` fixture, two pieces of CI machine
 
 The unifying principle: **canonical state lives in exactly one place; everything else derives** — required checks read it, harness writes go through a byte-preserving transform of it.
 
+## CI-flakiness invariants (#1723) — read before touching the prod loops / deploy waits
+
+The 2026-05 flakiness audit (#1723) traced the recurring CI reds to six classes. Each fix ships with a **lint-lock** that fails loud at CI time if reintroduced (the repo's standing pattern — don't sidestep them). Do NOT undo these:
+
+- **Never future-date a `_posts/` fixture you publish to verify its URL.** Jekyll *skips* future-dated posts unless `_config.yml` sets `future: true`. The prod-mutate / media canaries are `_posts/2099-*`; `future: true` is set **deliberately** so they build *only* when a spec flips them to `published: true` (baseline `published: false` keeps them skipped regardless). This was THE dominant "Cat 1" root cause — the build log said `Skipping: …-canary.md has a future date`, `/blog/<slug>/` 404'd, and the in-spec reflect-wait timed out *every* run (misread as a deploy backlog). Scheduling here is `published: false` + `publish_date` (`scripts/publish_scheduled_posts.py`), NOT future-dates — so `future: true` exposes nothing else. **Lock:** `e2e/fixture-baseline.test.js` → "prod-loop canaries are BUILDABLE when published".
+
+- **`test_fixture: true` posts are excluded from the homepage + blog index** (`index.html`, `blog/index.html`) via a `where_exp` filter, so a briefly-published canary serves only at its own `/blog/<slug>/` URL (what the spec verifies), never in human-facing listings. Keep that filter on any new post listing.
+
+- **`deploy-pill.js`'s `waitForChangeReflected` gates on the user-facing URL, never the GHA API.** The queue-aware deadline extension is *injected* via `onBudgetExhausted` (`makeDeployQueueExtender` in `github-actions-poll.js`) so the helper stays DOM-pure. The extender is **activity-aware**: extend while the deploy lane is in-flight *or recently cycling*, fail fast only when genuinely quiescent (a single-instant idle probe produced false "chain never fired" verdicts between this repo's frequent deploys). Don't make `deploy-pill.js` poll the API for success, and don't revert the extender to instantaneous idle detection. **Lock:** `e2e/deploy-pill.test.js`.
+
+- **`fixture-baseline.test.js`'s canary `published: false` assertion is diff-aware on `pull_request`.** It enforces the baseline only for fixtures the PR's *own diff* touches (`E2E_PR_TOUCHED_PROD_FIXTURES`, emitted by the `select` job), so a prod loop's transient `published: true` on `main` can't red an unrelated PR (it blocked #1715). Stays strict on push/schedule/local and on a PR that actually edits the canary. Don't make it strict on every PR. **Lock:** the `shouldEnforceBaseline` tests in `e2e/fixture-baseline.test.js`.
+
+- **`await-prod-deploy` step 2 defers a superseded/non-success deploy conclusion to step 3's ground-truth (descendant) check.** The `production` lane is `cancel-in-progress: false`, so a deploy queued for THIS merge can be `cancelled` while a newer sibling deploy carries the merge live (prod ends up ahead, not stale). Don't re-add a hard `exit 1` on the conclusion — "does prod serve this SHA or a newer descendant?" is the only gate, and it's strictly stronger. **Lock:** `e2e/workflow-prod-loop-serialized.test.js`.
+
+- **The ci-runner Playwright drift guard checks the Dockerfile `ARG`** (`scripts/check-playwright-image-drift.js`, run by the `select` job) — not just workflow files (no workflow references the raw `mcr.microsoft.com/playwright` image anymore). Bumping `@playwright/test` REQUIRES bumping `.github/ci-runner/Dockerfile`'s `PLAYWRIGHT_IMAGE_TAG` to match, or the rebuilt image pairs a new client with old browsers → `Executable doesn't exist` at launch. A Playwright `globalSetup` (`e2e/install-browsers-on-miss.js`) installs missing browsers as a runtime fallback. **Lock:** `e2e/playwright-image-drift.test.js`.
+
+- **`preview-media-resolves.spec.js` runs ONLY under `preview-media.yml`** (`RUN_PREVIEW_MEDIA_PROBE=1`, after that workflow's preview-reachability poll). Don't un-gate it — the general e2e matrix exposes `PR_NUMBER`, which previously un-skipped it there, where it probed a preview that may not exist and 404-flaked the required check.
+
+- **`parity-preview` / `preview-media` require a live preview only for RENDER-affecting PRs.** `selectParityPreviewSpecs` fans out on `RENDER_FANOUT_PATTERNS` only (the paths that also trigger `deploy-preview`), NOT test/CI-infra fanout (`e2e-tests.yml`, `package*.json`, playwright config, `e2e/base.js`). A pure-CI/test PR produces no preview, so demanding one there is a spurious hard-fail (it required an owner override every time). **Lock:** `e2e/select-specs.test.js`.
+
+See **ADR 0004** for the full investigation, including why the audit's original "deploy backlog" hypothesis for Cat 1 was wrong (the queue-aware wait's sharpened diagnostic is what exposed the future-date build-skip).
+
 ## Preview environment flow
 
 1. PR opened → Jekyll builds at root (no baseurl) → sync to `s3://adamdaniel-ai-previews/pr-{N}/`
@@ -988,13 +1010,16 @@ Bootstrap is idempotent and exits in well under three seconds.
 
 Only edit files under `.agents/skills/`. The pre-commit hook
 (`skills-mirror-check`, registered via `.gitconfig-fragment` on Git ≥ 2.54
-or `.githooks/pre-commit` on older Git) and the `skills-mirror` CI workflow
-both reject commits that turn `.claude/skills` into real files.
+or `.githooks/pre-commit` on older Git) rejects commits that turn
+`.claude/skills` into real files. (The former `skills-mirror` CI workflow
+was removed — it was offline/structural only and never synced to
+claude.ai, so the local pre-commit hook + the live tests below are the
+enforcement; run `pytest tests/` locally for the structural checks.)
 
 ### Tests
 
-- `pytest tests/` — offline (CI runs this on `ubuntu-latest` and
-  `windows-latest`).
+- `pytest tests/` — offline structural checks (run locally / on Claude
+  Code on the web; no longer a CI workflow).
 - `pytest tests/ -m live` (or `SKILLS_TEST_LIVE=1 pytest tests/`) — invokes
   `claude -p` against the canary skill. Requires the `claude` CLI on PATH
   and an authenticated subscription session. Run on a local
