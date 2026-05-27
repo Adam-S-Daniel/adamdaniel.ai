@@ -74,7 +74,7 @@ const {
   makeDeployQueueExtender,
 } = require("./github-actions-poll");
 const { waitForChangeReflected } = require("./deploy-pill");
-const { setPublished, saveEntry, publishViaUi } = require("./cms-editor-ui");
+const { setPublished, saveEntry } = require("./cms-editor-ui");
 const { prodTarget } = require("./cms-host");
 const { readPublishedFlag, forcePublishedFalse, loudBail } = require("./fixture-baseline");
 
@@ -430,24 +430,30 @@ test(
       });
     });
 
-    // ── 9. Cleanup: flip published: false and restore baseline body ─
-    // We do this via the Contents API as a single direct-to-main commit
-    // rather than going through Decap a second time. Faster, deterministic,
-    // and survives a Decap UI hiccup. The `cms-feature-branches` ruleset
-    // allows direct pushes to main from the repo owner; the PAT belongs
-    // to that account.
-    // ── Cleanup via Decap UI (toggle Published OFF + restore body) ─
-    // Drive Decap to undo the mutation symmetrically with the forward
-    // leg. The forward leg flipped `published: true` and added a
-    // marker to the body; the cleanup flips back and restores body.
+    // ── 9. Cleanup via Decap UI: toggle Published OFF, restore body, ──
+    // then merge the SAME way as the forward leg: cms/ready →
+    // cms-editorial-workflow `auto-merge-when-ready`, which WAITS for the
+    // cms PR's required checks before merging. We do NOT use Decap's
+    // "Publish Now" button: this repo's cms PRs gate the merge on required
+    // checks, so Publish Now's immediate-merge attempt is blocked by branch
+    // protection while checks are pending and never lands (#1723 verify run
+    // 26512944320). The editor UI (toggle + body + Save) is still fully
+    // exercised — symmetric with the forward leg; only the merge trigger
+    // matches it. This leg does NOT write main directly; the afterAll
+    // harness is the Contents-API safety net.
     // Per AGENTS.md "no back doors in setup or cleanup either."
-    await test.step("Cleanup via UI: toggle Published → OFF, restore body, Save → Publish Now", async () => {
-      // We may have left the entry editor for the pill-watch step;
-      // navigate back. Direct entry URL is deterministic.
-      await page.goto(
-        `${PROD_ADMIN}#/collections/posts/entries/${FIXTURE_PATH.replace(/^_posts\//, "").replace(/\.md$/, "")}`,
-        { waitUntil: "domcontentloaded" },
-      );
+    await test.step("Cleanup via UI: toggle Published → OFF, restore body, Save → cms/ready → auto-merge", async () => {
+      // A bare goto to the hash route is a same-document SPA change that
+      // does NOT reload Decap's editorial state from GitHub — so the
+      // cleanup Save can silently fail to open a fresh cms PR (run
+      // #26006678919). Close any stale branch/PR server-side, then force a
+      // full document reload. Mirrors the preview twin's proven cleanup.
+      const fileSlug = FIXTURE_PATH.replace(/^_posts\//, "").replace(/\.md$/, "");
+      await closeStaleDecapPrOnBranch({ branch: `cms/posts/${fileSlug}` });
+      await page.goto(`${PROD_ADMIN}#/collections/posts/entries/${fileSlug}`, {
+        waitUntil: "domcontentloaded",
+      });
+      await page.reload({ waitUntil: "domcontentloaded" });
       await expect(page.getByRole("textbox", { name: /^Title$/i })).toBeVisible({
         timeout: 30_000,
       });
@@ -467,15 +473,18 @@ test(
       const baselineBodyOnly = baselineFileText.slice(fmEnd + 5).trim();
       await body.pressSequentially(baselineBodyOnly + "\n");
 
-      // Save + publish the unpublish through Decap's editor. publishViaUi
-      // is state-robust: after the forward leg published this entry, it's
-      // in the "published with unpublished changes" state (a `Publish ▾`
-      // control, no `Status: Draft` chip), so it publishes directly —
-      // unconditionally asserting `Status: Ready` here is exactly what
-      // timed out before (#1723). Fully UI-driven, symmetric with the
-      // forward leg's mutation.
       await saveEntry(page);
-      await publishViaUi(page);
+
+      // Match on the forward run's unique marker: the cleanup commit
+      // REMOVES it, so it is guaranteed to appear as a `-` line in this
+      // PR's FIXTURE_PATH patch (the preview twin relies on the same).
+      const cleanupPr = await waitForCmsPullRequest({
+        base: "main",
+        filePath: FIXTURE_PATH,
+        canaryMarker: marker,
+        timeoutMs: 5 * 60 * 1000,
+      });
+      await addLabel({ prNumber: cleanupPr.number, label: "cms/ready" });
 
       // Wait for the URL to 4xx (post unpublished, file restored).
       await waitForChangeReflected({
