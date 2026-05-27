@@ -35,12 +35,26 @@
  * + ONE orphan upload, both swept by sweep-stale-cms-prs.yml — never a
  * corrupt shared baseline. No loop reads a path it also writes.
  *
- * Both merge legs go via the `cms/ready` label → cms-editorial-workflow
- * `auto-merge-when-ready`, NOT Decap's "Publish Now" (this repo gates cms
- * PRs on required checks; Publish Now's immediate-merge is blocked by
- * branch protection while checks are pending and never lands — run
- * 26512944320 / PR #1774). The editor UI is fully driven; only the merge
- * trigger is the label.
+ * The CREATE leg publishes through Decap's editor (Status → Ready →
+ * Publish → "Publish now"), exactly like the proven
+ * cms-delete-published.spec.js. Publish Now is what transitions Decap's
+ * editor into the PUBLISHED state — without it the entry stays a NEW
+ * editorial draft and the delete leg only ever sees "Delete unpublished
+ * entry", which removes the draft branch and NOT the file on main, so the
+ * URL never 404s. The merge still lands via cms-editorial-workflow
+ * `auto-merge-when-ready`: Status:Ready applies `decap-cms/pending_publish`
+ * (engages auto-merge), and Publish Now's synchronous merge is 422'd by
+ * branch protection while required checks are pending — admin/publish-via-
+ * auto-merge.js catches that 422 and adds the `cms/ready` label, re-
+ * engaging the SAME auto-merge job. The PR lands once checks pass. This is
+ * the proven prod path (cms-delete-published.spec.js's green host-loop runs
+ * land their merge exactly this way). The explicit `cms/ready` labelling of
+ * the create + delete PRs is kept belt-and-braces (idempotent). (Historical
+ * note: the earlier "NOT Publish Now / run 26512944320 / PR #1774" guidance
+ * was about the OLD in-place-edit cleanup-merge, a different scenario; it
+ * does not apply to this ephemeral create→serve→UI-delete flow, where
+ * Publish Now is required for the UI delete to remove from main.) The
+ * editor UI is fully driven throughout.
  *
  * Why this exists on top of the local upload specs: the local specs prove
  * the flat media_folder resolves on a local Jekyll build. This spec proves
@@ -75,7 +89,7 @@ const {
 const { waitForChangeReflected } = require("./deploy-pill");
 const { resolveCmsTarget } = require("./cms-host");
 const { loudBail } = require("./fixture-baseline");
-const { setPublished, saveEntry, clickEditorDelete } = require("./cms-editor-ui");
+const { setPublished, saveEntry, publishViaUi, clickEditorDelete } = require("./cms-editor-ui");
 const { EPHEMERAL_DATE, buildMediaRoundtripPost } = require("./prod-mutate-fixture");
 
 // Parameterized target: CMS_TARGET=preview (+ PR_NUMBER) drives the PR's
@@ -262,7 +276,25 @@ test(
       await saveEntry(page);
     });
 
+    await test.step("Status:Ready → Publish Now (transitions Decap to PUBLISHED, engages auto-merge)", async () => {
+      // publishViaUi (shared, #1723) drives Status:Draft → Ready then
+      // Publish → "Publish now" — the proven create-leg flow from
+      // cms-delete-published.spec.js. Required so the editor reaches the
+      // PUBLISHED state and the later delete leg surfaces "Delete published
+      // entry" (delete-from-main), not "Delete unpublished entry" (draft
+      // branch only, never 404s). Merge lands via auto-merge-when-ready
+      // (Status:Ready → decap-cms/pending_publish; Publish Now's 422 →
+      // admin/publish-via-auto-merge.js adds cms/ready). cms/ready is also
+      // labelled explicitly below, belt-and-braces.
+      await publishViaUi(page);
+    });
+
     // ── 5. Find the create cms/... PR, label cms/ready ───────────────
+    // Belt-and-braces explicit label: the Publish-Now shim already adds
+    // cms/ready on its 422 recovery and Status:Ready applies
+    // decap-cms/pending_publish; this guarantees auto-merge-when-ready is
+    // engaged even if the shim's recovery is delayed. addLabel is
+    // idempotent.
     await test.step("Wait for Decap to open the create cms/... PR, label cms/ready", async () => {
       // The .md diff contains `featured_image:
       // /assets/images/uploads/<imageName>` AND the dated slug — match on
