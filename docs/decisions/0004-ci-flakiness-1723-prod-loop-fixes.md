@@ -56,6 +56,12 @@ silently regress (see AGENTS.md "CI-flakiness invariants (#1723)"):
 3. **Diff-aware canary baseline assertion.** The `select` job emits the
    `PROD_FIXTURES` the PR's own diff touched; the assertion enforces a canary's
    `published: false` only for touched fixtures on a `pull_request`.
+   *(Later retired by #1771 step 4: the prod-mutate + media loops became
+   ephemeral per-run posts with no persistent `published: false` canary on
+   `main`, so this assertion — and the `PROD_FIXTURES` /
+   `E2E_PR_TOUCHED_PROD_FIXTURES` diff-aware machinery that fed it — was
+   removed rather than relaxed. The Cat 1 `future: true` fix below still
+   stands, since the ephemeral posts are still future-dated `2099-12-31`.)*
 4. **`await-prod-deploy` step 2 defers a superseded conclusion to step 3's
    ground-truth descendant check** (extends #1714 to step 2).
 5. **Drift-guard the ci-runner Dockerfile `ARG PLAYWRIGHT_IMAGE_TAG`** (not just

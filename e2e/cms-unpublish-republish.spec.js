@@ -306,8 +306,10 @@ test.afterAll(async () => {
   );
   // Derive the baseline from the checked-in fixture itself, forcing
   // ONLY `published: false` and leaving every other byte alone
-  // (forcePublishedFalse from ./fixture-baseline). Mirrors media-
-  // roundtrip's buildBaselineFileText.
+  // (forcePublishedFalse from ./fixture-baseline — the shared on-disk-
+  // derive helper; #1053. The prod-mutate / media loops that once shared
+  // this restore pattern went ephemeral in #1771 step 4, so this spec is
+  // its lone remaining caller.)
   //
   // The previous implementation hard-coded the entire front matter +
   // body as a literal array — a drift trap: any field added to the

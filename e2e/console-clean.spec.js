@@ -88,13 +88,13 @@ function buildContentUrls() {
   // it) is still covered.
   //
   // ALSO skip `sitemap: false` posts. Test-fixture canaries (e.g. the
-  // prod-mutate playground's `2099-01-01-e2e-mutation-canary.md`) get
-  // briefly flipped to `published: true` mid-run; their `sitemap:
-  // false` flag is the canonical "this is hidden by design" signal.
-  // Asserting that the URL is console-clean against TARGET=prod
-  // breaks because prod (correctly) still has the BASELINE
-  // `published: false` and the URL 404s — even though the cms PR's
-  // source tree says published: true.
+  // prod-mutate / media loops' EPHEMERAL born-published posts
+  // `_posts/2099-12-31-e2e-*-<runId>.md`, #1771 step 4) serve only
+  // transiently mid-run and are hard-deleted; their `sitemap: false`
+  // flag is the canonical "this is hidden by design" signal. Asserting
+  // that the URL is console-clean against TARGET=prod breaks because
+  // prod's resting state for these posts is ABSENCE — the URL 404s —
+  // even when an in-flight cms PR's source tree carries the post.
   for (const file of listMd(POSTS_DIR)) {
     const fm = parseFrontMatter(path.join(POSTS_DIR, file));
     if (!fm) continue;

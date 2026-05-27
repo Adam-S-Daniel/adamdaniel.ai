@@ -51,14 +51,16 @@ const KNOWN_BUGS = [
   // code path; remove this entry once `data.published` is plumbed
   // correctly for Pages.
   /\/pages\/about\/?$/,
-  // The e2e canary post (_posts/2099-01-01-e2e-mutation-canary.md)
-  // ships `published: false` + `date: 2099-01-01` so Jekyll excludes it
-  // from the build; the admin's link surface (which derives URLs from
-  // front-matter alone) still advertises `/blog/e2e-mutation-canary/`.
-  // Same root cause as the pages/about entry above — `data.published`
-  // doesn't gate the surfaced URL. Remove once the banner / admin
-  // affordance honours `published: false` for Posts.
-  /\/blog\/e2e-mutation-canary\/?$/,
+  // (Removed by #1771 step 4.) An entry here once allowlisted
+  // `/blog/e2e-mutation-canary/`, surfaced by the admin link surface
+  // from the persistent `_posts/2099-01-01-e2e-mutation-canary.md`
+  // canary's front-matter even though it shipped `published: false`.
+  // That persistent canary is gone — the prod-mutate loop now uses
+  // ephemeral born-published `_posts/2099-12-31-*-<runId>.md` posts that
+  // exist only transiently — so the admin no longer advertises that URL
+  // and there is nothing left to allowlist (keeping the dead regex would
+  // make this a junk drawer, per the header). If a similar surfaced-but-
+  // 404ing URL reappears, add a fresh entry with its own rationale.
 ];
 
 function isKnownBug(url) {
