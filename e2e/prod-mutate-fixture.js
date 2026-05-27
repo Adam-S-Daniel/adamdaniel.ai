@@ -41,7 +41,7 @@
  * any body churn is thrown away with it.
  *
  * Pure Node — no `require("./base")` — so it stays a plain, unit-testable
- * library (same discipline as `./fixture-baseline` / `./prod-fixture-canon`).
+ * library (same discipline as `./fixture-baseline`).
  */
 
 // Future date the ephemeral posts carry. Sorts last among `_posts/` and

@@ -241,11 +241,15 @@ const SPEC_RULES = {
   "e2e/cms-publish-loop-prod-mutate.spec.js": [
     /^admin\//,
     /^_layouts\/(post|default)\.html$/,
-    /^_posts\/2099-01-01-e2e-mutation-canary\.md$/,
+    // #1771 step 4: the persistent `_posts/2099-01-01-e2e-mutation-canary.md`
+    // fixture was retired for an EPHEMERAL born-published per-run post; the
+    // spec now builds its fixture from this module, so a change to it
+    // refreshes PR-time coverage of the gating/skip path.
+    /^e2e\/prod-mutate-fixture\.js$/,
     /^\.github\/workflows\/cms-editorial-workflow\.yml$/,
     /^\.github\/workflows\/deploy-production\.yml$/,
     /^\.github\/workflows\/cms-publish-loop-prod\.yml$/,
-    /^e2e\/(decap-pat|github-actions-poll|cms-host)\.js$/,
+    /^e2e\/(decap-pat|github-actions-poll|cms-fixture-pr|cms-host)\.js$/,
   ],
   // Issue #999 preview-parity loops. Each is the preview-env
   // counterpart of a prod-only real-backend loop, driving the same
