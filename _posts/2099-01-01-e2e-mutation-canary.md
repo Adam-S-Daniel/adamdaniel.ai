@@ -8,10 +8,10 @@ slug: e2e-mutation-canary
 date: 2099-01-01 00:00:00 +0000
 tags: []
 featured_image: ""
-published: false
-test_fixture: true
+published: true
 sitemap: false
 publish_date: ""
+test_fixture: true
 ---
 Adam Daniel — E2E mutation canary post (do not edit by hand).
 
@@ -26,7 +26,13 @@ deploy-production loop against a real `_posts/` entry rather than the
 The spec keeps `published: false` between runs, so this file does NOT
 serve at any public URL until the spec flips it to `true`. After the
 URL goes live and the spec asserts the deploy succeeded, a cleanup
-commit flips it back to `false` and the URL 404s again. `sitemap: false`
+commit flips it back to `false` and the URL 404s again. `sit`
+
+`e2e-prod-mutate:e2e-mutation-canary:1779878882687`
+
+`emap: false`
+
+
 and `robots: noindex,nofollow` are belt-and-suspenders so a stuck
 "published: true" state never leaks into search.
 
