@@ -158,7 +158,7 @@ jobs:
           fetch-depth: 0   # needed for last-modified dates in Jekyll
 
       - name: Setup Ruby
-        uses: ruby/setup-ruby@afeafc3d1ab54a631816aba4c914a0081c12ff2f  # v1.308.0 (2026-05-16)
+        uses: ruby/setup-ruby@afeafc3d1ab54a631816aba4c914a0081c12ff2f  # v1.310.0 (2026-05-20)
         with:
           ruby-version: '3.2'
           bundler-cache: true   # runs `bundle install` and caches gems
