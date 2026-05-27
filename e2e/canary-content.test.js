@@ -1,8 +1,13 @@
 // @lane: local — pure-fs invariants on _e2e canary collection wiring
+// + the prod `_posts/` canary body byte-lock (#1771 step 3).
 const { test, expect } = require("./base");
 const fs = require("node:fs");
 const path = require("node:path");
 const { CANARIES, readCanarySource } = require("./canary-content");
+const { PROD_FIXTURES, reconstructBaseline, readPublishedFlag } = require("./fixture-baseline");
+const { PROD_FIXTURES_CANON } = require("./prod-fixture-canon");
+
+const REPO_ROOT = path.resolve(__dirname, "..");
 
 test.describe("Canary content invariants", () => {
   test.describe.configure({ mode: "serial" });
@@ -110,5 +115,66 @@ test.describe("Canary content invariants", () => {
     // who clones a canary doesn't accidentally publish it to search.
     expect(cfg).toMatch(/sitemap:\s*false/);
     expect(cfg).toMatch(/robots:\s*"noindex,nofollow"/);
+  });
+});
+
+// ── Prod `_posts/` canary body byte-lock (#1771 step 3) ─────────────
+// The proven `canary-content.js ⇄ canary-content.test.js` contract, now
+// applied to the two prod-loop `_posts/` fixtures: the canonical content
+// is a frozen code constant (PROD_FIXTURES_CANON) and `reconstructBaseline`
+// returns it. THIS test is the lock that forces the committed file to
+// equal that constant byte-for-byte — so a Slate-mangled green run (which
+// double-spaces lines and backtick-escapes code spans through Decap's
+// `widget: markdown` editor) can never silently become the new baseline.
+//
+// This is the structural answer to the #1771 "Confirmed since filing"
+// criterion: "`published:false` + 404 is NOT sufficient proof of a clean
+// run — body integrity must be asserted." A green run's safety-net now
+// writes `reconstructBaseline(path)` (canonical bytes), and this lint
+// fails CI if the committed bytes ever drift from canonical.
+test.describe("Prod `_posts/` canary body byte-lock (#1771 step 3)", () => {
+  test("every PROD_FIXTURES entry has a code-pinned canonical (no self-read fallback)", () => {
+    // The baseline source MUST be a code constant for every prod fixture;
+    // a missing entry would force reconstructBaseline to throw at runtime,
+    // but catch it HERE at lint time so a newly-added PROD_FIXTURES path
+    // can't ship without its frozen canonical.
+    for (const rel of PROD_FIXTURES) {
+      expect(
+        Object.prototype.hasOwnProperty.call(PROD_FIXTURES_CANON, rel),
+        `${rel} is in PROD_FIXTURES but has no PROD_FIXTURES_CANON entry — add its ` +
+          `frozen canonical to e2e/prod-fixture-canon.js (the baseline MUST NOT fall ` +
+          `back to reading the on-disk body, #1771 step 3)`,
+      ).toBe(true);
+    }
+  });
+
+  test("committed fixture bytes EQUAL reconstructBaseline(path) — body integrity lock", () => {
+    for (const rel of PROD_FIXTURES) {
+      const abs = path.join(REPO_ROOT, rel);
+      const committed = fs.readFileSync(abs, "utf8");
+      const canonical = reconstructBaseline(rel);
+
+      // The canonical must itself be a clean baseline: `published: false`
+      // (the #1053 unstick state) — guards against a typo in the frozen
+      // constant.
+      expect(
+        readPublishedFlag(canonical),
+        `${rel} canonical MUST be 'published: false' (the #1053 unstick baseline)`,
+      ).toBe(false);
+
+      // THE drift lock: committed bytes === code-pinned canonical bytes.
+      // A failure here means a green run (or a hand edit) left the body
+      // drifted from canonical — typically a Decap `widget: markdown`
+      // Slate round-trip that double-spaced lines / backtick-escaped code
+      // spans. Reset the file to `reconstructBaseline(path)`.
+      expect(
+        committed,
+        `${rel} committed body has drifted from its code-pinned canonical ` +
+          `(PROD_FIXTURES_CANON). A green prod-loop run must leave the body ` +
+          `byte-identical to canonical (#1771): a Slate \`widget: markdown\` ` +
+          `round-trip double-spaces lines and backtick-escapes code spans. ` +
+          `Fix: overwrite the file with reconstructBaseline("${rel}").`,
+      ).toBe(canonical);
+    }
   });
 });

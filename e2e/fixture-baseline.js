@@ -30,6 +30,11 @@
  * stays a plain, unit-testable library (see fixture-baseline.test.js).
  */
 
+// Code-pinned canonical content for the prod fixtures (#1771 step 3).
+// `reconstructBaseline` reads the baseline from THIS map, never from the
+// on-disk body the loop also writes. Pure-Node sibling — no Playwright.
+const { PROD_FIXTURES_CANON } = require("./prod-fixture-canon");
+
 // The real `_posts/` fixtures the prod loops mutate. These MUST be
 // checked in `published: false` (the #1053 unstick invariant); the
 // assertion in fixture-baseline.test.js is the regression guard that
@@ -87,6 +92,41 @@ function frontMatterPublishedFalse(frontMatter) {
 function forcePublishedFalse(fileText, fixturePath) {
   const { frontMatter, body } = splitFrontMatter(fileText, fixturePath);
   return `${frontMatterPublishedFalse(frontMatter)}${body}`;
+}
+
+// Return the ENTIRE canonical file text (front matter forced
+// `published: false` + canonical body) for a prod fixture, from the
+// code-pinned PROD_FIXTURES_CANON map (#1771 step 3, Plan A "Lever 2").
+//
+// This is the keystone fix for the self-perpetuating body corruption:
+// the prod loops used to derive their baseline via
+// `forcePublishedFalse(readFileSync(FIXTURE_ABS))`, copying the on-disk
+// body verbatim — but a green run re-types that body through Decap's
+// `widget: markdown` Slate editor, whose WYSIWYG round-trip double-
+// spaces lines and backtick-escapes code spans on Save. The next run
+// then re-derived its "baseline" from that mangled body, so the
+// committed canary drifted further from canonical every green run
+// (#1771). `reconstructBaseline` breaks that loop: the baseline (and
+// the afterAll safety-net content) is now a FROZEN CODE CONSTANT, so
+// even when the UI cleanup mangles the body, the committed fixture is
+// restored to canonical bytes — satisfying the acceptance criterion
+// "a green run MUST leave the canary body byte-identical to canonical."
+//
+// The body is NEVER `readFileSync`'d from the path the loop also writes
+// (the whole point — see the drift-lint in canary-content.test.js). A
+// missing entry throws loudly so a new PROD_FIXTURES path can't
+// silently fall back to a self-read.
+function reconstructBaseline(fixtureRelPath) {
+  const canonical = PROD_FIXTURES_CANON[fixtureRelPath];
+  if (canonical == null) {
+    throw new Error(
+      `reconstructBaseline: no code-pinned canonical for ${fixtureRelPath} ` +
+        `(add it to PROD_FIXTURES_CANON in e2e/prod-fixture-canon.js). The ` +
+        `baseline MUST NOT fall back to reading the on-disk body — that is ` +
+        `the self-perpetuating corruption #1771 step 3 removes.`,
+    );
+  }
+  return canonical;
 }
 
 // Force `published: false` AND replace the body with a canonical,
@@ -216,6 +256,7 @@ module.exports = {
   readPublishedFlag,
   splitFrontMatter,
   forcePublishedFalse,
+  reconstructBaseline,
   sanitizeToBaseline,
   ownDecapBranchFor,
   baselineAssertionApplies,
