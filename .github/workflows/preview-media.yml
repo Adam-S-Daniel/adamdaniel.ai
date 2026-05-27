@@ -216,6 +216,14 @@ jobs:
           # TARGET=prod skips playwright.config.js's local Jekyll
           # webServer — the spec hits the deployed preview directly.
           TARGET: prod
+          # Opt-in that turns preview-media-resolves.spec.js ON. ONLY set
+          # here, AFTER the "Wait for the preview surface" step has
+          # confirmed the preview-pr<N> root is reachable. The spec
+          # self-skips everywhere this is absent (the general e2e matrix
+          # / e2e-real / local dev), so it can no longer race a not-yet-
+          # (or never-)deployed preview and flake the required e2e check
+          # (#1723 Cat 5).
+          RUN_PREVIEW_MEDIA_PROBE: "1"
           PR_NUMBER: ${{ github.event.pull_request.number }}
           PR_HEAD_REF: ${{ github.event.pull_request.head.ref }}
         run: |
