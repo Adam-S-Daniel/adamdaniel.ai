@@ -30,6 +30,18 @@
  * stays a plain, unit-testable library (see fixture-baseline.test.js).
  */
 
+// The real `_posts/` fixtures the prod loops mutate. These MUST be
+// checked in `published: false` (the #1053 unstick invariant); the
+// assertion in fixture-baseline.test.js is the regression guard that
+// keeps them that way. Canonical here (not in the test) so the e2e
+// workflow's `select` job can read the same list when computing which
+// of them a PR's diff touches (#1723 Cat 2). Keep in sync with the
+// SPEC_FIXTURES map in cms-recursion-churn.test.js.
+const PROD_FIXTURES = [
+  "_posts/2099-01-01-e2e-mutation-canary.md",
+  "_posts/2099-01-03-e2e-media-roundtrip.md",
+];
+
 // Parse the front-matter `published:` flag from a file's text. Matches
 // `published: true|false` on its own line, tolerating surrounding
 // whitespace and single/double quoting. Returns true | false, or null
@@ -115,6 +127,61 @@ function baselineAssertionApplies(fixtureRelPath, headRef) {
   return (headRef || "") !== ownDecapBranchFor(fixtureRelPath);
 }
 
+// Whether the strict `published: false` baseline assertion should BLOCK
+// for `fixtureRelPath` in the current CI context. Composes the
+// own-branch relaxation above with a second, #1723-Cat-2 relaxation:
+//
+//   On a `pull_request`, the e2e suite runs against the PR's MERGE ref
+//   (PR + base), so it inherits whatever transient state a prod loop
+//   has left on `main` — including the ~10-15 min window where a
+//   canary fixture is legitimately `published: true` mid-publish (the
+//   prod-mutate / media-roundtrip "playground" round trip). A PR that
+//   does NOT itself touch that fixture is in NO way responsible for
+//   main's transient canary state, yet the merge-ref bleed red-failed
+//   the required `e2e (1)` check on unrelated PRs anyway — it blocked
+//   #1715 (a prod-loop had left `_posts/2099-01-01-...` published:true
+//   on main at the moment the PR's merge-ref was computed). A PR is
+//   only responsible for the fixtures it actually changes, so on a
+//   pull_request we enforce the canary baseline ONLY for fixtures the
+//   PR's own diff touches (`prTouchesFixture`).
+//
+// #1053's real hazard — `published: true` PERSISTING on main, or a PR
+// that itself commits a canary at `published: true` — is still caught:
+//   - A PR that DOES edit the canary keeps `prTouchesFixture === true`
+//     → strict assertion applies → the PR can't introduce a stuck-true.
+//   - On push/schedule/workflow_dispatch and on local dev (eventName
+//     not "pull_request"), the assertion always applies, unchanged.
+//   - A persistent main-side stuck-true is bounded by the loop's own
+//     step-0 reset + afterAll safety net and surfaced by the
+//     non-required canary-baseline-watchdog (#1723 Cat 2).
+//
+// Defaults are the SAFE direction: unknown event or unknown touch-set
+// ⇒ enforce. `prTouchesFixture` defaults true so a caller that can't
+// compute the PR's touched set never silently relaxes.
+function shouldEnforceBaseline(
+  fixtureRelPath,
+  { headRef = "", eventName = "", prTouchesFixture = true } = {},
+) {
+  // (a) The fixture's own Decap branch: transient publish:true expected.
+  if (!baselineAssertionApplies(fixtureRelPath, headRef)) return false;
+  // (b) Unrelated pull_request (diff doesn't touch this fixture): main's
+  //     transient canary state is not this PR's concern (#1723 Cat 2).
+  if (eventName === "pull_request" && !prTouchesFixture) return false;
+  return true;
+}
+
+// Parse the space/newline-separated env list the e2e `select` job emits
+// (`E2E_PR_TOUCHED_PROD_FIXTURES`) into a Set of fixture paths the PR's
+// own diff touched. Empty/undefined ⇒ empty set (no fixtures touched).
+function parseTouchedFixtures(envValue) {
+  return new Set(
+    String(envValue || "")
+      .split(/\s+/)
+      .map((s) => s.trim())
+      .filter(Boolean),
+  );
+}
+
 // True when this process is a scheduled / manually-dispatched CI run
 // that is SUPPOSED to execute the loop for real. In that context a
 // precondition bail must be a LOUD red failure, never a green
@@ -145,12 +212,15 @@ function loudBail(test, message) {
 }
 
 module.exports = {
+  PROD_FIXTURES,
   readPublishedFlag,
   splitFrontMatter,
   forcePublishedFalse,
   sanitizeToBaseline,
   ownDecapBranchFor,
   baselineAssertionApplies,
+  shouldEnforceBaseline,
+  parseTouchedFixtures,
   isScheduledMustRun,
   loudBail,
 };
