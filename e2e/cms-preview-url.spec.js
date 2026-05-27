@@ -43,12 +43,13 @@ const publishedPosts = fs
   .filter(({ fm }) => fm && fm.published === "true")
   // Skip internal fixtures: they carry `sitemap: false` (and usually
   // `robots: noindex,nofollow`) to mark them as not part of the public
-  // site. The prod-mutation playground spec flips
-  // `_posts/2099-01-01-e2e-mutation-canary.md` to `published: true`
-  // mid-cycle (and a cleanup commit flips it back), and Jekyll's
-  // default `future: false` means a 2099-dated post won't render at
-  // its permalink anyway. Either way, this test verifying the public
-  // preview-URL contract shouldn't iterate over them.
+  // site. The prod-mutation + media loops create EPHEMERAL born-
+  // published posts (`_posts/2099-12-31-e2e-*-<runId>.md`) that briefly
+  // serve mid-run and are then hard-deleted (#1771 step 4); they carry
+  // `sitemap: false`, and Jekyll's `future: true` only renders them at
+  // their permalink while they transiently exist. Either way, this test
+  // verifying the public preview-URL contract shouldn't iterate over
+  // them.
   .filter(({ fm }) => fm.sitemap !== "false")
   // Skip future-dated posts: Jekyll's default config drops them from
   // the build, so the URL legitimately 404s. Defence-in-depth in case

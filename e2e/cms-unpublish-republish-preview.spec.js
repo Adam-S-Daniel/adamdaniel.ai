@@ -121,9 +121,9 @@ async function fetchFixtureFromBranch(branch) {
 // never the thing under test, so it is preserved).
 
 // Contents-API PUT to the PR head branch with optimistic-concurrency
-// retry (same rationale as the prod spec's writeFixtureOnMain — the
-// branch can advance under us via a concurrent Decap force-push or a
-// push from the parent PR author).
+// retry (same rationale as `cms-unpublish-republish.spec.js`'s
+// writeFixtureOnMain — the branch can advance under us via a concurrent
+// Decap force-push or a push from the parent PR author).
 async function writeFixtureOnBranch({ branch, fileText, message }) {
   const MAX_ATTEMPTS = 4;
   let lastErr;

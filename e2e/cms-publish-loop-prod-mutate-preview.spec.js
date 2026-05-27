@@ -167,11 +167,12 @@ async function fetchFixtureFromBranch(branch) {
 // canonical marker-free BASELINE_BODY.
 
 // Write a complete fixture body to the PR head branch. Optimistic-
-// concurrency retry mirrors the prod spec's writeFixtureOnMain: the
-// Contents API needs the current blob SHA; if the branch advances
-// under us (a concurrent Decap force-push, the parent PR author
-// pushing) the PUT 409s. Re-fetch the SHA and retry, capped at 4
-// attempts. The PUT is idempotent (same baseline → same end state).
+// concurrency retry mirrors `cms-unpublish-republish.spec.js`'s
+// writeFixtureOnMain: the Contents API needs the current blob SHA; if
+// the branch advances under us (a concurrent Decap force-push, the
+// parent PR author pushing) the PUT 409s. Re-fetch the SHA and retry,
+// capped at 4 attempts. The PUT is idempotent (same baseline → same
+// end state).
 async function writeFixtureOnBranch({ branch, fileText, message }) {
   const MAX_ATTEMPTS = 4;
   let lastErr;

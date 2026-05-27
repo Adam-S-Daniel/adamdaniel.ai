@@ -138,7 +138,7 @@ async function waitForCmsPullRequest({
   base,
   headBranchPrefix = "cms/",
   // The path of the file the test expects Decap to commit changes to,
-  // relative to the repo root (e.g. "_posts/2099-01-01-e2e-mutation-canary.md").
+  // relative to the repo root (e.g. "_posts/2099-12-31-e2e-prod-mutate-<runId>.md").
   // Required: without it we can't tell the right cms/ PR from any other.
   filePath,
   // A unique-per-run string the test embedded in the file content. The
