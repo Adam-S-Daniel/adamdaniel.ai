@@ -216,68 +216,30 @@ jobs:
           : > /tmp/select.log
 
       - name: Verify Playwright image version matches lockfile
-        # Drift guard for the `mcr.microsoft.com/playwright:v<version>-noble`
-        # container images used by every Playwright job in this repo.
-        # Docker tags don't auto-update with `package-lock.json`, so a
-        # `@playwright/test` bump that lands without a matching tag bump
-        # would have the runtime client and the prebuilt browsers on
-        # different versions — silent test-time breakage. This step
-        # fails the build before any test runs.
+        # Drift guard for the prebuilt Playwright browser version used by
+        # every Playwright job in this repo. A `@playwright/test` bump
+        # that lands without a matching base-image bump puts the runtime
+        # client and the baked browsers on different versions → every
+        # spec dies at `browserType.launch` ("Executable doesn't exist at
+        # /ms-playwright/...", #1723 Cat 4). This step fails the build
+        # before any test runs.
         #
-        # Source of truth: `packages["node_modules/@playwright/test"]`'s
-        # `version` field in `package-lock.json` — that's the resolved
-        # version npm actually installs (the `dependencies.version` in
-        # `package.json` may be a range like `^1.59.0`).
+        # The check lives in scripts/check-playwright-image-drift.js (pure
+        # Node, unit-tested by e2e/playwright-image-drift.test.js) and now
+        # scans BOTH every workflow AND — critically — the ci-runner
+        # Dockerfile's `ARG PLAYWRIGHT_IMAGE_TAG`. The Dockerfile base is
+        # the REAL browser pin (no workflow references the raw image
+        # anymore — they all use the prebaked ci-runner image), so the
+        # old workflow-only scan had zero real targets and missed exactly
+        # the drift that bites (#1723 Cat 4). Source of truth for the
+        # expected version: `packages["node_modules/@playwright/test"]`'s
+        # resolved `version` in package-lock.json.
         run: |
           set -euo pipefail
           # Tee everything to /tmp/select.log so a failure here lands in
           # the PR comment via the post-failure-comment composite action.
           exec > >(tee -a /tmp/select.log) 2>&1
-          expected=$(node -p "require('./package-lock.json').packages['node_modules/@playwright/test'].version")
-          echo "Lockfile @playwright/test version: $expected"
-
-          mismatches=0
-          # `nullglob` so an empty `.github/workflows/` (impossible in
-          # practice but cheap to defend against) leaves the loop body
-          # unrun rather than feeding the literal pattern through.
-          # Required by e2e/workflow-shell-glob-lint.test.js.
-          shopt -s nullglob
-          for f in .github/workflows/*.yml; do
-            # Extract every `mcr.microsoft.com/playwright:v<version>` tag
-            # from the file. `grep -oE` prints one match per line; if a
-            # workflow doesn't reference the image at all the loop body
-            # is just a no-op for that file.
-            while read -r tag; do
-              # `tag` looks like `v1.59.1-noble` or `v1.59.1`. Strip the
-              # leading `v` and any `-<flavor>` suffix to get a bare
-              # SemVer string for comparison.
-              found=${tag#v}
-              found=${found%%-*}
-              if [ "$found" != "$expected" ]; then
-                echo "::error file=$f::Playwright image tag '$tag' disagrees with package-lock.json's '$expected'."
-                mismatches=$((mismatches + 1))
-              fi
-            done < <(grep -oE 'mcr\.microsoft\.com/playwright:v[0-9]+\.[0-9]+\.[0-9]+(-[a-z]+)?' "$f" | sed 's|mcr\.microsoft\.com/playwright:||')
-          done
-
-          if [ "$mismatches" -gt 0 ]; then
-            # Plain `echo` + `printf` instead of a HEREDOC so YAML pipe-
-            # block indentation can't mis-frame the terminator.
-            {
-              echo ""
-              echo "Playwright Docker image tag(s) disagree with package-lock.json."
-              echo ""
-              echo "Lockfile says: $expected"
-              echo "To fix, bump every workflow tag to match. From the repo root:"
-              echo ""
-              echo "    sed -i 's|mcr.microsoft.com/playwright:v[^\"[:space:]]*-noble|mcr.microsoft.com/playwright:v${expected}-noble|g' .github/workflows/*.yml"
-              echo ""
-              echo "Then re-commit. The image must exist in the registry — verify"
-              echo "with: docker pull mcr.microsoft.com/playwright:v${expected}-noble"
-            } >&2
-            exit 1
-          fi
-          echo "All Playwright image tags match the lockfile version."
+          node scripts/check-playwright-image-drift.js
 
       - name: Decide scope and shard count
         id: s

@@ -51,6 +51,11 @@ const IS_LOCAL = TARGET === "local";
 module.exports = defineConfig({
   testDir: "./e2e",
   testIgnore: /regression-video\.spec\.js/,
+  // Install-on-miss browser self-heal (#1723 Cat 4): a sub-ms no-op when
+  // the prebaked browsers match this @playwright/test version (the normal
+  // path); installs only the missing build(s) on the rare image/cache
+  // mismatch so specs don't die at launch with "Executable doesn't exist".
+  globalSetup: "./e2e/install-browsers-on-miss.js",
   fullyParallel: true,
   // Single auto-retry on CI for the decap-server file-write race (and any
   // similar transient flake). Local runs stay at 0 so a regression caught
