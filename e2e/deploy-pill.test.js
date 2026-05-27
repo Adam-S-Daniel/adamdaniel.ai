@@ -149,34 +149,49 @@ test.describe("waitForChangeReflected queue-aware budget (#1723 Cat 1)", () => {
   });
 });
 
-test.describe("makeDeployQueueExtender lane probe (#1723 Cat 1)", () => {
-  test("idle lane → 0 (give up)", async () => {
-    const ext = makeDeployQueueExtender({ probe: async () => 0 });
+test.describe("makeDeployQueueExtender lane activity (#1723 Cat 1, refined)", () => {
+  // `activity` returns { inFlight, recent }. Quiescent = both 0.
+  const act = (inFlight, recent) => async () => ({ inFlight, recent });
+
+  test("genuinely quiescent lane (0 in flight, 0 recent) → 0 (give up)", async () => {
+    const ext = makeDeployQueueExtender({ activity: act(0, 0) });
     expect(await ext({ elapsedMs: 1000, extensionCount: 0 })).toBe(0);
   });
 
-  test("busy lane → proportional, floored extension", async () => {
+  test("recently-active lane (0 in flight but recent>0) → EXTENDS, not idle", async () => {
+    // The refinement: a momentary gap between frequent deploys must NOT
+    // be read as "chain never fired". With a deploy completed recently,
+    // the lane is cycling — extend (prod-mutate run 26487434047 regressor).
     const ext = makeDeployQueueExtender({
-      probe: async () => 1,
+      activity: act(0, 2),
       perDeployMs: 60_000,
       minExtendMs: 180_000,
       maxTotalExtendMs: 1_000_000,
     });
-    // 1 deploy × 60s = 60s, floored up to minExtendMs 180s.
+    // No in-flight → scale by 1 deploy's worth = 60s, floored to 180s.
     expect(await ext({})).toBe(180_000);
+  });
+
+  test("in-flight lane → proportional, floored extension", async () => {
+    const ext = makeDeployQueueExtender({
+      activity: act(1, 1),
+      perDeployMs: 60_000,
+      minExtendMs: 180_000,
+      maxTotalExtendMs: 1_000_000,
+    });
+    expect(await ext({})).toBe(180_000); // 1×60s floored to 180s
     const ext2 = makeDeployQueueExtender({
-      probe: async () => 4,
+      activity: act(4, 4),
       perDeployMs: 60_000,
       minExtendMs: 60_000,
       maxTotalExtendMs: 1_000_000,
     });
-    // 4 deploys × 60s = 240s.
-    expect(await ext2({})).toBe(240_000);
+    expect(await ext2({})).toBe(240_000); // 4×60s
   });
 
   test("respects the overall maxTotalExtendMs ceiling across rounds", async () => {
     const ext = makeDeployQueueExtender({
-      probe: async () => 10, // always "busy"
+      activity: act(10, 10), // always active
       perDeployMs: 60_000,
       minExtendMs: 60_000,
       maxTotalExtendMs: 500_000,
@@ -187,15 +202,13 @@ test.describe("makeDeployQueueExtender lane probe (#1723 Cat 1)", () => {
       total += g;
       if (g === 0) break;
     }
-    // Never grants more than the ceiling in aggregate.
     expect(total).toBeLessThanOrEqual(500_000);
-    // The round AFTER the ceiling is hit returns 0 (give up).
     expect(await ext({ extensionCount: 99 })).toBe(0);
   });
 
   test("probe error → one conservative extension (no false fail on an API blip)", async () => {
     const ext = makeDeployQueueExtender({
-      probe: async () => {
+      activity: async () => {
         throw new Error("api 502");
       },
       minExtendMs: 120_000,
