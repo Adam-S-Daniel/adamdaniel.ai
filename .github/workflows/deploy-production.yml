@@ -86,7 +86,6 @@ on:
       - '.github/workflows/dependabot-comment-sync.yml'
       - '.github/workflows/regenerate-manual.yml'
       - '.github/workflows/required-check-stubs.yml'
-      - '.github/workflows/skills-mirror.yml'
       - '.github/workflows/sweep-stale-cms-prs.yml'
   # Allow manual trigger from the Actions UI. workflow_dispatch ignores
   # paths-ignore, so a force-deploy from the UI always runs.

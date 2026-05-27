@@ -121,7 +121,16 @@ permissions:
   pull-requests: read
 
 concurrency:
-  group: dependabot-comment-sync-${{ github.event.pull_request.number }}
+  # Scope by PR number when present, else by ref. On `push` events
+  # `github.event.pull_request.number` is empty, so the old group
+  # collapsed to the constant `dependabot-comment-sync-` across EVERY
+  # branch — so any two near-simultaneous pushes (e.g. a rebase
+  # force-push, or pushes to sibling branches) fought for one slot and
+  # `cancel-in-progress` recorded the superseded one as a red
+  # `cancelled` row on unrelated PRs. Falling back to `github.ref`
+  # gives each branch its own push lane, so the phantom-suppression
+  # push run completes as `success` instead of being cancelled.
+  group: dependabot-comment-sync-${{ github.event.pull_request.number || github.ref }}
   cancel-in-progress: true
 
 jobs:
