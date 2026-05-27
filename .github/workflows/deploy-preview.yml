@@ -1,4 +1,8 @@
 name: Deploy Preview
+run-name: >-
+  ${{ github.event.action == 'closed'
+        && format('PR #{0} — teardown', github.event.pull_request.number)
+   || format('PR #{0} — {1}', github.event.pull_request.number, github.event.pull_request.title) }}
 
 on:
   pull_request:

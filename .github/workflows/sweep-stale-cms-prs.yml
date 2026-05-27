@@ -1,4 +1,8 @@
 name: Sweep stale automated-test PRs
+run-name: >-
+  ${{ github.event_name == 'schedule'
+        && format('scheduled — {0}', github.event.schedule)
+   || format('manual — @{0}{1} — threshold {2}h', github.actor, inputs.dry_run && ' — dry-run' || '', inputs.threshold_hours) }}
 
 # Closes orphaned PRs that the publish-loop / delete-published test
 # specs created during a run that crashed before auto-merge could

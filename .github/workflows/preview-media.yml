@@ -1,4 +1,5 @@
 name: Preview Media Gate
+run-name: "${{ format('PR #{0} — {1}', github.event.pull_request.number, github.event.pull_request.title) }}"
 
 # Required, lightweight, READ-ONLY merge gate. Asserts that a committed
 # image under the flat `media_folder` (assets/images/uploads/) actually

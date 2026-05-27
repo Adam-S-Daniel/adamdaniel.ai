@@ -1,4 +1,10 @@
 name: Dependabot comment sync
+run-name: >-
+  ${{ github.event_name == 'pull_request_target'
+        && format('PR #{0} — {1}', github.event.pull_request.number, github.event.pull_request.title)
+   || github.event_name == 'push'
+        && format('push — {0} @{1}', github.ref_name, github.actor)
+   || format('manual — @{0}', github.actor) }}
 
 # Refresh the trailing `# vX.Y.Z (YYYY-MM-DD)` comments on every
 # workflow `uses:` line that Dependabot just bumped, so the comment

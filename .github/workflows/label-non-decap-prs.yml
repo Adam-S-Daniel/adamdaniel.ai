@@ -1,4 +1,10 @@
 name: Label non-Decap PRs
+run-name: >-
+  ${{ github.event_name == 'pull_request'
+        && format('PR #{0} — {1}', github.event.pull_request.number, github.event.pull_request.title)
+   || github.event_name == 'push'
+        && format('push — {0} @{1}', github.ref_name, github.actor)
+   || format('manual — @{0}{1}', github.actor, inputs.dry_run && ' — dry-run' || '') }}
 
 # Decap CMS opens every content PR on a `cms/<collection>/<slug>` head
 # branch — that's its default `branchPrefix`, and the rest of the repo

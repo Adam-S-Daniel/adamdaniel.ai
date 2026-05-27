@@ -1,4 +1,10 @@
 name: CMS Media Roundtrip — Prod (real upload + delete)
+run-name: >-
+  ${{ github.event_name == 'schedule'
+        && format('scheduled — {0}', github.event.schedule)
+   || github.event_name == 'push'
+        && format('push — {0} @{1}', github.ref_name, github.actor)
+   || format('manual — @{0}', github.actor) }}
 
 # Runs the full Decap Media-UI lifecycle end-to-end against prod:
 # upload a unique image via the Media UI → attach to a real _posts/
