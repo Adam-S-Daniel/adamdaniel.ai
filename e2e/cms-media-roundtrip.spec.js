@@ -75,7 +75,7 @@ const {
 const { waitForChangeReflected } = require("./deploy-pill");
 const { resolveCmsTarget } = require("./cms-host");
 const { loudBail } = require("./fixture-baseline");
-const { setPublished, saveEntry } = require("./cms-editor-ui");
+const { setPublished, saveEntry, clickEditorDelete } = require("./cms-editor-ui");
 const { EPHEMERAL_DATE, buildMediaRoundtripPost } = require("./prod-mutate-fixture");
 
 // Parameterized target: CMS_TARGET=preview (+ PR_NUMBER) drives the PR's
@@ -320,20 +320,8 @@ test(
       });
     });
 
-    await test.step("Click Delete published entry → opens delete cms/... PR", async () => {
-      const trigger = page.getByRole("button", { name: /delete (published )?entry/i }).first();
-      if (await trigger.isVisible({ timeout: 5_000 }).catch(() => false)) {
-        await trigger.click({ timeout: 30_000 });
-      } else {
-        await page
-          .getByRole("button", { name: /^(Status:|Published$|In Review$|Ready$|Draft$)/i })
-          .first()
-          .click({ timeout: 30_000 });
-        await page
-          .getByRole("menuitem", { name: /delete (published )?entry/i })
-          .first()
-          .click({ timeout: 30_000 });
-      }
+    await test.step("Click the editor's Delete button → opens delete cms/... PR", async () => {
+      await clickEditorDelete(page);
       await page
         .getByRole("button", { name: /^(delete|confirm|yes|ok)$/i })
         .first()
@@ -513,6 +501,14 @@ test.afterAll(async () => {
   if (process.env.RUN_PROD_MUTATE_PLAYGROUND !== "1") return;
   if (!pendingFixture) return; // test never ran (skipped)
 
+  // Bump the hook timeout off Playwright's 30s default. This safety net
+  // reads main + opens a labelled removal PR + deletes a leftover upload
+  // via the GitHub API; 30s is too tight under runner contention even
+  // with skipWaitForMerge below. 2 min covers the worst case without the
+  // hook ever blocking on the 25-min waitForMerge (the failure mode the
+  // ephemeral prod-mutate twin's afterAll hit).
+  test.setTimeout(2 * 60 * 1000);
+
   const { filePath, slug, runId, imagePath } = pendingFixture;
 
   // Leftover ephemeral post → labelled removal PR.
@@ -532,6 +528,11 @@ test.afterAll(async () => {
           "Existence-only cleanup PR opened by `cms-media-roundtrip.spec.js` after a test " +
           "failure left the throw-away ephemeral post on main. Auto-merges via `cms/ready` " +
           "(#1771 step 4 — resting state is absence/404).",
+        // Fire-and-forget: open + label the removal PR, then return. The
+        // editorial-workflow auto-merges it in the background; the daily
+        // sweep reaps any orphan. Without this the 25-min waitForMerge
+        // blew the (now 2-min) hook timeout.
+        skipWaitForMerge: true,
       });
       console.warn(`[cleanup-harness] removed ${filePath} via removal PR`);
     } catch (e) {
