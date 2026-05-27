@@ -124,23 +124,32 @@ function toContentBase64(text) {
   return Buffer.from(text, "utf8").toString("base64");
 }
 
-async function fetchFixtureFromMain() {
-  return gh(`/repos/${HOST_REPO}/contents/${FIXTURE_PATH}?ref=main`);
+async function fetchFixtureFromMain({ retries = 0 } = {}) {
+  // `retries` defaults to 0 so read-only callers are unchanged; the
+  // mutating writeFixtureOnMain path passes retries:5 (#1771 step 1).
+  return gh(`/repos/${HOST_REPO}/contents/${FIXTURE_PATH}?ref=main`, { retries });
 }
 
 /**
  * Write the whole fixture file to main via the Contents API, with the
  * same optimistic-concurrency retry as cms-publish-loop-prod-mutate:
  * GitHub rejects a stale blob SHA with 409 if main advanced under us.
- * The owner PAT (CMS_E2E_PAT) is allowed to push to main directly by
- * the cms-feature-branches ruleset; this is harness hygiene, not the
- * behaviour under test.
+ * The owner PAT (CMS_E2E_PAT) can write to main directly via the
+ * repo-owner ruleset bypass on main (main.json carries a pull_request
+ * rule and empty bypass_actors, so direct-main writes come from the
+ * owner's bypass — NOT the cms-feature-branches ruleset, whose
+ * ref_name.include does not cover refs/heads/main). This is harness
+ * hygiene, not the behaviour under test.
  */
 async function writeFixtureOnMain({ fileText, message }) {
   const MAX_ATTEMPTS = 4;
   let lastErr;
   for (let attempt = 1; attempt <= MAX_ATTEMPTS; attempt++) {
-    const current = await fetchFixtureFromMain();
+    // retries:5 — absorb a transient GitHub 5xx/secondary-rate blip on
+    // the safety-net read+write (#1771 step 1). The 409 optimistic-
+    // concurrency conflict stays handled by this outer re-fetch-SHA
+    // loop, NOT the gh() retry.
+    const current = await fetchFixtureFromMain({ retries: 5 });
     try {
       return await gh(`/repos/${HOST_REPO}/contents/${FIXTURE_PATH}`, {
         method: "PUT",
@@ -151,6 +160,7 @@ async function writeFixtureOnMain({ fileText, message }) {
           sha: current.sha,
           branch: "main",
         }),
+        retries: 5,
       });
     } catch (err) {
       lastErr = err;

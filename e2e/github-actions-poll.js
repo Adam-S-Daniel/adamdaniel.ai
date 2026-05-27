@@ -26,13 +26,70 @@ function authHeaders() {
   };
 }
 
+function sleep(ms) {
+  return new Promise((r) => setTimeout(r, ms));
+}
+
+// Is this a TRANSIENT failure worth retrying? (#1771 step 1 / Plan A
+// Lever 1.) GitHub returns these for server-side blips and rate
+// limiting; the request itself is well-formed, so a bounded retry can
+// recover. Everything else (404 missing, 401 auth, 409 optimistic-
+// concurrency conflict, other 4xx) is a real, caller-meaningful error
+// that MUST surface immediately — the 409 retry stays in the writer's
+// own re-fetch-SHA loop, not here.
+function isTransientStatus(status, body) {
+  if (status >= 500) return true;
+  if (status === 429) return true;
+  // A 403 is normally permission-denied (do not retry), EXCEPT GitHub's
+  // secondary-rate-limit / abuse-detection responses, which are 403 with
+  // a distinctive body and ARE transient.
+  if (status === 403 && /secondary rate limit|abuse/i.test(body || "")) return true;
+  return false;
+}
+
+// Parse a `Retry-After` header (RFC 7231: either delta-seconds or an
+// HTTP-date) into a millisecond delay, or null when absent/unparseable.
+function parseRetryAfterMs(headerValue) {
+  if (headerValue == null) return null;
+  const raw = String(headerValue).trim();
+  if (/^\d+$/.test(raw)) return Number(raw) * 1000;
+  const when = Date.parse(raw);
+  if (Number.isFinite(when)) return Math.max(0, when - Date.now());
+  return null;
+}
+
+// Exponential backoff with full jitter, capped per-attempt. For
+// retries:5 the per-attempt caps are 1,2,4,8,16s → ~31s worst-case
+// total of pure backoff (before jitter pulls each sample down), which
+// matches the budget the issue calls out.
+const RETRY_BASE_MS = 1000;
+const RETRY_MAX_PER_ATTEMPT_MS = 16_000;
+function backoffDelayMs(attempt) {
+  const ceiling = Math.min(RETRY_BASE_MS * 2 ** attempt, RETRY_MAX_PER_ATTEMPT_MS);
+  // Full jitter: a uniform sample in [0, ceiling] de-synchronises
+  // concurrent retriers so they don't re-collide on the same tick.
+  return Math.round(Math.random() * ceiling);
+}
+
 async function gh(pathname, init = {}) {
   const url = pathname.startsWith("http") ? pathname : `${API_ROOT}${pathname}`;
-  const res = await fetch(url, {
-    ...init,
-    headers: { ...authHeaders(), ...(init.headers || {}) },
-  });
-  if (!res.ok) {
+  // Pull our own options out of `init` BEFORE spreading the rest into
+  // fetch — `retries` and `_sleep` are not valid fetch options and must
+  // not leak through.
+  const { retries = 0, _sleep = sleep, ...fetchInit } = init;
+  const maxRetries = Number.isInteger(retries) && retries > 0 ? retries : 0;
+
+  let attempt = 0;
+  // The loop runs at most maxRetries+1 times. With the default
+  // retries:0 it executes exactly once and is byte-for-byte equivalent
+  // to the pre-#1771 single-fetch behaviour: no sleep, no extra reads.
+  for (;;) {
+    const res = await fetch(url, {
+      ...fetchInit,
+      headers: { ...authHeaders(), ...(fetchInit.headers || {}) },
+    });
+    if (res.ok) return res.json();
+
     const body = await res.text();
     // Attach the HTTP status as a numeric `status` property so
     // callers can branch on it without parsing the message string
@@ -43,13 +100,25 @@ async function gh(pathname, init = {}) {
     );
     err.status = res.status;
     err.responseBody = body;
-    throw err;
-  }
-  return res.json();
-}
 
-function sleep(ms) {
-  return new Promise((r) => setTimeout(r, ms));
+    const retryable = attempt < maxRetries && isTransientStatus(res.status, body);
+    if (!retryable) throw err;
+
+    // Honour Retry-After when the server sent one (rate limits do);
+    // otherwise fall back to jittered exponential backoff. Cap the
+    // honoured value to the per-attempt ceiling so a pathological header
+    // can't park us indefinitely.
+    const retryAfterMs = parseRetryAfterMs(res.headers && res.headers.get("retry-after"));
+    const delayMs =
+      retryAfterMs != null
+        ? Math.min(retryAfterMs, RETRY_MAX_PER_ATTEMPT_MS)
+        : backoffDelayMs(attempt);
+    attempt += 1;
+    console.warn(
+      `[gh] transient ${res.status} on ${url}; retry ${attempt}/${maxRetries} after ${delayMs}ms`,
+    );
+    await _sleep(delayMs);
+  }
 }
 
 /**
@@ -143,10 +212,14 @@ async function waitForCmsPullRequest({
 }
 
 async function addLabel({ repo = HOST_REPO, prNumber, label }) {
+  // Mutating POST — opt into the bounded transient-retry (#1771 step 1).
+  // The read-pollers keep the default retries:0 because they already
+  // loop on their own deadlines.
   return gh(`/repos/${repo}/issues/${prNumber}/labels`, {
     method: "POST",
     headers: { "Content-Type": "application/json" },
     body: JSON.stringify({ labels: [label] }),
+    retries: 5,
   });
 }
 
