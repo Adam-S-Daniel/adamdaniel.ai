@@ -214,6 +214,48 @@ test.describe("real-prod loop workflows are serialized + deploy-gated (#1101)", 
       "await-prod-deploy must proceed when prod is a descendant of the merge (compare status 'ahead') — #1714",
     ).toContain('"$rel" = "ahead"');
   });
+
+  test("await-prod-deploy step 2 defers a superseded/non-success deploy conclusion to ground truth (#1723 Cat 3)", () => {
+    // The `production` lane is `cancel-in-progress: false`, so a deploy
+    // QUEUED for this merge can be superseded (conclusion 'cancelled')
+    // by a newer sibling/canary deploy that carries main — including
+    // this merge's tree — forward; prod ends up AHEAD of the merge
+    // (healthy) while the merge's OWN run shows non-success. The old
+    // step-2 behaviour hard-failed there ("not driving prod off a
+    // bad/superseded deploy" → exit 1), red-ing the gate on a live prod
+    // (#1723 Cat 3 — the sub-case left open after #1714/#1715 fixed
+    // step 3's exact-match). Step 2 must now DEFER to the step-3
+    // ground-truth (descendant) check instead of hard-failing.
+    const actionPath = path.join(
+      REPO_ROOT,
+      ".github",
+      "actions",
+      "await-prod-deploy",
+      "action.yml",
+    );
+    const action = parseYaml(fs.readFileSync(actionPath, "utf8"));
+    const shell = ((action.runs && action.runs.steps) || [])
+      .map((s) => String((s && s.run) || ""))
+      .join("\n");
+    // The old hard-fail string must be gone — a non-success conclusion
+    // no longer exits 1 in step 2.
+    expect(
+      shell,
+      "step 2 must no longer hard-fail on a non-success conclusion (#1723 Cat 3)",
+    ).not.toContain("not driving prod off a bad/superseded deploy");
+    // It now logs and defers to ground truth.
+    expect(
+      shell,
+      "step 2 must defer a non-success/superseded conclusion to the step-3 ground-truth check (#1723 Cat 3)",
+    ).toMatch(/Deferring to ground truth/i);
+    // The step-3 descendant check remains the sole loud-fail gate — a
+    // genuinely stale/diverged prod (never reaching the merge or a
+    // descendant) still fails loud.
+    expect(
+      shell,
+      "step 3 must keep its loud failure when prod never reaches the merge SHA or a newer descendant",
+    ).toMatch(/never served \$AD_SHA or a newer descendant/);
+  });
 });
 
 test.describe("changed-files recursion gate wiring (run 26108485428)", () => {

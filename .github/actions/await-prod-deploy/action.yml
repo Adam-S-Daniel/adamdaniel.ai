@@ -108,10 +108,26 @@ runs:
         fi
         echo "Deploy run for $AD_SHA = $run_id; waiting for it to conclude…"
 
-        # 2. Wait for that deploy run to finish. A non-success
-        #    conclusion is a LOUD failure: refusing to drive prod off a
-        #    failed/superseded deploy is the whole point (#1053 ethos —
-        #    never silently proceed on a broken precondition).
+        # 2. Wait for that deploy run to conclude, then defer to GROUND
+        #    TRUTH (step 3) regardless of HOW it concluded — do NOT
+        #    hard-fail on a non-success conclusion here. The `production`
+        #    lane is `cancel-in-progress: false`, so a deploy QUEUED for
+        #    THIS merge can be superseded (conclusion 'cancelled') by a
+        #    newer sibling/canary deploy that carried main — including
+        #    this merge's tree — forward. prod then ends up AHEAD of the
+        #    merge and is perfectly live, yet the merge's OWN run shows a
+        #    non-success conclusion. The old hard `exit 1` here red the
+        #    gate on a healthy prod (#1723 Cat 3 — the sub-case left open
+        #    after #1714/#1715 fixed step 3's exact-match).
+        #
+        #    Extend #1714's descendant logic to step 2 by deferring to
+        #    step 3, which already asks the only question that matters:
+        #    does prod serve THIS SHA or a newer descendant? That check
+        #    is strictly STRONGER than trusting the run's conclusion, so
+        #    #1101's "never drive a stale prod" still holds — a genuinely
+        #    stale or failed-and-not-superseded prod never reaches the
+        #    merge SHA or a descendant within step 3's window and fails
+        #    loud THERE. We only log the conclusion here, for triage.
         status=""; concl=""
         end=$(( $(date +%s) + AD_DEPLOY_TIMEOUT_S ))
         while [ "$(date +%s)" -lt "$end" ]; do
@@ -119,18 +135,17 @@ runs:
           status="$(printf '%s' "$rb" | jget status)"
           concl="$(printf '%s' "$rb" | jget conclusion)"
           if [ "$status" = "completed" ]; then
-            if [ "$concl" != "success" ]; then
-              echo "::error::Deploy run $run_id for $AD_SHA concluded '$concl' — not driving prod off a bad/superseded deploy."
-              echo "::endgroup::"; exit 1
+            if [ "$concl" = "success" ]; then
+              echo "Deploy run $run_id succeeded."
+            else
+              echo "::warning::Deploy run $run_id for $AD_SHA concluded '$concl' (likely superseded in the 'production' lane by a newer deploy). Deferring to ground truth — what prod actually serves — in step 3 below (#1723 Cat 3)."
             fi
-            echo "Deploy run $run_id succeeded."
             break
           fi
           sleep 15
         done
         if [ "$status" != "completed" ]; then
-          echo "::error::Timed out (${AD_DEPLOY_TIMEOUT_S}s) waiting for deploy run $run_id of $AD_SHA to conclude."
-          echo "::endgroup::"; exit 1
+          echo "::warning::Deploy run $run_id of $AD_SHA did not conclude within ${AD_DEPLOY_TIMEOUT_S}s; deferring to ground truth (prod commit.json) in step 3 rather than failing on the run state alone."
         fi
 
         # 3. deploy-production success ≠ edge serving it yet (CloudFront
@@ -165,5 +180,5 @@ runs:
           echo "prod commit.json sha=${live:-<unreachable>} (want $AD_SHA or newer; compare=${rel:-?}) — waiting for CloudFront…"
           sleep 15
         done
-        echo "::error::Deploy $run_id succeeded but $AD_COMMIT_URL never served $AD_SHA or a newer descendant within ${AD_REFLECT_TIMEOUT_S}s (CDN/invalidation stuck, or prod diverged from the merge)."
+        echo "::error::Deploy chain for $AD_SHA (run $run_id) did not go live: $AD_COMMIT_URL never served $AD_SHA or a newer descendant within ${AD_REFLECT_TIMEOUT_S}s (CDN/invalidation stuck, or prod genuinely stale/diverged from the merge — not merely superseded)."
         echo "::endgroup::"; exit 1
