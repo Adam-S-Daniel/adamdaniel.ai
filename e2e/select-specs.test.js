@@ -9,6 +9,11 @@ const {
   HEAVY,
   parseSpecDirectives,
   pickShardCount,
+  selectParityPreviewSpecs,
+  PARITY_PREVIEW_SPECS,
+  FANOUT_PATTERNS,
+  RENDER_FANOUT_PATTERNS,
+  TEST_INFRA_FANOUT_PATTERNS,
 } = require("./select-specs");
 
 // Pure-function unit tests for the e2e spec selector. No browser, no
@@ -556,5 +561,69 @@ test.describe("pickShardCount", () => {
     expect(pickShardCount("all", [])).toBeGreaterThanOrEqual(1);
     // Even an unknown scope falls through to 4, never 0.
     expect(pickShardCount("garbage", [])).toBeGreaterThanOrEqual(1);
+  });
+});
+
+test.describe("selectParityPreviewSpecs — render-only fanout (#1723 follow-up)", () => {
+  test("FANOUT_PATTERNS is exactly RENDER + TEST_INFRA, render first (main selector unchanged)", () => {
+    // The local-matrix selector still fans out on BOTH sets; the split
+    // must not drop or reorder a pattern (the 'first fanout file' reason
+    // string in selectSpecs depends on the order).
+    expect(FANOUT_PATTERNS.map(String)).toEqual(
+      [...RENDER_FANOUT_PATTERNS, ...TEST_INFRA_FANOUT_PATTERNS].map(String),
+    );
+    // The render set must NOT contain any of the test-infra patterns.
+    const renderStr = RENDER_FANOUT_PATTERNS.map(String);
+    for (const p of TEST_INFRA_FANOUT_PATTERNS.map(String)) {
+      expect(renderStr).not.toContain(p);
+    }
+  });
+
+  test("render-affecting change fans out to ALL parity-preview specs", () => {
+    for (const f of ["_layouts/post.html", "_config.yml", "assets/css/main.css", "Gemfile.lock"]) {
+      expect(
+        selectParityPreviewSpecs([f]).sort(),
+        `${f} should select every parity-preview spec (it changes the rendered tree)`,
+      ).toEqual([...PARITY_PREVIEW_SPECS].sort());
+    }
+  });
+
+  test("test/CI-infra change selects NO parity-preview spec (no preview to probe)", () => {
+    // These are exactly the files that (a) don't change the deployed
+    // site and (b) deploy-preview path-ignores, so no preview exists.
+    // Forcing parity-preview here was the spurious-hard-fail bug.
+    for (const f of [
+      ".github/workflows/e2e-tests.yml",
+      "package-lock.json",
+      "package.json",
+      "playwright.config.js",
+      "playwright.regression.config.js",
+      "e2e/base.js",
+      "e2e/fixture-baseline.js",
+      "e2e/fixture-baseline.test.js",
+    ]) {
+      expect(
+        selectParityPreviewSpecs([f]),
+        `${f} must NOT select any parity-preview spec — it changes no deployed output`,
+      ).toEqual([]);
+    }
+  });
+
+  test("a parity-preview spec's own file change still selects (just that spec)", () => {
+    expect(selectParityPreviewSpecs(["e2e/sitemap.spec.js"])).toEqual(["e2e/sitemap.spec.js"]);
+  });
+
+  test("admin/ change still selects admin-bundle-parity via its SPEC_RULE (deployed surface)", () => {
+    // admin/ IS deployed, so admin-bundle-parity must still run — and
+    // admin/ triggers deploy-preview, so a preview will exist.
+    expect(selectParityPreviewSpecs(["admin/index.html"])).toContain(
+      "e2e/admin-bundle-parity.spec.js",
+    );
+  });
+
+  test("a mixed render + test-infra change still fans out (render wins)", () => {
+    expect(selectParityPreviewSpecs(["_layouts/post.html", "e2e/base.js"]).sort()).toEqual(
+      [...PARITY_PREVIEW_SPECS].sort(),
+    );
   });
 });

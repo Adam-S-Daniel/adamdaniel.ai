@@ -72,18 +72,44 @@ const HEAVY = new Set([
 // Files that fan out to "every spec is potentially affected". Includes
 // shared infrastructure (layouts/css/plugins), test infrastructure
 // (helpers, base, configs), and dependency manifests.
-const FANOUT_PATTERNS = [
+// Fanout files that change the DEPLOYED / RENDERED output — a change
+// here can alter what any page looks like, so the full local matrix
+// runs AND the parity-preview specs (which probe the deployed
+// preview-pr<N> surface) apply. Every one of these also triggers
+// deploy-preview (none are in deploy-preview.yml's paths-ignore), so a
+// preview is guaranteed to exist when parity-preview needs it.
+const RENDER_FANOUT_PATTERNS = [
   /^_layouts\//,
   /^_includes\//,
   /^_config\.yml$/,
   /^assets\/css\//,
   /^_plugins\//,
   /^Gemfile/,
+];
+
+// Additional fanout files that change how the TEST SUITE runs but NOT
+// the deployed site (npm/test tooling, Playwright config, the e2e base
+// fixture, the e2e workflow itself). The local e2e matrix must still
+// re-run broadly on these — but the parity-preview selector must NOT
+// fan out on them: parity-preview probes the DEPLOYED preview, which
+// these files don't change, and deploy-preview path-ignores every one
+// of them (e2e/**, package*.json, playwright config), so it never
+// produces a preview for a test/CI-only PR. Fanning parity-preview out
+// on them therefore demanded a preview that can't exist → a spurious
+// `parity` hard-fail on PRs that legitimately have no preview
+// (#1723 follow-up: it blocked the Cat-2 PR, which only edited
+// e2e-tests.yml + e2e/fixture-baseline*).
+const TEST_INFRA_FANOUT_PATTERNS = [
   /^package(-lock)?\.json$/,
   /^playwright(\.regression)?\.config\.js$/,
   /^e2e\/base\.js$/,
   /^\.github\/workflows\/e2e-tests\.yml$/,
 ];
+
+// The local e2e matrix fans out on BOTH sets (a test-infra change can
+// shift local test execution). Order preserved so existing behaviour /
+// the "first fanout file" reason string is byte-identical.
+const FANOUT_PATTERNS = [...RENDER_FANOUT_PATTERNS, ...TEST_INFRA_FANOUT_PATTERNS];
 
 // Per-spec inclusion rules. Each entry says: "if any changed file
 // matches one of these patterns, include this spec." A spec NOT named
@@ -702,7 +728,15 @@ const PARITY_PREVIEW_SPECS = [
 // renaming/touching a parity-preview spec exercises it once before merge.
 function selectParityPreviewSpecs(changedFiles) {
   const selected = [];
-  const fanout = changedFiles.some((f) => FANOUT_PATTERNS.some((p) => p.test(f)));
+  // RENDER fanout only — NOT the test-infra fanout. parity-preview
+  // probes the deployed preview; only changes that alter the rendered
+  // tree warrant re-checking it, and those are exactly the ones that
+  // make deploy-preview produce a preview to check against. Test/CI
+  // fanout files (e2e-tests.yml, package-lock.json, playwright config,
+  // e2e/base.js) change test execution, not the deployed site, and
+  // never produce a preview — so they must not force a parity-preview
+  // run that would then hard-fail for want of a preview (#1723 follow-up).
+  const fanout = changedFiles.some((f) => RENDER_FANOUT_PATTERNS.some((p) => p.test(f)));
   for (const spec of PARITY_PREVIEW_SPECS) {
     if (fanout || changedFiles.includes(spec)) {
       selected.push(spec);
@@ -719,6 +753,8 @@ function selectParityPreviewSpecs(changedFiles) {
 module.exports = {
   ALWAYS_RUN,
   FANOUT_PATTERNS,
+  RENDER_FANOUT_PATTERNS,
+  TEST_INFRA_FANOUT_PATTERNS,
   SPEC_RULES,
   HEAVY,
   PARITY_PREVIEW_SPECS,
