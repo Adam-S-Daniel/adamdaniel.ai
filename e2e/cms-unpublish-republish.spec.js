@@ -64,6 +64,7 @@ const { gh, makeDeployQueueExtender } = require("./github-actions-poll");
 const { waitForChangeReflected } = require("./deploy-pill");
 const { prodTarget } = require("./cms-host");
 const { readPublishedFlag, forcePublishedFalse } = require("./fixture-baseline");
+const { setPublished, expectPublished, saveEntry, publishViaUi } = require("./cms-editor-ui");
 
 // Prod host triplet resolved through the shared cms-host SSOT (byte-identical
 // to the old hardcoded literals) so prod/preview surfaces can't drift.
@@ -214,47 +215,24 @@ test(
     });
 
     await test.step("Verify the editor reads Published toggle as OFF (baseline)", async () => {
-      // Decap renders the boolean Published widget as `role="switch"`
-      // (not `checkbox`); state is exposed via `aria-checked`. PR #407's
-      // first run failed here on `getByRole("checkbox")` — same lesson
-      // prod-mutate already learned, see its toggle step.
-      const toggle = page.getByRole("switch", { name: /^Published$/i }).first();
-      await expect(toggle, "Published toggle should be visible").toBeVisible({
-        timeout: 30_000,
-      });
-      await expect(
-        toggle,
-        "Published toggle should reflect baseline (aria-checked=false)",
-      ).toHaveAttribute("aria-checked", "false", { timeout: 5_000 });
+      // The Published widget is a switch (role="switch"), state via
+      // aria-checked — see e2e/cms-editor-ui.js (shared so the selector
+      // can't drift, #1723). 30s window: this is the first view of the
+      // editor on a freshly-loaded prod surface, where the switch can take
+      // a moment to hydrate (preserves the pre-refactor visibility tolerance).
+      await expectPublished(page, false, { timeout: 30_000 });
     });
 
     // ── 2. Re-publish leg: toggle ON, Save, drive workflow → URL 200 ──
     await test.step("Toggle Published → ON via UI", async () => {
-      const toggle = page.getByRole("switch", { name: /^Published$/i }).first();
-      // Belt-and-suspenders: only click if it's not already on (e.g. an
-      // earlier abort left it ON), so we don't toggle the wrong direction.
-      const ariaChecked = await toggle.getAttribute("aria-checked");
-      if (ariaChecked !== "true") await toggle.click();
-      await expect(toggle).toHaveAttribute("aria-checked", "true", {
-        timeout: 5_000,
-      });
+      // Idempotent toggle (only clicks if not already ON) via the shared
+      // switch helper — guards against an earlier abort leaving it ON.
+      await setPublished(page, true);
     });
 
     await test.step("Save → Status:Ready → Publish Now (re-publish)", async () => {
-      await page.getByRole("button", { name: /^Save$/i }).click();
-      await expect(page.getByText(/Changes saved/i).first()).toBeVisible({
-        timeout: 60_000,
-      });
-      await page.getByRole("button", { name: /^Status:\s*Draft$/i }).click();
-      await page.getByRole("menuitem", { name: /^Ready$/i }).click();
-      await expect(page.getByRole("button", { name: /^Status:\s*Ready$/i })).toBeVisible({
-        timeout: 30_000,
-      });
-      await page.getByRole("button", { name: /^Publish$/i }).click();
-      await page
-        .getByRole("menuitem", { name: /publish now/i })
-        .first()
-        .click();
+      await saveEntry(page);
+      await publishViaUi(page);
     });
 
     await test.step("Wait for /blog/e2e-unpublish-canary/ to serve (URL 200)", async () => {
@@ -269,29 +247,12 @@ test(
 
     // ── 3. Unpublish leg: toggle OFF, Save, drive workflow → URL 404 ──
     await test.step("Toggle Published → OFF via UI", async () => {
-      const toggle = page.getByRole("switch", { name: /^Published$/i }).first();
-      const ariaChecked = await toggle.getAttribute("aria-checked");
-      if (ariaChecked !== "false") await toggle.click();
-      await expect(toggle).toHaveAttribute("aria-checked", "false", {
-        timeout: 5_000,
-      });
+      await setPublished(page, false);
     });
 
     await test.step("Save → Status:Ready → Publish Now (unpublish)", async () => {
-      await page.getByRole("button", { name: /^Save$/i }).click();
-      await expect(page.getByText(/Changes saved/i).first()).toBeVisible({
-        timeout: 60_000,
-      });
-      await page.getByRole("button", { name: /^Status:\s*Draft$/i }).click();
-      await page.getByRole("menuitem", { name: /^Ready$/i }).click();
-      await expect(page.getByRole("button", { name: /^Status:\s*Ready$/i })).toBeVisible({
-        timeout: 30_000,
-      });
-      await page.getByRole("button", { name: /^Publish$/i }).click();
-      await page
-        .getByRole("menuitem", { name: /publish now/i })
-        .first()
-        .click();
+      await saveEntry(page);
+      await publishViaUi(page);
     });
 
     await test.step("Wait for /blog/e2e-unpublish-canary/ to 4xx (URL hidden)", async () => {

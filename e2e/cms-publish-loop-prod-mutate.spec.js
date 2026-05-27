@@ -74,6 +74,7 @@ const {
   makeDeployQueueExtender,
 } = require("./github-actions-poll");
 const { waitForChangeReflected } = require("./deploy-pill");
+const { setPublished, saveEntry, publishViaUi } = require("./cms-editor-ui");
 const { prodTarget } = require("./cms-host");
 const { readPublishedFlag, forcePublishedFalse, loudBail } = require("./fixture-baseline");
 
@@ -363,20 +364,10 @@ test(
     });
 
     await test.step("Toggle Published → ON", async () => {
-      // The published widget is a boolean rendered as a switch. Decap's
-      // accessible name is the field label "Published". Click toggles
-      // it. We assert the expected state by reading aria-checked.
-      const toggle = page.getByRole("switch", { name: /^Published$/i }).first();
-      await expect(toggle).toBeVisible({ timeout: 15_000 });
-      // Belt-and-suspenders: if for any reason it's already checked
-      // (e.g. an earlier abort), don't toggle it back off.
-      const ariaChecked = await toggle.getAttribute("aria-checked");
-      if (ariaChecked !== "true") {
-        await toggle.click();
-      }
-      await expect(toggle).toHaveAttribute("aria-checked", "true", {
-        timeout: 5_000,
-      });
+      // The Published widget is a switch (role="switch"), toggled via
+      // aria-checked — see e2e/cms-editor-ui.js (shared so the
+      // selector can't drift, #1723).
+      await setPublished(page, true, { visibleTimeout: 15_000 });
     });
 
     await test.step("Save (opens cms/... PR)", async () => {
@@ -450,7 +441,7 @@ test(
     // leg. The forward leg flipped `published: true` and added a
     // marker to the body; the cleanup flips back and restores body.
     // Per AGENTS.md "no back doors in setup or cleanup either."
-    await test.step("Cleanup via UI: toggle Published → OFF, restore body, Save → Status:Ready → Publish Now", async () => {
+    await test.step("Cleanup via UI: toggle Published → OFF, restore body, Save → Publish Now", async () => {
       // We may have left the entry editor for the pill-watch step;
       // navigate back. Direct entry URL is deterministic.
       await page.goto(
@@ -461,68 +452,30 @@ test(
         timeout: 30_000,
       });
 
-      // Decap renders the Published widget as role="switch" (NOT a
-      // checkbox); state is exposed via aria-checked. This cleanup leg had
-      // drifted to getByRole("checkbox") + uncheck() — the exact bug
-      // cms-unpublish-republish.spec.js hit and fixed in PR #407 — so it
-      // found nothing and failed EVERY run once the forward leg stopped
-      // timing out (#1723: the future-date fix let the spec finally reach
-      // cleanup). Mirror the forward "Toggle Published → ON" leg and the
-      // proven unpublish spec: switch role, toggled via aria-checked.
-      const publishedToggle = page.getByRole("switch", { name: /^Published$/i }).first();
-      await expect(publishedToggle).toBeVisible({ timeout: 30_000 });
-      const cleanupAriaChecked = await publishedToggle.getAttribute("aria-checked");
-      if (cleanupAriaChecked !== "false") {
-        await publishedToggle.click();
-      }
-      await expect(publishedToggle).toHaveAttribute("aria-checked", "false", { timeout: 5_000 });
+      // Toggle Published OFF via the shared switch helper (this leg had
+      // drifted to getByRole("checkbox") — see e2e/cms-editor-ui.js, #1723).
+      await setPublished(page, false);
 
+      // Restore the canonical baseline body (drops this run's marker).
+      // baselineFileText is the whole .md (front matter + body); slice off
+      // the front matter so we paste only the body portion.
       const body = page.locator('[role="textbox"][contenteditable="true"]').last();
       await body.click();
       await page.keyboard.press("Control+A");
       await page.keyboard.press("Backspace");
-      // Restore the canonical baseline body verbatim. baselineFileText
-      // is the entire .md file (frontmatter + body); slice off the
-      // frontmatter so we only paste the body portion.
       const fmEnd = baselineFileText.indexOf("\n---\n", 4);
       const baselineBodyOnly = baselineFileText.slice(fmEnd + 5).trim();
       await body.pressSequentially(baselineBodyOnly + "\n");
 
-      await page.getByRole("button", { name: /^Save$/i }).click();
-      await expect(page.getByText(/Changes saved/i).first()).toBeVisible({
-        timeout: 60_000,
-      });
-
-      // Trigger the unpublish deploy the SAME way the forward leg does:
-      // label the editorial-workflow PR `cms/ready` so
-      // cms-editorial-workflow.yml auto-merges it — NOT the UI
-      // Status:Ready → Publish-Now clicks. After the forward leg's
-      // label-merge, those UI clicks raced the leftover auto-merge state
-      // and "Status: Ready" never stabilised (#1723: the future-date fix
-      // let the spec finally reach cleanup and exposed this). The UI
-      // publish-now path stays covered by cms-unpublish-republish.spec.js;
-      // here we reuse the proven label→auto-merge mechanism. The mutation
-      // itself (toggle + body, above) is still UI-driven, so this is no
-      // more a "back door" than the forward leg's own cms/ready label.
-      const cleanupBranch = `cms/posts/${FIXTURE_PATH.replace(/^_posts\//, "").replace(/\.md$/, "")}`;
-      const cleanupOwner = HOST_REPO.split("/")[0];
-      let cleanupPr;
-      const findDeadline = Date.now() + 3 * 60 * 1000;
-      while (Date.now() < findDeadline) {
-        const prs = await gh(
-          `/repos/${HOST_REPO}/pulls?state=open&head=${cleanupOwner}:${encodeURIComponent(cleanupBranch)}&per_page=5`,
-        );
-        if (Array.isArray(prs) && prs.length > 0) {
-          cleanupPr = prs[0];
-          break;
-        }
-        await new Promise((r) => setTimeout(r, 4000));
-      }
-      expect(
-        cleanupPr,
-        `Decap should reopen the ${cleanupBranch} PR for the unpublish change`,
-      ).toBeTruthy();
-      await addLabel({ prNumber: cleanupPr.number, label: "cms/ready" });
+      // Save + publish the unpublish through Decap's editor. publishViaUi
+      // is state-robust: after the forward leg published this entry, it's
+      // in the "published with unpublished changes" state (a `Publish ▾`
+      // control, no `Status: Draft` chip), so it publishes directly —
+      // unconditionally asserting `Status: Ready` here is exactly what
+      // timed out before (#1723). Fully UI-driven, symmetric with the
+      // forward leg's mutation.
+      await saveEntry(page);
+      await publishViaUi(page);
 
       // Wait for the URL to 4xx (post unpublished, file restored).
       await waitForChangeReflected({

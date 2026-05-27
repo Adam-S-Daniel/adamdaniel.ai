@@ -73,6 +73,7 @@ const { addLabel, gh, waitForCmsPullRequest } = require("./github-actions-poll")
 const { waitForChangeReflected } = require("./deploy-pill");
 const { previewTarget } = require("./cms-host");
 const { readPublishedFlag, forcePublishedFalse } = require("./fixture-baseline");
+const { setPublished, expectPublished, saveEntry } = require("./cms-editor-ui");
 
 const FIXTURE_PATH = "_posts/2024-01-02-e2e-unpublish-canary.md";
 const FIXTURE_SLUG = "e2e-unpublish-canary";
@@ -265,34 +266,21 @@ test(
     });
 
     await test.step("Verify the editor reads Published toggle as OFF (baseline)", async () => {
-      // Decap renders the boolean Published widget as role="switch"
-      // (NOT checkbox); state via aria-checked. PR #407's first run
-      // failed on getByRole("checkbox") — use switch consistently.
-      const toggle = page.getByRole("switch", { name: /^Published$/i }).first();
-      await expect(toggle, "Published toggle should be visible").toBeVisible({
-        timeout: 30_000,
-      });
-      await expect(
-        toggle,
-        "Published toggle should reflect baseline (aria-checked=false)",
-      ).toHaveAttribute("aria-checked", "false", { timeout: 5_000 });
+      // The Published widget is a switch (role="switch"), state via
+      // aria-checked — see e2e/cms-editor-ui.js (shared so the selector
+      // can't drift, #1723). 30s window: this is the first view of the
+      // editor on a freshly-loaded preview surface, where the switch can take
+      // a moment to hydrate (preserves the pre-refactor visibility tolerance).
+      await expectPublished(page, false, { timeout: 30_000 });
     });
 
     // ── 3. Re-publish leg: toggle ON → Save → cms PR → URL 200 ──────
     await test.step("Toggle Published → ON via UI", async () => {
-      const toggle = page.getByRole("switch", { name: /^Published$/i }).first();
-      const ariaChecked = await toggle.getAttribute("aria-checked");
-      if (ariaChecked !== "true") await toggle.click();
-      await expect(toggle).toHaveAttribute("aria-checked", "true", {
-        timeout: 5_000,
-      });
+      await setPublished(page, true);
     });
 
     await test.step("Save → wait for cms PR → label cms/ready (re-publish)", async () => {
-      await page.getByRole("button", { name: /^Save$/i }).click();
-      await expect(page.getByText(/Changes saved/i).first()).toBeVisible({
-        timeout: 60_000,
-      });
+      await saveEntry(page);
       // The diff for this leg flips `-published: false` /
       // `+published: true`. The previous leg's PR (none yet — this is
       // the first) can't collide; waitForCmsPullRequest only
@@ -340,27 +328,15 @@ test(
       // After the re-publish chain landed, the editor should now read
       // the toggle as ON; assert it so the OFF flip below is a real
       // state transition (not a no-op on a stale view).
-      await expect(page.getByRole("switch", { name: /^Published$/i }).first()).toHaveAttribute(
-        "aria-checked",
-        "true",
-        { timeout: 30_000 },
-      );
+      await expectPublished(page, true, { timeout: 30_000 });
     });
 
     await test.step("Toggle Published → OFF via UI", async () => {
-      const toggle = page.getByRole("switch", { name: /^Published$/i }).first();
-      const ariaChecked = await toggle.getAttribute("aria-checked");
-      if (ariaChecked !== "false") await toggle.click();
-      await expect(toggle).toHaveAttribute("aria-checked", "false", {
-        timeout: 5_000,
-      });
+      await setPublished(page, false);
     });
 
     await test.step("Save → wait for cms PR → label cms/ready (unpublish)", async () => {
-      await page.getByRole("button", { name: /^Save$/i }).click();
-      await expect(page.getByText(/Changes saved/i).first()).toBeVisible({
-        timeout: 60_000,
-      });
+      await saveEntry(page);
       // The re-publish leg's PR is merged (the URL-200 wait only
       // resolves once it landed on the head branch and deploy-preview
       // ran), so waitForCmsPullRequest's state=open filter excludes
