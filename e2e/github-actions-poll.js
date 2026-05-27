@@ -345,29 +345,61 @@ async function countActiveDeployRuns({
   return total;
 }
 
+// #1723 Cat 1 (refined): a SINGLE-INSTANT in_progress+queued count is too
+// blunt. This repo deploys every few minutes, so the lane is often
+// momentarily IDLE between deploys — and a budget-exhaustion probe that
+// lands in such a gap wrongly concludes "the chain never fired" and fails
+// the spec, even though the lane is actively cycling and the spec's own
+// deploy is imminent/just-finished (observed: prod-mutate run 26487434047
+// — deploys ran at :41/:47/:56 but the probe at :56:19 caught a gap).
+//
+// So measure lane ACTIVITY over a short window, not one instant:
+//   inFlight = in_progress + queued right now
+//   recent   = runs created/updated within `recentWindowMs` (a deploy
+//              that just completed ⇒ the lane is cycling, not quiescent)
+// "Genuinely idle" = inFlight 0 AND recent 0.
+async function deployLaneActivity({
+  repo = HOST_REPO,
+  workflow = "deploy-production.yml",
+  recentWindowMs = 5 * 60 * 1000,
+} = {}) {
+  const inFlight = await countActiveDeployRuns({ repo, workflow });
+  const since = Date.now() - recentWindowMs;
+  const data = await gh(
+    `/repos/${repo}/actions/workflows/${encodeURIComponent(workflow)}/runs?per_page=20`,
+  );
+  const recent = (data.workflow_runs || []).filter((r) => {
+    const t = Date.parse(r.updated_at || r.created_at || "");
+    return Number.isFinite(t) && t >= since;
+  }).length;
+  return { inFlight, recent };
+}
+
 // Build an `onBudgetExhausted` callback for deploy-pill.js's
 // waitForChangeReflected (#1723 Cat 1). When the per-spec URL-reflect
-// budget elapses, this probes the deploy lane:
-//   - lane has N>0 deploys in flight  → return a proportional extension
-//     (the spec's own deploy is just queued behind a backlog; waiting
-//     longer is correct, not flaky).
-//   - lane idle                       → return 0 (give up): nothing is
-//     deploying, so the change's chain never fired — surface it as a
-//     REAL miss, fast, instead of burning the rest of a blind budget.
-//   - probe error                     → grant ONE conservative extension
-//     rather than false-failing on a transient API blip.
+// budget elapses, this probes the deploy lane's ACTIVITY:
+//   - lane in-flight OR recently-active → return a proportional extension
+//     (the spec's own deploy is queued behind a backlog, or the lane is
+//     cycling and its deploy is imminent/just-landed; waiting longer is
+//     correct, not flaky).
+//   - lane genuinely quiescent (0 in flight AND 0 recent) → return 0
+//     (give up): nothing is deploying or has deployed lately, so the
+//     change's chain never fired — surface it as a REAL miss, fast.
+//   - probe error → grant ONE conservative extension rather than
+//     false-failing on a transient API blip.
 // Bounded by `maxTotalExtendMs` (and by waitForChangeReflected's own
 // `maxExtensions` round cap) so a genuinely stuck lane can't wait
-// forever. `probe` is injectable for unit tests.
+// forever. `activity` is injectable for unit tests.
 function makeDeployQueueExtender({
   repo = HOST_REPO,
   workflow = "deploy-production.yml",
   perDeployMs = 5 * 60 * 1000,
   minExtendMs = 3 * 60 * 1000,
   maxTotalExtendMs = 30 * 60 * 1000,
-  probe,
+  recentWindowMs = 5 * 60 * 1000,
+  activity,
 } = {}) {
-  const probeLane = probe || (() => countActiveDeployRuns({ repo, workflow }));
+  const probeActivity = activity || (() => deployLaneActivity({ repo, workflow, recentWindowMs }));
   let extendedTotal = 0;
   return async ({ elapsedMs = 0, extensionCount = 0 } = {}) => {
     const remaining = maxTotalExtendMs - extendedTotal;
@@ -377,9 +409,9 @@ function makeDeployQueueExtender({
       );
       return 0;
     }
-    let depth;
+    let act;
     try {
-      depth = await probeLane();
+      act = await probeActivity();
     } catch (e) {
       const grant = Math.min(minExtendMs, remaining);
       extendedTotal += grant;
@@ -388,16 +420,21 @@ function makeDeployQueueExtender({
       );
       return grant;
     }
-    if (!Number.isFinite(depth) || depth <= 0) {
+    const inFlight = (act && Number.isFinite(act.inFlight) && act.inFlight) || 0;
+    const recent = (act && Number.isFinite(act.recent) && act.recent) || 0;
+    if (inFlight <= 0 && recent <= 0) {
       console.warn(
-        `[deploy-queue] URL still not reflected after ${Math.round(elapsedMs / 1000)}s and the ${workflow} lane is IDLE — not a backlog; failing as a real miss.`,
+        `[deploy-queue] URL still not reflected after ${Math.round(elapsedMs / 1000)}s and the ${workflow} lane is QUIESCENT (0 in flight, 0 in the last ${Math.round(recentWindowMs / 1000)}s) — not a backlog; failing as a real miss.`,
       );
       return 0;
     }
-    const grant = Math.min(Math.max(perDeployMs * depth, minExtendMs), remaining);
+    // Active or recently-cycling: scale the extension by what's in flight
+    // (at least one deploy's worth when only recent activity is seen).
+    const units = Math.max(inFlight, 1);
+    const grant = Math.min(Math.max(perDeployMs * units, minExtendMs), remaining);
     extendedTotal += grant;
     console.warn(
-      `[deploy-queue] URL not yet reflected after ${Math.round(elapsedMs / 1000)}s, but the ${workflow} lane has ${depth} deploy(s) in flight — extending ${Math.round(grant / 1000)}s (ext #${extensionCount + 1}, ${Math.round(extendedTotal / 1000)}s total).`,
+      `[deploy-queue] URL not yet reflected after ${Math.round(elapsedMs / 1000)}s, but the ${workflow} lane is active (${inFlight} in flight, ${recent} in the last ${Math.round(recentWindowMs / 1000)}s) — extending ${Math.round(grant / 1000)}s (ext #${extensionCount + 1}, ${Math.round(extendedTotal / 1000)}s total).`,
     );
     return grant;
   };
@@ -406,6 +443,7 @@ function makeDeployQueueExtender({
 module.exports = {
   addLabel,
   countActiveDeployRuns,
+  deployLaneActivity,
   fetchPublicUrl,
   getDefaultBranchHeadSha,
   getPullRequest,
