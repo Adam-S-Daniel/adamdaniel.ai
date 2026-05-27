@@ -93,10 +93,71 @@ async function publishViaUi(page) {
     .click();
 }
 
+// The editor toolbar's Delete control — STATE-ROBUST across BOTH the
+// simple-mode and editorial-workflow editor shapes.
+//
+// Decap's EditorToolbar (decap-cms-core EditorToolbar.js,
+// renderWorkflowControls) renders the delete affordance as a SINGLE
+// TOP-LEVEL <button> — never a dropdown menu item — whose label depends
+// on the entry's editorial state:
+//
+//   hasUnpublishedChanges && isModification         → "Delete unpublished changes"
+//   hasUnpublishedChanges && (isNewEntry||!isMod)    → "Delete unpublished entry"
+//   !hasUnpublishedChanges && !isModification        → "Delete published entry"
+//   simple mode (local backend)                      → "Delete entry" / "Delete new entry"
+//
+// The ephemeral prod canaries (#1771 step 4) publish via the `cms/ready`
+// label, NOT Decap's "Publish Now" — so the external auto-merge lands the
+// post on main while Decap's editor still holds it as a brand-new
+// editorial-workflow draft (isNewEntry=true, hasUnpublishedChanges=true).
+// That state surfaces "Delete unpublished entry", which the earlier
+// `/delete (published )?entry/i` locator never matched — the click timed
+// out at 30s and the run failed (first prod run of the ephemeral leg).
+// The proven cms-delete-published.spec.js reached "Delete published entry"
+// only because it publishes via Publish Now first.
+//
+// Match ALL five label variants so the click works regardless of which
+// editorial state Decap shows. The control is a real <button> (the styled
+// `ToolbarButton` is `styled("button")` in the bundle), so getByRole
+// finds it. Pin a timeout so a future UI shape change fails fast with a
+// clear error instead of pegging the runner until the outer test timeout.
+function editorDeleteButton(page) {
+  // Written as a flat alternation (no nested `\s+` quantifiers) so it's
+  // linear-time — the ambiguous-overlap form
+  // `delete\s+(published\s+|…)?(entry|changes)` trips the ReDoS lint.
+  // Each branch is anchored to one literal Decap label, separated by a
+  // single space, so there's nothing to backtrack.
+  return page
+    .getByRole("button", {
+      name: /delete (published entry|unpublished entry|unpublished changes|new entry|entry|changes)/i,
+    })
+    .first();
+}
+
+async function clickEditorDelete(page, { visibleTimeout = 15_000, clickTimeout = 30_000 } = {}) {
+  const btn = editorDeleteButton(page);
+  if (!(await btn.isVisible({ timeout: visibleTimeout }).catch(() => false))) {
+    // Surface a clear, actionable error rather than letting a missing
+    // affordance hang. Lists the labels we matched so a future Decap
+    // rename is obvious from the failure message.
+    throw new Error(
+      "Could not find the editor's Delete button. Expected a top-level toolbar " +
+        "button matching one of: 'Delete entry', 'Delete new entry', " +
+        "'Delete published entry', 'Delete unpublished entry', or " +
+        "'Delete unpublished changes' (Decap renderWorkflowControls / " +
+        "renderSimpleControls). If Decap changed the toolbar shape, update " +
+        "editorDeleteButton() in e2e/cms-editor-ui.js.",
+    );
+  }
+  await btn.click({ timeout: clickTimeout });
+}
+
 module.exports = {
   publishedSwitch,
   setPublished,
   expectPublished,
   saveEntry,
   publishViaUi,
+  editorDeleteButton,
+  clickEditorDelete,
 };

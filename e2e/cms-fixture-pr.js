@@ -293,6 +293,17 @@ async function removeFixtureViaPr({
   // identical full required-check matrix on the host repo's main
   // ruleset.
   timeoutMs = 25 * 60 * 1000,
+  // Fire-and-forget mode for harness-cleanup paths (the afterAll
+  // safety-nets in the ephemeral prod canaries). When true, return as
+  // soon as the removal PR is opened + labelled — do NOT block on
+  // waitForMerge. Playwright's default hook timeout is 30s; the
+  // 25-minute waitForMerge below would blow it (the ephemeral
+  // prod-mutate run's afterAll timed out at exactly this). The
+  // editorial-workflow auto-merges the removal PR in the background;
+  // the daily sweep (sweep-stale-cms-prs.yml) reaps any orphan PR that
+  // can't merge. Mirrors seedFixtureViaPr's identical option. Default
+  // false — the spec's own forward cleanup leg still wants the wait.
+  skipWaitForMerge = false,
 } = {}) {
   if (!slug || !runId || !filePath || !message) {
     throw new Error("removeFixtureViaPr requires slug, runId, filePath, and message.");
@@ -312,6 +323,12 @@ async function removeFixtureViaPr({
           `Branch: \`${branch}\`. Auto-merges via the \`cms/ready\` label once required checks land.`,
     });
     await addReadyLabel({ repo, prNumber: pr.number });
+    if (skipWaitForMerge) {
+      // Caller doesn't care when the PR merges, only that it's open and
+      // queued for auto-merge. Return the open PR descriptor; the
+      // editorial-workflow handles the rest.
+      return pr;
+    }
     return await waitForMerge({ repo, prNumber: pr.number, timeoutMs });
   } catch (e) {
     await closePrAndDeleteBranch({

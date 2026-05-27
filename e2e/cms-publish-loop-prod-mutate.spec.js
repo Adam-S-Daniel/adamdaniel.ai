@@ -80,7 +80,7 @@ const {
   makeDeployQueueExtender,
 } = require("./github-actions-poll");
 const { waitForChangeReflected } = require("./deploy-pill");
-const { setPublished, saveEntry } = require("./cms-editor-ui");
+const { setPublished, saveEntry, clickEditorDelete } = require("./cms-editor-ui");
 const { prodTarget } = require("./cms-host");
 const { loudBail } = require("./fixture-baseline");
 const { EPHEMERAL_DATE, buildProdMutatePost } = require("./prod-mutate-fixture");
@@ -290,25 +290,8 @@ test(
       });
     });
 
-    await test.step("Click Delete published entry → opens delete cms/... PR", async () => {
-      // Decap renders "Delete published entry" either as a top-level
-      // button or inside the entry-status menu, depending on entry state.
-      // Try the direct button first; fall back to the status menu. Pin a
-      // timeout on every action so a UI shape change fails in 30 s, not
-      // 40 min (run 25473784039).
-      const trigger = page.getByRole("button", { name: /delete (published )?entry/i }).first();
-      if (await trigger.isVisible({ timeout: 5_000 }).catch(() => false)) {
-        await trigger.click({ timeout: 30_000 });
-      } else {
-        await page
-          .getByRole("button", { name: /^(Status:|Published$|In Review$|Ready$|Draft$)/i })
-          .first()
-          .click({ timeout: 30_000 });
-        await page
-          .getByRole("menuitem", { name: /delete (published )?entry/i })
-          .first()
-          .click({ timeout: 30_000 });
-      }
+    await test.step("Click the editor's Delete button → opens delete cms/... PR", async () => {
+      await clickEditorDelete(page);
       // The persistent page.on("dialog") accepts the native confirm. If
       // Decap uses an in-page modal instead, click its confirm button.
       await page
@@ -417,6 +400,14 @@ test.afterAll(async () => {
   if (process.env.RUN_PROD_MUTATE_PLAYGROUND !== "1") return;
   if (!pendingFixture) return; // test never ran (skipped)
 
+  // Bump the hook timeout off Playwright's 30s default. This safety net
+  // reads main + opens a labelled removal PR via the GitHub API; under
+  // runner contention 30s is too tight even with skipWaitForMerge below
+  // (the first ephemeral prod-mutate run's afterAll timed out at exactly
+  // the 30s limit). 2 min covers the worst case without the hook ever
+  // blocking on the 25-min waitForMerge.
+  test.setTimeout(2 * 60 * 1000);
+
   const { filePath, slug, runId } = pendingFixture;
   const stillThere = await fileExistsOnMain(filePath).catch(() => false);
   if (!stillThere) {
@@ -439,6 +430,11 @@ test.afterAll(async () => {
         "Existence-only cleanup PR opened by `cms-publish-loop-prod-mutate.spec.js` after a " +
         "test failure left the throw-away ephemeral post on main. Auto-merges via `cms/ready` " +
         "(#1771 step 4 — resting state is absence/404).",
+      // Fire-and-forget: open + label the removal PR, then return. The
+      // editorial-workflow auto-merges it in the background; the daily
+      // sweep reaps any orphan. Without this the 25-min waitForMerge
+      // blew the (now 2-min) hook timeout — the failure this fix targets.
+      skipWaitForMerge: true,
     });
     console.warn(`[cleanup-harness] removed ${filePath} via removal PR`);
   } catch (e) {
