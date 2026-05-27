@@ -10,6 +10,22 @@ author:
 markdown: kramdown
 highlighter: rouge
 permalink: /blog/:slug/
+# Build future-dated posts. This site does NOT schedule via future dates
+# — scheduling is `published: false` + `publish_date` flipped to true by
+# scripts/publish_scheduled_posts.py once due (so a not-yet-due post stays
+# `published: false` and Jekyll skips it regardless of this flag). The
+# ONLY future-dated posts are the prod-mutation / media-roundtrip e2e
+# canaries (`_posts/2099-*`, `test_fixture: true`), which are
+# `published: false` at baseline (skipped) and only build when a loop spec
+# flips them to `published: true` to verify the publish→deploy→URL chain.
+# With Jekyll's default `future: false`, those canaries were SKIPPED even
+# when published — so /blog/e2e-mutation-canary/ 404'd forever and the
+# spec's URL-reflect wait timed out every run (the real root cause behind
+# #1723's "Cat 1" prod-mutate/media reflect-timeouts, misread as a deploy
+# backlog). `test_fixture: true` posts are excluded from the homepage /
+# blog index (index.html, blog/index.html) so a published canary serves
+# only at its direct URL for the spec, not in human-facing listings.
+future: true
 
 # Collections
 collections:
