@@ -263,7 +263,10 @@ const SPEC_RULES = {
   "e2e/cms-publish-loop-prod-mutate-preview.spec.js": [
     /^admin\//,
     /^_layouts\/(post|default)\.html$/,
-    /^_posts\/2099-01-01-e2e-mutation-canary\.md$/,
+    // #1771 step 4 retired the persistent `_posts/2099-01-01-e2e-mutation-canary.md`
+    // fixture this preview twin mirrored; with no committed fixture the spec
+    // self-`fixme`s (dispatch-only, non-required). It stays selected by its
+    // admin/helper/workflow rules below so the gating/skip path keeps coverage.
     /^scripts\/patch-preview-config\.sh$/,
     /^\.github\/workflows\/cms-editorial-workflow\.yml$/,
     /^\.github\/workflows\/deploy-preview\.yml$/,
