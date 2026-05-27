@@ -492,16 +492,37 @@ test(
       await expect(page.getByText(/Changes saved/i).first()).toBeVisible({
         timeout: 60_000,
       });
-      await page.getByRole("button", { name: /^Status:\s*Draft$/i }).click();
-      await page.getByRole("menuitem", { name: /^Ready$/i }).click();
-      await expect(page.getByRole("button", { name: /^Status:\s*Ready$/i })).toBeVisible({
-        timeout: 30_000,
-      });
-      await page.getByRole("button", { name: /^Publish$/i }).click();
-      await page
-        .getByRole("menuitem", { name: /publish now/i })
-        .first()
-        .click();
+
+      // Trigger the unpublish deploy the SAME way the forward leg does:
+      // label the editorial-workflow PR `cms/ready` so
+      // cms-editorial-workflow.yml auto-merges it — NOT the UI
+      // Status:Ready → Publish-Now clicks. After the forward leg's
+      // label-merge, those UI clicks raced the leftover auto-merge state
+      // and "Status: Ready" never stabilised (#1723: the future-date fix
+      // let the spec finally reach cleanup and exposed this). The UI
+      // publish-now path stays covered by cms-unpublish-republish.spec.js;
+      // here we reuse the proven label→auto-merge mechanism. The mutation
+      // itself (toggle + body, above) is still UI-driven, so this is no
+      // more a "back door" than the forward leg's own cms/ready label.
+      const cleanupBranch = `cms/posts/${FIXTURE_PATH.replace(/^_posts\//, "").replace(/\.md$/, "")}`;
+      const cleanupOwner = HOST_REPO.split("/")[0];
+      let cleanupPr;
+      const findDeadline = Date.now() + 3 * 60 * 1000;
+      while (Date.now() < findDeadline) {
+        const prs = await gh(
+          `/repos/${HOST_REPO}/pulls?state=open&head=${cleanupOwner}:${encodeURIComponent(cleanupBranch)}&per_page=5`,
+        );
+        if (Array.isArray(prs) && prs.length > 0) {
+          cleanupPr = prs[0];
+          break;
+        }
+        await new Promise((r) => setTimeout(r, 4000));
+      }
+      expect(
+        cleanupPr,
+        `Decap should reopen the ${cleanupBranch} PR for the unpublish change`,
+      ).toBeTruthy();
+      await addLabel({ prNumber: cleanupPr.number, label: "cms/ready" });
 
       // Wait for the URL to 4xx (post unpublished, file restored).
       await waitForChangeReflected({
