@@ -66,8 +66,25 @@ jobs:
             echo "No base ref (manual run) — linting all languages."
             exit 0
           fi
-          git fetch --no-tags --depth=1 origin "$BASE_REF"
-          CHANGED="$(git diff --name-only "origin/${BASE_REF}...HEAD")"
+          # Fetch the base ref WITHOUT --depth=1. Checkout already pulled
+          # full history (fetch-depth: 0), but a `--depth=1` re-fetch
+          # SHALLOWS origin/$BASE_REF to a single commit — so on a PR
+          # whose merge-base with main sits deeper than that boundary
+          # (every Decap-opened cms/* PR hit this), `git diff
+          # origin/$BASE_REF...HEAD` died with `fatal: ...: no merge base`
+          # → exit 128 → a red `code-quality` row. THAT crash — not
+          # content lint — was the real source of the "code-quality reds
+          # on cms PRs" (#1723 Cat 6). Fail SAFE: if the merge-base still
+          # can't be computed (grafted/odd history), lint every language
+          # rather than crashing or silently skipping.
+          git fetch --no-tags origin "$BASE_REF" || true
+          if ! CHANGED="$(git diff --name-only "origin/${BASE_REF}...HEAD" 2>/dev/null)"; then
+            echo "Could not compute the merge-base against origin/${BASE_REF} (shallow/grafted history) — linting all languages (fail-safe)."
+            for k in any js py rb sh yaml css md; do
+              echo "${k}=true" >> "$GITHUB_OUTPUT"
+            done
+            exit 0
+          fi
           echo "Changed files:"
           echo "$CHANGED"
           match() { echo "$CHANGED" | grep -qE "$1"; }
