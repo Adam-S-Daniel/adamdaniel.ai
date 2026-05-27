@@ -1,4 +1,8 @@
 name: CMS Publish Loop — Prod Mutation Playground
+run-name: >-
+  ${{ github.event_name == 'push'
+        && format('push — {0} @{1}', github.ref_name, github.actor)
+   || format('manual — @{0}', github.actor) }}
 
 # Runs the full Decap → cms PR → auto-merge → deploy-production loop
 # end-to-end against prod. See plan G4 +

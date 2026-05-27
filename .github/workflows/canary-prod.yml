@@ -1,4 +1,8 @@
 name: Production Canary
+run-name: >-
+  ${{ github.event_name == 'schedule'
+        && format('scheduled — {0}', github.event.schedule)
+   || format('manual — @{0}', github.actor) }}
 
 # E3 — Daily read-only probe of the three `_e2e/canary-*` URLs on
 # adamdaniel.ai. The full publish-loop spec

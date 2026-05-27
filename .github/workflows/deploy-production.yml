@@ -1,4 +1,8 @@
 name: Deploy to Production
+run-name: >-
+  ${{ github.event_name == 'push'
+        && format('push — {0} @{1}', github.ref_name, github.actor)
+   || format('manual — @{0}', github.actor) }}
 
 on:
   push:

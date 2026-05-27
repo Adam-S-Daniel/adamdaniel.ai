@@ -1,4 +1,8 @@
 name: Auto-resolve newline-only merge conflicts on CMS PRs
+run-name: >-
+  ${{ github.event_name == 'workflow_run'
+        && format('chained — after {0} #{1}', github.event.workflow_run.name, github.event.workflow_run.run_number)
+   || format('manual — PR #{0}{1} @{2}', inputs.pr_number, inputs.dry_run && ' — dry-run' || '', github.actor) }}
 
 # Belt-and-suspenders for PR #882 — a `cms/e2e/canary-post` Decap PR
 # whose only diff vs main was Slate-mangled newlines (`\n` → `\n\n`,

@@ -1,4 +1,5 @@
 name: Parity (preview)
+run-name: ${{ format('PR #{0} — {1}', github.event.pull_request.number, github.event.pull_request.title) }}
 
 # Per-PR @parity gate against preview-pr<N>.adamdaniel.ai.
 #

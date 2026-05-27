@@ -273,7 +273,25 @@ the verified footguns. Keep both in sync when you change path filters.
 | `auto-resolve-newline-conflict.yml` | `workflow_run` (after `cms-editorial-workflow`), `workflow_dispatch` | n/a (event-driven, gated by script's PR allowlists) | n/a |
 | `code-quality.yml` | `pull_request`, `workflow_dispatch` | **always-run + early-skip** — a cheap `changes` job computes per-language booleans from the PR diff; the `lint` job self-skips (`if: needs.changes.outputs.any`) when no lintable file changed. NOT a required check (not in `main.json`), so it never blocks a merge | any source the linters cover: `**/*.{js,py,rb,sh,css,md}`, `.github/{workflows,actions}/**`, `pyproject.toml`, `Gemfile*`?(no — Ruby lints `_plugins*`), the lint configs (`eslint.config.js`, `.prettierrc.json`, `.rubocop.yml`, `.yamllint.yml`, `.stylelintrc.json`, `.markdownlint*.jsonc`, `.shellcheckrc`) |
 
-When you add a new workflow, append it to this table in the same commit.
+When you add a new workflow, append it to this table in the same commit, and set `run-name:` per the grammar in [§ Workflow run naming](#workflow-run-naming).
+
+### Workflow run naming
+
+Every workflow sets `run-name:` as line 2 (immediately after `name:`) so the Actions tab shows *what triggered each run* deterministically — independent of commit-message contents. `name:` identifies the *workflow* (static); `run-name:` titles the *run* and supports expressions. Without it, GitHub auto-titles runs from the trigger (push borrows the head commit, dispatch falls back to `name:`, PR borrows the PR title), so the same file gets inconsistent titles.
+
+**Grammar:** `<trigger> — <context>`, em-dash separated. The run-name does **not** repeat the workflow name (the UI already shows it); it leads with the trigger. Building-block fragments (inline each — anchors can't cross files):
+
+- PR — `format('PR #{0} — {1}', github.event.pull_request.number, github.event.pull_request.title)`
+- push — `format('push — {0} @{1}', github.ref_name, github.actor)`
+- manual — `format('manual — @{0}', github.actor)`
+- scheduled — `format('scheduled — {0}', github.event.schedule)`
+- chained — `format('chained — after {0} #{1}', github.event.workflow_run.name, github.event.workflow_run.run_number)`
+
+A multi-event workflow branches *inside* the expression (it can't use `if:`, which isn't valid at top level): `cond && 'A' || cond2 && 'B' || fallback` (`&&` binds tighter than `||`; a final `|| github.event_name` keeps the title non-empty). Use the folded `>-` scalar for readability. Trim each file to only the events it actually declares.
+
+**Context limit:** `run-name:` may reference **only** the `github` and `inputs` contexts — `vars`/`env`/`secrets`/`steps`/`jobs`/`runner` are unavailable, and it can't read job/step outputs. Dispatch inputs declared `type: boolean` arrive as real booleans, so `inputs.dry_run && ' — dry-run' || ''` works. Echoing attacker-controllable fields (e.g. a fork PR title) is safe — run-name is display-only text, never executed or rendered as markup.
+
+`e2e/workflow-run-name.test.js` (`@lane: local`) lint-locks this: every workflow must declare a non-empty, dynamic (`${{`) `run-name:`, and every multi-event workflow must branch on `github.event_name ==` / `github.event.action ==`. (A hypothetical pure-`workflow_call`-only workflow would never show its own run-name and could be exempted; none exist today.)
 
 ## Workflows
 

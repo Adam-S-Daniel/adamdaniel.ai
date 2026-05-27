@@ -1,4 +1,8 @@
 name: Regenerate Contributor Manual
+run-name: >-
+  ${{ github.event_name == 'push'
+        && format('push — {0} @{1}', github.ref_name, github.actor)
+   || format('manual — @{0}', github.actor) }}
 
 # Re-runs the e2e specs that emit captureStep records, rebuilds
 # docs/CONTRIBUTOR_MANUAL.md, and opens a PR if the manual changed.

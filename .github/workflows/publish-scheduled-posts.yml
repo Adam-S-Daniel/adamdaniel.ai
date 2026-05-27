@@ -1,4 +1,8 @@
 name: Publish Scheduled Posts
+run-name: >-
+  ${{ github.event_name == 'schedule'
+        && format('scheduled — {0}', github.event.schedule)
+   || format('manual — @{0}', github.actor) }}
 
 # Runs once a day to check whether any post's publish_date has arrived.
 # When posts are published, the resulting push to main triggers the

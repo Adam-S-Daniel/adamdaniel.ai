@@ -1,4 +1,12 @@
 name: CI Runner Image
+run-name: >-
+  ${{ github.event_name == 'pull_request'
+        && format('PR #{0} — {1}', github.event.pull_request.number, github.event.pull_request.title)
+   || github.event_name == 'push'
+        && format('push — {0} @{1}', github.ref_name, github.actor)
+   || github.event_name == 'workflow_dispatch'
+        && format('manual — @{0}', github.actor)
+   || github.event_name }}
 
 # Builds and pushes the `ghcr.io/adam-s-daniel/adamdaniel.ai/ci-runner`
 # image consumed by every Playwright-running workflow as their `container:

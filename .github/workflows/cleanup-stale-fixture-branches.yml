@@ -1,4 +1,8 @@
 name: Cleanup stale e2e fixture branches
+run-name: >-
+  ${{ github.event_name == 'schedule'
+        && format('scheduled — {0}', github.event.schedule)
+   || format('manual — @{0}', github.actor) }}
 
 # Sweeps stale `cms/e2e-fixture/*` branches the publish-loop and
 # delete-published specs leave behind when their cleanup paths fail.
