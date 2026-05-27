@@ -232,6 +232,40 @@ test.describe("fixture-baseline shared helpers (#1053)", () => {
     }
   });
 
+  test("prod-loop canaries are BUILDABLE when published — future-date trap guard (#1723)", () => {
+    // THE dominant #1723 root cause: a prod-loop spec flips a canary to
+    // `published: true`, then waits for /blog/<slug>/ to serve a run
+    // marker. But Jekyll SKIPS future-dated posts unless `_config.yml`
+    // has `future: true` — so the 2099-dated canaries were never built
+    // even when published, the URL 404'd forever, and the spec's
+    // URL-reflect wait timed out EVERY run (misread as a deploy backlog;
+    // the build log literally said "Skipping: …-canary.md has a future
+    // date"). Lock the invariant: any future-dated prod canary REQUIRES
+    // `future: true`. (A non-future canary date is the other valid fix —
+    // then this guard is satisfied vacuously, like the 2024 unpublish
+    // canary.) Removing `future: true` while a canary is future-dated, or
+    // future-dating a canary without it, fails HERE instead of silently
+    // re-breaking the prod-mutate + media loops months later.
+    const config = fs.readFileSync(path.join(REPO_ROOT, "_config.yml"), "utf8");
+    const futureBuildsEnabled = /^future:\s*true\s*$/m.test(config);
+    const todayUtcIso = new Date().toISOString().slice(0, 10);
+    for (const rel of PROD_FIXTURES) {
+      const text = fs.readFileSync(path.join(REPO_ROOT, rel), "utf8");
+      const m = text.match(/^date:\s*(\d{4}-\d{2}-\d{2})/m);
+      expect(m, `${rel} must have a parseable front-matter date:`).not.toBeNull();
+      const isFutureDated = m[1] > todayUtcIso;
+      if (isFutureDated) {
+        expect(
+          futureBuildsEnabled,
+          `${rel} is future-dated (${m[1]}) but _config.yml does not set 'future: true'. ` +
+            `Jekyll will SKIP it even when published: true, so /blog/<slug>/ 404s and the ` +
+            `prod loop's URL-reflect wait times out every run (#1723 Cat 1 root cause). Fix: ` +
+            `set 'future: true' in _config.yml, OR give the canary a non-future date.`,
+        ).toBe(true);
+      }
+    }
+  });
+
   test("parseTouchedFixtures splits the select-job env list into a Set", () => {
     expect(parseTouchedFixtures(undefined)).toEqual(new Set());
     expect(parseTouchedFixtures("")).toEqual(new Set());

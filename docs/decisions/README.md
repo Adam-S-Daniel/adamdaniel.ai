@@ -69,3 +69,4 @@ PRs, issues, commits, external links. Anchor the ADR to artefacts that won't go 
 | [0001](0001-canary-body-widget-text.md) | Use `widget: text` for the e2e canary collection body in Decap CMS | Accepted |
 | [0002](0002-stuck-pr-diagnostic-two-layer.md) | Diagnose stuck PRs via a two-layer, always-exit-0, read-only catch | Accepted |
 | [0003](0003-extend-decap-for-mobile-instead-of-forking.md) | Extend Decap CMS with a CSS overlay for mobile instead of forking it | Accepted |
+| [0004](0004-ci-flakiness-1723-prod-loop-fixes.md) | Fix the #1723 CI-flakiness classes without weakening the prod-loop guarantees | Accepted |
