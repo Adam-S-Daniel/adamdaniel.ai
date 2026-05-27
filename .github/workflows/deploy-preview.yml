@@ -52,7 +52,6 @@ on:
       - '.github/workflows/publish-scheduled-posts.yml'
       - '.github/workflows/regenerate-manual.yml'
       - '.github/workflows/secrets-scan.yml'
-      - '.github/workflows/skills-mirror.yml'
       - '.github/workflows/visual-regression.yml'
 
 permissions:

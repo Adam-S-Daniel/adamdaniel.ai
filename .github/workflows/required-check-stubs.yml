@@ -89,7 +89,6 @@ on:
       - '.github/workflows/dependabot-comment-sync.yml'
       - '.github/workflows/regenerate-manual.yml'
       - '.github/workflows/required-check-stubs.yml'
-      - '.github/workflows/skills-mirror.yml'
       - '.github/workflows/sweep-stale-cms-prs.yml'
 
 permissions:
