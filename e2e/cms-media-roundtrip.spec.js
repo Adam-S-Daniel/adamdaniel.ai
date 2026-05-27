@@ -338,8 +338,12 @@ test(
         .getByRole("button", { name: /^(delete|confirm|yes|ok)$/i })
         .first()
         .click({ timeout: 5_000 })
-        .catch(() => {
-          /* native confirm handled by the persistent dialog listener */
+        .catch((e) => {
+          // The in-page confirm button is optional: when Decap uses a
+          // native confirm(), the persistent page.on("dialog") listener
+          // already accepted it, so the button never appears. Log the
+          // skip rather than swallowing it silently (silent-catch-lint).
+          console.debug(`[cleanup] optional delete-confirm click skipped: ${e.message}`);
         });
     });
 
