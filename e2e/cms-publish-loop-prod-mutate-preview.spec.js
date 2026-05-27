@@ -84,6 +84,7 @@ const { addLabel, gh, waitForCmsPullRequest } = require("./github-actions-poll")
 const { waitForChangeReflected } = require("./deploy-pill");
 const { previewTarget } = require("./cms-host");
 const { readPublishedFlag, sanitizeToBaseline } = require("./fixture-baseline");
+const { setPublished, saveEntry } = require("./cms-editor-ui");
 
 const FIXTURE_PATH = "_posts/2099-01-01-e2e-mutation-canary.md";
 const FIXTURE_SLUG = "e2e-mutation-canary";
@@ -332,27 +333,14 @@ test(
     });
 
     await test.step("Toggle Published → ON", async () => {
-      // Decap renders the boolean Published widget as role="switch"
-      // (NOT checkbox); state is exposed via aria-checked. PR #407
-      // burned a run on getByRole("checkbox") — use the switch role
-      // consistently.
-      const toggle = page.getByRole("switch", { name: /^Published$/i }).first();
-      await expect(toggle).toBeVisible({ timeout: 15_000 });
-      const ariaChecked = await toggle.getAttribute("aria-checked");
-      if (ariaChecked !== "true") await toggle.click();
-      await expect(toggle).toHaveAttribute("aria-checked", "true", {
-        timeout: 5_000,
-      });
+      // The Published widget is a switch (role="switch"), toggled via
+      // aria-checked — see e2e/cms-editor-ui.js (shared so the selector
+      // can't drift, #1723).
+      await setPublished(page, true, { visibleTimeout: 15_000 });
     });
 
     await test.step("Save (opens cms/... PR against the PR head)", async () => {
-      await page.getByRole("button", { name: /^Save$/i }).click();
-      // In editorial_workflow mode Save stays disabled after the save
-      // completes — the toolbar swaps in status pills. Wait for the
-      // "Changes saved" status text instead of toBeEnabled.
-      await expect(page.getByText(/Changes saved/i).first()).toBeVisible({
-        timeout: 60_000,
-      });
+      await saveEntry(page);
     });
 
     // ── 4. Find the cms/... PR Decap opened against the PR head ─────
@@ -412,13 +400,7 @@ test(
         timeout: 30_000,
       });
 
-      const toggle = page.getByRole("switch", { name: /^Published$/i }).first();
-      await expect(toggle).toBeVisible({ timeout: 30_000 });
-      const ariaChecked = await toggle.getAttribute("aria-checked");
-      if (ariaChecked !== "false") await toggle.click();
-      await expect(toggle).toHaveAttribute("aria-checked", "false", {
-        timeout: 5_000,
-      });
+      await setPublished(page, false);
 
       const body = page.locator('[role="textbox"][contenteditable="true"]').last();
       await body.click();
@@ -426,10 +408,7 @@ test(
       await page.keyboard.press("Backspace");
       await body.pressSequentially(BASELINE_BODY.trim() + "\n");
 
-      await page.getByRole("button", { name: /^Save$/i }).click();
-      await expect(page.getByText(/Changes saved/i).first()).toBeVisible({
-        timeout: 60_000,
-      });
+      await saveEntry(page);
 
       // Match on the forward run's unique marker, not BASELINE_SENTINEL.
       // The cleanup commit REMOVES the marker the forward leg appended,

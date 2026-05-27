@@ -73,6 +73,7 @@ const {
 const { waitForChangeReflected } = require("./deploy-pill");
 const { resolveCmsTarget } = require("./cms-host");
 const { readPublishedFlag, forcePublishedFalse, loudBail } = require("./fixture-baseline");
+const { setPublished, saveEntry } = require("./cms-editor-ui");
 
 const REPO_ROOT = path.resolve(__dirname, "..");
 const FIXTURE_PATH = "_posts/2099-01-03-e2e-media-roundtrip.md";
@@ -405,21 +406,14 @@ test(
 
     // ── 5. Publish (toggle on, Save, Status → Ready) ──────────────
     await test.step("Toggle Published → ON", async () => {
-      const toggle = page.getByRole("switch", { name: /^Published$/i }).first();
-      await expect(toggle).toBeVisible({ timeout: 15_000 });
-      if ((await toggle.getAttribute("aria-checked")) !== "true") {
-        await toggle.click();
-      }
-      await expect(toggle).toHaveAttribute("aria-checked", "true", {
-        timeout: 5_000,
-      });
+      await setPublished(page, true, { visibleTimeout: 15_000 });
     });
 
     await test.step("Save → Status: Ready (engages auto-merge)", async () => {
-      await page.getByRole("button", { name: /^Save$/i }).click();
-      await expect(page.getByText(/Changes saved/i).first()).toBeVisible({
-        timeout: 60_000,
-      });
+      await saveEntry(page);
+      // Advance to Ready (engages auto-merge); this leg does NOT click
+      // Publish → publish now (the cms/ready label drives the merge), so
+      // it is intentionally not publishViaUi.
       await page.getByRole("button", { name: /^Status:\s*Draft$/i }).click();
       await page.getByRole("menuitem", { name: /^Ready$/i }).click();
       await expect(page.getByRole("button", { name: /^Status:\s*Ready$/i })).toBeVisible({
@@ -507,19 +501,12 @@ test(
         })
         .toBe(false);
 
-      const toggle = page.getByRole("switch", { name: /^Published$/i }).first();
-      await expect(toggle).toBeVisible({ timeout: 15_000 });
-      if ((await toggle.getAttribute("aria-checked")) === "true") {
-        await toggle.click();
-      }
-      await expect(toggle).toHaveAttribute("aria-checked", "false", {
-        timeout: 5_000,
-      });
+      await setPublished(page, false, { visibleTimeout: 15_000 });
 
-      await page.getByRole("button", { name: /^Save$/i }).click();
-      await expect(page.getByText(/Changes saved/i).first()).toBeVisible({
-        timeout: 60_000,
-      });
+      await saveEntry(page);
+      // Advance to Ready (engages auto-merge); like the publish leg this
+      // does NOT click Publish → publish now (the cms/ready label drives
+      // the merge), so it is intentionally not publishViaUi.
       await page.getByRole("button", { name: /^Status:\s*Draft$/i }).click();
       await page.getByRole("menuitem", { name: /^Ready$/i }).click();
       await expect(page.getByRole("button", { name: /^Status:\s*Ready$/i })).toBeVisible({

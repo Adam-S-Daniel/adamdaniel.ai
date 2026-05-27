@@ -18,6 +18,10 @@ __pycache__/
 test-results/
 playwright-report/
 screenshots/regression/
+# Sandbox-only Playwright config that flips ignoreHTTPSErrors so the unpkg
+# Decap bundle loads behind an egress TLS proxy (Claude-Code-web sessions).
+# Never belongs in CI — see the admin-e2e gotchas in AGENTS.md.
+playwright.localcert.config.js
 bin/
 e2e/visual-regression.spec.js-snapshots-before/
 .claude/scheduled_tasks.lock
