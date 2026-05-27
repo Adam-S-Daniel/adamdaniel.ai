@@ -2,6 +2,10 @@
 
 Personal website and blog for Adam Daniel (Freelance AI Engineer). Jekyll static site with Decap CMS, AWS OAuth proxy, and PR preview environments.
 
+## Scope & Boundaries
+
+- **Stay within the requested scope.** Only act on the explicitly requested scope (e.g. user-level vs repo-level placement). When in doubt about scope, confirm before proceeding.
+
 ## Test-Driven Design
 
 - **Red-green TDD.** Write a failing test first, then make it pass, then refactor. Always follow this cycle.
@@ -24,6 +28,10 @@ Function strips the same prefix from `Location` headers so S3's
 trailing-slash redirects (e.g. `/admin` → `/admin/`) don't leak the
 internal key space. Pages on preview and prod share the same
 root-relative URL structure (no `/pr-N/` in any visible URL).
+
+## Environment / WSL
+
+- **No `sudo` in the non-interactive shell.** Do NOT run `sudo` commands inside the non-interactive bash session — they fail because no password prompt is available. Instead, output the `sudo` commands for the user to run manually in their own terminal.
 
 ## Key commands
 
@@ -274,6 +282,10 @@ the verified footguns. Keep both in sync when you change path filters.
 | `code-quality.yml` | `pull_request`, `workflow_dispatch` | **always-run + early-skip** — a cheap `changes` job computes per-language booleans from the PR diff; the `lint` job self-skips (`if: needs.changes.outputs.any`) when no lintable file changed. NOT a required check (not in `main.json`), so it never blocks a merge | any source the linters cover: `**/*.{js,py,rb,sh,css,md}`, `.github/{workflows,actions}/**`, `pyproject.toml`, `Gemfile*`?(no — Ruby lints `_plugins*`), the lint configs (`eslint.config.js`, `.prettierrc.json`, `.rubocop.yml`, `.yamllint.yml`, `.stylelintrc.json`, `.markdownlint*.jsonc`, `.shellcheckrc`) |
 
 When you add a new workflow, append it to this table in the same commit.
+
+## CI / GitHub Actions
+
+- **Validate workflow / composite-action YAML before committing.** Quote `description` and other string values that contain special characters, and parse the file with the [`yaml`](https://www.npmjs.com/package/yaml) library or `yamllint` before committing — never eyeball it. (Complements the parser rule under Code quality, which governs how tests/scripts *read* these files at runtime.)
 
 ## Workflows
 
