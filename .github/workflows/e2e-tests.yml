@@ -1,5 +1,5 @@
 name: E2E Tests
-run-name: ${{ format('PR #{0} — {1}', github.event.pull_request.number, github.event.pull_request.title) }}
+run-name: "${{ format('PR #{0} — {1}', github.event.pull_request.number, github.event.pull_request.title) }}"
 
 on:
   pull_request:

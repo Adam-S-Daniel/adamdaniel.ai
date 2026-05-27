@@ -58,6 +58,22 @@ for (const file of listWorkflows()) {
         `\`<trigger> — <context>\` grammar), not a hard-coded string — ` +
         `otherwise it can't reflect what triggered the run.`,
     ).toBe(true);
+
+    // The expression must be balanced (close the `${{`). A single-line
+    // `run-name: ${{ format('PR #{0} …') }}` left UNQUOTED has its `#`
+    // parsed by YAML as an inline comment, truncating the scalar at `#`
+    // to `${{ format('PR` — which still contains `${{` (so the check
+    // above passes) but is an unterminated expression that actionlint
+    // rejects and GitHub renders wrong. Requiring `}}` catches that:
+    // single-line run-names containing `#` must be quoted.
+    expect(
+      runName.includes("}}"),
+      `${name} :: run-name expression is truncated (no closing \`}}\`). ` +
+        `A single-line \`run-name: \${{ … }}\` containing \`#\` must be ` +
+        `wrapped in quotes ("\${{ … }}") so YAML doesn't treat the \`#\` ` +
+        `as a comment and cut off the expression. See AGENTS.md ` +
+        `"Workflow run naming".`,
+    ).toBe(true);
   });
 
   test(`${name} :: multi-event run-name branches on the trigger`, () => {

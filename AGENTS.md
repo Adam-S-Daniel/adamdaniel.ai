@@ -289,6 +289,8 @@ Every workflow sets `run-name:` as line 2 (immediately after `name:`) so the Act
 
 A multi-event workflow branches *inside* the expression (it can't use `if:`, which isn't valid at top level): `cond && 'A' || cond2 && 'B' || fallback` (`&&` binds tighter than `||`; a final `|| github.event_name` keeps the title non-empty). Use the folded `>-` scalar for readability. Trim each file to only the events it actually declares.
 
+**Quote single-line run-names that contain `#`.** The PR fragment embeds a `#` (`PR #{0}`); on a single-line plain scalar YAML treats ` #` as an inline comment and truncates the expression (actionlint then errors "unexpected EOF while lexing string literal", and GitHub renders the title wrong). Wrap such values in double quotes — `run-name: "${{ format('PR #{0} — {1}', …) }}"`. The folded `>-` form is immune (inside a block scalar `#` is literal), so multi-event run-names need no quoting.
+
 **Context limit:** `run-name:` may reference **only** the `github` and `inputs` contexts — `vars`/`env`/`secrets`/`steps`/`jobs`/`runner` are unavailable, and it can't read job/step outputs. Dispatch inputs declared `type: boolean` arrive as real booleans, so `inputs.dry_run && ' — dry-run' || ''` works. Echoing attacker-controllable fields (e.g. a fork PR title) is safe — run-name is display-only text, never executed or rendered as markup.
 
 `e2e/workflow-run-name.test.js` (`@lane: local`) lint-locks this: every workflow must declare a non-empty, dynamic (`${{`) `run-name:`, and every multi-event workflow must branch on `github.event_name ==` / `github.event.action ==`. (A hypothetical pure-`workflow_call`-only workflow would never show its own run-name and could be exempted; none exist today.)

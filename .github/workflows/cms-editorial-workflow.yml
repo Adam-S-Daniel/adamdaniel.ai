@@ -1,5 +1,5 @@
 name: CMS Editorial Workflow
-run-name: ${{ format('PR #{0} — {1}', github.event.pull_request.number, github.event.pull_request.title) }}
+run-name: "${{ format('PR #{0} — {1}', github.event.pull_request.number, github.event.pull_request.title) }}"
 
 # Triggered when Decap CMS opens or updates a PR for a draft entry.
 # Validates the content, applies cms/draft on open, and on PRs whose
