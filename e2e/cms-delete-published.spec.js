@@ -50,7 +50,7 @@
  */
 const { test, expect } = require("./base");
 const { seedDecapAuth, getPat, HOST_REPO } = require("./decap-pat");
-const { gh } = require("./github-actions-poll");
+const { gh, makeDeployQueueExtender } = require("./github-actions-poll");
 const { removeFixtureViaPr } = require("./cms-fixture-pr");
 const { waitForChangeReflected } = require("./deploy-pill");
 const { prodTarget } = require("./cms-host");
@@ -305,6 +305,7 @@ test(
         // Cms PR cycle (validate-content + auto-merge + deploy-production
         // + CDN propagation), generous margin for queued runners.
         urlTimeoutMs: 15 * 60 * 1000,
+        onBudgetExhausted: makeDeployQueueExtender(),
       });
     });
 
@@ -406,6 +407,7 @@ test(
         // validate-content + auto-merge + deploy-production + CDN
         // propagation) with margin, in case runners are saturated.
         urlTimeoutMs: 12 * 60 * 1000,
+        onBudgetExhausted: makeDeployQueueExtender(),
       });
     });
 

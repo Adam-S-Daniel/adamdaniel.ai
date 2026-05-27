@@ -323,12 +323,94 @@ async function getDefaultBranchHeadSha({ repo = HOST_REPO, branch = "main" } = {
   return ref.object && ref.object.sha;
 }
 
+// #1723 Cat 1: how many deploys currently occupy a deploy lane
+// (in_progress + queued). The `production` lane (deploy-production.yml,
+// `cancel-in-progress: false`) serializes EVERY deploy repo-wide, so a
+// loop spec's own canary deploy can sit queued behind a backlog far
+// longer than the per-spec URL-reflect budget sized for one deploy —
+// the dominant in-spec timeout flake. Used by makeDeployQueueExtender
+// to tell "still draining a backlog" (extend the wait) from "lane idle,
+// the chain never fired" (fail fast as a real miss).
+async function countActiveDeployRuns({
+  repo = HOST_REPO,
+  workflow = "deploy-production.yml",
+} = {}) {
+  let total = 0;
+  for (const status of ["in_progress", "queued"]) {
+    const data = await gh(
+      `/repos/${repo}/actions/workflows/${encodeURIComponent(workflow)}/runs?status=${status}&per_page=50`,
+    );
+    total += (data.workflow_runs || []).length;
+  }
+  return total;
+}
+
+// Build an `onBudgetExhausted` callback for deploy-pill.js's
+// waitForChangeReflected (#1723 Cat 1). When the per-spec URL-reflect
+// budget elapses, this probes the deploy lane:
+//   - lane has N>0 deploys in flight  → return a proportional extension
+//     (the spec's own deploy is just queued behind a backlog; waiting
+//     longer is correct, not flaky).
+//   - lane idle                       → return 0 (give up): nothing is
+//     deploying, so the change's chain never fired — surface it as a
+//     REAL miss, fast, instead of burning the rest of a blind budget.
+//   - probe error                     → grant ONE conservative extension
+//     rather than false-failing on a transient API blip.
+// Bounded by `maxTotalExtendMs` (and by waitForChangeReflected's own
+// `maxExtensions` round cap) so a genuinely stuck lane can't wait
+// forever. `probe` is injectable for unit tests.
+function makeDeployQueueExtender({
+  repo = HOST_REPO,
+  workflow = "deploy-production.yml",
+  perDeployMs = 5 * 60 * 1000,
+  minExtendMs = 3 * 60 * 1000,
+  maxTotalExtendMs = 30 * 60 * 1000,
+  probe,
+} = {}) {
+  const probeLane = probe || (() => countActiveDeployRuns({ repo, workflow }));
+  let extendedTotal = 0;
+  return async ({ elapsedMs = 0, extensionCount = 0 } = {}) => {
+    const remaining = maxTotalExtendMs - extendedTotal;
+    if (remaining <= 0) {
+      console.warn(
+        `[deploy-queue] hit the ${Math.round(maxTotalExtendMs / 1000)}s extension ceiling for the ${workflow} lane; failing as a real miss.`,
+      );
+      return 0;
+    }
+    let depth;
+    try {
+      depth = await probeLane();
+    } catch (e) {
+      const grant = Math.min(minExtendMs, remaining);
+      extendedTotal += grant;
+      console.warn(
+        `[deploy-queue] could not probe the ${workflow} lane (${e && e.message}); granting a conservative ${Math.round(grant / 1000)}s extension (ext #${extensionCount + 1}).`,
+      );
+      return grant;
+    }
+    if (!Number.isFinite(depth) || depth <= 0) {
+      console.warn(
+        `[deploy-queue] URL still not reflected after ${Math.round(elapsedMs / 1000)}s and the ${workflow} lane is IDLE — not a backlog; failing as a real miss.`,
+      );
+      return 0;
+    }
+    const grant = Math.min(Math.max(perDeployMs * depth, minExtendMs), remaining);
+    extendedTotal += grant;
+    console.warn(
+      `[deploy-queue] URL not yet reflected after ${Math.round(elapsedMs / 1000)}s, but the ${workflow} lane has ${depth} deploy(s) in flight — extending ${Math.round(grant / 1000)}s (ext #${extensionCount + 1}, ${Math.round(extendedTotal / 1000)}s total).`,
+    );
+    return grant;
+  };
+}
+
 module.exports = {
   addLabel,
+  countActiveDeployRuns,
   fetchPublicUrl,
   getDefaultBranchHeadSha,
   getPullRequest,
   gh,
+  makeDeployQueueExtender,
   waitForAutoMergeEnabled,
   waitForCmsPullRequest,
   waitForMerge,

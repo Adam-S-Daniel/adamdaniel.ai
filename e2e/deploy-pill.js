@@ -60,13 +60,32 @@ const PILL_PREVIEW = "cms-preview-build-pill";
  *   the helper polls; returns true once the URL reflects the
  *   change. For publish flows: fetch URL, check it 200s with the
  *   expected marker. For delete flows: fetch URL, check 4xx.
- * @param {number} [opts.urlTimeoutMs=10*60*1000] — total budget for
+ * @param {number} [opts.urlTimeoutMs=10*60*1000] — INITIAL budget for
  *   the URL to reflect the change. Covers cms-editorial-workflow +
- *   auto-merge + deploy-production/deploy-preview + CDN.
+ *   auto-merge + deploy-production/deploy-preview + CDN for ONE deploy
+ *   in flight. When the shared deploy lane (`production` /
+ *   `deploy-preview`, `cancel-in-progress: false`) has a backlog, the
+ *   spec's own deploy sits queued behind it and this single budget is
+ *   too small — the dominant CI flake (#1723 Cat 1). `onBudgetExhausted`
+ *   makes the wait queue-AWARE rather than a blind wall-clock.
  * @param {number} [opts.urlPollMs=8000] — interval between URL polls.
  * @param {number} [opts.pillTerminalTimeoutMs=120_000] — once the
  *   URL reflects the change, allow this long for the pill's last
  *   poll to land it in the terminal hidden state.
+ * @param {(ctx: {elapsedMs:number, extensionCount:number}) =>
+ *   Promise<number>} [opts.onBudgetExhausted] — called when the budget
+ *   elapses WITHOUT the URL reflecting. Returns the number of extra ms
+ *   to keep waiting (the chain is still draining a deploy backlog), or
+ *   0/negative to give up (the lane is idle ⇒ the chain never fired —
+ *   a real failure). DELIBERATELY a caller-supplied callback so this
+ *   module stays DOM-pure: the success gate is still the user-facing
+ *   URL, never the GitHub Actions API; the API is consulted ONLY to
+ *   decide whether a not-yet-reflected change is a backlog (extend) or
+ *   a genuine miss (fail). See makeDeployQueueExtender in
+ *   github-actions-poll.js for the production/preview-lane probe.
+ * @param {number} [opts.maxExtensions=6] — hard cap on extension rounds,
+ *   independent of the callback's own ceiling, so a stuck lane can't
+ *   wait forever.
  */
 async function waitForChangeReflected({
   page,
@@ -75,45 +94,101 @@ async function waitForChangeReflected({
   urlTimeoutMs = 10 * 60 * 1000,
   urlPollMs = 8000,
   pillTerminalTimeoutMs = 120_000,
+  onBudgetExhausted,
+  maxExtensions = 6,
 }) {
   if (typeof urlCheck !== "function") {
     throw new Error("waitForChangeReflected requires an async urlCheck() function.");
   }
 
-  const deadline = Date.now() + urlTimeoutMs;
+  const startedAt = Date.now();
+  let deadline = startedAt + urlTimeoutMs;
   let urlReflected = false;
-  while (Date.now() < deadline) {
-    // Fast-fail if the pill ever flips to the failure state. We
-    // check this BEFORE the URL probe so a pre-existing failure
-    // doesn't get masked by a stale URL response.
-    const pillFailed = await page.evaluate((id) => {
-      const el = document.getElementById(id);
-      return Boolean(el && el.innerHTML && el.innerHTML.includes("failed"));
-    }, pillId);
-    if (pillFailed) {
-      const href = await page.evaluate((id) => {
+  let extensionCount = 0;
+  // null = extender never consulted; false = extender ran and found the
+  // lane idle (real miss). Drives which failure message we throw.
+  let laneIdleAtTimeout = null;
+  for (;;) {
+    while (Date.now() < deadline) {
+      // Fast-fail if the pill ever flips to the failure state. We
+      // check this BEFORE the URL probe so a pre-existing failure
+      // doesn't get masked by a stale URL response.
+      const pillFailed = await page.evaluate((id) => {
         const el = document.getElementById(id);
-        return el && el.href ? el.href : "";
+        return Boolean(el && el.innerHTML && el.innerHTML.includes("failed"));
       }, pillId);
-      throw new Error(
-        `deploy-status-pill (#${pillId}) flipped to failure during wait — see ${href}`,
-      );
-    }
+      if (pillFailed) {
+        const href = await page.evaluate((id) => {
+          const el = document.getElementById(id);
+          return el && el.href ? el.href : "";
+        }, pillId);
+        throw new Error(
+          `deploy-status-pill (#${pillId}) flipped to failure during wait — see ${href}`,
+        );
+      }
 
-    if (await urlCheck()) {
-      urlReflected = true;
-      break;
-    }
+      if (await urlCheck()) {
+        urlReflected = true;
+        break;
+      }
 
-    await page.waitForTimeout(urlPollMs);
+      await page.waitForTimeout(urlPollMs);
+    }
+    if (urlReflected) break;
+
+    // Budget elapsed without the URL reflecting. Before declaring a
+    // failure, ask the caller whether the deploy chain is merely still
+    // draining a backlog (extend) — this is what turns the blind
+    // wall-clock into a deterministic, queue-aware wait (#1723 Cat 1).
+    if (typeof onBudgetExhausted === "function" && extensionCount < maxExtensions) {
+      let extendMs = 0;
+      try {
+        extendMs = await onBudgetExhausted({
+          elapsedMs: Date.now() - startedAt,
+          extensionCount,
+        });
+      } catch (_) {
+        // A probe error must not mask a real failure — leave extendMs at
+        // 0 ("no extension") and fall through to the timeout throw below.
+      }
+      if (Number.isFinite(extendMs) && extendMs > 0) {
+        deadline = Date.now() + extendMs;
+        extensionCount += 1;
+        continue;
+      }
+      laneIdleAtTimeout = true;
+    }
+    break;
   }
 
   if (!urlReflected) {
+    const elapsedS = Math.round((Date.now() - startedAt) / 1000);
+    let detail;
+    if (extensionCount > 0) {
+      // We extended for a real backlog and STILL never saw the change —
+      // genuinely stuck/overlong past the queue, not a mis-sized budget.
+      detail =
+        `Waited ${elapsedS}s (initial ${Math.round(urlTimeoutMs / 1000)}s + ${extensionCount} ` +
+        `queue-aware extension(s)); the deploy lane was draining a backlog but the URL never ` +
+        `reflected the change even after it cleared.`;
+    } else if (laneIdleAtTimeout) {
+      // The extender ran and found the lane IDLE: nothing is deploying,
+      // so the change's chain almost certainly never fired — a real bug,
+      // not a backlog. The #1723 Cat 1 "sharpened" signal.
+      detail =
+        `Waited ${elapsedS}s and the deploy lane was idle (no deploy in flight) — the ` +
+        `deploy-triggering action almost certainly never fired the chain (auto-merge / ` +
+        `editorial-workflow miss), rather than the change simply being slow to deploy.`;
+    } else {
+      // No queue-awareness available (no extender supplied).
+      detail =
+        `Timed out within ${Math.round(urlTimeoutMs / 1000)}s. The deploy-triggering action ` +
+        `may not have fired the chain, or the chain may still be running past this budget.`;
+    }
     throw await augmentTimeoutError(
       new Error(
-        `Timed out waiting for the URL to reflect the change within ${urlTimeoutMs}ms. ` +
-          `The deploy-triggering action may not have fired the chain, or the chain may ` +
-          `still be running past this budget. Check the pill state for in-flight clues.`,
+        `Timed out waiting for the URL to reflect the change. ${detail} ` +
+          `Check the pill state for in-flight clues.`,
       ),
       { waitingFor: "URL to reflect change (deploy chain)", kind: "url" },
     );

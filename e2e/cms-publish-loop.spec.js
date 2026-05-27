@@ -55,7 +55,12 @@ const { test, expect } = require("./base");
 const { captureStep } = require("./manual-capture");
 const { seedDecapAuth, getPat, HOST_REPO } = require("./decap-pat");
 const { CANARIES, findCanary, makeMarker } = require("./canary-content");
-const { fetchPublicUrl, gh, waitForCmsPullRequest } = require("./github-actions-poll");
+const {
+  fetchPublicUrl,
+  gh,
+  waitForCmsPullRequest,
+  makeDeployQueueExtender,
+} = require("./github-actions-poll");
 const { seedFixtureViaPr, closeStaleDecapPrOnBranch } = require("./cms-fixture-pr");
 const { waitForChangeReflected } = require("./deploy-pill");
 const { prodTarget } = require("./cms-host");
@@ -393,6 +398,7 @@ test("CMS publish loop — host repo, target main", { tag: ["@admin-write"] }, a
       // checks + deploy-production + CDN propagation under runner
       // saturation.
       urlTimeoutMs: 15 * 60 * 1000,
+      onBudgetExhausted: makeDeployQueueExtender(),
     });
     await page.goto(PUBLIC_URL, { waitUntil: "domcontentloaded" });
     await captureStep(page, {
@@ -477,6 +483,7 @@ test("CMS publish loop — host repo, target main", { tag: ["@admin-write"] }, a
         return !text.includes(marker) && text.includes(baselineBody);
       },
       urlTimeoutMs: 15 * 60 * 1000,
+      onBudgetExhausted: makeDeployQueueExtender(),
     });
   });
 });
