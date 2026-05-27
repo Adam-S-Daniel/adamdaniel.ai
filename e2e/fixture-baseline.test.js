@@ -3,26 +3,27 @@ const { test, expect } = require("./base");
 const fs = require("node:fs");
 const path = require("node:path");
 const {
+  PROD_FIXTURES,
   readPublishedFlag,
   forcePublishedFalse,
   sanitizeToBaseline,
   ownDecapBranchFor,
   baselineAssertionApplies,
+  shouldEnforceBaseline,
+  parseTouchedFixtures,
   isScheduledMustRun,
   loudBail,
 } = require("./fixture-baseline");
 
 const REPO_ROOT = path.resolve(__dirname, "..");
 
-// The real fixtures the prod loops operate on. These MUST be checked
-// in `published: false` after #1053's unstick; the assertion below is
-// the regression guard that keeps them that way (a future commit that
-// flips one back to `published: true` re-creates the stuck fixed
-// point this whole change exists to kill).
-const PROD_FIXTURES = [
-  "_posts/2099-01-01-e2e-mutation-canary.md",
-  "_posts/2099-01-03-e2e-media-roundtrip.md",
-];
+// `PROD_FIXTURES` (the real `_posts/` fixtures the prod loops mutate,
+// which MUST be checked in `published: false` after #1053's unstick) is
+// now canonical in ./fixture-baseline so the e2e `select` job can read
+// the same list (#1723 Cat 2). The assertion below is the regression
+// guard that keeps them at baseline (a future commit that flips one to
+// `published: true` re-creates the stuck fixed point this exists to
+// kill).
 
 // Byte-identical reference implementations — exactly the per-spec
 // copies that existed before this module. The DRY refactor must not
@@ -118,32 +119,53 @@ test.describe("fixture-baseline shared helpers (#1053)", () => {
 
   test("checked-in prod-loop fixtures are at baseline (published: false)", () => {
     const headRef = process.env.GITHUB_HEAD_REF || "";
+    const eventName = process.env.GITHUB_EVENT_NAME || "";
+    // The e2e `select` job (full history) emits the subset of
+    // PROD_FIXTURES this PR's own diff touched; on push/schedule/local
+    // it's empty and `eventName` isn't "pull_request", so the touch-set
+    // is ignored and the assertion applies unconditionally (#1723 Cat 2).
+    const touched = parseTouchedFixtures(process.env.E2E_PR_TOUCHED_PROD_FIXTURES);
     for (const rel of PROD_FIXTURES) {
       const abs = path.join(REPO_ROOT, rel);
       const text = fs.readFileSync(abs, "utf8");
       const flag = readPublishedFlag(text);
 
-      // ALWAYS enforced, every branch: `published:` must parse as a
-      // boolean. `null` is genuine front-matter corruption — a real
-      // defect wherever it occurs, including the loop's own branch.
+      // ALWAYS enforced, every branch/event: `published:` must parse as
+      // a boolean. `null` is genuine front-matter corruption — a real
+      // defect wherever it occurs (it is NOT the transient publish:true
+      // a loop leaves, which still parses), so this guard is exempt from
+      // the Cat-2 relaxation below.
       expect(
         flag,
         `${rel} 'published:' must be a parseable boolean (got null) — ` +
           `fix the fixture's front matter`,
       ).not.toBeNull();
 
-      // On the loop's OWN Decap branch for THIS fixture, a transient
-      // `published: true` is the expected in-flight state: the
-      // prod-mutate / media-roundtrip round trip publishes here and
-      // REQUIRES this PR to merge+deploy before it reverts (spec
-      // step 9 + afterAll + step-0b force baseline). Failing this
-      // required check there deadlocks the very PR the spec waits on
-      // — the #1053 force-baseline change (3dbade7) regressed exactly
-      // this (scheduled media run 26114167560). #1053's real hazard
-      // is `published: true` PERSISTING on main, still guarded by the
-      // push/main run of this same test + the spec's initialPublished
-      // loudBail + the force-baseline. Relax ONLY here, per fixture.
-      if (!baselineAssertionApplies(rel, headRef)) continue;
+      // Two relaxations of the strict baseline (see shouldEnforceBaseline):
+      //  (a) the fixture's OWN Decap branch — a transient `published:
+      //      true` is the expected in-flight state there: the prod-mutate
+      //      / media-roundtrip round trip publishes on this branch and
+      //      REQUIRES its PR to merge+deploy before it reverts (#1053
+      //      deadlock fix 3dbade7 regressed exactly this; media run
+      //      26114167560).
+      //  (b) an UNRELATED pull_request (diff doesn't touch THIS fixture)
+      //      — the merge-ref inherits main's transient canary state,
+      //      which is not the PR's concern; enforcing here red-failed
+      //      the required `e2e (1)` on innocent PRs and blocked #1715
+      //      (#1723 Cat 2). A PR editing the canary keeps it in `touched`
+      //      → still strictly checked.
+      // #1053's real hazard (a persistent stuck-true on main, or a PR
+      // that itself commits publish:true) stays guarded — see the
+      // shouldEnforceBaseline doc-comment.
+      if (
+        !shouldEnforceBaseline(rel, {
+          headRef,
+          eventName,
+          prTouchesFixture: touched.has(rel),
+        })
+      ) {
+        continue;
+      }
 
       expect(
         flag,
@@ -191,6 +213,87 @@ test.describe("fixture-baseline shared helpers (#1053)", () => {
     // to published:true, and vice-versa).
     expect(baselineAssertionApplies(MUTATE, "cms/posts/2099-01-03-e2e-media-roundtrip")).toBe(true);
     expect(baselineAssertionApplies(MEDIA, "cms/posts/2099-01-01-e2e-mutation-canary")).toBe(true);
+  });
+
+  test("PROD_FIXTURES is the canonical shared list (matches the on-disk canaries)", () => {
+    // Moving the list into ./fixture-baseline (so the select job can
+    // read it) must not drop or rename a fixture — every entry must
+    // exist on disk and parse a `published:` flag.
+    expect(PROD_FIXTURES).toEqual([
+      "_posts/2099-01-01-e2e-mutation-canary.md",
+      "_posts/2099-01-03-e2e-media-roundtrip.md",
+    ]);
+    for (const rel of PROD_FIXTURES) {
+      const text = fs.readFileSync(path.join(REPO_ROOT, rel), "utf8");
+      expect(
+        readPublishedFlag(text),
+        `${rel} must exist with a parseable published flag`,
+      ).not.toBeNull();
+    }
+  });
+
+  test("parseTouchedFixtures splits the select-job env list into a Set", () => {
+    expect(parseTouchedFixtures(undefined)).toEqual(new Set());
+    expect(parseTouchedFixtures("")).toEqual(new Set());
+    expect(parseTouchedFixtures("   ")).toEqual(new Set());
+    expect(parseTouchedFixtures("_posts/a.md")).toEqual(new Set(["_posts/a.md"]));
+    // Space- and newline-separated, with stray whitespace, de-duped by Set.
+    expect(parseTouchedFixtures("_posts/a.md   _posts/b.md\n_posts/a.md")).toEqual(
+      new Set(["_posts/a.md", "_posts/b.md"]),
+    );
+  });
+
+  test("shouldEnforceBaseline: #1723 Cat-2 relaxes only on an UNRELATED pull_request", () => {
+    const MUTATE = "_posts/2099-01-01-e2e-mutation-canary.md";
+    const MEDIA = "_posts/2099-01-03-e2e-media-roundtrip.md";
+
+    // push / schedule / workflow_dispatch / local dev (event not
+    // "pull_request"): ALWAYS enforce regardless of touch-set — this is
+    // the #1053 main-protection, unchanged by Cat 2.
+    for (const eventName of ["push", "schedule", "workflow_dispatch", ""]) {
+      expect(shouldEnforceBaseline(MUTATE, { eventName, prTouchesFixture: false })).toBe(true);
+      expect(shouldEnforceBaseline(MUTATE, { eventName, prTouchesFixture: true })).toBe(true);
+    }
+
+    // pull_request that DOES touch the fixture: still strictly enforced
+    // (a PR can't introduce a stuck published:true on a canary).
+    expect(
+      shouldEnforceBaseline(MUTATE, { eventName: "pull_request", prTouchesFixture: true }),
+    ).toBe(true);
+
+    // pull_request that does NOT touch the fixture: RELAXED — main's
+    // transient canary state is not this PR's concern (#1723 Cat 2,
+    // which had blocked #1715). This is the whole fix.
+    expect(
+      shouldEnforceBaseline(MUTATE, { eventName: "pull_request", prTouchesFixture: false }),
+    ).toBe(false);
+    expect(
+      shouldEnforceBaseline(MEDIA, { eventName: "pull_request", prTouchesFixture: false }),
+    ).toBe(false);
+
+    // Per-fixture precision: an UNRELATED-PR relaxation for MEDIA must
+    // not relax MUTATE and vice-versa (the touch-set is per fixture).
+    expect(
+      shouldEnforceBaseline(MUTATE, { eventName: "pull_request", prTouchesFixture: true }),
+    ).toBe(true);
+    expect(
+      shouldEnforceBaseline(MEDIA, { eventName: "pull_request", prTouchesFixture: false }),
+    ).toBe(false);
+
+    // The own-Decap-branch relaxation still composes: on the fixture's
+    // own branch it's relaxed even if the touch-set says otherwise.
+    expect(
+      shouldEnforceBaseline(MUTATE, {
+        headRef: "cms/posts/2099-01-01-e2e-mutation-canary",
+        eventName: "pull_request",
+        prTouchesFixture: true,
+      }),
+    ).toBe(false);
+
+    // SAFE defaults: unknown event with default args ⇒ enforce; a
+    // pull_request with an unknown touch-set (default true) ⇒ enforce.
+    expect(shouldEnforceBaseline(MUTATE)).toBe(true);
+    expect(shouldEnforceBaseline(MUTATE, { eventName: "pull_request" })).toBe(true);
   });
 
   test("isScheduledMustRun / loudBail: loud on schedule, fixme otherwise", () => {

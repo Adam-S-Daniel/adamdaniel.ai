@@ -193,6 +193,12 @@ jobs:
       # TEST_LANE=real). The companion `e2e-real` job consumes them.
       real_scope: ${{ steps.s.outputs.real_scope }}
       real_files: ${{ steps.s.outputs.real_files }}
+      # Subset of PROD_FIXTURES (the prod-loop canaries) this PR's own
+      # diff touches — fed to the e2e matrix so fixture-baseline.test.js
+      # enforces the strict `published: false` canary assertion ONLY for
+      # fixtures the PR actually changed, never for main's transient
+      # loop-state the merge-ref inherits (#1723 Cat 2; blocked #1715).
+      touched_prod_fixtures: ${{ steps.touched.outputs.list }}
     steps:
       - name: Checkout
         uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd  # v6.0.2 (2026-01-09)
@@ -330,6 +336,42 @@ jobs:
           echo "real_files=$real_files" >> "$GITHUB_OUTPUT"
           echo "Resolved: scope=$scope shard_count=$shard_count shards=$shards real_scope=$real_scope"
 
+      - name: List PROD_FIXTURES the PR's own diff touches (#1723 Cat 2)
+        id: touched
+        # fixture-baseline.test.js (required `e2e (1)`) enforces the
+        # strict `published: false` canary baseline. On a pull_request it
+        # runs against the MERGE ref, so it inherits whatever transient
+        # `published: true` a prod loop has on `main` mid-publish — which
+        # red-failed the required check on PRs that never touched the
+        # canary (it blocked #1715). A PR is only responsible for the
+        # fixtures it changes: compute the per-fixture touch-set HERE (the
+        # select job alone has full history — fetch-depth: 0 + the
+        # `git fetch origin main` above) and hand it to the e2e matrix via
+        # `E2E_PR_TOUCHED_PROD_FIXTURES`. The list is canonical in
+        # e2e/fixture-baseline.js (PROD_FIXTURES), shared with the test so
+        # the two can't drift. Fail-safe: any git/diff error ⇒ treat the
+        # fixture as touched (enforce), never silently relax.
+        run: |
+          set -uo pipefail
+          list="$(node -e '
+            const { execSync } = require("child_process");
+            const { PROD_FIXTURES } = require("./e2e/fixture-baseline");
+            const touched = PROD_FIXTURES.filter((f) => {
+              try {
+                return (
+                  execSync("git diff --name-only origin/main...HEAD -- " + JSON.stringify(f), {
+                    encoding: "utf8",
+                  }).trim().length > 0
+                );
+              } catch (_) {
+                return true; // no base / git error ⇒ fail safe: enforce
+              }
+            });
+            process.stdout.write(touched.join(" "));
+          ')"
+          echo "list=$list" >> "$GITHUB_OUTPUT"
+          echo "PROD_FIXTURES touched by this PR's diff: ${list:-<none>}"
+
       # Failure-comment fan-out — see AGENTS.md "Failure-comment
       # composite action". Two call sites (post / resolve), gitleaks-
       # scrubbed via the composite action. Select-side failures are
@@ -384,6 +426,14 @@ jobs:
       # honours the same env var. The companion `e2e-real` job
       # carries the GitHub-backed lane on its own runner.
       TEST_LANE: local
+      # Per-fixture touch-set from the select job. fixture-baseline.test.js
+      # enforces the strict `published: false` canary assertion on a
+      # pull_request ONLY for the PROD_FIXTURES this PR's own diff
+      # touched, so a prod loop's transient `published: true` on `main`
+      # (inherited by the merge-ref) can't red the required check on an
+      # unrelated PR (#1723 Cat 2; blocked #1715). Empty on a PR that
+      # touches no canary ⇒ the assertion relaxes for both canaries.
+      E2E_PR_TOUCHED_PROD_FIXTURES: ${{ needs.select.outputs.touched_prod_fixtures }}
       # Public-page projects only — admin specs (tagged @admin-write
       # / @admin-read / @admin-screenshots) are excluded from these
       # 8 projects via `grepInvert` in playwright.config.js. The
