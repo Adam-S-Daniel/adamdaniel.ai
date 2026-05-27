@@ -1,4 +1,6 @@
 // @lane: local — pure builders for the ephemeral prod-loop posts (#1771 step 4)
+const fs = require("node:fs");
+const path = require("node:path");
 const { test, expect } = require("./base");
 const { readPublishedFlag, splitFrontMatter } = require("./fixture-baseline");
 const {
@@ -9,6 +11,8 @@ const {
   buildMediaRoundtripPost,
   composePost,
 } = require("./prod-mutate-fixture");
+
+const REPO_ROOT = path.resolve(__dirname, "..");
 
 test.describe("ephemeral prod-loop post builders (#1771 step 4)", () => {
   test("buildProdMutatePost is a pure function of runId (unique path/slug/url)", () => {
@@ -77,5 +81,33 @@ test.describe("ephemeral prod-loop post builders (#1771 step 4)", () => {
   test("missing runId throws loudly (no silent shared path)", () => {
     expect(() => buildProdMutatePost({})).toThrow(/requires a runId/);
     expect(() => buildMediaRoundtripPost({})).toThrow(/requires a runId/);
+  });
+
+  test("ephemeral posts are BUILDABLE when published — future-date trap guard (#1723 Cat 1)", () => {
+    // THE dominant #1723 root cause: a prod-loop spec publishes a
+    // future-dated `_posts/` entry, then waits for /blog/<slug>/ to serve a
+    // run marker — but Jekyll SKIPS future-dated posts unless `_config.yml`
+    // has `future: true`, so the URL 404s forever and the spec's
+    // URL-reflect wait times out EVERY run. The ephemeral posts are dated
+    // EPHEMERAL_DATE (a deliberately far-future date so they sort last and
+    // are trivially per-run unique), so they only build when published if
+    // `future: true` is set. This lock replaces the retired PROD_FIXTURES
+    // "BUILDABLE when published" guard (the persistent canaries it iterated
+    // are gone, #1771 step 4) — it keeps `future: true` lint-locked while
+    // EPHEMERAL_DATE is a future date.
+    const config = fs.readFileSync(path.join(REPO_ROOT, "_config.yml"), "utf8");
+    const futureBuildsEnabled = /^future:\s*true\s*$/m.test(config);
+    const todayUtcIso = new Date().toISOString().slice(0, 10);
+    const isFutureDated = EPHEMERAL_DATE > todayUtcIso;
+    if (isFutureDated) {
+      expect(
+        futureBuildsEnabled,
+        `The ephemeral prod-loop posts are future-dated (${EPHEMERAL_DATE}) but _config.yml ` +
+          `does not set 'future: true'. Jekyll will SKIP them even when published: true, so ` +
+          `/blog/<slug>/ 404s and the prod loops' URL-reflect wait times out every run (#1723 ` +
+          `Cat 1 root cause). Fix: set 'future: true' in _config.yml, OR give the ephemeral ` +
+          `posts a non-future date (EPHEMERAL_DATE in e2e/prod-mutate-fixture.js).`,
+      ).toBe(true);
+    }
   });
 });
