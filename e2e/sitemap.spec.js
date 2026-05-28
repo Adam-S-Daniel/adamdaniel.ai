@@ -2,7 +2,7 @@
 const fs = require("node:fs");
 const path = require("node:path");
 const { test, expect } = require("./base");
-const { isTestFixturePost } = require("./public-content");
+const { isTestFixturePost, slugify } = require("./public-content");
 
 // Plan unit B3 — sitemap structural contract.
 //
@@ -59,27 +59,23 @@ function parseFrontMatter(filePath) {
   return fields;
 }
 
-// Mirror Jekyll's default `slugify` filter (mode: "default"): lowercase,
-// then collapse any run of non-`[a-z0-9]` characters into a single `-`,
-// then trim leading/trailing dashes. Without this, a filename like
-// `2026-05-28-quoting-anthropic-opus-4-8-safety-"somewhat-less-robust".md`
-// (real human content; #1815 push-media run 26598524027) maps to a literal
-// `…safety-"somewhat-less-robust"` slug that doesn't exist in the
-// jekyll-generated sitemap — the live URL is the curly-quote-stripped
-// `…safety-somewhat-less-robust`. ASCII-only / dash-only slugs are
-// unchanged by this transformation.
-function jekyllSlugify(s) {
-  return s
-    .toLowerCase()
-    .replace(/[^a-z0-9]+/g, "-")
-    .replace(/^-+|-+$/g, "");
-}
-
 function deriveSlugFromFilename(filename) {
   // `_posts/2026-04-25-replacement-test-post-1.md` → `replacement-test-post-1`.
+  // The date-stripped remainder is then run through the SHARED `slugify`
+  // (e2e/public-content.js) — Jekyll's `permalink: /blog/:slug/` passes the
+  // effective slug through `Jekyll::Utils.slugify` (lowercase, collapse runs
+  // of non-`[a-z0-9]` into single `-`, trim dashes). Without slugifying here,
+  // a filename like `2026-05-28-quoting-anthropic-opus-4-8-safety-"somewhat-
+  // less-robust".md` (real human content; #1815 push-media run 26598524027)
+  // mapped to a literal `…safety-"somewhat-less-robust"` URL that doesn't
+  // exist in the jekyll-generated sitemap — the live URL is the curly-quote-
+  // stripped `…safety-somewhat-less-robust`. Reusing the shared helper keeps
+  // this spec, admin/live-url-derive.js, and public-content.js's crawl
+  // enumeration agreeing on what the live URL is (drift-locked by
+  // e2e/slugify-parity.test.js).
   const base = path.basename(filename, ".md");
   const dateStripped = base.replace(FILENAME_DATE_PREFIX_RE, "");
-  return jekyllSlugify(dateStripped);
+  return slugify(dateStripped);
 }
 
 function expectedPostUrl(filename, frontMatter) {
