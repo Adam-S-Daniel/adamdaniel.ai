@@ -59,6 +59,7 @@ on:
       - e2e/github-actions-poll.js
       - e2e/deploy-pill.js
       - e2e/cms-fixture-pr.js
+      - e2e/cms-editor-ui.js
       - e2e/base.js
       - admin/**
       - playwright.config.js

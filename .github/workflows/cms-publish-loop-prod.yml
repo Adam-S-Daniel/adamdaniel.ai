@@ -46,6 +46,7 @@ on:
       # with the persistent fixture).
       - e2e/prod-mutate-fixture.js
       - e2e/cms-fixture-pr.js
+      - e2e/cms-editor-ui.js
       - e2e/decap-pat.js
       - e2e/github-actions-poll.js
       - e2e/base.js

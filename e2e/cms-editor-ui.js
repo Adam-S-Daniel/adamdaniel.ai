@@ -243,34 +243,46 @@ async function reopenForPublishedDelete(
   } = {},
 ) {
   const titleLocator = page.getByRole("textbox", { name: titleName });
+  // Decap's nav menu surfaces the "Posts" link only when the admin app is
+  // fully past its login flow. We use it as the proof-of-login signal
+  // before deep-navigating to the entry URL.
+  const postsLink = page.getByRole("link", { name: /^Posts$/i }).first();
+  // Decap's transient login state surfaces a "Logging in..." chip. If we
+  // see it on the deep entry route, the session has lapsed (Decap is
+  // re-authenticating). The bounce-through-admin-root below recovers it.
+  const loggingInChip = page.getByText(/^Logging in\.\.\.$/i).first();
   const deadline = Date.now() + totalTimeoutMs;
   let attempt = 0;
   let lastState;
   let lastCrossCheck = null;
+  let lastLoggingIn = false;
   for (;;) {
     attempt += 1;
 
-    // Default reset: navigate to the entry route + hard-reload — re-runs
-    // componentDidMount → loadUnpublishedEntry against fresh backend state.
+    // Bounce through admin ROOT every attempt (#1815, run 26592333311).
+    // Without this, a deep goto(entryUrl) on a session whose Decap login
+    // state lapsed during the long create-PR-merge wait surfaces the
+    // "Logging in..." spinner forever — the editor never mounts and
+    // Title never appears. Navigating to `${adminUrl}` (the Decap app
+    // root) re-runs the login routing and lets Decap complete its
+    // localStorage-replay before we deep-link into the entry. The Posts
+    // link is the canonical "Decap is logged in and the nav rendered"
+    // signal.
     //
-    // Every 3rd attempt, ALSO bounce through the collection index FIRST
-    // (navigate-away-and-back fallback, #1815). A same-hash goto alone
-    // would not re-mount the editor component; reload re-mounts but
-    // Decap's Redux store survives a same-route reload in some shapes,
-    // leaving the previously-loaded editorial entry cached. Bouncing
-    // through `#/collections/posts` forces a route change, unmounts the
-    // Editor component, lets Decap rebuild its entry slice from a cold
-    // state, then re-enters the entry — the most reliable way to surface
-    // the post-merge published file when the editor is otherwise stuck
-    // on the cached editorial draft.
-    if (attempt % 3 === 0 && adminUrl) {
-      const collectionMatch = /(#\/collections\/[^/]+)/.exec(entryUrl);
-      const collectionRoute = collectionMatch
-        ? `${adminUrl}${collectionMatch[1]}`
-        : `${adminUrl}#/collections/posts`;
-      await page.goto(collectionRoute, { waitUntil: "domcontentloaded" });
-      await page.waitForTimeout(1_500);
+    // page.addInitScript from decap-pat.seedDecapAuth re-injects the
+    // PAT-backed localStorage record on every navigation, so this also
+    // re-seeds the auth without the spec having to call seedDecapAuth
+    // again.
+    if (adminUrl) {
+      await page.goto(adminUrl, { waitUntil: "domcontentloaded" });
+      // Best-effort: don't fail the attempt if Posts doesn't render fast
+      // enough — the subsequent entry navigation may still recover. We
+      // just need to give Decap a chance to complete login.
+      await postsLink
+        .waitFor({ state: "visible", timeout: Math.min(perAttemptMs, 15_000) })
+        .catch(() => {});
     }
+
     await page.goto(entryUrl, { waitUntil: "domcontentloaded" });
     await page.reload({ waitUntil: "domcontentloaded" });
 
@@ -285,8 +297,22 @@ async function reopenForPublishedDelete(
     }
 
     // Wait for the editor to mount at all (Title field present).
-    if (!(await titleLocator.isVisible({ timeout: perAttemptMs }).catch(() => false))) {
-      lastState = "editor never mounted (Title field absent)";
+    // `waitFor({state:"visible",timeout})` is mandatory here — Playwright's
+    // `locator.isVisible()` ignores any timeout option and returns
+    // synchronously, so a same-named check would race Decap's hydration
+    // and return false for the entire poll budget (#1815, run 26592333311
+    // logged 170 instant attempts in 1500s).
+    const titleVisible = await titleLocator
+      .waitFor({ state: "visible", timeout: perAttemptMs })
+      .then(() => true)
+      .catch(() => false);
+    if (!titleVisible) {
+      lastLoggingIn = await loggingInChip.isVisible().catch(() => false);
+      lastState = lastLoggingIn
+        ? 'editor never mounted (Title field absent; "Logging in..." chip ' +
+          "still visible — Decap is stuck re-authenticating, the bounce " +
+          "through admin root did not complete the login flow this attempt)"
+        : "editor never mounted (Title field absent)";
     } else {
       const draftChipVisible = await editorialStatusChip(page)
         .isVisible({ timeout: 2_000 })
@@ -314,10 +340,18 @@ async function reopenForPublishedDelete(
             ? " Contents-API cross-check on main: file is ABSENT (the create PR's merge has NOT " +
               "landed; widen waitForMerge or investigate why auto-merge stalled)."
             : "";
+      const loginLine = lastLoggingIn
+        ? ' Last attempt observed Decap stuck on the "Logging in..." spinner: the PAT-backed ' +
+          "localStorage record is present (page.addInitScript re-injects it on every nav) but Decap's " +
+          "login flow is not completing. Suspect: rate-limited GitHub validation or a stale Decap " +
+          "Redux slice surviving the bounce. Consider clearing browser context (cookies + " +
+          "localStorage) and re-seeding before the next reopen attempt."
+        : "";
       throw new Error(
         `Editor for ${entryUrl} never reached the PUBLISHED delete state within ` +
           `${Math.round(totalTimeoutMs / 1000)}s (${attempt} attempt(s)); last seen: ${lastState}.` +
           crossCheckLine +
+          loginLine +
           " Decap is still loading the entry as an open editorial-workflow draft — the create " +
           "PR's cms/* branch has not been merged+removed yet, so a Delete click would call " +
           "onDeleteUnpublishedChanges (draft branch only) instead of onDelete (delete from main). " +
