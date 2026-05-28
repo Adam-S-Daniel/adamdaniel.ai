@@ -104,6 +104,7 @@ const {
   publishViaUi,
   clickEditorDelete,
   reopenForPublishedDelete,
+  openMediaLibrary,
 } = require("./cms-editor-ui");
 const { EPHEMERAL_DATE, buildMediaRoundtripPost } = require("./prod-mutate-fixture");
 
@@ -484,25 +485,28 @@ test(
       });
     });
 
-    // ── 10. Delete the uploaded asset via the standalone Media UI ────
-    await test.step("Delete the image via the standalone Media library UI", async () => {
-      // Bounce through admin root before the deep media-route nav: after
-      // the post-delete leg, the page is on a deep entry-editor route. A
-      // same-host `page.goto(`${PROD_ADMIN}#/media`)` is a HASH-ONLY
-      // change — Playwright does not full-reload on a hash diff, and
-      // Decap's React router has been observed to render "Not Found" at
-      // /media instead of remounting the MediaLibrary component (run
-      // 26597250490). Going through the admin root forces a full
-      // navigation so the next route change starts from a clean Decap app
-      // state, and the explicit `page.reload()` after the hash change
-      // guarantees the MediaLibrary fetches its file list against current
-      // backend state rather than a cached pre-upload listing.
+    // ── 10. Delete the uploaded asset via the global Media library UI ─
+    await test.step("Delete the image via the Media library modal", async () => {
+      // Decap's global media library is a MODAL opened from the top-nav
+      // "Media" button — it is NOT a page route. The earlier
+      // `page.goto(`${PROD_ADMIN}#/media`)` rendered Decap's NotFound
+      // ("Not Found") every time, because Decap registers no `/media`
+      // route (the standalone media page does not exist in this 3.12.2
+      // setup); the library only opens as an overlay (runs 26597250490 /
+      // 26602619236, both screenshots: nav present + "Not Found" body).
+      //
+      // Bounce through admin root for a clean nav (the post-delete leg
+      // left the page on a deep entry route), then CLICK "Media" to open
+      // the library overlay and wait for its header. Proven pattern:
+      // e2e/admin-no-occlusion.spec.js's media-library modal test.
       await page.goto(PROD_ADMIN, { waitUntil: "domcontentloaded" });
       await expect(page.getByRole("link", { name: /^Posts$/i })).toBeVisible({
         timeout: 60_000,
       });
-      await page.goto(`${PROD_ADMIN}#/media`, { waitUntil: "domcontentloaded" });
-      await page.reload({ waitUntil: "domcontentloaded" });
+      // openMediaLibrary (shared, cms-editor-ui.js) clicks the top-nav
+      // "Media" button and waits for the library header — the supported
+      // way to reach the global library (there is no `#/media` route).
+      await openMediaLibrary(page);
       const card = page.getByText(imageName, { exact: false }).first();
       await expect(
         card,
