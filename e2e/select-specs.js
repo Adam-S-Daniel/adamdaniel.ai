@@ -328,6 +328,10 @@ const SPEC_RULES = {
   // config, plugins), so anything that can change the rendered tree
   // selects them. Picked up by parity-preview.yml's spec selector
   // (see PARITY_PREVIEW_SPECS / selectParityPreviewSpecs below).
+  // The sitemap / console-clean / image-alt crawls share their
+  // public-content enumeration + test-fixture exclusion via
+  // e2e/public-content.js (#1771 Cat-2) — a change there can shift which
+  // `/blog/` posts are crawled, so it re-selects all three.
   "e2e/sitemap.spec.js": [
     /^_posts\//,
     /^_projects\//,
@@ -336,6 +340,7 @@ const SPEC_RULES = {
     /^_config\.yml$/,
     /^_layouts\//,
     /^_plugins\//,
+    /^e2e\/public-content\.js$/,
   ],
   "e2e/console-clean.spec.js": [
     /^_posts\//,
@@ -347,6 +352,7 @@ const SPEC_RULES = {
     /^_plugins\//,
     /^assets\/css\//,
     /^assets\/js\//,
+    /^e2e\/public-content\.js$/,
   ],
   "e2e/draft-isolation.spec.js": [
     /^_posts\//,
@@ -362,7 +368,14 @@ const SPEC_RULES = {
     /^_layouts\//,
     /^_includes\//,
     /^assets\/images\//,
+    /^e2e\/public-content\.js$/,
   ],
+  // Pure-node unit test for the shared public-content crawl-set
+  // predicate. Selects on a change to the module it locks (or its own
+  // change via the direct-edit rule); also tracks prod-mutate-fixture.js
+  // since the predicate's `e2e-` slug signature must keep matching the
+  // ephemeral-canary slugs that module builds.
+  "e2e/public-content.test.js": [/^e2e\/public-content\.js$/, /^e2e\/prod-mutate-fixture\.js$/],
   "e2e/glow-banding.spec.js": [
     // CSS-only spec; otherwise idle. Picks up via fanout.
   ],

@@ -218,7 +218,16 @@ function editorialStatusChip(page) {
 async function reopenForPublishedDelete(
   page,
   entryUrl,
-  { titleName = /^Title$/i, totalTimeoutMs = 6 * 60 * 1000, perAttemptMs = 30_000 } = {},
+  // totalTimeoutMs bumped 6 → 13 min (#1771 follow-up). The 6-min budget
+  // timed out in real prod: after the create PR's SQUASH auto-merge, the
+  // `cms/posts/<slug>` editorial branch deletion has to PROPAGATE and
+  // Decap's loadUnpublishedEntry has to re-sync to the now-published file
+  // before the editor surfaces "Delete published entry". Under runner
+  // contention (a concurrent loop holding the deploy queue, GitHub API
+  // lag) that resync regularly exceeds 6 min. 13 min comfortably covers
+  // it and still fits inside the spec's TEST_TIMEOUT_MS (46 min prod / 80
+  // min media), which in turn fits the job timeout (50 / 95 min).
+  { titleName = /^Title$/i, totalTimeoutMs = 13 * 60 * 1000, perAttemptMs = 30_000 } = {},
 ) {
   const titleLocator = page.getByRole("textbox", { name: titleName });
   const deadline = Date.now() + totalTimeoutMs;

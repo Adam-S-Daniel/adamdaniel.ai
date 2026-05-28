@@ -2,6 +2,7 @@
 const fs = require("node:fs");
 const path = require("node:path");
 const { test, expect } = require("./base");
+const { isTestFixturePost } = require("./public-content");
 
 // Plan unit B3 — sitemap structural contract.
 //
@@ -142,13 +143,18 @@ test.describe("sitemap structure @parity", () => {
     for (const file of posts) {
       const fm = parseFrontMatter(file);
       if (!isPublished(fm)) continue;
-      // Posts with `sitemap: false` (e.g. test-fixture canaries that
-      // get briefly flipped to `published: true` mid-run by
-      // cms-publish-loop-prod-mutate.spec.js) are deliberately
-      // excluded from the sitemap by jekyll-sitemap. Don't assert on
-      // them — they're a fixture, not a published post the public
-      // sees.
-      if (fm.sitemap === "false" || fm.sitemap === false) continue;
+      // E2E test-fixture canaries are NOT public content we assert the
+      // sitemap must advertise. The shared isTestFixturePost predicate
+      // (e2e/public-content.js) excludes posts flagged `sitemap: false`
+      // (jekyll-sitemap drops these anyway — the `_e2e`/unpublish
+      // canaries) AND the ephemeral prod-loop posts whose slug carries
+      // the `e2e-` canary signature. The latter are born
+      // `published: true` through the Decap UI with NO `sitemap:` flag
+      // (the posts collection has no widget for it), so they DO land in
+      // the sitemap mid-run — but they're a transient fixture, not a
+      // published post the public sees, so this "every published post
+      // appears" check must not depend on them (#1771 Cat-2 fix).
+      if (isTestFixturePost(fm, { filename: path.basename(file) })) continue;
       const url = expectedPostUrl(file, fm);
       if (!locs.includes(url)) {
         missing.push({ file: path.relative(REPO_ROOT, file), url });
