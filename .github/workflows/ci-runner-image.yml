@@ -197,7 +197,7 @@ jobs:
 
       - name: Build and push (lockhash + latest on main)
         if: ${{ steps.check.outputs.exists != 'true' || (github.event_name == 'push' && github.ref == 'refs/heads/main') }}
-        uses: docker/build-push-action@f9f3042f7e2789586610d6e8b85c8f03e5195baf  # v7.1.0 (2026-04-09)
+        uses: docker/build-push-action@f9f3042f7e2789586610d6e8b85c8f03e5195baf  # v7.2.0 (2026-05-21)
         with:
           context: .
           file: .github/ci-runner/Dockerfile
