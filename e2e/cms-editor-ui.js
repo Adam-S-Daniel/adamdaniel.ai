@@ -397,6 +397,29 @@ async function openMediaLibrary(page, { timeout = 30_000 } = {}) {
   return top;
 }
 
+// Close the media library overlay. CRITICAL before any subsequent admin
+// navigation: Decap's media library is a Redux-state overlay, NOT a
+// route — a `page.goto(...)` does NOT dismiss it, so a later nav-link
+// wait times out behind the still-open modal (#1815, run 26604334850:
+// after deleting the asset the modal stayed up and the Posts-list wait
+// 60s-timed-out behind it). No-op if the modal isn't open. Escape is
+// Decap's modal-close affordance; a full reload is the guaranteed
+// fallback (the overlay is client state, so a reload always clears it).
+async function closeMediaLibrary(page, { timeout = 10_000 } = {}) {
+  const top = mediaLibraryTop(page);
+  if (!(await top.isVisible().catch(() => false))) return;
+  await page.keyboard.press("Escape");
+  const closed = await top
+    .waitFor({ state: "hidden", timeout })
+    .then(() => true)
+    .catch(() => false);
+  if (!closed) {
+    // Escape didn't dismiss it (Decap shape/version change) — a full
+    // reload reliably clears the client-state overlay.
+    await page.reload({ waitUntil: "domcontentloaded" });
+  }
+}
+
 module.exports = {
   publishedSwitch,
   setPublished,
@@ -412,4 +435,5 @@ module.exports = {
   mediaLibraryButton,
   mediaLibraryTop,
   openMediaLibrary,
+  closeMediaLibrary,
 };
