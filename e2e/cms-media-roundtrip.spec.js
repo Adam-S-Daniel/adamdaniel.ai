@@ -105,6 +105,7 @@ const {
   clickEditorDelete,
   reopenForPublishedDelete,
   openMediaLibrary,
+  closeMediaLibrary,
 } = require("./cms-editor-ui");
 const { EPHEMERAL_DATE, buildMediaRoundtripPost } = require("./prod-mutate-fixture");
 
@@ -524,6 +525,11 @@ test(
           timeout: 30_000,
         })
         .toBe(false);
+      // Close the overlay before the next step navigates: Decap's media
+      // modal is a Redux-state overlay, not route-bound, so a later
+      // page.goto won't dismiss it and the Posts-list nav wait would
+      // 60s-time-out behind it (#1815, run 26604334850).
+      await closeMediaLibrary(page);
     });
 
     // ── 11. Drive the image delete through to the live site ──────────
@@ -574,7 +580,11 @@ test(
     await test.step("Wait for the image URL to 404 on adamdaniel.ai", async () => {
       // Back to a stable pill-mount route. The deleted post's editor is
       // gone; the /media route has no pill, so navigate to the Posts list.
+      // Reload after the hash-nav: belt-and-braces so any lingering media
+      // overlay is cleared and the posts list remounts cleanly before we
+      // wait on its nav link (#1815).
       await page.goto(`${PROD_ADMIN}#/collections/posts`, { waitUntil: "domcontentloaded" });
+      await page.reload({ waitUntil: "domcontentloaded" });
       await expect(page.getByRole("link", { name: /^Posts$/i })).toBeVisible({ timeout: 60_000 });
       await waitForChangeReflected({
         page,
