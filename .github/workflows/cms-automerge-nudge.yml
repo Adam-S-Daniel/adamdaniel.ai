@@ -1,0 +1,225 @@
+name: CMS auto-merge nudge
+run-name: >-
+  ${{ github.event_name == 'schedule'
+        && format('scheduled — {0}', github.event.schedule)
+   || format('manual — @{0}', github.actor) }}
+
+# Re-enables auto-merge on any open CMS canary PR whose required checks
+# all show latest=SUCCESS / NEUTRAL / SKIPPED but whose mergeStateStatus
+# is still BLOCKED.
+#
+# Background — issue #1815 Blocker 1
+# ──────────────────────────────────
+#
+# Observed on PR #1812 (2026-05-28): all 9 required-status-checks were
+# SUCCESS at the latest CheckRun per context, auto-merge was enabled at
+# 02:44:00Z, no review required, strict_required_status_checks_policy is
+# false — yet the PR stayed `mergeStateStatus: BLOCKED` until the daily
+# sweep closed it ~9h later, never merging.
+#
+# Empirical differential vs. its prod-mutate twin #1813 (which merged in
+# ~7 min): #1812 received two distinct auto-merge-triggering labels in
+# the same second (`decap-cms/pending_publish` from Decap, then
+# `cms/ready` from the publish-via-auto-merge shim + the editorial
+# workflow's `opened` handler). Both fired the `auto-merge-when-ready`
+# job; the per-PR concurrency lane serialised them, so the second
+# `enablePullRequestAutoMerge` mutation ran 4s after the first completed.
+# The final `validate-content` SUCCESS landed 2s after the second
+# mutation — and GitHub's merge-state evaluator appears to have cached
+# the BLOCKED snapshot taken during one of the two mutations (when
+# validate-content's latest was still CANCELLED) and not re-evaluated
+# when the SUCCESS arrived. No subsequent state-change event fires
+# between then and the eventual sweep close, so the PR sits BLOCKED with
+# all-green data.
+#
+# A no-op re-call of `enablePullRequestAutoMerge` re-triggers GitHub's
+# merge-state evaluation against the now-correct check state. This
+# workflow runs that re-call every 5 minutes against any
+# `automated-test`-labelled PR that matches the stuck pattern.
+#
+# Scope — DELIBERATELY narrow
+# ────────────────────────────
+#
+# Only acts on a PR when ALL of the following hold:
+#
+#   1. PR carries the `automated-test` label. `e2e/github-actions-poll.js`
+#      `waitForCmsPullRequest` applies this as the loop opens any cms PR;
+#      a human-authored PR will never carry it. Guarantees we never
+#      touch a real editor's draft or a code PR.
+#   2. PR.autoMergeRequest is already populated — i.e. auto-merge is
+#      already enabled. If a human disabled it, we never re-enable.
+#   3. PR.mergeStateStatus === 'BLOCKED'.
+#   4. Every required-status-check (the 9 contexts in
+#      .github/rulesets/main.json) has latest=SUCCESS / NEUTRAL / SKIPPED.
+#
+# The intersection of 1-4 is exactly the #1812 stuck pattern. With the
+# 5-min cron, worst-case time-to-merge drops from "until the daily sweep
+# closes it" to ~5 min.
+#
+# Required-context list MUST stay in lock-step with .github/rulesets/main.json
+# (lint-locked by e2e/cms-automerge-nudge.test.js).
+#
+# Out of scope:
+#
+#   - Does NOT change cms-editorial-workflow.yml's auto-merge enable
+#     path. The original mutations are unchanged; this is a recovery
+#     mechanism that fires only when they happen to land in the racy
+#     state.
+#   - Does NOT enable auto-merge where it wasn't already. A PR with
+#     `autoMergeRequest: null` is left alone — the editor-workflow's
+#     `auto-merge-when-ready` job is the only thing that should enable
+#     auto-merge from a clean slate.
+#   - Does NOT touch non-CMS PRs (the `automated-test` label gate).
+
+on:
+  schedule:
+    # Every 5 minutes — well under the 6h sweep threshold so a stuck PR
+    # is recovered long before it would be closed. Cron load is ~288
+    # runs/day, each <1 min, one GraphQL query + 0-N tiny mutations.
+    - cron: "*/5 * * * *"
+  workflow_dispatch:
+
+permissions:
+  # Read PR state via GraphQL; write only via the mutation, which the
+  # PAT below carries its own scope for.
+  contents: read
+  pull-requests: read
+
+concurrency:
+  # Single global lane — only one nudge pass at a time. cancel-in-progress
+  # is fine here: if a new pass starts mid-flight, the cancelled pass'
+  # work is recovered by the next pass (the mutation is idempotent and
+  # the next pass re-queries fresh state).
+  group: cms-automerge-nudge
+  cancel-in-progress: true
+
+jobs:
+  nudge:
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    steps:
+      - name: Re-enable auto-merge on stuck CMS PRs
+        uses: actions/github-script@3a2844b7e9c422d3c10d287c895573f7108da1b3 # v9.0.0 (2026-04-09)
+        with:
+          # CMS_E2E_PAT for the same deploy-production-fires reason
+          # documented in cms-editorial-workflow.yml — the recovered
+          # merge must push to main as a non-bot identity so
+          # deploy-production.yml fires.
+          github-token: ${{ secrets.CMS_E2E_PAT }}
+          script: |
+            // Required-status-checks list. MUST stay in lock-step with
+            // .github/rulesets/main.json's `required_status_checks`
+            // array (lint-locked by e2e/cms-automerge-nudge.test.js).
+            const REQUIRED = new Set([
+              'validate-content',
+              'scan',
+              'select',
+              'unit',
+              'parity',
+              'e2e (1)',
+              'e2e-admin',
+              'finalize',
+              'preview-media',
+            ]);
+
+            // Query open PRs carrying `automated-test`; pull their merge
+            // state + status check rollup in one round-trip.
+            const { repository } = await github.graphql(`
+              query($owner:String!, $repo:String!) {
+                repository(owner:$owner, name:$repo) {
+                  pullRequests(states:OPEN, first:50, labels:["automated-test"]) {
+                    nodes {
+                      number
+                      id
+                      mergeStateStatus
+                      autoMergeRequest { enabledAt }
+                      commits(last:1) {
+                        nodes {
+                          commit {
+                            statusCheckRollup {
+                              contexts(first:100) {
+                                nodes {
+                                  __typename
+                                  ... on CheckRun { name conclusion }
+                                  ... on StatusContext { context state }
+                                }
+                              }
+                            }
+                          }
+                        }
+                      }
+                    }
+                  }
+                }
+              }`, { owner: context.repo.owner, repo: context.repo.repo });
+
+            const prs = repository.pullRequests.nodes;
+            core.info(`Found ${prs.length} open automated-test PR(s)`);
+            let nudged = 0;
+
+            for (const pr of prs) {
+              if (pr.mergeStateStatus !== 'BLOCKED') continue;
+              if (!pr.autoMergeRequest) continue;
+              if (!pr.commits.nodes.length) continue;
+
+              const rollup = pr.commits.nodes[0].commit.statusCheckRollup;
+              if (!rollup) continue;
+
+              // Build latest-per-context map. CheckRun is the modern API
+              // (Actions); StatusContext is legacy commit statuses. Both
+              // can appear in the rollup; we take the latest entry per
+              // name (the rollup is ordered, so a forward sweep with
+              // overwrite gives us the latest).
+              const latest = new Map();
+              for (const c of rollup.contexts.nodes) {
+                if (c.__typename === 'CheckRun') {
+                  latest.set(c.name, c.conclusion);
+                } else if (c.__typename === 'StatusContext') {
+                  // Legacy status — state is 'SUCCESS' / 'FAILURE' / etc.
+                  // Map to CheckRun conclusion semantics.
+                  latest.set(c.context, c.state);
+                }
+              }
+
+              const allGreen = [...REQUIRED].every((name) => {
+                const c = latest.get(name);
+                return c === 'SUCCESS' || c === 'NEUTRAL' || c === 'SKIPPED';
+              });
+              if (!allGreen) {
+                const missing = [...REQUIRED].filter((n) => {
+                  const c = latest.get(n);
+                  return !(c === 'SUCCESS' || c === 'NEUTRAL' || c === 'SKIPPED');
+                });
+                core.debug(
+                  `PR #${pr.number}: BLOCKED but required checks not all green ` +
+                    `(non-green: ${missing.join(', ')}); leaving alone`,
+                );
+                continue;
+              }
+
+              core.info(
+                `PR #${pr.number}: all required SUCCESS but BLOCKED + auto-merge enabled — nudging`,
+              );
+
+              try {
+                await github.graphql(`
+                  mutation($pullRequestId: ID!) {
+                    enablePullRequestAutoMerge(input: {
+                      pullRequestId: $pullRequestId,
+                      mergeMethod: SQUASH
+                    }) {
+                      pullRequest { autoMergeRequest { enabledAt } }
+                    }
+                  }`, { pullRequestId: pr.id });
+                nudged += 1;
+              } catch (err) {
+                const msg = String((err && err.message) || err);
+                if (/pull request is already merged/i.test(msg)) {
+                  core.info(`PR #${pr.number} merged between query and mutation; nothing to do.`);
+                  continue;
+                }
+                core.warning(`nudge failed for PR #${pr.number}: ${msg}`);
+              }
+            }
+
+            core.info(`Nudged ${nudged} stuck PR(s).`);
