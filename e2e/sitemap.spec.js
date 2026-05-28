@@ -2,7 +2,7 @@
 const fs = require("node:fs");
 const path = require("node:path");
 const { test, expect } = require("./base");
-const { isTestFixturePost } = require("./public-content");
+const { isTestFixturePost, slugify } = require("./public-content");
 
 // Plan unit B3 — sitemap structural contract.
 //
@@ -61,8 +61,21 @@ function parseFrontMatter(filePath) {
 
 function deriveSlugFromFilename(filename) {
   // `_posts/2026-04-25-replacement-test-post-1.md` → `replacement-test-post-1`.
+  // The date-stripped remainder is then run through the SHARED `slugify`
+  // (e2e/public-content.js) — Jekyll's `permalink: /blog/:slug/` passes the
+  // effective slug through `Jekyll::Utils.slugify` (lowercase, collapse runs
+  // of non-`[a-z0-9]` into single `-`, trim dashes). Without slugifying here,
+  // a filename like `2026-05-28-quoting-anthropic-opus-4-8-safety-"somewhat-
+  // less-robust".md` (real human content; #1815 push-media run 26598524027)
+  // mapped to a literal `…safety-"somewhat-less-robust"` URL that doesn't
+  // exist in the jekyll-generated sitemap — the live URL is the curly-quote-
+  // stripped `…safety-somewhat-less-robust`. Reusing the shared helper keeps
+  // this spec, admin/live-url-derive.js, and public-content.js's crawl
+  // enumeration agreeing on what the live URL is (drift-locked by
+  // e2e/slugify-parity.test.js).
   const base = path.basename(filename, ".md");
-  return base.replace(FILENAME_DATE_PREFIX_RE, "");
+  const dateStripped = base.replace(FILENAME_DATE_PREFIX_RE, "");
+  return slugify(dateStripped);
 }
 
 function expectedPostUrl(filename, frontMatter) {
@@ -103,6 +116,18 @@ function readSitemapLocs() {
   // jekyll-sitemap emits `<loc>https://adamdaniel.ai/path/</loc>`. Pull every
   // <loc>'s body, then strip the host so we can compare against root-relative
   // paths regardless of which `url:` is configured (prod vs. preview).
+  //
+  // After stripping, percent-decode the path so the comparison against
+  // expectedPostUrl / expectedE2eUrl (which return literal unencoded slug
+  // text) matches when a post slug contains characters that jekyll-sitemap
+  // URL-encodes — curly quotes, em-dashes, etc. Without this, a post like
+  // `_posts/2026-05-28-quoting-anthropic-opus-4-8-safety-"somewhat-less-
+  // robust".md` is in the sitemap as `…safety-%E2%80%9C…%E2%80%9D/` but the
+  // expected URL is `…safety-"…"/`, the strict `locs.includes(url)` returns
+  // false, and the test reports the post as missing (#1815 push-media run
+  // 26598524027). decodeURI is the correct primitive here — it leaves URL
+  // reserved characters (`/`, `?`, `#`, etc.) intact and only decodes the
+  // percent-encoded body, which is what we want for slug comparison.
   const xml = fs.readFileSync(SITEMAP_PATH, "utf8");
   const locs = [];
   const re = /<loc>([^<]+)<\/loc>/g;
@@ -111,7 +136,14 @@ function readSitemapLocs() {
     const raw = match[1].trim();
     try {
       const u = new URL(raw);
-      locs.push(u.pathname);
+      let path = u.pathname;
+      try {
+        path = decodeURI(path);
+      } catch {
+        // Malformed percent-encoding — keep the raw pathname so the
+        // failure surface is a real mismatch, not a decode crash.
+      }
+      locs.push(path);
     } catch {
       // Not a full URL — keep as-is.
       locs.push(raw);
