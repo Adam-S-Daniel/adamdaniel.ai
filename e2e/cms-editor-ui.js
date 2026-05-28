@@ -362,6 +362,41 @@ async function reopenForPublishedDelete(
   }
 }
 
+// Decap's GLOBAL media library is a MODAL opened from the top-nav
+// "Media" button — it is NOT a page route. `page.goto("…/admin/#/media")`
+// renders Decap's NotFound ("Not Found") because Decap 3.12.2 registers
+// no `/media` page route (#1815, runs 26597250490 / 26602619236). The
+// library's header is a container whose class contains "LibraryTop"; it
+// holds the Upload / Copy / Download / Delete-selected controls and sits
+// above the asset grid. Single-sourced here so the open-and-wait
+// sequence and the brittle `[class*="LibraryTop"]` selector can't drift
+// across specs (was copy-pasted in cms-media-roundtrip.spec.js +
+// admin-no-occlusion.spec.js).
+const MEDIA_LIBRARY_TOP_SELECTOR = '[class*="LibraryTop"]';
+
+// The top-nav button that opens the global media library overlay.
+function mediaLibraryButton(page) {
+  return page.getByRole("button", { name: "Media", exact: true }).first();
+}
+
+// The media library modal's header container (Upload / Delete-selected /
+// Copy / Download live inside it). Callers scope header-control lookups
+// to this so they don't match same-named controls elsewhere.
+function mediaLibraryTop(page) {
+  return page.locator(MEDIA_LIBRARY_TOP_SELECTOR).first();
+}
+
+// Open the global media library overlay (click "Media") and wait for its
+// header to render. Returns the LibraryTop locator so callers can scope
+// header-control interactions. Caller is responsible for being on a
+// route where the top nav is present (e.g. after loading the admin root).
+async function openMediaLibrary(page, { timeout = 30_000 } = {}) {
+  await mediaLibraryButton(page).click();
+  const top = mediaLibraryTop(page);
+  await expect(top, "Decap media library modal should open").toBeVisible({ timeout });
+  return top;
+}
+
 module.exports = {
   publishedSwitch,
   setPublished,
@@ -373,4 +408,8 @@ module.exports = {
   publishedDeleteButton,
   editorialStatusChip,
   reopenForPublishedDelete,
+  MEDIA_LIBRARY_TOP_SELECTOR,
+  mediaLibraryButton,
+  mediaLibraryTop,
+  openMediaLibrary,
 };

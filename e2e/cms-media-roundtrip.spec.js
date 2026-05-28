@@ -104,6 +104,7 @@ const {
   publishViaUi,
   clickEditorDelete,
   reopenForPublishedDelete,
+  openMediaLibrary,
 } = require("./cms-editor-ui");
 const { EPHEMERAL_DATE, buildMediaRoundtripPost } = require("./prod-mutate-fixture");
 
@@ -502,11 +503,10 @@ test(
       await expect(page.getByRole("link", { name: /^Posts$/i })).toBeVisible({
         timeout: 60_000,
       });
-      await page.getByRole("button", { name: "Media", exact: true }).first().click();
-      const libraryTop = page.locator('[class*="LibraryTop"]').first();
-      await expect(libraryTop, "Decap media library modal should open").toBeVisible({
-        timeout: 30_000,
-      });
+      // openMediaLibrary (shared, cms-editor-ui.js) clicks the top-nav
+      // "Media" button and waits for the library header — the supported
+      // way to reach the global library (there is no `#/media` route).
+      await openMediaLibrary(page);
       const card = page.getByText(imageName, { exact: false }).first();
       await expect(
         card,
