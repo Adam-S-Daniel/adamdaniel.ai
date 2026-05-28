@@ -277,10 +277,21 @@ async function reopenForPublishedDelete(
       await page.goto(adminUrl, { waitUntil: "domcontentloaded" });
       // Best-effort: don't fail the attempt if Posts doesn't render fast
       // enough — the subsequent entry navigation may still recover. We
-      // just need to give Decap a chance to complete login.
-      await postsLink
+      // just need to give Decap a chance to complete login. The
+      // `.catch(() => false)` (not a banned `() => {}`) flows the miss
+      // into a logged conditional so the choice to proceed is explicit
+      // (silent-catch-lint).
+      const postsRendered = await postsLink
         .waitFor({ state: "visible", timeout: Math.min(perAttemptMs, 15_000) })
-        .catch(() => {});
+        .then(() => true)
+        .catch(() => false);
+      if (!postsRendered) {
+        console.warn(
+          `[reopenForPublishedDelete] attempt ${attempt}: Posts nav not visible within the ` +
+            "bounded wait after bouncing through admin root; proceeding to the entry route anyway " +
+            "(Decap may still be finishing login).",
+        );
+      }
     }
 
     await page.goto(entryUrl, { waitUntil: "domcontentloaded" });
