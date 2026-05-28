@@ -15,11 +15,16 @@ title: Home
     </div>
   </section>
 
-  {%- comment -%} Exclude e2e test-fixture canaries (test_fixture: true) so a
-  loop spec briefly publishing one (e.g. _posts/2099-*-e2e-*-canary) never
-  surfaces it on the homepage — it still serves at its own /blog/<slug>/ URL
-  for the spec to verify. See _config.yml `future: true`. {%- endcomment -%}
-  {% assign featured_posts = site.posts | where: "published", true | where_exp: "post", "post.test_fixture != true" | limit: 3 %}
+  {%- comment -%} Exclude e2e test-fixture canaries so a loop spec briefly
+  publishing one (e.g. _posts/2099-*-e2e-*-canary) never surfaces it on the
+  homepage — it still serves at its own /blog/<slug>/ URL for the spec to
+  verify. `feed_exclude` is stamped by _plugins/exclude_e2e_posts.rb on any
+  post whose slug starts with `e2e-` or that sets `test_fixture: true` — the
+  shared discriminator across the feed, sitemap, tags, and listings. Using
+  it (not the raw `test_fixture` flag) catches Decap UI-created e2e posts,
+  which carry the `e2e-` slug but cannot set the flag. See _config.yml
+  `future: true`. {%- endcomment -%}
+  {% assign featured_posts = site.posts | where: "published", true | where_exp: "post", "post.feed_exclude != true" | limit: 3 %}
   {% if featured_posts.size > 0 %}
   <section style="padding: 4rem 0; border-top: 1px solid var(--border);">
     <div class="container">

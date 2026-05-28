@@ -85,6 +85,11 @@ const RENDER_FANOUT_PATTERNS = [
   /^assets\/css\//,
   /^_plugins\//,
   /^Gemfile/,
+  // Custom site-wide Atom feed source (replaces jekyll-feed's /feed.xml).
+  // A change here alters the deployed feed for every post, so fan out the
+  // full matrix — feeds-and-share.spec.js + e2e-posts-public-exclusion.test.js
+  // need to re-run.
+  /^feed\.xml$/,
 ];
 
 // Additional fanout files that change how the TEST SUITE runs but NOT
