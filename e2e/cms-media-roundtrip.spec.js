@@ -486,7 +486,23 @@ test(
 
     // ── 10. Delete the uploaded asset via the standalone Media UI ────
     await test.step("Delete the image via the standalone Media library UI", async () => {
+      // Bounce through admin root before the deep media-route nav: after
+      // the post-delete leg, the page is on a deep entry-editor route. A
+      // same-host `page.goto(`${PROD_ADMIN}#/media`)` is a HASH-ONLY
+      // change — Playwright does not full-reload on a hash diff, and
+      // Decap's React router has been observed to render "Not Found" at
+      // /media instead of remounting the MediaLibrary component (run
+      // 26597250490). Going through the admin root forces a full
+      // navigation so the next route change starts from a clean Decap app
+      // state, and the explicit `page.reload()` after the hash change
+      // guarantees the MediaLibrary fetches its file list against current
+      // backend state rather than a cached pre-upload listing.
+      await page.goto(PROD_ADMIN, { waitUntil: "domcontentloaded" });
+      await expect(page.getByRole("link", { name: /^Posts$/i })).toBeVisible({
+        timeout: 60_000,
+      });
       await page.goto(`${PROD_ADMIN}#/media`, { waitUntil: "domcontentloaded" });
+      await page.reload({ waitUntil: "domcontentloaded" });
       const card = page.getByText(imageName, { exact: false }).first();
       await expect(
         card,
