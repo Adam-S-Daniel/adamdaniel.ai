@@ -131,10 +131,13 @@ const PROD_CANARY = process.env.PROD_CANARY === "1";
 // Two editorial-workflow auto-merge cycles (create + delete), each
 // roughly validate-content + auto-merge + deploy-production + CloudFront
 // (~12-15 min when runners are warm), plus the in-browser drive of both
-// chains and two URL waits at 15 min each. 40 min envelope. Retries
-// disabled — this mutates real prod; a retry re-runs the same broken
-// chain after another 40 min.
-const TEST_TIMEOUT_MS = 40 * 60 * 1000;
+// chains, two URL waits at 15 min each, and the enlarged 13-min
+// reopenForPublishedDelete resync budget (#1771 follow-up). Bumped
+// 40 → 46 min so the worst-case sum (URL-serve + create-merge confirm +
+// 13-min reopen + 404-wait) fits without truncating a leg; still inside
+// the 50-min job timeout (cms-publish-loop-prod.yml). Retries disabled —
+// this mutates real prod; a retry re-runs the same broken chain.
+const TEST_TIMEOUT_MS = 46 * 60 * 1000;
 
 test.describe.configure({
   mode: "serial",
@@ -355,8 +358,12 @@ test(
       // fires. The URL already served above (deploy runs only post-merge),
       // so the merge is usually done; this confirms it deterministically
       // and is what lets the delete leg open a delete-FROM-MAIN change.
+      // 10-min budget (was 5): the merge has normally landed by the
+      // URL-serve gate above, but this absorbs GitHub API lag between the
+      // deploy completing and the PR object flipping `merged:true` without
+      // failing a run whose chain is actually healthy (#1771 follow-up).
       expect(createPrNumber, "create PR number captured for merge wait").toBeTruthy();
-      await waitForMerge({ prNumber: createPrNumber, timeoutMs: 5 * 60 * 1000 });
+      await waitForMerge({ prNumber: createPrNumber, timeoutMs: 10 * 60 * 1000 });
     });
 
     await test.step("Re-open the post in PUBLISHED state for the delete leg", async () => {

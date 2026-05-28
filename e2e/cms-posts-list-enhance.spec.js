@@ -173,9 +173,16 @@ test.describe("Issue #1042 — admin posts UI", () => {
     // Only the toggle-only unpublish canary is a PERSISTENT committed
     // `_posts/` fixture now: #1771 step 4 retired the prod-mutate +
     // media canaries for EPHEMERAL per-run posts (created + deleted within
-    // a run, never committed). The ephemeral posts are ALSO born with
-    // `test_fixture: true` — locked in e2e/prod-mutate-fixture.test.js
-    // ("the post is BORN published, noindex, sitemap:false, test_fixture").
+    // a run, never committed). NB: the ephemeral posts' canonical
+    // `composePost` text DOES set `test_fixture: true` (locked in
+    // e2e/prod-mutate-fixture.test.js), but the genuinely-UI-driven create
+    // leg lands them on `main` with `test_fixture: false` — the posts
+    // collection's `test_fixture` is a hidden `default: false` widget the
+    // editor can't toggle. The Posts-list hide + the public-content crawl
+    // exclusion therefore key on the structural `e2e-` slug signature for
+    // those (admin/posts-list-enhance.js's /^\d{4}-\d{2}-\d{2}-e2e-/i and
+    // e2e/public-content.js), not on the flag. This assertion covers only
+    // the committed fixture, where the flag genuinely IS on disk.
     for (const f of ["2024-01-02-e2e-unpublish-canary.md"]) {
       const fm = read(path.join(postsDir, f));
       expect(

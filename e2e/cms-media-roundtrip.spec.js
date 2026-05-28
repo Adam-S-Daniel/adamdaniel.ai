@@ -125,10 +125,13 @@ const UPLOADS_DIR = "assets/images/uploads";
 const PROD_CANARY = process.env.PROD_CANARY === "1";
 
 // One full real-prod loop: create+attach → live, delete post → 404,
-// delete image → 404. Three deploy waits at 15 min each + setup ≈ 55 min
-// worst case; typical happy path ~25-30 min. Retries disabled — mutates
-// real prod; a retry re-runs the same broken chain.
-const TEST_TIMEOUT_MS = 55 * 60 * 1000;
+// delete image → 404. Three deploy waits at 15 min each + the enlarged
+// 13-min reopenForPublishedDelete resync budget (#1771 follow-up) + setup.
+// Bumped 55 → 80 min so the worst-case sum fits without truncating a leg;
+// typical happy path is still ~25-30 min. Comfortably inside the 95-min
+// job timeout (cms-media-roundtrip.yml). Retries disabled — mutates real
+// prod; a retry re-runs the same broken chain.
+const TEST_TIMEOUT_MS = 80 * 60 * 1000;
 
 test.describe.configure({
   mode: "serial",
@@ -385,8 +388,11 @@ test(
       // post-merge), so the merge is usually done; this confirms it
       // deterministically and is what lets the delete leg open a
       // delete-FROM-MAIN change rather than dropping the draft branch.
+      // 10-min budget (was 5): the merge has normally landed by the
+      // serve gate above, but this absorbs GitHub API lag between deploy
+      // completing and the PR flipping `merged:true` (#1771 follow-up).
       expect(createPrNumber, "create PR number captured for merge wait").toBeTruthy();
-      await waitForMerge({ prNumber: createPrNumber, timeoutMs: 5 * 60 * 1000 });
+      await waitForMerge({ prNumber: createPrNumber, timeoutMs: 10 * 60 * 1000 });
     });
 
     await test.step("Re-open the post in PUBLISHED state for the delete leg", async () => {
