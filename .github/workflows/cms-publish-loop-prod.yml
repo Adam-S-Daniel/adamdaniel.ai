@@ -177,11 +177,12 @@ jobs:
       HOME: /root
     container:
       image: ${{ needs.build-image.outputs.image }}
-    # 30 → 50: the await-prod-deploy gate below can spend up to
-    # ~15 min waiting for this commit's deploy + CDN reflect before
-    # the spec even starts (#1101). Headroom so a legit slow-deploy
-    # gate doesn't get GHA-killed mid-loop.
-    timeout-minutes: 50
+    # 30 → 50 → 90: the await-prod-deploy gate below can spend up to
+    # ~15 min waiting for this commit's deploy + CDN reflect (#1101).
+    # Spec TEST_TIMEOUT_MS bumped to 80 min (#1815) to absorb real prod
+    # auto-merge / Decap-resync latencies; outer cap stays comfortably
+    # ahead so a slow gate + worst-case spec run never gets GHA-killed.
+    timeout-minutes: 90
     steps:
       - name: Checkout
         uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd  # v6.0.2 (2026-01-09)
