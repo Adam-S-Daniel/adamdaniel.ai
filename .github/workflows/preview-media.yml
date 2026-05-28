@@ -157,8 +157,17 @@ jobs:
           # shellcheck disable=SC2001
           echo "$changed" | sed 's/^/  /'
           # grep -E with an alternation of the salient path anchors.
+          # PROBE ⊆ DEPLOY (#1815): every anchor here MUST be a path
+          # deploy-preview.yml deploys for — otherwise a salient PR that
+          # builds no preview hard-fails after ~20 min waiting on a
+          # preview that never existed. Test-only files (the spec
+          # e2e/preview-media-resolves.spec.js, its helper e2e/cms-host.js)
+          # are DELIBERATELY excluded: they're under deploy-preview's
+          # `e2e/**` paths-ignore, so they deploy no preview. The spec
+          # still runs in the normal e2e matrix. The invariant is
+          # drift-locked by e2e/preview-deploy-superset.test.js.
           if echo "$changed" | grep -Eq \
-            '^(assets/images/uploads/|admin/config(-local)?\.yml$|_config\.yml$|_layouts/(post|canary)\.html$|scripts/patch-preview-config\.sh$|e2e/cms-host\.js$|e2e/preview-media-resolves\.spec\.js$|\.github/workflows/preview-media\.yml$)'; then
+            '^(assets/images/uploads/|admin/config(-local)?\.yml$|_config\.yml$|_layouts/(post|canary)\.html$|scripts/patch-preview-config\.sh$|\.github/workflows/preview-media\.yml$)'; then
             echo "salient=true" >> "$GITHUB_OUTPUT"
             echo "Media-salient change detected — running the preview probe."
           else
