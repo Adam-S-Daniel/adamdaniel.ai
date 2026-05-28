@@ -19,6 +19,28 @@ const {
 // Pure-function unit tests for the e2e spec selector. No browser, no
 // git — just verify each rule fires correctly.
 
+// Most assertions below check the selector's DEFAULT (local-lane)
+// behaviour and call selectSpecs() WITHOUT an explicit `options.lane`.
+// selectSpecs() falls back to `process.env.TEST_LANE` when the option is
+// omitted (select-specs.js), and the `e2e-real` CI lane runs this file
+// with TEST_LANE=real — which deliberately flips a render/fanout change
+// from scope:"all" to scope:"subset" (every @lane:real spec). That made
+// these env-agnostic assertions fail only when this file happened to be
+// selected into the real lane (e.g. on a PR touching select-specs.js).
+// Pin the ambient lane to the default (unset ⇒ local) for the whole file
+// so the no-option assertions are deterministic regardless of which CI
+// lane selected them; tests that pass an explicit `{ lane: "real" }` are
+// unaffected because `options.lane` overrides the env.
+let savedTestLane;
+test.beforeAll(() => {
+  savedTestLane = process.env.TEST_LANE;
+  delete process.env.TEST_LANE;
+});
+test.afterAll(() => {
+  if (savedTestLane === undefined) delete process.env.TEST_LANE;
+  else process.env.TEST_LANE = savedTestLane;
+});
+
 test.describe("select-specs", () => {
   test("empty changeset → skip with baseline", () => {
     const r = selectSpecs([]);
