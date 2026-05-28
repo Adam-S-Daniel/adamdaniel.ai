@@ -167,10 +167,12 @@ jobs:
     container:
       image: ${{ needs.build-image.outputs.image }}
     # One full real-prod loop with THREE deploy waits. Per-spec
-    # TEST_TIMEOUT_MS is 55 min; this cap is the outer backstop.
-    # 75 → 95: the await-prod-deploy gate can spend up to ~15 min
-    # before the spec starts (#1101).
-    timeout-minutes: 95
+    # TEST_TIMEOUT_MS is 100 min (#1815, was 80); this cap is the
+    # outer backstop. 75 → 95 → 110: the await-prod-deploy gate can
+    # spend up to ~15 min before the spec starts (#1101), and the
+    # enlarged waitForMerge / reopenForPublishedDelete budgets need
+    # the spec to fit inside the cap.
+    timeout-minutes: 110
     steps:
       - name: Checkout
         uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd  # v6.0.2 (2026-01-09)

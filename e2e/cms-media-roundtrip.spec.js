@@ -126,12 +126,13 @@ const PROD_CANARY = process.env.PROD_CANARY === "1";
 
 // One full real-prod loop: create+attach → live, delete post → 404,
 // delete image → 404. Three deploy waits at 15 min each + the enlarged
-// 13-min reopenForPublishedDelete resync budget (#1771 follow-up) + setup.
-// Bumped 55 → 80 min so the worst-case sum fits without truncating a leg;
-// typical happy path is still ~25-30 min. Comfortably inside the 95-min
-// job timeout (cms-media-roundtrip.yml). Retries disabled — mutates real
-// prod; a retry re-runs the same broken chain.
-const TEST_TIMEOUT_MS = 80 * 60 * 1000;
+// 25-min reopenForPublishedDelete resync budget + the 30-min waitForMerge
+// budget (#1815) + setup. Bumped 80 → 100 min so the worst-case sum fits
+// without truncating a leg; typical happy path is still ~25-30 min.
+// Comfortably inside the 110-min job timeout (cms-media-roundtrip.yml).
+// Retries disabled — mutates real prod; a retry re-runs the same broken
+// chain.
+const TEST_TIMEOUT_MS = 100 * 60 * 1000;
 
 test.describe.configure({
   mode: "serial",
@@ -388,11 +389,15 @@ test(
       // post-merge), so the merge is usually done; this confirms it
       // deterministically and is what lets the delete leg open a
       // delete-FROM-MAIN change rather than dropping the draft branch.
-      // 10-min budget (was 5): the merge has normally landed by the
-      // serve gate above, but this absorbs GitHub API lag between deploy
-      // completing and the PR flipping `merged:true` (#1771 follow-up).
+      // 30-min budget (was 10): real prod create PRs regularly take
+      // 15-30 min to auto-merge under runner contention or when the CMS
+      // editorial-workflow concurrency cancels intermediate validate-content
+      // runs and the SUCCESS only lands on the final reattempt (#1815).
+      // The serve gates above hint the deploy completed, but the PR
+      // object can still lag flipping `merged:true`; this absorbs that
+      // without failing a healthy run.
       expect(createPrNumber, "create PR number captured for merge wait").toBeTruthy();
-      await waitForMerge({ prNumber: createPrNumber, timeoutMs: 10 * 60 * 1000 });
+      await waitForMerge({ prNumber: createPrNumber, timeoutMs: 30 * 60 * 1000 });
     });
 
     await test.step("Re-open the post in PUBLISHED state for the delete leg", async () => {
@@ -400,7 +405,14 @@ test(
       // and "Delete published entry" is present — i.e. Decap has dropped
       // the (now-merged) editorial entry and re-loaded the published file.
       // Only in that state does the Delete click remove the file from main.
-      await reopenForPublishedDelete(page, `${PROD_ADMIN}#/collections/posts/entries/${fileSlug}`);
+      // Pass the spec's fileExistsOnMain as a Contents-API cross-check so a
+      // timeout's error message can tell "Decap is slow" from "merge never
+      // landed" (#1815). adminUrl enables the navigate-away-and-back
+      // fallback inside the helper.
+      await reopenForPublishedDelete(page, `${PROD_ADMIN}#/collections/posts/entries/${fileSlug}`, {
+        crossCheck: () => fileExistsOnMain(filePath),
+        adminUrl: PROD_ADMIN,
+      });
     });
 
     await test.step("Click the editor's Delete button → opens delete-from-main cms/... PR", async () => {
@@ -622,7 +634,9 @@ test.afterAll(async () => {
       console.warn(`[cleanup-harness] could not remove ${filePath}: ${e && e.message}`);
     }
   } else {
-    console.log(`[cleanup-harness] ${filePath} gone from main; UI delete succeeded`);
+    console.log(
+      `[cleanup-harness] ${filePath} gone from main; UI delete succeeded — no safety net needed`,
+    );
   }
 
   // Leftover per-run upload → direct Contents-API delete (the name is

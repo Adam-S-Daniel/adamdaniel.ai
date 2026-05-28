@@ -218,36 +218,71 @@ function editorialStatusChip(page) {
 async function reopenForPublishedDelete(
   page,
   entryUrl,
-  // totalTimeoutMs bumped 6 → 13 min (#1771 follow-up). The 6-min budget
-  // timed out in real prod: after the create PR's SQUASH auto-merge, the
-  // `cms/posts/<slug>` editorial branch deletion has to PROPAGATE and
-  // Decap's loadUnpublishedEntry has to re-sync to the now-published file
-  // before the editor surfaces "Delete published entry". Under runner
-  // contention (a concurrent loop holding the deploy queue, GitHub API
-  // lag) that resync regularly exceeds 6 min. 13 min comfortably covers
-  // it and still fits inside the spec's TEST_TIMEOUT_MS (46 min prod / 80
-  // min media), which in turn fits the job timeout (50 / 95 min).
-  { titleName = /^Title$/i, totalTimeoutMs = 13 * 60 * 1000, perAttemptMs = 30_000 } = {},
+  // totalTimeoutMs bumped 13 → 25 min (#1815 / #1771 follow-up). The
+  // 13-min budget timed out in real prod (run 26551283809): after the
+  // create PR's SQUASH auto-merge, Decap's loadUnpublishedEntry has to
+  // re-sync past the deleted editorial branch AND past any concurrent
+  // editorial-workflow runs Decap kicks off during hydration. Under
+  // runner contention (a concurrent loop holding the deploy queue,
+  // GitHub API lag) the resync regularly exceeds 13 min. 25 min
+  // comfortably covers it and still fits inside the spec's TEST_TIMEOUT_MS
+  // (80 min prod / 100 min media), which in turn fits the job timeout
+  // (90 / 110 min).
+  //
+  // `crossCheck` (optional) is called every attempt; it should return a
+  // Promise<boolean> indicating whether the create PR's file is present on
+  // `main` (Contents-API cross-check). When provided, the error message
+  // distinguishes "Decap is slow but the merge has landed" from "the
+  // merge never landed at all" so triage is unambiguous.
+  {
+    titleName = /^Title$/i,
+    totalTimeoutMs = 25 * 60 * 1000,
+    perAttemptMs = 30_000,
+    crossCheck = null,
+    adminUrl = null,
+  } = {},
 ) {
   const titleLocator = page.getByRole("textbox", { name: titleName });
   const deadline = Date.now() + totalTimeoutMs;
   let attempt = 0;
-  // Assigned on every loop pass (the if/else below is exhaustive) before
-  // the deadline check reads it, so no initializer is needed — and a dead
-  // initializer trips no-useless-assignment.
   let lastState;
+  let lastCrossCheck = null;
   for (;;) {
     attempt += 1;
-    // Navigate to the entry route, then HARD RELOAD every pass. The page
-    // is typically already on this entry's editor route (the create leg
-    // mounted it), so a same-hash goto alone would not re-mount the
-    // component; the reload re-runs componentDidMount → loadUnpublishedEntry
-    // against fresh backend state. Once the (now-merged) editorial branch
-    // is gone, Decap's loadUnpublishedEntry hits notUnderEditorialWorkflow
-    // and falls through to loadEntry (the published file), so the DRAFT
-    // toolbar disappears and "Delete published entry" renders.
+
+    // Default reset: navigate to the entry route + hard-reload — re-runs
+    // componentDidMount → loadUnpublishedEntry against fresh backend state.
+    //
+    // Every 3rd attempt, ALSO bounce through the collection index FIRST
+    // (navigate-away-and-back fallback, #1815). A same-hash goto alone
+    // would not re-mount the editor component; reload re-mounts but
+    // Decap's Redux store survives a same-route reload in some shapes,
+    // leaving the previously-loaded editorial entry cached. Bouncing
+    // through `#/collections/posts` forces a route change, unmounts the
+    // Editor component, lets Decap rebuild its entry slice from a cold
+    // state, then re-enters the entry — the most reliable way to surface
+    // the post-merge published file when the editor is otherwise stuck
+    // on the cached editorial draft.
+    if (attempt % 3 === 0 && adminUrl) {
+      const collectionMatch = /(#\/collections\/[^/]+)/.exec(entryUrl);
+      const collectionRoute = collectionMatch
+        ? `${adminUrl}${collectionMatch[1]}`
+        : `${adminUrl}#/collections/posts`;
+      await page.goto(collectionRoute, { waitUntil: "domcontentloaded" });
+      await page.waitForTimeout(1_500);
+    }
     await page.goto(entryUrl, { waitUntil: "domcontentloaded" });
     await page.reload({ waitUntil: "domcontentloaded" });
+
+    // Run the optional Contents-API cross-check ONCE per attempt so the
+    // error message can quote a deterministic state.
+    if (crossCheck) {
+      try {
+        lastCrossCheck = await crossCheck();
+      } catch (_) {
+        lastCrossCheck = null;
+      }
+    }
 
     // Wait for the editor to mount at all (Title field present).
     if (!(await titleLocator.isVisible({ timeout: perAttemptMs }).catch(() => false))) {
@@ -271,10 +306,19 @@ async function reopenForPublishedDelete(
     }
 
     if (Date.now() >= deadline) {
+      const crossCheckLine =
+        lastCrossCheck === true
+          ? " Contents-API cross-check on main: file IS present (the create PR's merge HAS landed — " +
+            "Decap is failing to catch up to it; this is a Decap-side hydration bug, not a missing merge)."
+          : lastCrossCheck === false
+            ? " Contents-API cross-check on main: file is ABSENT (the create PR's merge has NOT " +
+              "landed; widen waitForMerge or investigate why auto-merge stalled)."
+            : "";
       throw new Error(
         `Editor for ${entryUrl} never reached the PUBLISHED delete state within ` +
-          `${Math.round(totalTimeoutMs / 1000)}s (${attempt} attempt(s)); last seen: ${lastState}. ` +
-          "Decap is still loading the entry as an open editorial-workflow draft — the create " +
+          `${Math.round(totalTimeoutMs / 1000)}s (${attempt} attempt(s)); last seen: ${lastState}.` +
+          crossCheckLine +
+          " Decap is still loading the entry as an open editorial-workflow draft — the create " +
           "PR's cms/* branch has not been merged+removed yet, so a Delete click would call " +
           "onDeleteUnpublishedChanges (draft branch only) instead of onDelete (delete from main). " +
           "Ensure the create PR is fully merged before re-opening for delete.",
