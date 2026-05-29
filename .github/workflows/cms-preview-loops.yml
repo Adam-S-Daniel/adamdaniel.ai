@@ -1,245 +1,30 @@
-name: CMS Preview Loops — Parity (prod-mutate / unpublish / tags)
+# Thin caller — copied into a site repo as
+# `.github/workflows/cms-preview-loops.yml`. Owns the workflow_dispatch
+# trigger + run-name; delegates the three preview-env parity loops
+# (prod-mutate / unpublish / tags) to the platform's reusable workflow.
+name: CMS Preview Loops — Parity
 run-name: "${{ format('manual — PR #{0} @{1}', inputs.pr_number, github.actor) }}"
-
-# Issue #999 follow-up to PR #971. Companion to
-# cms-publish-loop-preview.yml: that workflow runs the canary-page
-# publish loop against a PR preview env; THIS workflow runs the three
-# remaining real-backend loops that previously had prod-only coverage
-# — prod-mutation (`_posts/` body edit + publish toggle), unpublish/
-# re-publish, and the Tags-collection lifecycle — against the SAME
-# per-PR preview environment (`preview-pr<N>.adamdaniel.ai`),
-# targeting the parent PR's head ref.
-#
-# Why a workflow_dispatch (and NOT a required PR check):
-#
-#   1. These are heavy real-network round trips (Decap save →
-#      cms/<col>/<slug> PR against the head ref → label-driven
-#      auto-merge → deploy-preview → public URL), ~10-12 min each. The
-#      merge path stays off them deliberately — per PR #971 the only
-#      REQUIRED preview check is the lightweight read-only
-#      `preview-media` gate. This workflow is dispatch-only, so it is
-#      never a PR status context and never gates a merge (no
-#      .github/rulesets/main.json entry, no required-check stub).
-#
-#   2. The spec needs PR_NUMBER + PR_HEAD_REF to build the preview URL
-#      and target the right branch for the canary writes. These come
-#      from the workflow input and the resolved pull_request payload —
-#      identical to cms-publish-loop-preview.yml.
-#
-# Trigger model:
-#   - workflow_dispatch with `pr_number` input — the canonical way to
-#     validate the three preview loops against any open PR's preview
-#     env. Resolves the head ref via the GitHub API so each spec gets
-#     PR_NUMBER + PR_HEAD_REF.
-#
-# Spec gating: every cms-*-preview.spec.js self-skips when
-# CMS_E2E_PAT, PR_NUMBER, or PR_HEAD_REF is unset, so this workflow is
-# the only place they actually run end-to-end.
 
 on:
   workflow_dispatch:
     inputs:
       pr_number:
         description: >-
-          Parent PR number (the preview env to target). Must be open
-          with deploy-preview having run successfully (a working
-          preview-pr<N>.adamdaniel.ai). The specs write to that PR's
-          head branch via the Contents API and drive Decap on the
-          preview admin.
+          Parent PR number (the preview env to target). Must be open with
+          deploy-preview having run successfully.
         required: true
         type: string
 
 permissions:
-  # Specs drive Decap with CMS_E2E_PAT for content writes; the
-  # workflow itself only needs `contents: read` to install deps and
-  # checkout source. PAT carries Contents: r/w + Pull requests: r/w +
-  # Actions: r on the host repo.
-  #
-  # `pull-requests: write` is needed by the post-failure-comment
-  # composite action so the default GITHUB_TOKEN can post the
-  # failure-summary comment on the parent PR (resolved via the
-  # `pr_number` workflow input). Without it the github-script call
-  # 403s silently and no comment lands.
   contents: read
   pull-requests: write
 
-concurrency:
-  # Per-PR group keeps two preview-loop runs from racing on the same
-  # head ref's fixtures. cancel-in-progress=false queues runs instead
-  # of cancelling, matching cms-publish-loop-preview.yml /
-  # cms-publish-loop-host.yml behaviour.
-  group: cms-preview-loops-${{ inputs.pr_number }}
-  cancel-in-progress: false
-
-defaults:
-  run:
-    # GHA defaults the shell to `sh -e {0}` inside `container:` jobs,
-    # but our run-blocks use `set -o pipefail` and other bash-isms.
-    shell: bash
-
 jobs:
-  # TEMPORARILY DISABLED 2026-05-21: companion disable to
-  # cms-delete-published-preview.yml. An external dispatcher was firing
-  # the preview-loop workflows against PR #1228 in a tight loop. Remove
-  # `if: ${{ false }}` once the dispatcher is found and stopped.
-  build-image:
-    if: ${{ false }}
-    uses: ./.github/workflows/ci-runner-image.yml
-    secrets: inherit
-    permissions:
-      contents: read
-      packages: write
-
   preview-loops:
-    if: ${{ false }}
-    needs: build-image
-    runs-on: ubuntu-latest
-    env:
-      # Firefox launch fix — see cms-publish-loop-host.yml for the
-      # full rationale (HOME=/root keeps Firefox happy in container
-      # jobs). Chromium is unaffected; set uniformly for simplicity.
-      HOME: /root
-    container:
-      image: ${{ needs.build-image.outputs.image }}
-    # Three heavy specs run serially (~10-12 min happy path each).
-    # The 90-min ceiling matches cms-publish-loop-host.yml's backstop
-    # for its 4-spec serial run; per-spec TEST_TIMEOUT_MS (40 min)
-    # fires first for any genuine stuck-run, and --max-failures=1
-    # bails the whole run on the first failure.
-    timeout-minutes: 90
-    steps:
-      - name: Checkout
-        uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd  # v6.0.2 (2026-01-09)
-
-      - name: Resolve PR head ref
-        id: pr
-        # Look up the head ref + verify the PR is open before
-        # spinning up the rest. If the PR is closed/merged, fail
-        # fast — the preview env is gone and the specs can't run.
-        #
-        # Uses actions/github-script (not `gh api`) because the
-        # Playwright noble container doesn't ship the GitHub CLI.
-        uses: actions/github-script@3a2844b7e9c422d3c10d287c895573f7108da1b3  # v9.0.0 (2026-04-09)
-        with:
-          script: |
-            const prNumber = parseInt(`${{ inputs.pr_number }}`, 10);
-            const { data: pr } = await github.rest.pulls.get({
-              owner: context.repo.owner,
-              repo: context.repo.repo,
-              pull_number: prNumber,
-            });
-            if (pr.state !== "open") {
-              core.setFailed(
-                `PR #${prNumber} is not open (state=${pr.state}). The preview env may already be torn down.`,
-              );
-              return;
-            }
-            if (!pr.head || !pr.head.ref) {
-              core.setFailed(`Could not resolve head ref for PR #${prNumber}.`);
-              return;
-            }
-            core.setOutput("head_ref", pr.head.ref);
-            core.notice(`Resolved PR #${prNumber} → head_ref=${pr.head.ref}`);
-
-      - name: Run preview-env parity loops (prod-mutate / unpublish / tags)
-        env:
-          # See decap-pat.js header for the required PAT permissions.
-          CMS_E2E_PAT: ${{ secrets.CMS_E2E_PAT }}
-          # `TARGET=prod` skips the local Jekyll webServer in
-          # playwright.config.js — the specs hit the preview env's
-          # public URL directly and never need the local stack.
-          TARGET: prod
-          # The specs read these to build the preview URL and target
-          # the right branch for canary writes.
-          PR_NUMBER: ${{ inputs.pr_number }}
-          PR_HEAD_REF: ${{ steps.pr.outputs.head_ref }}
-        run: |
-          set -o pipefail
-          # `--workers=1` serialises the three specs. They all mutate
-          # the same preview env via Decap → cms/* PR → auto-merge →
-          # deploy-preview, and deploy-preview is per-PR
-          # concurrency-grouped — parallel specs would queue multiple
-          # deploys deep and blow their URL-wait budgets (the exact
-          # failure mode documented in cms-publish-loop-host.yml).
-          # `--max-failures=1` bails the whole run on the first
-          # failure for faster feedback.
-          npx playwright test \
-            e2e/cms-publish-loop-prod-mutate-preview.spec.js \
-            e2e/cms-unpublish-republish-preview.spec.js \
-            e2e/cms-tags-lifecycle-preview.spec.js \
-            --project=chromium-desktop-3k \
-            --reporter=list \
-            --max-failures=1 \
-            --workers=1 \
-            2>&1 | tee /tmp/preview-loops.log
-
-      - name: Upload test results on failure
-        if: ${{ failure() || cancelled() }}
-        uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a  # v7.0.1 (2026-04-10)
-        with:
-          name: preview-loops-results
-          path: |
-            /tmp/preview-loops.log
-            test-results/**
-          if-no-files-found: ignore
-          retention-days: 14
-
-      # Surface the failure block as a PR comment on the parent PR
-      # (resolved via the workflow_dispatch input). See AGENTS.md
-      # "Failure-comment composite action" for the pattern. This
-      # workflow has no `pull_request` event, so pass `pr-number`
-      # explicitly and don't gate on `github.event_name`.
-      - name: Post failure summary
-        if: failure()
-        uses: ./.github/actions/post-failure-comment
-        with:
-          mode: post
-          log-file: /tmp/preview-loops.log
-          marker: preview-loops-failure-summary
-          title: preview-loops
-          pr-number: ${{ inputs.pr_number }}
-
-      - name: Resolve failure summary on success
-        if: success()
-        uses: ./.github/actions/post-failure-comment
-        with:
-          mode: resolve
-          marker: preview-loops-failure-summary
-          title: preview-loops
-          pr-number: ${{ inputs.pr_number }}
-
-      # Stuck-PR diagnostic — see cms-publish-loop-host.yml for the
-      # rationale. Gated on "Timed out waiting" in the log to stay
-      # quiet on non-timeout failures.
-      - name: Diagnose stuck PRs
-        if: ${{ failure() && hashFiles('/tmp/preview-loops.log') != '' }}
-        env:
-          GH_TOKEN: ${{ secrets.CMS_E2E_PAT || secrets.GITHUB_TOKEN }}
-          GH_REPO: ${{ github.repository }}
-          WAITING_FOR: 'preview-loops spec (see Playwright log for the specific wait)'
-        run: |
-          set -uo pipefail
-          if grep -q 'Timed out waiting' /tmp/preview-loops.log 2>/dev/null; then
-            node scripts/diagnose-stuck-pr.js > /tmp/preview-loops-stuck-pr-diagnostic.md || true
-          else
-            echo "_no 'Timed out waiting' lines in log; stuck-PR diagnostic skipped_" > /tmp/preview-loops-stuck-pr-diagnostic.md
-          fi
-
-      - name: Post stuck-PR diagnostic
-        if: ${{ failure() && hashFiles('/tmp/preview-loops-stuck-pr-diagnostic.md') != '' }}
-        uses: ./.github/actions/post-failure-comment
-        with:
-          mode: post
-          log-file: /tmp/preview-loops-stuck-pr-diagnostic.md
-          marker: preview-loops-stuck-pr-diagnostic
-          title: preview-loops stuck-PR diagnostic
-          pr-number: ${{ inputs.pr_number }}
-
-      - name: Resolve stuck-PR diagnostic on success
-        if: success()
-        uses: ./.github/actions/post-failure-comment
-        with:
-          mode: resolve
-          marker: preview-loops-stuck-pr-diagnostic
-          title: preview-loops stuck-PR diagnostic
-          pr-number: ${{ inputs.pr_number }}
+    uses: Adam-S-Daniel/cms-platform/.github/workflows/cms-preview-loops.yml@94fce5e355f9db8aae68bbea4ebbda93193374ad
+    with:
+      pr_number: ${{ inputs.pr_number }}
+      apex: adamdaniel.ai
+      platform_ref: 94fce5e355f9db8aae68bbea4ebbda93193374ad
+    secrets:
+      CMS_E2E_PAT: ${{ secrets.CMS_E2E_PAT }}

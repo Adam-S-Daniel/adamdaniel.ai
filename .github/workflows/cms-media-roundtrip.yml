@@ -1,3 +1,13 @@
+# Thin caller — copied into a site repo as
+# `.github/workflows/cms-media-roundtrip.yml`. Owns the schedule / push
+# triggers + run-name; delegates the prod media-roundtrip loop to the
+# platform's reusable workflow. The e2e harness + the cms-recursion-gate /
+# await-prod-deploy / post-failure-comment composites all live in the
+# platform repo. Keep `platform_ref` equal to the `@<sha>` pin on the
+# `uses:` line.
+#
+# Site identity (CMS_PROD_URL / CMS_APEX) + the PROD_PLAYGROUND_MODE
+# sunset gate are read from THIS repo's VARS by the reusable workflow.
 name: CMS Media Roundtrip — Prod (real upload + delete)
 run-name: >-
   ${{ github.event_name == 'schedule'
@@ -6,270 +16,31 @@ run-name: >-
         && format('push — {0} @{1}', github.ref_name, github.actor)
    || format('manual — @{0}', github.actor) }}
 
-# Runs the full Decap Media-UI lifecycle end-to-end against prod:
-# upload a unique image via the Media UI → attach to a real _posts/
-# entry → publish → assert it loads on adamdaniel.ai → remove from the
-# post → publish → delete via the Media UI → assert the image URL
-# 404s. See e2e/cms-media-roundtrip.spec.js for the rationale.
-#
-# Structure mirrors cms-publish-loop-prod.yml exactly (same
-# PROD_PLAYGROUND_MODE sunset gate, same prebuilt Playwright container,
-# same failure-comment + stuck-PR diagnostic). It is a SEPARATE
-# workflow (not folded into cms-publish-loop-prod.yml) so doubling that
-# job's wall-clock with a second 40-min real-prod loop can't make the
-# existing prod-mutate workflow flaky.
-#
-# Trigger model: workflow-level `paths:` filter on pushes to `main`
-# (post-merge, not per-PR — the spec drives a REAL prod mutation, so
-# firing it on every concurrent PR raced the shared fixture + the
-# deploy-production queue and flaked; PR #1067). Only fires when a
-# push to `main` touches a salient file; this job is NOT a required
-# status check, so not running on PRs blocks no merge. Plus manual
-# `workflow_dispatch` and a daily schedule slotted clear of the other
-# prod-mutating loops' deploy-production concurrency windows (host
-# 12:00, prod-mutate 13:00, scheduled-posts 14:00 → this at 15:00
-# UTC).
-#
-# Sunset path: the actual mutation is gated on the repo variable
-# `PROD_PLAYGROUND_MODE`. While prod is a "full mutation playground",
-# set it to `true`. When prod stops being a playground, set it to
-# `false` (or unset it) — the workflow keeps reporting success on
-# runs (no real mutation).
-#
-# #1771 step 4: the spec now CREATES + DELETES an EPHEMERAL,
-# born-published per-run post (`_posts/2099-12-31-e2e-media-roundtrip-<runId>.md`)
-# plus a per-run uploaded image, rather than mutating a persistent
-# committed fixture in place. Resting state is absence (404); a killed
-# run leaks at most one inert post + upload the daily sweeper reaps.
-
 on:
   schedule:
     - cron: '0 15 * * *'
+  workflow_dispatch:
   push:
     branches: [main]
     paths:
       - .github/workflows/cms-media-roundtrip.yml
-      - e2e/cms-media-roundtrip.spec.js
-      # #1771 step 4: the ephemeral per-run post is built in code, not
-      # committed, so the spec's fixture source is this module (the old
-      # `_posts/2099-01-03-e2e-media-roundtrip.md` salient path retired
-      # with the persistent fixture).
-      - e2e/prod-mutate-fixture.js
-      - e2e/decap-pat.js
-      - e2e/github-actions-poll.js
-      - e2e/deploy-pill.js
-      - e2e/cms-fixture-pr.js
-      - e2e/cms-editor-ui.js
-      - e2e/base.js
       - admin/**
       - playwright.config.js
       - package.json
       - package-lock.json
       - _config.yml
       - _layouts/post.html
-  workflow_dispatch:
 
 permissions:
-  # The spec drives admin via a fine-grained PAT (CMS_E2E_PAT) — the
-  # workflow itself only needs to read the repo. `pull-requests: write`
-  # is for the post-failure-comment composite action's GITHUB_TOKEN.
-  # `actions: read` lets the await-prod-deploy gate query this commit's
-  # `Deploy to Production` run via the REST API (#1101).
   contents: read
   pull-requests: write
   actions: read
 
-defaults:
-  run:
-    shell: bash
-
 jobs:
-  # Changed-files recursion gate. Replaces the old `publish: `
-  # head-commit guard, which Decap's own `Update/Delete <Collection>
-  # "<slug>"` squash template structurally evaded — the loop's
-  # cms/<col>/<slug> auto-merge lands with no `publish: ` prefix on the
-  # unpublish-canary/delete paths, so the loop kept re-firing on its own
-  # merge (run 26108485428). Logic + the per-loop self-churn set live in
-  # the shared .github/actions/cms-recursion-gate composite and
-  # e2e/cms-recursion-churn.js (single source). Cheap: checkout(depth 2)
-  # + a `git diff` membership test. A push whose only changed files are
-  # this loop's own canary churn skips the heavy job; schedule/dispatch
-  # always run; any ambiguity fails OPEN (never silently skip a real
-  # change). The `prod-mutating-loop` lane now lives on the heavy loop
-  # job, not the workflow (#1178), so this gate runs OUTSIDE the lane:
-  # its skip decision is computed immediately even while a real loop
-  # holds the lane, and a recursion-skipped loop never enters the lane
-  # at all — ~15-25 s of its own (uncontended) runtime on a skip vs. a
-  # full real-prod loop.
-  recursion-gate:
-    runs-on: ubuntu-latest
-    outputs:
-      run: ${{ steps.gate.outputs.run }}
-    steps:
-      - name: Checkout
-        uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd  # v6.0.2 (2026-01-09)
-        with:
-          fetch-depth: 2
-      - name: Recursion gate
-        id: gate
-        uses: ./.github/actions/cms-recursion-gate
-        with:
-          loop: media
-
-  # Build (or cache-hit) the prebaked ci-runner image used as
-  # `container.image:` by the media-roundtrip job below. See
-  # e2e-tests.yml for the full rationale. Independent of
-  # `recursion-gate` so a Dockerfile/lockfile-only push still rebuilds
-  # the image even when the recursion gate would skip the loop.
-  build-image:
-    uses: ./.github/workflows/ci-runner-image.yml
-    secrets: inherit
-    permissions:
-      contents: read
-      packages: write
-
   media-roundtrip:
-    needs: [recursion-gate, build-image]
-    runs-on: ubuntu-latest
-    concurrency:
-      # SHARED lane for ALL real-prod-mutating loop workflows
-      # (cms-publish-loop-prod / cms-media-roundtrip / cms-publish-loop-host).
-      # Declared on the HEAVY LOOP JOB, not the workflow (#1178): the cheap
-      # recursion-gate job has no concurrency, so it runs OUTSIDE this lane
-      # — its skip decision is computed immediately even while a real loop
-      # holds the lane, and a recursion-skipped loop is `if:`-skipped before
-      # it ever enters the lane (zero lane occupancy for recursion). GHA
-      # keys concurrency groups by string ACROSS workflows, so one constant
-      # group on these three loop jobs keeps them mutually exclusive: only
-      # one real-prod loop runs at a time, whatever the trigger (push /
-      # workflow_dispatch / host's daily cron all converge here). They each
-      # mutate prod through Decap → cms-PR → auto-merge → deploy-production
-      # and a parallel pair races deploy-production's `group: production`,
-      # blowing each other's URL-reflect budgets (#1101 — observed: 3 loops
-      # 13:42→13:59 on merge 3dbade7, 2 failed). cancel-in-progress:false
-      # queues rather than killing an in-flight loop (cancelling mid-flow
-      # can leave the canary dirty); a stuck run holds the lane up to its
-      # timeout-minutes, which is bounded and far cheaper than the collision.
-      # This block MUST stay byte-identical across all three workflows AND
-      # remain on the loop job (NOT the workflow) — enforced by
-      # e2e/workflow-prod-loop-serialized.test.js.
-      group: prod-mutating-loop
-      cancel-in-progress: false
-    # Recursion guard delegated to the `recursion-gate` job above
-    # (changed-files decision; schedule/dispatch always run; ambiguity
-    # fails OPEN). The old `head_ref`/`publish: ` guard could not see
-    # Decap's `Update/Delete <Collection> "…"` self-merge template.
-    if: ${{ needs.recursion-gate.outputs.run == 'true' }}
-    env:
-      # Firefox refuses to launch when $HOME is owned by another user
-      # inside GHA container jobs; job-level env wins. Uniform for
-      # simplicity (chromium/webkit unaffected).
-      HOME: /root
-    container:
-      image: ${{ needs.build-image.outputs.image }}
-    # One full real-prod loop with THREE deploy waits. Per-spec
-    # TEST_TIMEOUT_MS is 100 min (#1815, was 80); this cap is the
-    # outer backstop. 75 → 95 → 110: the await-prod-deploy gate can
-    # spend up to ~15 min before the spec starts (#1101), and the
-    # enlarged waitForMerge / reopenForPublishedDelete budgets need
-    # the spec to fit inside the cap.
-    timeout-minutes: 110
-    steps:
-      - name: Checkout
-        uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd  # v6.0.2 (2026-01-09)
-
-      # Post-merge only: do NOT drive prod until THIS commit is live on
-      # adamdaniel.ai (deploy-production succeeded + CDN serves the SHA
-      # or a newer descendant; prod ahead of the merge is fine — #1714).
-      # Without this the loop validates a stale pre-merge site
-      # (#1101). Skipped on workflow_dispatch/schedule (no associated
-      # merge) and when playground mode is off (the spec self-skips, so
-      # there is nothing to gate). Fails loud if the deploy failed.
-      - name: Await prod deploy of this merge
-        if: ${{ github.event_name == 'push' && vars.PROD_PLAYGROUND_MODE == 'true' }}
-        uses: ./.github/actions/await-prod-deploy
-
-      - name: Skip — playground mode disabled
-        if: vars.PROD_PLAYGROUND_MODE != 'true'
-        run: echo "::notice::PROD_PLAYGROUND_MODE is not 'true'; skipping media round-trip."
-
-      - name: Run media round-trip spec
-        if: vars.PROD_PLAYGROUND_MODE == 'true'
-        env:
-          # Same fine-grained PAT the other publish-loop specs use
-          # (contents r/w + pull_requests r/w + metadata r).
-          CMS_E2E_PAT: ${{ secrets.CMS_E2E_PAT }}
-          # Tells playwright.config.js NOT to spin up local Jekyll +
-          # decap-server — the spec hits adamdaniel.ai directly.
-          TARGET: prod
-          # Reuses the prod-mutate opt-in gate so the spec self-skips
-          # inside e2e-tests.yml shard 1 and on its own cms/* PR.
-          RUN_PROD_MUTATE_PLAYGROUND: "1"
-        run: |
-          set -o pipefail
-          npx playwright test \
-            e2e/cms-media-roundtrip.spec.js \
-            --project=chromium-desktop-3k \
-            --reporter=list \
-            --max-failures=1 \
-            --workers=1 \
-            2>&1 | tee /tmp/media-roundtrip.log
-
-      - name: Upload test results on failure
-        if: ${{ (failure() || cancelled()) && vars.PROD_PLAYGROUND_MODE == 'true' }}
-        uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a  # v7.0.1 (2026-04-10)
-        with:
-          name: media-roundtrip-results
-          path: |
-            test-results/
-            /tmp/media-roundtrip.log
-          retention-days: 14
-
-      - name: Post failure summary
-        if: ${{ failure() && vars.PROD_PLAYGROUND_MODE == 'true' }}
-        uses: ./.github/actions/post-failure-comment
-        with:
-          mode: post
-          log-file: /tmp/media-roundtrip.log
-          marker: media-roundtrip-failure-summary
-          title: media-roundtrip
-
-      - name: Resolve failure summary on success
-        if: ${{ success() && vars.PROD_PLAYGROUND_MODE == 'true' }}
-        uses: ./.github/actions/post-failure-comment
-        with:
-          mode: resolve
-          marker: media-roundtrip-failure-summary
-          title: media-roundtrip
-
-      - name: Diagnose stuck PRs
-        if: ${{ failure() && vars.PROD_PLAYGROUND_MODE == 'true' && hashFiles('/tmp/media-roundtrip.log') != '' }}
-        env:
-          GH_TOKEN: ${{ secrets.CMS_E2E_PAT || secrets.GITHUB_TOKEN }}
-          GH_REPO: ${{ github.repository }}
-          WAITING_FOR: 'media-roundtrip spec (see Playwright log for the specific wait)'
-        run: |
-          set -uo pipefail
-          if grep -q 'Timed out waiting' /tmp/media-roundtrip.log 2>/dev/null; then
-            node scripts/diagnose-stuck-pr.js > /tmp/media-roundtrip-stuck-pr-diagnostic.md || true
-          else
-            echo "_no 'Timed out waiting' lines in log; stuck-PR diagnostic skipped_" > /tmp/media-roundtrip-stuck-pr-diagnostic.md
-          fi
-
-      - name: Post stuck-PR diagnostic
-        if: ${{ failure() && vars.PROD_PLAYGROUND_MODE == 'true' && hashFiles('/tmp/media-roundtrip-stuck-pr-diagnostic.md') != '' }}
-        uses: ./.github/actions/post-failure-comment
-        with:
-          mode: post
-          log-file: /tmp/media-roundtrip-stuck-pr-diagnostic.md
-          marker: media-roundtrip-stuck-pr-diagnostic
-          title: media-roundtrip stuck-PR diagnostic
-
-      - name: Resolve stuck-PR diagnostic on success
-        if: ${{ success() && vars.PROD_PLAYGROUND_MODE == 'true' }}
-        uses: ./.github/actions/post-failure-comment
-        with:
-          mode: resolve
-          marker: media-roundtrip-stuck-pr-diagnostic
-          title: media-roundtrip stuck-PR diagnostic
-# Intentionally inert line (no functional effect).
+    uses: Adam-S-Daniel/cms-platform/.github/workflows/cms-media-roundtrip.yml@94fce5e355f9db8aae68bbea4ebbda93193374ad
+    with:
+      # Pin to the SAME ref as the `uses:` pin above so the harness matches.
+      platform_ref: 94fce5e355f9db8aae68bbea4ebbda93193374ad
+    secrets:
+      CMS_E2E_PAT: ${{ secrets.CMS_E2E_PAT }}

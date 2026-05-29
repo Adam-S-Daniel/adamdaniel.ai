@@ -1,6 +1,6 @@
 {
   "name": "cms-feature-branches",
-  "_comment": "Applied via gh api repos/Adam-S-Daniel/adamdaniel.ai/rulesets — checked in here so the rule is reviewable in the repo. Pinning validate-content as a required check on every feature-branch PR target lets cms-editorial-workflow.yml's auto-merge mutation succeed: without a required check, GitHub's mergeable_state goes 'unstable' the moment any pending non-required check is queued (including the auto-merge job's own pending state — issue #79).",
+  "_comment": "Applied via gh api repos/Adam-S-Daniel/adamdaniel.ai/rulesets — checked in here so the rule is reviewable in the repo. Pinning the editorial content-validation check as a required check on every feature-branch PR target lets cms-editorial-workflow.yml's auto-merge mutation succeed: without a required check, GitHub's mergeable_state goes 'unstable' the moment any pending non-required check is queued (including the auto-merge job's own pending state — issue #79). POST-CUTOVER: the validation now runs in cms-platform's reusable cms-editorial-workflow.yml (job `validate-content`) called from this repo's thin caller cms-editorial-workflow.yml (job `editorial`), so the surfaced context is `editorial / validate-content`, not the bare `validate-content`. The LIVE ruleset must be re-PUT to match this renamed context (confirm the exact rendered string on the first PR run).",
   "target": "branch",
   "enforcement": "active",
   "conditions": {
@@ -40,7 +40,7 @@
         "do_not_enforce_on_create": true,
         "required_status_checks": [
           {
-            "context": "validate-content"
+            "context": "editorial / validate-content"
           }
         ]
       }

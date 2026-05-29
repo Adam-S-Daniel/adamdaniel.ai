@@ -49,7 +49,7 @@
   "use strict";
 
   var BANNER_ID = "cms-live-url";
-  var REPO = "Adam-S-Daniel/adamdaniel.ai";
+  var REPO = window.CMS_REPO;
   var REST = "https://api.github.com/repos/" + REPO;
   // admin/posts-list-enhance.js writes { at, data:{ prBySlug, … } }
   // under this key whenever the operator visits the Posts list. Sharing
@@ -195,7 +195,7 @@
     try {
       var u = new URL(prodUrl);
       u.protocol = "https:";
-      u.hostname = "preview-pr" + n + ".adamdaniel.ai";
+      u.hostname = "preview-pr" + n + "." + window.CMS_APEX;
       return u.toString();
     } catch {
       return prodUrl;

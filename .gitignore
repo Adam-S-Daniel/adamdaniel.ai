@@ -26,6 +26,13 @@ bin/
 e2e/visual-regression.spec.js-snapshots-before/
 .claude/scheduled_tasks.lock
 admin/commit.json
+# cms-platform consumer artifacts. The admin Decap config is generated from
+# _config.yml's cms: block by the platform's admin tooling (do not commit the
+# generated/local variants); the e2e lane checks the platform out here.
+# Gemfile.lock stays TRACKED (committed) for deterministic builds.
+admin/config.yml
+admin/config-local.yml
+.cms-platform/
 # Intermediate JSON records from e2e/manual-capture.js. The collator
 # (scripts/build-contributor-manual.js) reads these and emits
 # docs/CONTRIBUTOR_MANUAL.md, which IS committed. The raw JSON is

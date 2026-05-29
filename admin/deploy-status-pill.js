@@ -90,7 +90,7 @@
   if (window.__deployStatusPillInstalled) return;
   window.__deployStatusPillInstalled = true;
 
-  var REPO = "Adam-S-Daniel/adamdaniel.ai";
+  var REPO = window.CMS_REPO;
   var API = "https://api.github.com/repos/" + REPO;
   var POLL_MS = 30 * 1000;
   var PROD_PILL_ID = "cms-prod-status-pill";

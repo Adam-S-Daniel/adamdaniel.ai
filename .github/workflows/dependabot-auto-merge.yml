@@ -1,33 +1,10 @@
+# Thin caller — copied into a site repo as
+# `.github/workflows/dependabot-auto-merge.yml`. Owns the `pull_request`
+# trigger + run-name; delegates the Dependabot unattended-merge gate to the
+# platform's reusable workflow. Auto-merges the platform-bump / gem
+# Dependabot PRs once the site's required checks on main are green.
 name: Dependabot auto-merge
 run-name: "${{ format('PR #{0} — {1}', github.event.pull_request.number, github.event.pull_request.title) }}"
-
-# Unattended-merge gate for Dependabot PRs.
-#
-# Flow:
-#   1. Confirm the actor is dependabot[bot] (defence in depth — the
-#      job-level `if:` would already skip non-Dependabot PRs).
-#   2. Confirm the PR diff only touches dependency-manifest paths.
-#      Dependabot already restricts itself to those by design, so a
-#      diff outside this allowlist is a sign something is wrong —
-#      bail out and leave the PR for human review.
-#   3. Enable GitHub's native auto-merge with --squash. GitHub holds
-#      the merge until every required status check on `main` passes:
-#        - e2e (e2e-tests.yml — 4-shard Playwright matrix across the
-#          full 8-project browser/viewport/text/colour matrix)
-#        - visual-regression / approve-regression (visual-regression.yml,
-#          which auto-passes when 0 pages differ from production and
-#          routes through the `regression-review` GitHub Environment
-#          for human approval otherwise)
-#
-# Once the merge fires, deploy-production.yml runs on the resulting
-# push to main and ships the change. Preview environments per PR are
-# already covered by deploy-preview.yml's pull_request trigger and
-# come up the moment Dependabot opens the PR.
-#
-# Security updates: Dependabot's 7-day cooldown applies to version
-# updates only, not security updates. A vulnerability bump opens a PR
-# immediately, lands here on the same auto-merge gate, and ships as
-# soon as the test matrix is green.
 
 on:
   pull_request:
@@ -39,82 +16,4 @@ permissions:
 
 jobs:
   auto-merge:
-    if: github.actor == 'dependabot[bot]'
-    runs-on: ubuntu-latest
-    steps:
-      - name: Checkout
-        uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd  # v6.0.2 (2026-01-09)
-        with:
-          fetch-depth: 0
-
-      - name: Fetch base ref
-        run: git fetch origin "${{ github.event.pull_request.base.ref }}"
-
-      - name: Get Dependabot metadata
-        # Surfaces dependency-name / update-type / etc. as outputs.
-        # Even though we don't gate on update-type (we trust the test
-        # matrix to catch breakage in major bumps), the action also
-        # validates that the PR genuinely came from Dependabot.
-        id: metadata
-        uses: dependabot/fetch-metadata@25dd0e34f4fe68f24cc83900b1fe3fe149efef98  # v3.1.0 (2026-04-20)
-
-      - name: Verify only manifest paths changed
-        id: paths
-        # Path allowlist: only dependency manifests and workflow
-        # files. Dependabot doesn't touch anything else, so a diff
-        # outside this list means either a misconfiguration or a
-        # tampered branch — either way, refuse to auto-merge.
-        run: |
-          set -euo pipefail
-          BASE="origin/${{ github.event.pull_request.base.ref }}"
-          HEAD="${{ github.event.pull_request.head.sha }}"
-
-          mapfile -t CHANGED < <(git diff --name-only "$BASE"..."$HEAD")
-          echo "Files changed:"
-          printf '  %s\n' "${CHANGED[@]}"
-
-          REJECT=0
-          for f in "${CHANGED[@]}"; do
-            case "$f" in
-              package.json|package-lock.json) ;;
-              Gemfile|Gemfile.lock) ;;
-              .github/workflows/*.yml|.github/workflows/*.yaml) ;;
-              *)
-                echo "::error file=$f::Dependabot PR touches non-manifest path: $f"
-                REJECT=1
-                ;;
-            esac
-          done
-
-          if [ "$REJECT" = "1" ]; then
-            echo "safe=false" >> "$GITHUB_OUTPUT"
-          else
-            echo "safe=true"  >> "$GITHUB_OUTPUT"
-            echo "All changed paths are within the manifest allowlist."
-          fi
-
-      - name: Enable auto-merge
-        if: steps.paths.outputs.safe == 'true'
-        # --auto enables the same auto-merge feature exposed in the
-        # GitHub UI: GitHub holds the merge until every required
-        # status check on `main` reports success. The merge method
-        # matches the CMS editorial workflow's choice (squash) so
-        # main keeps a linear history of single-commit landings.
-        run: gh pr merge --auto --squash "$PR_URL"
-        env:
-          PR_URL: ${{ github.event.pull_request.html_url }}
-          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
-
-      - name: Disable auto-merge (path check failed)
-        if: steps.paths.outputs.safe == 'false'
-        # If a previous run already enabled auto-merge but the PR was
-        # later updated to touch content paths, undo the enablement
-        # so the merge can't fire. `|| true` because `--disable-auto`
-        # errors when auto-merge wasn't enabled — we don't care.
-        run: |
-          gh pr merge --disable-auto "$PR_URL" || true
-          echo "::error::PR touches paths outside the dependency-manifest allowlist; auto-merge disabled."
-          exit 1
-        env:
-          PR_URL: ${{ github.event.pull_request.html_url }}
-          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+    uses: Adam-S-Daniel/cms-platform/.github/workflows/dependabot-auto-merge.yml@94fce5e355f9db8aae68bbea4ebbda93193374ad

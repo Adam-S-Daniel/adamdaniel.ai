@@ -233,7 +233,10 @@ jobs:
       # ── Surface failures inline (gitleaks-scrubbed) ────────────────
       - name: Post failure summary
         if: ${{ failure() && github.event_name == 'pull_request' }}
-        uses: ./.github/actions/post-failure-comment
+        # Repointed from the deleted local `./.github/actions/post-failure-comment`
+        # to the platform's composite (same interface) now that the dogfood
+        # consumes machinery from cms-platform. Pinned to the platform SHA.
+        uses: Adam-S-Daniel/cms-platform/.github/actions/post-failure-comment@94fce5e355f9db8aae68bbea4ebbda93193374ad
         with:
           mode: post
           log-file: /tmp/lint.log
@@ -243,7 +246,7 @@ jobs:
 
       - name: Resolve failure summary on success
         if: ${{ success() && github.event_name == 'pull_request' }}
-        uses: ./.github/actions/post-failure-comment
+        uses: Adam-S-Daniel/cms-platform/.github/actions/post-failure-comment@94fce5e355f9db8aae68bbea4ebbda93193374ad
         with:
           mode: resolve
           marker: code-quality-failure-summary
