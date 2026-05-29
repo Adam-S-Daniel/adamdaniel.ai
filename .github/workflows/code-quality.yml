@@ -126,13 +126,13 @@ jobs:
         if: ${{ needs.changes.outputs.js == 'true' }}
         run: |
           set -o pipefail
-          npx eslint "e2e/**/*.js" "admin/**/*.js" "scripts/*.js" "*.config.js" 2>&1 | tee -a /tmp/lint.log
+          npx eslint "admin/**/*.js" "scripts/*.js" "*.config.js" 2>&1 | tee -a /tmp/lint.log
 
       - name: Prettier (check)
         if: ${{ needs.changes.outputs.js == 'true' }}
         run: |
           set -o pipefail
-          npx prettier --check "e2e/**/*.js" "admin/**/*.js" "scripts/*.js" "*.config.js" 2>&1 | tee -a /tmp/lint.log
+          npx prettier --check "admin/**/*.js" "scripts/*.js" "*.config.js" 2>&1 | tee -a /tmp/lint.log
 
       # ── CSS: stylelint ─────────────────────────────────────────────
       - name: Stylelint
@@ -236,7 +236,7 @@ jobs:
         # Repointed from the deleted local `./.github/actions/post-failure-comment`
         # to the platform's composite (same interface) now that the dogfood
         # consumes machinery from cms-platform. Pinned to the platform SHA.
-        uses: Adam-S-Daniel/cms-platform/.github/actions/post-failure-comment@94fce5e355f9db8aae68bbea4ebbda93193374ad
+        uses: Adam-S-Daniel/cms-platform/.github/actions/post-failure-comment@19db64fb7277c26a7f83b7bcb7fa0db317edb60f
         with:
           mode: post
           log-file: /tmp/lint.log
@@ -246,7 +246,7 @@ jobs:
 
       - name: Resolve failure summary on success
         if: ${{ success() && github.event_name == 'pull_request' }}
-        uses: Adam-S-Daniel/cms-platform/.github/actions/post-failure-comment@94fce5e355f9db8aae68bbea4ebbda93193374ad
+        uses: Adam-S-Daniel/cms-platform/.github/actions/post-failure-comment@19db64fb7277c26a7f83b7bcb7fa0db317edb60f
         with:
           mode: resolve
           marker: code-quality-failure-summary

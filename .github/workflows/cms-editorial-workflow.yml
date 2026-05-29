@@ -9,4 +9,6 @@ permissions:
   issues: write
 jobs:
   editorial:
-    uses: Adam-S-Daniel/cms-platform/.github/workflows/cms-editorial-workflow.yml@94fce5e355f9db8aae68bbea4ebbda93193374ad
+    uses: Adam-S-Daniel/cms-platform/.github/workflows/cms-editorial-workflow.yml@19db64fb7277c26a7f83b7bcb7fa0db317edb60f
+    secrets:
+      CMS_E2E_PAT: ${{ secrets.CMS_E2E_PAT }}
