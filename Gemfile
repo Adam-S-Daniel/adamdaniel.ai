@@ -9,5 +9,5 @@ group :jekyll_plugins do
   gem "jekyll-sitemap"
   # cms-platform theme. Pinned at the dogfood SHA (kept in lockstep with
   # platform.lock); a later step repins to the v0.1.0 release tag.
-  gem "cms-platform-theme", git: "https://github.com/Adam-S-Daniel/cms-platform", glob: "theme/*.gemspec", ref: "19db64fb7277c26a7f83b7bcb7fa0db317edb60f"
+  gem "cms-platform-theme", git: "https://github.com/Adam-S-Daniel/cms-platform", glob: "theme/*.gemspec", ref: "bf307bc030cd3c6d93707ea377bc7e521fc57dc7"
 end
