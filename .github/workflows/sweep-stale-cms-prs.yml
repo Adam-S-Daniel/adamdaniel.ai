@@ -17,7 +17,7 @@ permissions:
   pull-requests: write
 jobs:
   sweep:
-    uses: Adam-S-Daniel/cms-platform/.github/workflows/sweep-stale-cms-prs.yml@ccedd3c26a5f9c61e6da1cac2327f32f43c4d9f7
+    uses: Adam-S-Daniel/cms-platform/.github/workflows/sweep-stale-cms-prs.yml@v0.1.0
     with:
       dry_run: ${{ github.event_name == 'workflow_dispatch' && inputs.dry_run || false }}
       threshold_hours: ${{ github.event_name == 'workflow_dispatch' && inputs.threshold_hours || 6 }}
