@@ -1,225 +1,30 @@
-name: CMS Delete Published — Preview Env (canary collection)
+# Thin caller — copied into a site repo as
+# `.github/workflows/cms-delete-published-preview.yml`. Owns the
+# workflow_dispatch trigger + run-name; delegates the preview-env
+# delete-published loop to the platform's reusable workflow.
+name: CMS Delete Published — Preview Env
 run-name: "${{ format('manual — PR #{0} @{1}', inputs.pr_number, github.actor) }}"
-
-# Companion to cms-delete-published.spec.js / cms-publish-loop-preview.yml.
-# Exercises the "Delete published entry" path end to end against a
-# per-PR preview environment (`preview-pr<N>.adamdaniel.ai`) whose
-# admin is patched at deploy-preview time so `backend.branch` is the
-# PR's head ref (NOT main). The spec UI-seeds a throw-away
-# `_e2e/canary-delete-preview-<runId>.md`, UI-deletes it, and asserts
-# the preview URL 404s — closing the preview-side entry-deletion gap
-# from #999's matrix (issue #1004).
-#
-# Non-required by design: the heavy loops stay off the merge path. The
-# only required preview check is the lightweight `preview-media` gate
-# (PR #971). This workflow is dispatch-only (it needs a live preview
-# env to target) and is NOT in the branch-protection
-# required-status-checks list — verify via
-# `gh api repos/Adam-S-Daniel/adamdaniel.ai/rules/branches/main`.
-#
-# Trigger model:
-#   - workflow_dispatch with `pr_number` input — the canonical way to
-#     validate the preview delete path against any open PR's preview
-#     env. Resolves the head ref via the API so the spec gets both
-#     PR_NUMBER and PR_HEAD_REF. ~15 min total (seed publish + delete,
-#     two deploy-preview waits).
-#
-# Spec gating: e2e/cms-delete-published-preview.spec.js self-skips when
-# CMS_E2E_PAT, PR_NUMBER, or PR_HEAD_REF are unset, so this workflow is
-# the only place it actually runs end-to-end.
 
 on:
   workflow_dispatch:
     inputs:
       pr_number:
         description: >-
-          Parent PR number (the preview env to target). Must be open
-          with deploy-preview having run successfully (a working
-          preview-pr<N>.adamdaniel.ai). The spec drives Decap on the
-          preview admin and writes ONLY to that PR's head branch, so a
-          stale fixture dies with the PR — zero prod blast radius.
+          Parent PR number (the preview env to target). Must be open with
+          deploy-preview having run successfully.
         required: true
         type: string
 
 permissions:
-  # Spec drives Decap with CMS_E2E_PAT for content writes; the workflow
-  # itself only needs `contents: read` to install deps + checkout. The
-  # PAT carries Contents: r/w + Pull requests: r/w + Actions: r on the
-  # host repo.
-  #
-  # `pull-requests: write` is needed by the post-failure-comment
-  # composite action so the default GITHUB_TOKEN can post the
-  # failure-summary comment on the parent PR (resolved via the
-  # `pr_number` input). Without it the github-script call 403s silently
-  # and no comment lands.
   contents: read
   pull-requests: write
 
-concurrency:
-  # Per-PR group keeps two preview-delete runs from racing on the same
-  # head ref. cancel-in-progress=false queues runs instead of
-  # cancelling, matching cms-publish-loop-preview.yml.
-  group: cms-delete-published-preview-${{ inputs.pr_number }}
-  cancel-in-progress: false
-
-defaults:
-  run:
-    # GHA defaults the shell to `sh -e {0}` inside `container:` jobs,
-    # but our run-blocks use `set -o pipefail` and other bash-isms.
-    shell: bash
-
 jobs:
-  # TEMPORARILY DISABLED 2026-05-21: an external dispatcher was firing this
-  # workflow every ~2 minutes against PR #1228, racking up 296 canary PRs in
-  # 18h and burning CI. Remove `if: ${{ false }}` once the dispatcher is
-  # found and stopped. See the PR that introduced this guard.
-  build-image:
-    if: ${{ false }}
-    uses: ./.github/workflows/ci-runner-image.yml
-    secrets: inherit
-    permissions:
-      contents: read
-      packages: write
-
   preview-delete:
-    if: ${{ false }}
-    needs: build-image
-    runs-on: ubuntu-latest
-    env:
-      # Firefox launch fix — see cms-publish-loop-host.yml for the full
-      # rationale (HOME=/root keeps Firefox happy in container jobs).
-      HOME: /root
-    container:
-      image: ${{ needs.build-image.outputs.image }}
-    # Single spec, ~15 min happy path (seed publish + delete, two
-    # deploy-preview waits); 30 min ceiling matches the spec's
-    # TEST_TIMEOUT_MS plus headroom for runner bring-up. Backstop only —
-    # the per-spec timeout fires first for any genuine stuck run.
-    timeout-minutes: 35
-    steps:
-      - name: Checkout
-        uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd  # v6.0.2 (2026-01-09)
-
-      - name: Resolve PR head ref
-        id: pr
-        # Look up the head ref + verify the PR is open before spinning
-        # up the rest. If the PR is closed/merged, fail fast — the
-        # preview env is gone and the spec can't run. Uses
-        # actions/github-script (not `gh api`) because the Playwright
-        # noble container doesn't ship the GitHub CLI.
-        uses: actions/github-script@3a2844b7e9c422d3c10d287c895573f7108da1b3  # v9.0.0 (2026-04-09)
-        with:
-          script: |
-            const prNumber = parseInt(`${{ inputs.pr_number }}`, 10);
-            const { data: pr } = await github.rest.pulls.get({
-              owner: context.repo.owner,
-              repo: context.repo.repo,
-              pull_number: prNumber,
-            });
-            if (pr.state !== "open") {
-              core.setFailed(
-                `PR #${prNumber} is not open (state=${pr.state}). The preview env may already be torn down.`,
-              );
-              return;
-            }
-            if (!pr.head || !pr.head.ref) {
-              core.setFailed(`Could not resolve head ref for PR #${prNumber}.`);
-              return;
-            }
-            core.setOutput("head_ref", pr.head.ref);
-            core.notice(`Resolved PR #${prNumber} → head_ref=${pr.head.ref}`);
-
-      - name: Run preview-env delete-published spec
-        env:
-          # See decap-pat.js header for the required PAT permissions.
-          CMS_E2E_PAT: ${{ secrets.CMS_E2E_PAT }}
-          # `TARGET=prod` skips the local Jekyll webServer in
-          # playwright.config.js — the spec hits the preview env's
-          # public URL directly and never needs the local stack.
-          TARGET: prod
-          # The spec reads these to build the preview URL and target
-          # the right branch for the throw-away fixture.
-          PR_NUMBER: ${{ inputs.pr_number }}
-          PR_HEAD_REF: ${{ steps.pr.outputs.head_ref }}
-        run: |
-          set -o pipefail
-          # `--max-failures=1` consistent with cms-publish-loop-preview
-          # — single spec today, but the flag is harmless and keeps the
-          # workflow shape symmetric.
-          npx playwright test \
-            e2e/cms-delete-published-preview.spec.js \
-            --project=chromium-desktop-3k \
-            --reporter=list \
-            --max-failures=1 \
-            2>&1 | tee /tmp/preview-delete.log
-
-      - name: Upload test results on failure
-        if: ${{ failure() || cancelled() }}
-        uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a  # v7.0.1 (2026-04-10)
-        with:
-          name: preview-delete-results
-          path: |
-            /tmp/preview-delete.log
-            test-results/**
-          if-no-files-found: ignore
-          retention-days: 14
-
-      # Surface the failure block as a PR comment on the parent PR
-      # (resolved via the workflow_dispatch input). workflow_dispatch
-      # has no `pull_request` payload, so pass `pr-number` explicitly
-      # and don't gate on `github.event_name`. See AGENTS.md
-      # "Failure-comment composite action".
-      - name: Post failure summary
-        if: failure()
-        uses: ./.github/actions/post-failure-comment
-        with:
-          mode: post
-          log-file: /tmp/preview-delete.log
-          marker: preview-delete-failure-summary
-          title: preview-delete
-          pr-number: ${{ inputs.pr_number }}
-
-      - name: Resolve failure summary on success
-        if: success()
-        uses: ./.github/actions/post-failure-comment
-        with:
-          mode: resolve
-          marker: preview-delete-failure-summary
-          title: preview-delete
-          pr-number: ${{ inputs.pr_number }}
-
-      # Stuck-PR diagnostic — see cms-publish-loop-host.yml for the
-      # rationale. Gated on "Timed out waiting" in the log to stay
-      # quiet on non-timeout failures.
-      - name: Diagnose stuck PRs
-        if: ${{ failure() && hashFiles('/tmp/preview-delete.log') != '' }}
-        env:
-          GH_TOKEN: ${{ secrets.CMS_E2E_PAT || secrets.GITHUB_TOKEN }}
-          GH_REPO: ${{ github.repository }}
-          WAITING_FOR: 'preview-delete spec (see Playwright log for the specific wait)'
-        run: |
-          set -uo pipefail
-          if grep -q 'Timed out waiting' /tmp/preview-delete.log 2>/dev/null; then
-            node scripts/diagnose-stuck-pr.js > /tmp/preview-delete-stuck-pr-diagnostic.md || true
-          else
-            echo "_no 'Timed out waiting' lines in log; stuck-PR diagnostic skipped_" > /tmp/preview-delete-stuck-pr-diagnostic.md
-          fi
-
-      - name: Post stuck-PR diagnostic
-        if: ${{ failure() && hashFiles('/tmp/preview-delete-stuck-pr-diagnostic.md') != '' }}
-        uses: ./.github/actions/post-failure-comment
-        with:
-          mode: post
-          log-file: /tmp/preview-delete-stuck-pr-diagnostic.md
-          marker: preview-delete-stuck-pr-diagnostic
-          title: preview-delete stuck-PR diagnostic
-          pr-number: ${{ inputs.pr_number }}
-
-      - name: Resolve stuck-PR diagnostic on success
-        if: success()
-        uses: ./.github/actions/post-failure-comment
-        with:
-          mode: resolve
-          marker: preview-delete-stuck-pr-diagnostic
-          title: preview-delete stuck-PR diagnostic
-          pr-number: ${{ inputs.pr_number }}
+    uses: Adam-S-Daniel/cms-platform/.github/workflows/cms-delete-published-preview.yml@v0.1.0
+    with:
+      pr_number: ${{ inputs.pr_number }}
+      apex: adamdaniel.ai
+      platform_ref: v0.1.0
+    secrets:
+      CMS_E2E_PAT: ${{ secrets.CMS_E2E_PAT }}

@@ -43,7 +43,7 @@
   // Same value as admin/config.yml's `repo:` field. Hard-coded so the
   // dependency is obvious; if we ever swap repos this string and
   // config.yml have to move together.
-  var REPO = "Adam-S-Daniel/adamdaniel.ai";
+  var REPO = window.CMS_REPO;
   var API = "https://api.github.com/repos/" + REPO;
 
   var origFetch = window.fetch.bind(window);

@@ -126,13 +126,13 @@ jobs:
         if: ${{ needs.changes.outputs.js == 'true' }}
         run: |
           set -o pipefail
-          npx eslint "e2e/**/*.js" "admin/**/*.js" "scripts/*.js" "*.config.js" 2>&1 | tee -a /tmp/lint.log
+          npx eslint "admin/**/*.js" "scripts/*.js" "*.config.js" 2>&1 | tee -a /tmp/lint.log
 
       - name: Prettier (check)
         if: ${{ needs.changes.outputs.js == 'true' }}
         run: |
           set -o pipefail
-          npx prettier --check "e2e/**/*.js" "admin/**/*.js" "scripts/*.js" "*.config.js" 2>&1 | tee -a /tmp/lint.log
+          npx prettier --check "admin/**/*.js" "scripts/*.js" "*.config.js" 2>&1 | tee -a /tmp/lint.log
 
       # ── CSS: stylelint ─────────────────────────────────────────────
       - name: Stylelint
@@ -194,6 +194,7 @@ jobs:
         if: ${{ needs.changes.outputs.sh == 'true' }}
         run: |
           set -euo pipefail
+          mkdir -p "$HOME/.local/bin"   # bare ubuntu-latest has no ~/.local/bin (the prebaked CI image is gone)
           sudo apt-get update -qq
           sudo apt-get install -y -qq shellcheck
           curl -fsSL "https://github.com/mvdan/sh/releases/download/v3.10.0/shfmt_v3.10.0_linux_amd64" \
@@ -215,6 +216,7 @@ jobs:
         if: ${{ needs.changes.outputs.yaml == 'true' }}
         run: |
           set -euo pipefail
+          mkdir -p "$HOME/.local/bin"   # bare ubuntu-latest has no ~/.local/bin (the prebaked CI image is gone)
           python3 -m pip install --quiet --user 'yamllint==1.38.0'
           curl -fsSL "https://github.com/rhysd/actionlint/releases/download/v1.7.7/actionlint_1.7.7_linux_amd64.tar.gz" \
             | tar -xz -C "$HOME/.local/bin" actionlint
@@ -233,7 +235,10 @@ jobs:
       # ── Surface failures inline (gitleaks-scrubbed) ────────────────
       - name: Post failure summary
         if: ${{ failure() && github.event_name == 'pull_request' }}
-        uses: ./.github/actions/post-failure-comment
+        # Repointed from the deleted local `./.github/actions/post-failure-comment`
+        # to the platform's composite (same interface) now that the dogfood
+        # consumes machinery from cms-platform. Pinned to the platform SHA.
+        uses: Adam-S-Daniel/cms-platform/.github/actions/post-failure-comment@3ce6a3259797a1bd0f173af53efff55df4a36852  # v0.1.0 (2026-05-29)
         with:
           mode: post
           log-file: /tmp/lint.log
@@ -243,7 +248,7 @@ jobs:
 
       - name: Resolve failure summary on success
         if: ${{ success() && github.event_name == 'pull_request' }}
-        uses: ./.github/actions/post-failure-comment
+        uses: Adam-S-Daniel/cms-platform/.github/actions/post-failure-comment@3ce6a3259797a1bd0f173af53efff55df4a36852  # v0.1.0 (2026-05-29)
         with:
           mode: resolve
           marker: code-quality-failure-summary

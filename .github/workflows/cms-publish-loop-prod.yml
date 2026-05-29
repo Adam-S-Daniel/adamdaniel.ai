@@ -1,55 +1,24 @@
+# Thin caller — copied into a site repo as
+# `.github/workflows/cms-publish-loop-prod.yml`. Owns the push /
+# workflow_dispatch triggers + run-name; delegates the prod-mutation
+# playground loop to the platform's reusable workflow. The e2e harness +
+# the cms-recursion-gate / await-prod-deploy / post-failure-comment
+# composites all live in the platform repo. Keep `platform_ref` equal to
+# the `@<sha>` pin on the `uses:` line.
+#
+# Site identity (CMS_PROD_URL / CMS_APEX) + the PROD_PLAYGROUND_MODE
+# sunset gate are read from THIS repo's VARS by the reusable workflow.
 name: CMS Publish Loop — Prod Mutation Playground
 run-name: >-
   ${{ github.event_name == 'push'
         && format('push — {0} @{1}', github.ref_name, github.actor)
    || format('manual — @{0}', github.actor) }}
 
-# Runs the full Decap → cms PR → auto-merge → deploy-production loop
-# end-to-end against prod. See plan G4 +
-# e2e/cms-publish-loop-prod-mutate.spec.js for the rationale and
-# fixture details.
-#
-# Trigger model: workflow-level `paths:` filter on pushes to `main`.
-# It runs post-merge (not speculatively per-PR) because the spec
-# drives a REAL mutation against production: firing it on every
-# concurrent PR raced the shared prod canary + the deploy-production
-# queue and flaked non-deterministically. On a push that doesn't
-# touch a salient file it doesn't run at all. This job is NOT in the
-# branch-protection required-status-checks list (see
-# `.github/rulesets/main.json` and the live
-# `gh api repos/.../rules/branches/main` view), so not running on PRs
-# blocks no merge. Manual `workflow_dispatch` always forces a real
-# run regardless of paths.
-#
-# Sunset path: the actual mutation is gated on the repo variable
-# `PROD_PLAYGROUND_MODE`. While prod is a "full mutation playground",
-# set it to `true` (Repo Settings → Variables and secrets → Actions →
-# Variables). When prod stops being a playground, set it to `false`
-# (or unset it) — the workflow keeps reporting success on pushes (no
-# real mutation).
-#
-# #1771 step 4: the spec now CREATES + DELETES an EPHEMERAL,
-# born-published per-run post (`_posts/2099-12-31-e2e-prod-mutate-<runId>.md`)
-# rather than mutating a persistent committed fixture in place. Resting
-# state is absence (404); a killed run leaks at most one inert,
-# uniquely-named orphan the daily sweep-stale-cms-prs.yml sweeper reaps.
-
 on:
   push:
     branches: [main]
     paths:
       - .github/workflows/cms-publish-loop-prod.yml
-      - e2e/cms-publish-loop-prod-mutate.spec.js
-      # #1771 step 4: the ephemeral per-run post is built in code, not
-      # committed, so the spec's fixture source is this module (the old
-      # `_posts/2099-01-01-e2e-mutation-canary.md` salient path retired
-      # with the persistent fixture).
-      - e2e/prod-mutate-fixture.js
-      - e2e/cms-fixture-pr.js
-      - e2e/cms-editor-ui.js
-      - e2e/decap-pat.js
-      - e2e/github-actions-poll.js
-      - e2e/base.js
       - admin/**
       - playwright.config.js
       - package.json
@@ -59,258 +28,15 @@ on:
   workflow_dispatch:
 
 permissions:
-  # The spec drives admin via a fine-grained PAT (CMS_E2E_PAT) — the
-  # workflow itself only needs to read the repo to install deps and
-  # check out source, so contents:read is sufficient there. The PAT
-  # carries its own contents:rw / pull-requests:rw scope.
-  #
-  # `pull-requests: write` is needed by the post-failure-comment
-  # composite action so the default GITHUB_TOKEN can post the
-  # failure-summary comment via the issues comments API. Without
-  # this the github-script call 403s silently and no comment lands.
-  #
-  # `actions: read` lets the await-prod-deploy gate query this commit's
-  # `Deploy to Production` run via the REST API (#1101).
   contents: read
   pull-requests: write
   actions: read
 
-defaults:
-  run:
-    # GHA defaults the shell to `sh -e {0}` inside `container:` jobs,
-    # but our run-blocks use `set -o pipefail` and other bash-isms.
-    # Force bash so those scripts work inside the Playwright container.
-    shell: bash
-
 jobs:
-  # Changed-files recursion gate. Replaces the old `publish: `
-  # head-commit guard, which Decap's own `Update/Delete <Collection>
-  # "<slug>"` squash template structurally evaded — the loop's
-  # cms/<col>/<slug> auto-merge lands with no `publish: ` prefix on the
-  # unpublish-canary/delete paths, so the loop kept re-firing on its own
-  # merge (run 26108485428). Logic + the per-loop self-churn set live in
-  # the shared .github/actions/cms-recursion-gate composite and
-  # e2e/cms-recursion-churn.js (single source). Cheap: checkout(depth 2)
-  # + a `git diff` membership test. A push whose only changed files are
-  # this loop's own canary churn skips the heavy job; schedule/dispatch
-  # always run; any ambiguity fails OPEN (never silently skip a real
-  # change). The `prod-mutating-loop` lane now lives on the heavy loop
-  # job, not the workflow (#1178), so this gate runs OUTSIDE the lane:
-  # its skip decision is computed immediately even while a real loop
-  # holds the lane, and a recursion-skipped loop never enters the lane
-  # at all — ~15-25 s of its own (uncontended) runtime on a skip vs. a
-  # full real-prod loop.
-  recursion-gate:
-    runs-on: ubuntu-latest
-    outputs:
-      run: ${{ steps.gate.outputs.run }}
-    steps:
-      - name: Checkout
-        uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd  # v6.0.2 (2026-01-09)
-        with:
-          fetch-depth: 2
-      - name: Recursion gate
-        id: gate
-        uses: ./.github/actions/cms-recursion-gate
-        with:
-          loop: prod
-
-  # Build (or cache-hit) the prebaked ci-runner image used as
-  # `container.image:` by the prod-mutate job below. See e2e-tests.yml
-  # for the full rationale. Independent of `recursion-gate` so a
-  # Dockerfile/lockfile-only push still rebuilds the image even when
-  # the recursion gate would skip the loop.
-  build-image:
-    uses: ./.github/workflows/ci-runner-image.yml
-    secrets: inherit
-    permissions:
-      contents: read
-      packages: write
-
-  prod-mutate:
-    needs: [recursion-gate, build-image]
-    runs-on: ubuntu-latest
-    concurrency:
-      # SHARED lane for ALL real-prod-mutating loop workflows
-      # (cms-publish-loop-prod / cms-media-roundtrip / cms-publish-loop-host).
-      # Declared on the HEAVY LOOP JOB, not the workflow (#1178): the cheap
-      # recursion-gate job has no concurrency, so it runs OUTSIDE this lane
-      # — its skip decision is computed immediately even while a real loop
-      # holds the lane, and a recursion-skipped loop is `if:`-skipped before
-      # it ever enters the lane (zero lane occupancy for recursion). GHA
-      # keys concurrency groups by string ACROSS workflows, so one constant
-      # group on these three loop jobs keeps them mutually exclusive: only
-      # one real-prod loop runs at a time, whatever the trigger (push /
-      # workflow_dispatch / host's daily cron all converge here). They each
-      # mutate prod through Decap → cms-PR → auto-merge → deploy-production
-      # and a parallel pair races deploy-production's `group: production`,
-      # blowing each other's URL-reflect budgets (#1101 — observed: 3 loops
-      # 13:42→13:59 on merge 3dbade7, 2 failed). cancel-in-progress:false
-      # queues rather than killing an in-flight loop (cancelling mid-flow
-      # can leave the canary dirty); a stuck run holds the lane up to its
-      # timeout-minutes, which is bounded and far cheaper than the collision.
-      # This block MUST stay byte-identical across all three workflows AND
-      # remain on the loop job (NOT the workflow) — enforced by
-      # e2e/workflow-prod-loop-serialized.test.js.
-      group: prod-mutating-loop
-      cancel-in-progress: false
-    # Recursion guard delegated to the `recursion-gate` job above
-    # (changed-files decision; schedule/dispatch always run; ambiguity
-    # fails OPEN). The old `publish: ` message guard could not see
-    # Decap's `Update Post "…"` self-merge template (run 26108485428).
-    if: ${{ needs.recursion-gate.outputs.run == 'true' }}
-    # Prebaked ci-runner image — apt deps + Ruby + Gemfile.lock gems +
-    # warm npm cache + gitleaks baked in, replacing the previous
-    # Setup Node + `npm ci` steps inline. Browsers + their apt deps
-    # come from the upstream Playwright base layer.
-    env:
-      # Firefox refuses to launch when $HOME is owned by a different
-      # user. Inside GHA's container jobs the runner injects
-      # `-e HOME=/github/home` at `docker create` time (owned by the
-      # image's `pwuser`); attempting to override that via
-      # `container.env` is a no-op because GHA's injection wins. The
-      # runner DOES honour job-level `env:` — it `export`s those into
-      # every step's shell after `docker exec`, so HOME=/root takes
-      # effect by the time `npx playwright test` runs. Firefox bails
-      # with "Running Nightly as root in a regular user's session is
-      # not supported" without this. Chromium and WebKit are
-      # unaffected; setting it uniformly keeps configuration simple.
-      HOME: /root
-    container:
-      image: ${{ needs.build-image.outputs.image }}
-    # 30 → 50 → 90: the await-prod-deploy gate below can spend up to
-    # ~15 min waiting for this commit's deploy + CDN reflect (#1101).
-    # Spec TEST_TIMEOUT_MS bumped to 80 min (#1815) to absorb real prod
-    # auto-merge / Decap-resync latencies; outer cap stays comfortably
-    # ahead so a slow gate + worst-case spec run never gets GHA-killed.
-    timeout-minutes: 90
-    steps:
-      - name: Checkout
-        uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd  # v6.0.2 (2026-01-09)
-
-      # Post-merge only: do NOT drive prod until THIS commit is live on
-      # adamdaniel.ai (deploy-production succeeded + CDN serves the SHA
-      # or a newer descendant; prod ahead of the merge is fine — #1714).
-      # Without this the loop validates a stale pre-merge site
-      # (#1101). Skipped on workflow_dispatch/schedule (no associated
-      # merge) and when playground mode is off (the spec self-skips, so
-      # there is nothing to gate). Fails loud if the deploy failed.
-      - name: Await prod deploy of this merge
-        if: ${{ github.event_name == 'push' && vars.PROD_PLAYGROUND_MODE == 'true' }}
-        uses: ./.github/actions/await-prod-deploy
-
-      - name: Skip — playground mode disabled
-        if: vars.PROD_PLAYGROUND_MODE != 'true'
-        run: echo "::notice::PROD_PLAYGROUND_MODE is not 'true'; skipping prod mutation."
-
-      - name: Run prod mutation playground spec
-        if: vars.PROD_PLAYGROUND_MODE == 'true'
-        env:
-          # Same PAT the existing publish-loop tests use. Fine-grained,
-          # scoped to the host repo with contents: r/w + pull_requests:
-          # r/w + metadata: r. See AGENTS.md → "GitHub Actions secrets".
-          CMS_E2E_PAT: ${{ secrets.CMS_E2E_PAT }}
-          # Tells playwright.config.js (via the G3 TARGET= switch) NOT
-          # to spin up the local Jekyll + decap-server webServer block
-          # — this spec hits adamdaniel.ai directly and the runner has
-          # no Ruby/bundler, so a webServer attempt would fail at
-          # `bundle: not found`. The spec hardcodes
-          # https://adamdaniel.ai for its own fetches, so the baseURL
-          # override TARGET=prod also installs is incidental but not
-          # relied on. Mirrors canary-prod.yml's pattern.
-          TARGET: prod
-          # Opt-in marker the spec checks before running. Without this,
-          # it also fires inside e2e-tests.yml shard 1, force-pushing
-          # concurrent commits to the same cms/posts/… branch and
-          # cancelling each other's validate-content runs. Setting it
-          # here scopes the prod mutation to this dedicated workflow.
-          RUN_PROD_MUTATE_PLAYGROUND: "1"
-        run: |
-          set -o pipefail
-          # `--max-failures=1` is a no-op for a single spec but kept
-          # here for symmetry with cms-publish-loop-host.yml so any
-          # future addition of a second spec in this workflow inherits
-          # the fail-fast behaviour.
-          npx playwright test \
-            e2e/cms-publish-loop-prod-mutate.spec.js \
-            --project=chromium-desktop-3k \
-            --reporter=list \
-            --max-failures=1 \
-            2>&1 | tee /tmp/prod-mutate.log
-
-      - name: Upload test results on failure
-        if: ${{ (failure() || cancelled()) && vars.PROD_PLAYGROUND_MODE == 'true' }}
-        uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a  # v7.0.1 (2026-04-10)
-        with:
-          name: prod-mutate-results
-          path: |
-            test-results/
-            /tmp/prod-mutate.log
-          retention-days: 14
-
-      # Surface the Playwright failure block as a PR comment so a
-      # human (or agent) iterating on the PR can triage without
-      # needing workflow-log access. Delegated to the shared
-      # composite action at .github/actions/post-failure-comment;
-      # see AGENTS.md "Failure-comment composite action" for the
-      # full convention and design notes. Distinct marker so it
-      # doesn't clobber the e2e or host-loop comment. Gated on
-      # PROD_PLAYGROUND_MODE for symmetry with the upload-artifact
-      # step above — when playground mode is off, the test
-      # self-skips and there's nothing meaningful to comment about.
-      # Two call sites — caller-side gating with `failure()` /
-      # `success()` is the canonical, well-tested pattern. The
-      # composite action is mode-driven and doesn't detect job
-      # state itself.
-      - name: Post failure summary
-        if: ${{ failure() && vars.PROD_PLAYGROUND_MODE == 'true' }}
-        uses: ./.github/actions/post-failure-comment
-        with:
-          mode: post
-          log-file: /tmp/prod-mutate.log
-          marker: prod-mutate-failure-summary
-          title: prod-mutate
-
-      - name: Resolve failure summary on success
-        if: ${{ success() && vars.PROD_PLAYGROUND_MODE == 'true' }}
-        uses: ./.github/actions/post-failure-comment
-        with:
-          mode: resolve
-          marker: prod-mutate-failure-summary
-          title: prod-mutate
-
-      # Stuck-PR diagnostic — see the corresponding block in
-      # cms-publish-loop-host.yml for the rationale and design.
-      # Gated by `grep 'Timed out waiting'` so it stays quiet on
-      # non-timeout failures.
-      - name: Diagnose stuck PRs
-        if: ${{ failure() && vars.PROD_PLAYGROUND_MODE == 'true' && hashFiles('/tmp/prod-mutate.log') != '' }}
-        env:
-          GH_TOKEN: ${{ secrets.CMS_E2E_PAT || secrets.GITHUB_TOKEN }}
-          GH_REPO: ${{ github.repository }}
-          WAITING_FOR: 'prod-mutate spec (see Playwright log for the specific wait)'
-        run: |
-          set -uo pipefail
-          if grep -q 'Timed out waiting' /tmp/prod-mutate.log 2>/dev/null; then
-            node scripts/diagnose-stuck-pr.js > /tmp/prod-mutate-stuck-pr-diagnostic.md || true
-          else
-            echo "_no 'Timed out waiting' lines in log; stuck-PR diagnostic skipped_" > /tmp/prod-mutate-stuck-pr-diagnostic.md
-          fi
-
-      - name: Post stuck-PR diagnostic
-        if: ${{ failure() && vars.PROD_PLAYGROUND_MODE == 'true' && hashFiles('/tmp/prod-mutate-stuck-pr-diagnostic.md') != '' }}
-        uses: ./.github/actions/post-failure-comment
-        with:
-          mode: post
-          log-file: /tmp/prod-mutate-stuck-pr-diagnostic.md
-          marker: prod-mutate-stuck-pr-diagnostic
-          title: prod-mutate stuck-PR diagnostic
-
-      - name: Resolve stuck-PR diagnostic on success
-        if: ${{ success() && vars.PROD_PLAYGROUND_MODE == 'true' }}
-        uses: ./.github/actions/post-failure-comment
-        with:
-          mode: resolve
-          marker: prod-mutate-stuck-pr-diagnostic
-          title: prod-mutate stuck-PR diagnostic
-# Intentionally inert line (no functional effect).
+  prod-loop:
+    uses: Adam-S-Daniel/cms-platform/.github/workflows/cms-publish-loop-prod.yml@v0.1.0
+    with:
+      # Pin to the SAME ref as the `uses:` pin above so the harness matches.
+      platform_ref: v0.1.0
+    secrets:
+      CMS_E2E_PAT: ${{ secrets.CMS_E2E_PAT }}

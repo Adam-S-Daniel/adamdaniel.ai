@@ -85,10 +85,10 @@
   if (window.__postsListEnhanceInstalled) return;
   window.__postsListEnhanceInstalled = true;
 
-  var REPO = "Adam-S-Daniel/adamdaniel.ai";
+  var REPO = window.CMS_REPO;
   var REST = "https://api.github.com/repos/" + REPO;
   var GQL = "https://api.github.com/graphql";
-  var SITE_ORIGIN = "https://adamdaniel.ai";
+  var SITE_ORIGIN = window.CMS_SITE_ORIGIN;
   var SHOW_FIXTURES_KEY = "cms-ple-show-fixtures";
   var CACHE_KEY = "cms-ple-remote-cache-v1";
   var CACHE_TTL_MS = 5 * 60 * 1000;
@@ -624,7 +624,9 @@
       bits.push(
         '<a href="https://preview-pr' +
           esc(pr.number) +
-          ".adamdaniel.ai/blog/" +
+          "." +
+          window.CMS_APEX +
+          "/blog/" +
           esc(urlSlug(card.slug)) +
           '/" target="_blank" rel="noopener" title="Per-PR preview ' +
           "environment for the unmerged draft (open PR #" +

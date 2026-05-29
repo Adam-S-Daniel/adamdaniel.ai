@@ -1,3 +1,15 @@
+# Thin caller — copied into a site repo as
+# `.github/workflows/visual-regression.yml`. Owns the pull_request trigger
+# + content-skip `paths:` filter + run-name; delegates the visual-regression
+# video pipeline to the platform's reusable workflow. The pipeline
+# (detect-changed-pages.js, compute-visual-diffs.js, generate-video.sh,
+# regression-video.spec.js, playwright.regression.config.js) lives in the
+# platform repo's e2e/. Keep `platform_ref` equal to the `@<sha>` pin on
+# the `uses:` line.
+#
+# Site identity (CMS_APEX / PREVIEW_BUCKET / AWS_REGION) is read from THIS
+# repo's VARS by the reusable workflow; AWS/CloudFront secrets are wired
+# through the `secrets:` block below.
 name: Visual Regression
 run-name: "${{ format('PR #{0} — {1}', github.event.pull_request.number, github.event.pull_request.title) }}"
 
@@ -6,355 +18,51 @@ on:
     types: [opened, synchronize, reopened]
     branches:
       - main
-    # Positive path list — only run when the diff can actually shift
-    # rendered output OR change one of the tools the regression
-    # pipeline uses. Stated as a positive list (rather than the
-    # paths-ignore form used elsewhere) because the dual nature of
-    # `e2e/` (most specs unrelated, but a handful drive this workflow)
-    # makes a negative list awkward to express.
-    #
-    # Content-only PRs are NOT in this list and therefore do not run
-    # visual regression. The CMS's editorial workflow opens a PR for
-    # every Save, and those PRs touch only the CMS-managed content
-    # collections (_posts/, _tags/, _projects/, pages/, _e2e/ — see
-    # admin/config.yml), plus media uploads under
-    # assets/images/uploads/. The "regression" of editing a post or
-    # uploading an image is by design — pixel diffs are guaranteed,
-    # so the human review of the regression video adds noise and
-    # runner time without signal. The check exists to catch
-    # *unintentional* visual drift in templates / styling / the
-    # admin shell — that's what the paths below cover. Content-only
-    # PRs still gate on validate-content + the e2e suite.
+    # Positive path list — only run when the diff can shift rendered
+    # output OR change a tool the regression pipeline uses. Content-only
+    # PRs (CMS collections + media uploads) are intentionally absent:
+    # pixel diffs there are by design. (Locked by
+    # e2e/visual-regression-content-skip.test.js.)
     paths:
-      # Templates / rendering logic / styling
       - '_layouts/**'
       - '_includes/**'
       - '_plugins/**'
-      - '_data/**'              # site-wide data (e.g. nav lists), not CMS content
-      - 'admin/**'              # the editor shell itself
+      - '_data/**'
+      - 'admin/**'
       - '_config.yml'
       - 'Gemfile'
       - 'Gemfile.lock'
-      - 'index.html'            # hand-edited root page (not a CMS page)
+      - 'index.html'
       - '404.html'
       - 'robots.txt'
       - 'preview.md'
-      # Styling assets — narrowed from `assets/**` so CMS media
-      # uploads under assets/images/uploads/** don't trigger.
       - 'assets/css/**'
       - 'assets/js/**'
       - 'assets/images/logo.svg'
-      # Tools the regression pipeline itself depends on
+      # Tools the regression pipeline itself depends on (in the platform's
+      # e2e/, but listed so a vendored/site-local copy also triggers).
       - '.github/workflows/visual-regression.yml'
       - 'e2e/detect-changed-pages.js'
       - 'e2e/compute-visual-diffs.js'
       - 'e2e/generate-video.sh'
       - 'e2e/regression-video.spec.js'
-      - 'playwright.regression.config.js'
+      - 'e2e/playwright.regression.config.js'
 
 permissions:
   contents: read
   pull-requests: write
   id-token: write
 
-concurrency:
-  group: "visual-regression-pr-${{ github.event.pull_request.number }}"
-  cancel-in-progress: true
-
 jobs:
-  generate:
-    # Skip entirely on Dependabot PRs whose ecosystem can't possibly
-    # change rendered output (npm/github-actions are dev-only here).
-    # Bundler bumps (Jekyll + plugins) DO affect rendering, so they
-    # still run the regression gate. Branch naming is Dependabot's
-    # contract: `dependabot/<ecosystem>/...`.
-    if: github.actor != 'dependabot[bot]' || startsWith(github.head_ref, 'dependabot/bundler/')
-    runs-on: ubuntu-latest
-    outputs:
-      visually-different: ${{ steps.compute.outputs.visually-different }}
-    env:
-      AWS_REGION: us-east-1
-      PREVIEW_BUCKET: adamdaniel-ai-previews
-      APEX_DOMAIN: adamdaniel.ai
-      CLOUDFRONT_DISTRIBUTION_ID: ${{ secrets.PREVIEW_CLOUDFRONT_ID }}
-      PR_NUMBER: ${{ github.event.pull_request.number }}
-
-    steps:
-      - name: Checkout
-        uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd  # v6.0.2 (2026-01-09)
-        with:
-          fetch-depth: 0
-
-      - name: Fetch main branch
-        run: git fetch origin main
-
-      - name: Setup Ruby
-        uses: ruby/setup-ruby@afeafc3d1ab54a631816aba4c914a0081c12ff2f  # v1.310.0 (2026-05-20)
-        with:
-          ruby-version: '3.2'
-          bundler-cache: true
-
-      - name: Setup Node
-        uses: actions/setup-node@48b55a011bda9f5d6aeb4c2d9c7362e8dae4041e  # v6.4.0 (2026-04-20)
-        with:
-          node-version: '20'
-          cache: 'npm'
-
-      - name: Install npm dependencies
-        run: npm ci
-
-      - name: Cache Playwright browsers
-        id: pw-cache
-        uses: actions/cache@27d5ce7f107fe9357f9df03efb73ab90386fccae  # v5.0.5 (2026-04-13)
-        with:
-          path: ~/.cache/ms-playwright
-          # `playwright-chromium-` keeps this cache distinct from the
-          # all-three-browsers cache used by e2e-tests.yml so neither
-          # trashes the other.
-          key: playwright-chromium-${{ runner.os }}-${{ hashFiles('package-lock.json') }}
-
-      - name: Install Playwright browsers
-        if: steps.pw-cache.outputs.cache-hit != 'true'
-        run: npx playwright install chromium --with-deps
-
-      - name: Install Playwright OS deps (browsers cached)
-        if: steps.pw-cache.outputs.cache-hit == 'true'
-        # Same sizing rationale as e2e-tests.yml's matching step:
-        # 435-run sample showed p99=179s, max=554s, with apt-mirror
-        # latency in the long tail. 5 minutes is comfortably above
-        # p99 and clips the rare outlier instead of paying the
-        # 6-hour default for a stuck apt.
-        timeout-minutes: 5
-        run: npx playwright install-deps chromium
-
-      - name: Install ffmpeg
-        run: sudo apt-get update -qq && sudo apt-get install -y -qq ffmpeg
-
-      - name: Detect changed pages
-        run: node e2e/detect-changed-pages.js > /tmp/page-changes.json
-
-      - name: Show page changes
-        run: cat /tmp/page-changes.json
-
-      - name: Build Jekyll site
-        run: bundle exec jekyll build --quiet
-
-      - name: Run regression video screenshots
-        continue-on-error: true
-        env:
-          PAGE_CHANGES_PATH: /tmp/page-changes.json
-        run: npx playwright test --config=playwright.regression.config.js
-
-      - name: Compute per-page visual diffs
-        id: compute
-        run: |
-          set -euo pipefail
-          node e2e/compute-visual-diffs.js \
-            /tmp/page-changes.json \
-            screenshots/regression/pr \
-            screenshots/regression/prod \
-            screenshots/regression/diffs.json
-          cat screenshots/regression/diffs.json || true
-          # Robust read of the visuallyDifferent total (#1723 Cat 6). A
-          # MISSING/EMPTY diffs.json is tolerated as 0 (e.g. no pages
-          # changed); a PRESENT-but-malformed one fails LOUD with a clear,
-          # actionable message naming the file + its first bytes, instead
-          # of the cryptic `SyntaxError: Unexpected token ':'` that left
-          # past runs un-triageable (visual-regression runs 24913687663 /
-          # 24913540458).
-          VD=$(node -e '
-            const fs = require("fs");
-            const p = "screenshots/regression/diffs.json";
-            if (!fs.existsSync(p)) {
-              console.error("[visreg] " + p + " not written — treating as 0 visually-different.");
-              process.stdout.write("0");
-              process.exit(0);
-            }
-            const raw = fs.readFileSync(p, "utf8").trim();
-            if (!raw) {
-              console.error("[visreg] " + p + " is empty — treating as 0 visually-different.");
-              process.stdout.write("0");
-              process.exit(0);
-            }
-            let j;
-            try {
-              j = JSON.parse(raw);
-            } catch (e) {
-              console.error("::error::[visreg] " + p + " is present but not valid JSON (" + e.message + "). First 200 chars: " + raw.slice(0, 200));
-              process.exit(1);
-            }
-            const vd = (j && j.totals && j.totals.visuallyDifferent) || 0;
-            process.stdout.write(String(vd));
-          ')
-          echo "visually-different=$VD" >> "$GITHUB_OUTPUT"
-
-      - name: Generate comparison video
-        run: bash e2e/generate-video.sh /tmp/page-changes.json screenshots/regression/diffs.json
-
-      # AWS / S3 / CloudFront / PR-comment steps below are skipped for
-      # Dependabot PRs — Dependabot can't access the OIDC role secret,
-      # and the comment links to S3-hosted media that wouldn't have
-      # been uploaded anyway. The diff computation above still ran, so
-      # `approve-regression` still functions as the merge gate.
-      - name: Configure AWS credentials
-        if: github.actor != 'dependabot[bot]'
-        uses: aws-actions/configure-aws-credentials@d979d5b3a71173a29b74b5b88418bfda9437d885  # v6.1.1 (2026-05-05)
-        with:
-          role-to-assume: ${{ secrets.AWS_ROLE_ARN }}
-          aws-region: ${{ env.AWS_REGION }}
-
-      - name: Upload video and diffs JSON to S3
-        if: github.actor != 'dependabot[bot]'
-        run: |
-          aws s3 cp screenshots/regression/comparison.mp4 \
-            "s3://${PREVIEW_BUCKET}/pr-${PR_NUMBER}/regression.mp4" \
-            --cache-control "no-cache, must-revalidate" \
-            --content-type "video/mp4"
-          aws s3 cp screenshots/regression/diffs.json \
-            "s3://${PREVIEW_BUCKET}/pr-${PR_NUMBER}/regression.json" \
-            --cache-control "no-cache, must-revalidate" \
-            --content-type "application/json"
-
-      - name: Invalidate CloudFront cache for video and diffs
-        if: github.actor != 'dependabot[bot]' && env.CLOUDFRONT_DISTRIBUTION_ID != ''
-        run: |
-          aws cloudfront create-invalidation \
-            --distribution-id "$CLOUDFRONT_DISTRIBUTION_ID" \
-            --paths "/pr-${PR_NUMBER}/regression.mp4" "/pr-${PR_NUMBER}/regression.json"
-
-      - name: Post regression video comment
-        if: github.actor != 'dependabot[bot]'
-        uses: actions/github-script@3a2844b7e9c422d3c10d287c895573f7108da1b3  # v9.0.0 (2026-04-09)
-        with:
-          script: |
-            const fs = require('fs');
-            const pr = context.payload.pull_request.number;
-            // Robust read (#1723 Cat 6): this comment is informational
-            // (the merge gate is `approve-regression`, not this step), so
-            // a missing/malformed inputs file must SKIP the comment with a
-            // clear log line, never crash the step with a raw SyntaxError.
-            const readJsonOrNull = (p) => {
-              try {
-                const raw = fs.readFileSync(p, 'utf-8').trim();
-                return raw ? JSON.parse(raw) : null;
-              } catch (e) {
-                console.warn(`[visreg] could not read/parse ${p} (${e.message}); skipping the regression comment.`);
-                return null;
-              }
-            };
-            const changes = readJsonOrNull('/tmp/page-changes.json');
-            const diffs = readJsonOrNull('screenshots/regression/diffs.json');
-            if (!changes || !diffs) {
-              console.warn('[visreg] regression inputs unavailable — not posting/!updating the comment this run.');
-              return;
-            }
-            const apex = process.env.APEX_DOMAIN;
-            const cfId = process.env.CLOUDFRONT_DISTRIBUTION_ID;
-
-            const videoUrl = cfId
-              ? `https://preview-pr${pr}.${apex}/regression.mp4`
-              : `https://${apex}/admin/reviews/`;
-            const previewUrl = cfId
-              ? `https://preview-pr${pr}.${apex}/`
-              : '#';
-            const dashboardUrl = `https://${apex}/admin/reviews/`;
-
-            const { data: comments } = await github.rest.issues.listComments({
-              owner: context.repo.owner,
-              repo: context.repo.repo,
-              issue_number: pr,
-            });
-
-            const BOT_MARKER = '<!-- adamdaniel-regression-bot -->';
-            const existing = comments.find(c => c.body.includes(BOT_MARKER));
-
-            // The two stats answer different questions:
-            //
-            //   "Potentially affected"  — pages whose source files changed,
-            //                             OR pages on a globally-fanout file
-            //                             (_layouts, _includes, _config.yml,
-            //                             assets/css). Heuristic — anything
-            //                             could break in here.
-            //
-            //   "Visually different"    — pages where the screenshot actually
-            //                             differs from production beyond the
-            //                             anti-aliasing tolerance. Fact —
-            //                             these are the ones to look at.
-            const t = diffs.totals;
-            const visuallyDifferentList = diffs.pages
-              .filter(p => p.status === 'different' || p.status === 'new')
-              .map(p => `\`${p.path}\``)
-              .join(', ');
-
-            // No visually-different pages → the approve-regression job
-            // skips the human-review environment and auto-passes the
-            // required status check. Reflect that in the comment so
-            // editors know they don't need to do anything.
-            const reviewLine = t.visuallyDifferent === 0
-              ? `> **Auto-approved.** No visual regressions detected — the required regression check passed without manual review.`
-              : `> **Review required.** Watch the regression video and [approve in the dashboard](${dashboardUrl}) or via GitHub Actions. The dashboard also lists the per-page stats so you don't need GitHub access to see them.`;
-
-            const body = [
-              BOT_MARKER,
-              '## Visual Regression Video',
-              '',
-              '| | |',
-              '|---|---|',
-              `| **Video** | [regression.mp4](${videoUrl}) |`,
-              `| **Preview** | [preview-pr${pr}.${apex}](${previewUrl}) |`,
-              `| **Commit** | \`${context.payload.pull_request.head.sha.slice(0, 7)}\` |`,
-              `| **Visually different** | ${t.visuallyDifferent} page(s)${visuallyDifferentList ? ` — ${visuallyDifferentList}` : ''} |`,
-              `| **Potentially affected by changes** | ${t.potentiallyAffected} page(s) |`,
-              `| **New** | ${t.new} page(s) |`,
-              `| **Visually identical** | ${t.identical} page(s) |`,
-              '',
-              reviewLine,
-              '',
-              '*Video regenerates automatically on every push to this PR.*',
-            ].join('\n');
-
-            if (existing) {
-              await github.rest.issues.updateComment({
-                owner: context.repo.owner,
-                repo: context.repo.repo,
-                comment_id: existing.id,
-                body,
-              });
-            } else {
-              await github.rest.issues.createComment({
-                owner: context.repo.owner,
-                repo: context.repo.repo,
-                issue_number: pr,
-                body,
-              });
-            }
-
-      - name: Upload video artifact
-        if: ${{ !cancelled() }}
-        uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a  # v7.0.1 (2026-04-10)
-        with:
-          name: regression-video
-          path: |
-            screenshots/regression/comparison.mp4
-            screenshots/regression/diffs.json
-          retention-days: 14
-
-  approve-regression:
-    needs: generate
-    runs-on: ubuntu-latest
-    # When `visually-different == 0` (zero diffs), enter no environment
-    # at all — the job runs immediately, reports its required status
-    # check as success, and the PR can merge without a human reviewer.
-    # Any non-zero count routes through the `regression-review`
-    # environment, which has required reviewers configured in
-    # repo Settings → Environments.
-    environment: ${{ needs.generate.outputs.visually-different != '0' && 'regression-review' || '' }}
-    steps:
-      - name: Approval confirmed
-        run: |
-          if [ "${{ needs.generate.outputs.visually-different }}" = "0" ]; then
-            echo "Auto-approved: 0 pages visually different from production."
-          else
-            echo "Visual regression approved by reviewer (${{ needs.generate.outputs.visually-different }} page(s) visually different)."
-          fi
-# Intentionally inert line (no functional effect).
+  visual-regression:
+    uses: Adam-S-Daniel/cms-platform/.github/workflows/visual-regression.yml@v0.1.0
+    with:
+      # Pin to the SAME ref as the `uses:` pin above so the pipeline matches.
+      platform_ref: v0.1.0
+    secrets:
+      # Optional — drop any the site doesn't use. The AWS steps no-op when
+      # PREVIEW_BUCKET (a repo var) is unset; the CloudFront invalidation
+      # also gates on PREVIEW_CLOUDFRONT_ID.
+      AWS_ROLE_ARN: ${{ secrets.AWS_ROLE_ARN }}
+      PREVIEW_CLOUDFRONT_ID: ${{ secrets.PREVIEW_CLOUDFRONT_ID }}
+      CMS_E2E_PAT: ${{ secrets.CMS_E2E_PAT }}

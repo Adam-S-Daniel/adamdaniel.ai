@@ -6,6 +6,17 @@ author:
   name: Adam Daniel
   email: adam@adamdaniel.ai
 
+# Theme. Layouts/includes/assets are vendored in by the cms-platform theme
+# gem (pinned in the Gemfile + platform.lock). Local files under _layouts /
+# _includes still override the gem's where present.
+theme: cms-platform-theme
+
+# CMS (Decap) wiring. The admin/ config is generated from these by the
+# platform's admin tooling; keep them in sync with the live OAuth proxy.
+cms:
+  repository: Adam-S-Daniel/adamdaniel.ai
+  oauth_base_url: https://sq8d4876v8.execute-api.us-east-1.amazonaws.com
+
 # Build settings
 markdown: kramdown
 highlighter: rouge
@@ -102,6 +113,13 @@ exclude:
   - playwright.config.js
   - playwright.regression.config.js
   - e2e
+  # The cms-platform e2e lane checks the platform out into .cms-platform/.
+  # It's not site content and is dot-prefixed (Jekyll ignores it by default);
+  # listing it is explicit so it can never pollute _site or the e2e specs.
+  - .cms-platform
+  - platform.lock
+  - admin/README.md
+  - admin/collections.site.yml.example
   - docs
   # Repo docs / READMEs — meant for GitHub, not the apex domain.
   - AGENTS.md

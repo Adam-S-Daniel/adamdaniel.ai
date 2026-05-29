@@ -1,128 +1,16 @@
 # Dependabot configuration for adamdaniel.ai.
 #
-# Pairs with .github/workflows/dependabot-auto-merge.yml to ship dep
-# bumps unattended once branch protection's required checks (e2e
-# matrix + visual-regression / approve-regression) report success.
-#
-# Cooldown: every non-security update waits 7 days from the upstream
-# release before Dependabot opens the PR. This lets the wider
-# ecosystem surface regressions before we adopt a release. Per
-# GitHub's spec the `cooldown` option is "only available for version
-# updates, not security updates" — security advisories bypass it
-# automatically and ship as soon as Dependabot detects them.
-#
-# Grouping: minor + patch bumps batch into one PR per ecosystem so
-# the auto-merge pipeline isn't drowning in N PRs/week. Major bumps
-# stay individual so each gets a clear visual-regression review
-# window.
-#
-# SHA pinning note: Dependabot updates the SHA and version part of
-# the inline comment for github-actions deps but does not refresh
-# the `(YYYY-MM-DD)` release-date suffix used by this repo's pinning
-# convention. Re-run the pin-actions-to-sha skill periodically to
-# refresh the dates after Dependabot lands a bump.
-
+# Down-sync: Dependabot opens PRs bumping the platform pins when cms-platform
+# tags a release.
 version: 2
-
 updates:
-  # ────────────────────────────────────────────────────────────
-  # GitHub Actions
-  # ────────────────────────────────────────────────────────────
-  - package-ecosystem: "github-actions"
+  # Bumps `uses: Adam-S-Daniel/cms-platform/...@<tag>` in the workflow callers.
+  - package-ecosystem: github-actions
     directory: "/"
     schedule:
-      interval: "daily"
-    cooldown:
-      default-days: 7
-    open-pull-requests-limit: 10
-    labels:
-      - "dependencies"
-      - "github-actions"
-    commit-message:
-      prefix: "chore"
-      include: "scope"
-    groups:
-      actions-minor-patch:
-        update-types:
-          - "minor"
-          - "patch"
-
-  # ────────────────────────────────────────────────────────────
-  # npm — Playwright + decap-cms + serve toolchain
-  # ────────────────────────────────────────────────────────────
-  - package-ecosystem: "npm"
+      interval: weekly
+  # Bumps the cms-platform-theme gem.
+  - package-ecosystem: bundler
     directory: "/"
     schedule:
-      interval: "daily"
-    cooldown:
-      default-days: 7
-    open-pull-requests-limit: 10
-    labels:
-      - "dependencies"
-      - "npm"
-    commit-message:
-      prefix: "chore"
-      include: "scope"
-    groups:
-      npm-minor-patch:
-        update-types:
-          - "minor"
-          - "patch"
-
-  # ────────────────────────────────────────────────────────────
-  # Bundler — Jekyll + plugins
-  # ────────────────────────────────────────────────────────────
-  - package-ecosystem: "bundler"
-    directory: "/"
-    schedule:
-      interval: "daily"
-    cooldown:
-      default-days: 7
-    open-pull-requests-limit: 10
-    labels:
-      - "dependencies"
-      - "bundler"
-    commit-message:
-      prefix: "chore"
-      include: "scope"
-    groups:
-      bundler-minor-patch:
-        update-types:
-          - "minor"
-          - "patch"
-
-  # ────────────────────────────────────────────────────────────
-  # Docker — CI-runner base image. DELIBERATELY IGNORED.
-  # ────────────────────────────────────────────────────────────
-  #
-  # The repo's only container image is .github/ci-runner/Dockerfile,
-  # whose sole versioned dependency is the Playwright base image
-  # `mcr.microsoft.com/playwright:v<X.Y.Z>-noble`. That tag is
-  # HARD-COUPLED to the npm `@playwright/test` version: the browsers
-  # baked into the image must match the test client exactly, or
-  # Playwright fails at runtime on a driver/browser version mismatch.
-  # e2e-tests.yml enforces this with its "Verify Playwright image
-  # version matches lockfile" drift guard.
-  #
-  # Dependabot can't bump a docker dep and an npm dep in the same PR,
-  # so a docker-only base-image bump would desync the image from
-  # package-lock.json and fail the whole e2e matrix — the PR's
-  # required checks could never go green (the exact "docker PR fails
-  # its requirements" symptom). The base image is therefore bumped
-  # manually, in lockstep with the `@playwright/test` npm update, not
-  # by Dependabot. The Dockerfile's other pinned version,
-  # GITLEAKS_VERSION, is fetched from a GitHub release tarball rather
-  # than a registry image, so the docker ecosystem can't track it
-  # regardless.
-  #
-  # We register the ecosystem and ignore every dependency-name rather
-  # than omitting it, so the exclusion is explicit and trivially
-  # reversible. A base-image CVE is handled by a manual
-  # `workflow_dispatch` rebuild of ci-runner-image.yml, not here.
-  - package-ecosystem: "docker"
-    directory: "/.github/ci-runner"
-    schedule:
-      interval: "daily"
-    ignore:
-      - dependency-name: "*"
-# Intentionally inert line (no functional effect).
+      interval: weekly

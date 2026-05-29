@@ -1,3 +1,7 @@
+# Thin caller — copied into a site repo as `.github/workflows/deploy-production.yml`.
+# It owns the trigger + paths-ignore; the build/deploy logic lives in the
+# platform's reusable workflow. Pin `@<sha>` to a cms-platform release and let
+# Dependabot (github-actions ecosystem) open the bump PRs.
 name: Deploy to Production
 run-name: >-
   ${{ github.event_name == 'push'
@@ -6,280 +10,36 @@ run-name: >-
 
 on:
   push:
-    branches:
-      - main
-    # Skip the deploy when a push to main only touches files that
-    # cannot change what's served from S3 (docs, CI scripts, test
-    # tooling, infra-as-code for non-Jekyll AWS pieces, dev-only
-    # toolchains, etc.). Keep `.github/workflows/deploy-production.yml`
-    # OUT of this list — workflow-self changes must still trigger a
-    # run to validate them. Same for Gemfile/Gemfile.lock (Bundler
-    # bumps can change Jekyll output) and admin/ (the editorial shell
-    # is part of the deployed site).
+    branches: [main]
+    # Customize per site. Skip pushes that can't change what's served from S3
+    # (docs, infra-as-code, tests, dev tooling). Keep this workflow file itself
+    # OUT of the list so caller-only changes still validate via a real run.
     paths-ignore:
       - 'README.md'
       - 'AGENTS.md'
       - 'CLAUDE.md'
-      - 'ANALYTICS_SETUP.md'
       - 'docs/**'
-      - '.agents/**'
-      - '_plugins_test/**'
-      - 'oauth-proxy/**'
-      - 'infrastructure/**'
       - 'e2e/**'
-      - 'screenshots/**'
-      - 'recordings/**'
-      - 'test-results/**'
-      - 'playwright.config.js'
-      - 'playwright.regression.config.js'
-      - 'package.json'
-      - 'package-lock.json'
-      - 'LICENSE'
-      - '.gitignore'
-      - '.gitleaks.toml'
-      - '.editorconfig'
-      - '.bundle/**'
-      - 'scripts/setup-test-environment.sh'
-      - 'scripts/extract-playwright-failures.sh'
-      - 'scripts/scrub-secrets.js'
-      - 'scripts/generate-showcase.js'
-      - 'scripts/write-commit-json.sh'
-      - 'scripts/publish_scheduled_posts.py'
-      - 'scripts/patch-preview-config.sh'
-      # Dev/CI tooling scripts added after PR #67 — none participate
-      # in `bundle exec jekyll build`, so they cannot change what's
-      # served from S3. Folded in per the issue #856 skip-rules audit;
-      # its 2026-05-18 refresh confirmed these gaps caused real false
-      # production deploys (e.g. scripts/diagnose-stuck-pr.js,
-      # scripts/auto-resolve-newline-conflict.js).
-      - 'scripts/auto-resolve-newline-conflict.js'
-      - 'scripts/auto-resolve-newline-conflict.test.js'
-      - 'scripts/bootstrap.ps1'
-      - 'scripts/bootstrap.sh'
-      - 'scripts/build-contributor-manual.js'
-      - 'scripts/build-contributor-manual.test.js'
-      - 'scripts/diagnose-stuck-pr.js'
-      - 'scripts/diagnose-stuck-pr.test.js'
-      - 'scripts/live-admin-smoke.js'
-      - 'scripts/secrets-scan.sh'
-      - 'scripts/sync-action-pin-comments.sh'
-      - 'scripts/sync-action-pin-comments.test.sh'
-      - 'scripts/verify-skills-mirror.ps1'
-      - 'scripts/verify-skills-mirror.sh'
-      - '.github/dependabot.yml'
-      - '.github/workflows/cms-editorial-workflow.yml'
-      - '.github/workflows/dependabot-auto-merge.yml'
-      - '.github/workflows/secrets-scan.yml'
-      - '.github/workflows/publish-scheduled-posts.yml'
-      - '.github/workflows/visual-regression.yml'
-      - '.github/workflows/e2e-tests.yml'
-      - '.github/workflows/deploy-preview.yml'
-      - '.github/workflows/canary-prod.yml'
-      # Maintenance / CMS-automation workflows added after PR #67 —
-      # none can alter the Jekyll output synced to S3, so a push
-      # touching only one of these must not trigger a production
-      # deploy. Per the issue #856 audit + its 2026-05-18 refresh
-      # (which traced 4 confirmed false deploys to these gaps).
-      # `deploy-production.yml` itself stays OUT of this list so
-      # workflow-self changes still validate via a real run.
-      - '.github/workflows/auto-resolve-newline-conflict.yml'
-      - '.github/workflows/cleanup-stale-fixture-branches.yml'
-      - '.github/workflows/cms-publish-loop-host.yml'
-      - '.github/workflows/cms-publish-loop-preview.yml'
-      - '.github/workflows/cms-publish-loop-prod.yml'
-      - '.github/workflows/dependabot-comment-sync.yml'
-      - '.github/workflows/regenerate-manual.yml'
-      - '.github/workflows/required-check-stubs.yml'
-      - '.github/workflows/sweep-stale-cms-prs.yml'
-  # Allow manual trigger from the Actions UI. workflow_dispatch ignores
-  # paths-ignore, so a force-deploy from the UI always runs.
+      - 'tests/**'
+      - 'infrastructure/**'
+      - 'oauth-proxy/**'
+      - 'scripts/**'
+  # Manual force-deploy (workflow_dispatch ignores paths-ignore).
   workflow_dispatch:
 
+# Reusable workflows are capped by the caller's token permissions — grant here
+# what deploy-production.yml declares it needs.
 permissions:
   contents: read
-  id-token: write   # needed for AWS OIDC authentication
-  # Register GitHub Deployments so admin/deploy-status-pill.js can
-  # surface "Publishing… (deploy run #NNN)" in the editor while this
-  # workflow runs, transitioning to "Live since HH:MM" or "Deploy
-  # failed" when it finishes. Decap CMS itself doesn't track post-merge
-  # production deploys for the github backend, so this fills the gap.
+  id-token: write
   deployments: write
-
-# Allow only one concurrent deployment, skipping runs queued between the run
-# in-progress and latest queued.  We do NOT cancel in-progress runs, so that
-# a production deploy is never interrupted mid-flight.
-concurrency:
-  group: "production"
-  cancel-in-progress: false
 
 jobs:
   deploy:
-    runs-on: ubuntu-latest
-    env:
-      AWS_REGION: us-east-1
-      PRODUCTION_BUCKET: adamdaniel-ai-production
-      CLOUDFRONT_DISTRIBUTION_ID: ${{ secrets.PRODUCTION_CLOUDFRONT_ID }}
-
-    steps:
-      - name: Register GitHub Deployment (in_progress)
-        # Mirror of deploy-preview.yml's deployment-registration step,
-        # but for production. Creates a deployment + initial in_progress
-        # status keyed by main's HEAD SHA. The companion
-        # admin/deploy-status-pill.js polls
-        # /repos/.../deployments?environment=production and surfaces
-        # the state to the editor. The closing step at the end of this
-        # job updates the status to success/failure.
-        id: deploy-start
-        uses: actions/github-script@3a2844b7e9c422d3c10d287c895573f7108da1b3  # v9.0.0 (2026-04-09)
-        with:
-          script: |
-            const { data: deployment } = await github.rest.repos.createDeployment({
-              owner: context.repo.owner,
-              repo: context.repo.repo,
-              ref: context.sha,
-              environment: 'production',
-              auto_merge: false,
-              required_contexts: [],
-              production_environment: true,
-              description: 'deploy-production.yml run',
-            });
-            const runUrl = `${context.serverUrl}/${context.repo.owner}/${context.repo.repo}/actions/runs/${context.runId}`;
-            await github.rest.repos.createDeploymentStatus({
-              owner: context.repo.owner,
-              repo: context.repo.repo,
-              deployment_id: deployment.id,
-              state: 'in_progress',
-              log_url: runUrl,
-              description: 'Building + syncing to S3 + invalidating CloudFront',
-            });
-            core.setOutput('deployment_id', deployment.id);
-            core.notice(`Registered production deployment ${deployment.id} (in_progress)`);
-
-      - name: Checkout
-        uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd  # v6.0.2 (2026-01-09)
-        with:
-          fetch-depth: 0   # needed for last-modified dates in Jekyll
-
-      - name: Setup Ruby
-        uses: ruby/setup-ruby@afeafc3d1ab54a631816aba4c914a0081c12ff2f  # v1.310.0 (2026-05-20)
-        with:
-          ruby-version: '3.2'
-          bundler-cache: true   # runs `bundle install` and caches gems
-
-      - name: Calculate reading times
-        run: |
-          # Auto-calculate reading_time for every post that has `reading_time`
-          # left blank (or 0).  We write the value into a _data file consumed
-          # by the Liquid templates, keeping the source Markdown unmodified.
-          mkdir -p _data
-          echo "# Auto-generated — do not edit" > _data/reading_times.yml
-          # `nullglob` expands an empty `_posts/*.md` to nothing rather
-          # than the literal pattern, so a brand-new repo with no posts
-          # doesn't try to read a file called `_posts/*.md` and emit a
-          # bogus reading-time entry.
-          shopt -s nullglob
-          for f in _posts/*.md; do
-            slug=$(basename "$f" .md)
-            # `cat "$f" |` keeps the front-matter-stripping pipeline reading
-            # left-to-right; the extra process is negligible at build time.
-            # (SC2002 useless-cat suggestion.)
-            # shellcheck disable=SC2002
-            words=$(cat "$f" | sed '/^---/,/^---/d' | wc -w)
-            mins=$(( (words / 200) + 1 ))
-            echo "${slug}: ${mins}" >> _data/reading_times.yml
-          done
-
-      - name: Build Jekyll site
-        env:
-          JEKYLL_ENV: production
-        run: bundle exec jekyll build
-
-      - name: Write deploy-time commit metadata
-        # Surfaces the deployed commit in the admin's top-right corner via
-        # admin/index.html. Use HEAD (whatever's checked out) rather than
-        # github.sha — sidesteps shallow-clone issues. On push events HEAD
-        # equals github.sha anyway, so the SHA in the JSON is identical.
-        run: |
-          mkdir -p ./_site/admin
-          SHA=$(git rev-parse HEAD)
-          ISO=$(git log -1 --format=%cI HEAD)
-          cat > ./_site/admin/commit.json <<JSON
-          { "sha": "${SHA}", "iso": "${ISO}", "branch": "main" }
-          JSON
-          cat ./_site/admin/commit.json
-
-      - name: Configure AWS credentials
-        uses: aws-actions/configure-aws-credentials@d979d5b3a71173a29b74b5b88418bfda9437d885  # v6.1.1 (2026-05-05)
-        with:
-          role-to-assume: ${{ secrets.AWS_ROLE_ARN }}
-          aws-region: ${{ env.AWS_REGION }}
-
-      - name: Sync to S3
-        # `--exclude` keeps the local-dev / e2e-test admin variants out
-        # of the public bucket. They have to remain in `_site/` so the
-        # local Playwright suite (which runs `jekyll build && serve
-        # _site`) can hit /admin/index-local.html and
-        # /admin/index-test.html, but they reference localhost-only
-        # backends and have no business being on prod. Note: `aws s3
-        # sync --delete --exclude X` will NOT delete X from the
-        # destination either — the explicit `aws s3 rm` below cleans
-        # up the stale copies on bucket state predating this exclude.
-        run: |
-          aws s3 sync ./_site "s3://${PRODUCTION_BUCKET}/" \
-            --delete \
-            --cache-control "public, max-age=86400" \
-            --exclude 'admin/index-local.html' \
-            --exclude 'admin/config-local.yml' \
-            --exclude 'admin/index-test.html' \
-            --exclude 'admin/config-test.yml'
-
-      - name: Remove stale dev-only admin objects
-        # Idempotent purge of the admin/*-local and admin/*-test files
-        # that earlier deploys uploaded before they were excluded above.
-        # `aws s3 rm` on a missing key is a silent no-op, so this stays
-        # safe to keep in the pipeline indefinitely.
-        run: |
-          for key in admin/index-local.html admin/config-local.yml \
-                     admin/index-test.html admin/config-test.yml; do
-            aws s3 rm "s3://${PRODUCTION_BUCKET}/${key}"
-          done
-
-      - name: Invalidate CloudFront cache
-        if: env.CLOUDFRONT_DISTRIBUTION_ID != ''
-        run: |
-          aws cloudfront create-invalidation \
-            --distribution-id "$CLOUDFRONT_DISTRIBUTION_ID" \
-            --paths "/*"
-
-      - name: Update GitHub Deployment status (success/failure)
-        # Always-run partner of `Register GitHub Deployment (in_progress)`.
-        # `if: always() && steps.deploy-start.outputs.deployment_id` covers:
-        #   - success path → `state: success`, with `environment_url` so
-        #     admin/deploy-status-pill.js shows "Live since …"
-        #   - any prior step failed → `state: failure`, so the pill goes
-        #     red with a link to the run logs
-        # Cancellation falls through (we still mark failure so the pill
-        # stops spinning).
-        if: always() && steps.deploy-start.outputs.deployment_id
-        uses: actions/github-script@3a2844b7e9c422d3c10d287c895573f7108da1b3  # v9.0.0 (2026-04-09)
-        env:
-          JOB_STATUS: ${{ job.status }}
-        with:
-          script: |
-            const id = ${{ steps.deploy-start.outputs.deployment_id }};
-            const job = process.env.JOB_STATUS;        // success | failure | cancelled
-            const state = job === 'success' ? 'success' : 'failure';
-            const runUrl = `${context.serverUrl}/${context.repo.owner}/${context.repo.repo}/actions/runs/${context.runId}`;
-            await github.rest.repos.createDeploymentStatus({
-              owner: context.repo.owner,
-              repo: context.repo.repo,
-              deployment_id: id,
-              state,
-              environment_url: state === 'success' ? 'https://adamdaniel.ai/' : undefined,
-              log_url: runUrl,
-              description: state === 'success'
-                ? 'adamdaniel.ai is live with the latest commit'
-                : `deploy-production.yml ${job}`,
-            });
-            core.notice(`Production deployment ${id} → ${state}`);
-# Intentionally inert line (no functional effect).
+    uses: Adam-S-Daniel/cms-platform/.github/workflows/deploy-production.yml@v0.1.0
+    with:
+      apex_domain: adamdaniel.ai
+      prod_bucket: adamdaniel-ai-production
+    secrets:
+      AWS_ROLE_ARN: ${{ secrets.AWS_ROLE_ARN }}
+      PRODUCTION_CLOUDFRONT_ID: ${{ secrets.PRODUCTION_CLOUDFRONT_ID }}

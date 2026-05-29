@@ -7,11 +7,11 @@
     "test": "npx playwright test",
     "test:regression-video": "npx playwright test --config=playwright.regression.config.js",
     "lint": "npm run lint:js && npm run lint:css && npm run lint:md",
-    "lint:js": "eslint \"e2e/**/*.js\" \"admin/**/*.js\" \"scripts/*.js\" \"*.config.js\"",
+    "lint:js": "eslint \"admin/**/*.js\" \"scripts/*.js\" \"*.config.js\"",
     "lint:css": "stylelint \"assets/css/*.css\" \"admin/*.css\"",
     "lint:md": "markdownlint-cli2",
-    "format": "prettier --write \"e2e/**/*.js\" \"admin/**/*.js\" \"scripts/*.js\" \"*.config.js\"",
-    "format:check": "prettier --check \"e2e/**/*.js\" \"admin/**/*.js\" \"scripts/*.js\" \"*.config.js\""
+    "format": "prettier --write \"admin/**/*.js\" \"scripts/*.js\" \"*.config.js\"",
+    "format:check": "prettier --check \"admin/**/*.js\" \"scripts/*.js\" \"*.config.js\""
   },
   "repository": {
     "type": "git",
