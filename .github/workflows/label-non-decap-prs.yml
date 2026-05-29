@@ -42,8 +42,8 @@ permissions:
 
 jobs:
   label-non-decap:
-    uses: Adam-S-Daniel/cms-platform/.github/workflows/label-non-decap-prs.yml@d5cbc35117dbf6ba321ee6a06c2f90442a050c33
+    uses: Adam-S-Daniel/cms-platform/.github/workflows/label-non-decap-prs.yml@ccedd3c26a5f9c61e6da1cac2327f32f43c4d9f7
     with:
       dry_run: ${{ github.event_name == 'workflow_dispatch' && inputs.dry_run || false }}
       # Pin to the SAME ref as the `uses:` pin above so the module matches.
-      platform_ref: d5cbc35117dbf6ba321ee6a06c2f90442a050c33
+      platform_ref: ccedd3c26a5f9c61e6da1cac2327f32f43c4d9f7

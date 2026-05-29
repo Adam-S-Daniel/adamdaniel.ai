@@ -11,6 +11,6 @@ permissions:
   contents: write
 jobs:
   publish:
-    uses: Adam-S-Daniel/cms-platform/.github/workflows/publish-scheduled-posts.yml@d5cbc35117dbf6ba321ee6a06c2f90442a050c33
+    uses: Adam-S-Daniel/cms-platform/.github/workflows/publish-scheduled-posts.yml@ccedd3c26a5f9c61e6da1cac2327f32f43c4d9f7
     with:
-      platform_ref: d5cbc35117dbf6ba321ee6a06c2f90442a050c33
+      platform_ref: ccedd3c26a5f9c61e6da1cac2327f32f43c4d9f7
