@@ -194,6 +194,7 @@ jobs:
         if: ${{ needs.changes.outputs.sh == 'true' }}
         run: |
           set -euo pipefail
+          mkdir -p "$HOME/.local/bin"   # bare ubuntu-latest has no ~/.local/bin (the prebaked CI image is gone)
           sudo apt-get update -qq
           sudo apt-get install -y -qq shellcheck
           curl -fsSL "https://github.com/mvdan/sh/releases/download/v3.10.0/shfmt_v3.10.0_linux_amd64" \
@@ -215,6 +216,7 @@ jobs:
         if: ${{ needs.changes.outputs.yaml == 'true' }}
         run: |
           set -euo pipefail
+          mkdir -p "$HOME/.local/bin"   # bare ubuntu-latest has no ~/.local/bin (the prebaked CI image is gone)
           python3 -m pip install --quiet --user 'yamllint==1.38.0'
           curl -fsSL "https://github.com/rhysd/actionlint/releases/download/v1.7.7/actionlint_1.7.7_linux_amd64.tar.gz" \
             | tar -xz -C "$HOME/.local/bin" actionlint
@@ -236,7 +238,7 @@ jobs:
         # Repointed from the deleted local `./.github/actions/post-failure-comment`
         # to the platform's composite (same interface) now that the dogfood
         # consumes machinery from cms-platform. Pinned to the platform SHA.
-        uses: Adam-S-Daniel/cms-platform/.github/actions/post-failure-comment@bf307bc030cd3c6d93707ea377bc7e521fc57dc7
+        uses: Adam-S-Daniel/cms-platform/.github/actions/post-failure-comment@d5cbc35117dbf6ba321ee6a06c2f90442a050c33
         with:
           mode: post
           log-file: /tmp/lint.log
@@ -246,7 +248,7 @@ jobs:
 
       - name: Resolve failure summary on success
         if: ${{ success() && github.event_name == 'pull_request' }}
-        uses: Adam-S-Daniel/cms-platform/.github/actions/post-failure-comment@bf307bc030cd3c6d93707ea377bc7e521fc57dc7
+        uses: Adam-S-Daniel/cms-platform/.github/actions/post-failure-comment@d5cbc35117dbf6ba321ee6a06c2f90442a050c33
         with:
           mode: resolve
           marker: code-quality-failure-summary

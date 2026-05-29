@@ -2,4 +2,4 @@
 # Bumped by the platform-bump workflow; Dependabot bumps the uses:@ pins
 # and the theme gem in lockstep. See the platform's docs/SYNC.md.
 platform_repo: Adam-S-Daniel/cms-platform
-platform_ref: bf307bc030cd3c6d93707ea377bc7e521fc57dc7
+platform_ref: d5cbc35117dbf6ba321ee6a06c2f90442a050c33

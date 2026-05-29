@@ -33,14 +33,14 @@ permissions:
 
 jobs:
   preview:
-    uses: Adam-S-Daniel/cms-platform/.github/workflows/deploy-preview.yml@bf307bc030cd3c6d93707ea377bc7e521fc57dc7
+    uses: Adam-S-Daniel/cms-platform/.github/workflows/deploy-preview.yml@d5cbc35117dbf6ba321ee6a06c2f90442a050c33
     with:
       apex_domain: adamdaniel.ai
       preview_bucket: adamdaniel-ai-previews
       # Keep unique per site so multiple sites' bots never clobber comments.
       bot_marker: adamdaniel-ai-preview-bot
       # Pin to the SAME ref as the `uses:` pin above so the helper scripts match.
-      platform_ref: bf307bc030cd3c6d93707ea377bc7e521fc57dc7
+      platform_ref: d5cbc35117dbf6ba321ee6a06c2f90442a050c33
     secrets:
       AWS_ROLE_ARN: ${{ secrets.AWS_ROLE_ARN }}
       PREVIEW_CLOUDFRONT_ID: ${{ secrets.PREVIEW_CLOUDFRONT_ID }}
