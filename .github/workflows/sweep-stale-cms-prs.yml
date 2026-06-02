@@ -18,6 +18,14 @@ permissions:
 jobs:
   sweep:
     uses: Adam-S-Daniel/cms-platform/.github/workflows/sweep-stale-cms-prs.yml@v0.1.0
+    # Unlike the other thin callers (which map `CMS_E2E_PAT` explicitly),
+    # the sweep reusable authenticates `gh` from `secrets.CMS_E2E_PAT` but
+    # does NOT declare it as a `workflow_call` secret input at v0.1.0 — so
+    # an explicit `secrets:` map can't forward it and `inherit` is the only
+    # path. Without this the reusable's `GH_TOKEN` is empty and every
+    # `gh` call fails with exit 4 (regressed in #1858's dogfood migration,
+    # which dropped this line when extracting the inline workflow).
+    secrets: inherit
     with:
       dry_run: ${{ github.event_name == 'workflow_dispatch' && inputs.dry_run || false }}
       threshold_hours: ${{ github.event_name == 'workflow_dispatch' && inputs.threshold_hours || 6 }}
