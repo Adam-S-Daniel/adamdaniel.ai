@@ -1,0 +1,34 @@
+# Thin caller. Companion to e2e-tests.yml: emits a synthetic `e2e / e2e`
+# success on the docs-/infra-/tooling-only PRs that the heavy e2e lane skips
+# (its paths-ignore), so the REQUIRED `e2e / e2e` context still reports and
+# branch protection doesn't hang ("Waiting for status to be reported") — the
+# trap that stranded the contributor-manual regen PR #1857.
+#
+# The `paths:` below MUST mirror e2e-tests.yml's `paths-ignore` byte-for-byte
+# (the platform's required-check-stub-paths.test.js locks the canonical
+# template). The job MUST stay named `e2e` so the surfaced context is exactly
+# `e2e / e2e`. Pinned to the same cms-platform ref as the other callers
+# (→ @v0.1.3 once that tag is cut).
+name: E2E (docs-only stub)
+run-name: "${{ format('PR #{0} — {1}', github.event.pull_request.number, github.event.pull_request.title) }}"
+
+on:
+  pull_request:
+    branches:
+      - main
+    paths:
+      - 'README.md'
+      - 'AGENTS.md'
+      - 'CLAUDE.md'
+      - 'docs/**'
+      - 'infrastructure/**'
+      - 'oauth-proxy/**'
+      - 'LICENSE'
+      - '.gitignore'
+
+permissions:
+  contents: read
+
+jobs:
+  e2e:
+    uses: Adam-S-Daniel/cms-platform/.github/workflows/e2e-required-stub.yml@a73d6fe4c489add80fa8fd45627c38be9425693c
