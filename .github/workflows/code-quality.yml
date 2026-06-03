@@ -132,7 +132,7 @@ jobs:
         if: ${{ needs.changes.outputs.js == 'true' }}
         run: |
           set -o pipefail
-          npx prettier --check "admin/**/*.js" "scripts/*.js" "*.config.js" 2>&1 | tee -a /tmp/lint.log
+          npx prettier --no-error-on-unmatched-pattern --check "admin/**/*.js" "scripts/*.js" "*.config.js" 2>&1 | tee -a /tmp/lint.log
 
       # ── CSS: stylelint ─────────────────────────────────────────────
       - name: Stylelint
