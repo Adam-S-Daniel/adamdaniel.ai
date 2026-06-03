@@ -126,7 +126,7 @@ jobs:
         if: ${{ needs.changes.outputs.js == 'true' }}
         run: |
           set -o pipefail
-          npx eslint "admin/**/*.js" "scripts/*.js" "*.config.js" 2>&1 | tee -a /tmp/lint.log
+          npx eslint --no-error-on-unmatched-pattern "admin/**/*.js" "scripts/*.js" "*.config.js" 2>&1 | tee -a /tmp/lint.log
 
       - name: Prettier (check)
         if: ${{ needs.changes.outputs.js == 'true' }}
