@@ -23,10 +23,9 @@ permissions:
   pull-requests: write
 jobs:
   sweep:
-    # Pinned to cms-platform main @ 0c03667 — the reusable declares the
-    # CMS_E2E_PAT workflow_call secret, so we map it explicitly like every
-    # other caller. Moves to @v0.1.3 once that tag is cut.
-    uses: Adam-S-Daniel/cms-platform/.github/workflows/sweep-stale-cms-prs.yml@0c0366782c1e74cdb81440e26c39a515d6c36598
+    # Pinned to cms-platform v0.1.3 — the reusable declares the CMS_E2E_PAT
+    # workflow_call secret, so we map it explicitly like every other caller.
+    uses: Adam-S-Daniel/cms-platform/.github/workflows/sweep-stale-cms-prs.yml@v0.1.3
     secrets:
       CMS_E2E_PAT: ${{ secrets.CMS_E2E_PAT }}
     with:
