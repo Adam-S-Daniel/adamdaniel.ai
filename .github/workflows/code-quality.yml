@@ -126,20 +126,20 @@ jobs:
         if: ${{ needs.changes.outputs.js == 'true' }}
         run: |
           set -o pipefail
-          npx eslint "admin/**/*.js" "scripts/*.js" "*.config.js" 2>&1 | tee -a /tmp/lint.log
+          npx eslint --no-error-on-unmatched-pattern "admin/**/*.js" "scripts/*.js" "*.config.js" 2>&1 | tee -a /tmp/lint.log
 
       - name: Prettier (check)
         if: ${{ needs.changes.outputs.js == 'true' }}
         run: |
           set -o pipefail
-          npx prettier --check "admin/**/*.js" "scripts/*.js" "*.config.js" 2>&1 | tee -a /tmp/lint.log
+          npx prettier --no-error-on-unmatched-pattern --check "admin/**/*.js" "scripts/*.js" "*.config.js" 2>&1 | tee -a /tmp/lint.log
 
       # ── CSS: stylelint ─────────────────────────────────────────────
       - name: Stylelint
         if: ${{ needs.changes.outputs.css == 'true' }}
         run: |
           set -o pipefail
-          npx stylelint "assets/css/*.css" "admin/*.css" 2>&1 | tee -a /tmp/lint.log
+          npx stylelint --allow-empty-input "assets/css/*.css" "admin/*.css" 2>&1 | tee -a /tmp/lint.log
 
       # ── Markdown: markdownlint-cli2 ────────────────────────────────
       - name: markdownlint
