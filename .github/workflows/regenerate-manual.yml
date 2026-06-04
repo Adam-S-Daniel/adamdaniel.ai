@@ -71,7 +71,7 @@ jobs:
         # General → Workflow permissions toggle that's currently OFF
         # (and the user has chosen to keep it that way for safety).
         # CMS_E2E_PAT bypasses the toggle.
-        uses: actions/checkout@df4cb1c069e1874edd31b4311f1884172cec0e10  # v6.0.2 (2026-01-09)
+        uses: actions/checkout@df4cb1c069e1874edd31b4311f1884172cec0e10  # v6.0.3 (2026-06-02)
         with:
           fetch-depth: 0
           token: ${{ secrets.CMS_E2E_PAT }}
