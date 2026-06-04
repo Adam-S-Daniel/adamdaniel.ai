@@ -25,16 +25,21 @@ on:
   workflow_dispatch:
   push:
     branches: [main]
+    # Trigger ONLY on this loop's own surfaces (the host workflow + the canary
+    # collection fixtures/layouts). The shared infra paths (admin/**,
+    # playwright.config.js, package*.json, _config.yml) were REMOVED because
+    # cms-publish-loop-prod.yml triggers on those same paths — a single push
+    # fired BOTH loops, which then co-arrived in the shared `prod-mutating-loop`
+    # concurrency lane and the host job EVICTED the prod-loop job
+    # (cancel-in-progress:false holds the in-flight holder but drops a
+    # co-arriving sibling). Prod owns the infra-change canary on push; host
+    # still covers them via its daily 12:00 UTC cron. Zero path overlap = no
+    # eviction.
     paths:
       - .github/workflows/cms-publish-loop-host.yml
-      - admin/**
       - _e2e/canary-post.md
       - _e2e/canary-page.md
       - _e2e/canary-project.md
-      - playwright.config.js
-      - package.json
-      - package-lock.json
-      - _config.yml
       - _layouts/canary.html
       - _layouts/default.html
 
