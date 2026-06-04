@@ -29,6 +29,8 @@ trailing-slash redirects (e.g. `/admin` → `/admin/`) don't leak the
 internal key space. Pages on preview and prod share the same
 root-relative URL structure (no `/pr-N/` in any visible URL).
 
+**`admin/` is GEM-DELIVERED (do not re-vendor the machinery).** As of cms-platform v0.1.4 the Decap admin UI + its `config*.base.yml` templates ship inside the `cms-platform-theme` gem (pinned in `Gemfile` / `platform.lock`); the gem's Decap render hook copies that machinery into `_site/admin/` and renders `_site/admin/config.yml` at build time. This repo therefore tracks **only the site-owned seam** `admin/collections.site.yml` (`.example` is the template) — the per-site collection list the render hook splices into the platform's base collections; the `admin/*.js` / `admin/*.base.yml` / `admin/index*.html` machinery is **no longer vendored here** (the full e2e harness moved to the platform too — `e2e/` is no longer tracked in this repo). To change the admin UI, edit it in **cms-platform** and ship a release; the sync path is a gem bump (`Gemfile` tag + `platform.lock`, via Dependabot). Do NOT copy admin machinery back into this repo — a re-vendored copy would shadow the gem and silently drift. Anything below that references in-repo `admin/config*.yml` or `e2e/cms-*.spec.js` describes the platform-owned source of truth, not files you edit here.
+
 ## Environment / WSL
 
 - **No `sudo` in the non-interactive shell.** Do NOT run `sudo` commands inside the non-interactive bash session — they fail because no password prompt is available. Instead, output the `sudo` commands for the user to run manually in their own terminal.
@@ -393,6 +395,14 @@ CMS creates PR (branch: cms/draft-{timestamp})
   → all checks pass → auto-merge fires → deploy-production triggers
 ```
 
+#### The "adding labels to N of your Editorial Workflow entries" dialog
+
+Decap re-runs its editorial-workflow label migration on **every** `/admin` load (prod and every preview) when an open editorial PR — a `cms/*` branch — is **missing its `decap-cms/<draft|pending_review|pending_publish>` status label**. The symptom is a persistent "Decap CMS is adding labels to N of your Editorial Workflow entries" dialog that never clears. Root cause is almost always editorial debris: a stuck/abandoned `cms/*` PR (a crashed loop run, or a manually-opened draft) that never got its status label. **Fix:** find the offending open `cms/*` PRs (`gh pr list --state open --search "head:cms"`) and either label them with the correct `decap-cms/<status>` or close them. `editorial-label-audit.yml` (daily, see below) flags this before it bites an editor.
+
+#### `editorial-label-audit.yml`
+
+A thin daily caller (cron `0 13 * * *` + `workflow_dispatch`) that delegates to the platform's reusable `editorial-label-audit.yml` (pinned `@v0.1.6`). It flags any open `cms/*` PR missing its `decap-cms/<status>` label — i.e. the exact condition that triggers the "adding labels" dialog above. Read-only (`contents: read`, `pull-requests: read`); the platform owns the audit logic, this caller only schedules it. Keep the `uses:@` pin and `platform_ref` input in lockstep.
+
 ---
 
 ### `visual-regression.yml`
@@ -485,6 +495,10 @@ Sibling to the `cms-publish-loop` and `cms-publish-loop-preview` specs, but oper
 3. Per-ref concurrency (`group: cms-publish-loop-prod-${{ pull_request.number || ref }}` — the `pull_request.number` half is dead on a push trigger and resolves to `github.ref`) so a newer push to `main` cancels the in-flight run.
 
 When all three pass, the spec runs against `https://adamdaniel.ai/admin/`: it CREATES a born-published ephemeral post via the Decap "+ New Post" UI (Title + URL Slug + Date `2099-12-31` + Body + Published ON), then publishes through the editor with **Status:Ready → Publish → "Publish now"** (the proven `cms-delete-published.spec.js` create-leg flow), labels the cms PR `cms/ready` belt-and-braces → auto-merge → `deploy-production.yml`, fetches `/blog/e2e-prod-mutate-<runId>/`, asserts the run-unique marker is live, then re-opens the entry and DELETEs the post via the Decap UI ("Delete published entry" → delete-from-main PR, merged via `cms/ready`) and asserts the URL 404s. **Publish Now is required**, not avoided: it transitions Decap's editor into the PUBLISHED state, so the delete leg surfaces "Delete published entry" (a delete-from-main PR) rather than "Delete unpublished entry" (which removes only the editorial draft branch and never 404s the live URL). The merge still lands via `auto-merge-when-ready` — Status:Ready applies `decap-cms/pending_publish` and Publish Now's synchronous merge is 422'd by branch protection, which `admin/publish-via-auto-merge.js` recovers by adding `cms/ready` (#1771 follow-up; the earlier "never Publish Now" guidance described the OLD in-place-edit cleanup-merge, a different scenario). The `afterAll` is an existence-only delete of any leftover orphan (#1771 step 4).
+
+> **Thin callers now:** `cms-publish-loop-host.yml` and `cms-publish-loop-prod.yml` (and their preview siblings) are thin callers that delegate to the platform's reusable workflows; the e2e harness + specs described here live in **cms-platform**, not this repo (`e2e/` is no longer tracked here). The triggers, run-name, and the gating notes above are owned by these site-side caller files.
+
+**Loop co-arrival eviction — host vs prod sharing the `prod-mutating-loop` lane (#1892).** All real-prod loops serialise through one shared `prod-mutating-loop` concurrency group on each loop's heavy job (see "Loop-aware required checks" below). That group is `cancel-in-progress: false`, which holds an **in-flight** holder but **drops a co-arriving sibling** — if two loop jobs are queued in the same instant, only one survives and the other is silently evicted (NOT queued behind it). The bug: `cms-publish-loop-host.yml` and `cms-publish-loop-prod.yml` both used to trigger on the same shared infra `paths:` (`admin/**`, `playwright.config.js`, `package*.json`, `_config.yml`), so a single push to `main` fired BOTH — they co-arrived in the shared lane and the host job evicted the prod-mutate job. **Fix:** the host caller's `push` trigger is narrowed to **its own canary surfaces only** (`cms-publish-loop-host.yml`, `_e2e/canary-*.md`, `_layouts/{canary,default}.html`) — zero path overlap with prod. Prod owns the infra-change canary on push; host still covers those paths via its daily 12:00 UTC cron. When editing either caller's `paths:`, keep the two trigger sets disjoint or the eviction returns.
 
 ### `cms-preview-loops.yml` (preview-parity loops — issue #999)
 
