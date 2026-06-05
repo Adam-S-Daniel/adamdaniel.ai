@@ -39,8 +39,11 @@ Then add the stack outputs as GitHub Actions secrets (repo → Settings → Secr
 After verifying OIDC works, remove the old `AWS_ACCESS_KEY_ID` and
 `AWS_SECRET_ACCESS_KEY` secrets and deactivate the IAM user keys.
 
-See `infrastructure/bootstrap/template.yaml` for full details on what is
-provisioned.
+The bootstrap CloudFormation template is no longer vendored here — it lives in
+**cms-platform** (`infrastructure/bootstrap/template.yaml`) as the single source
+of truth, and `infrastructure/bootstrap/deploy.sh` checks the platform out at the
+pinned `platform_ref` (from `platform.lock`) into `.cms-platform/` and deploys
+from there. See that template for full details on what is provisioned.
 
 ## Content Model
 

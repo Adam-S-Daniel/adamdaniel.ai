@@ -3,7 +3,8 @@
 # (preview-pr<N>.adamdaniel.ai, preview-cms-<slug>.adamdaniel.ai) are
 # blocked at the HTTP-header level via an `X-Robots-Tag: noindex,
 # nofollow` injected by the PreviewLocationFixerFunction CloudFront
-# Function (see infrastructure/bootstrap/template.yaml). The header is
+# Function (defined in the platform-owned bootstrap template, cms-platform
+# infrastructure/bootstrap/template.yaml). The header is
 # more authoritative than this file for crawlers that have already
 # discovered a preview URL — robots.txt itself is shared across hosts
 # from the same _site build.

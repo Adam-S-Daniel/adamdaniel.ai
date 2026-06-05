@@ -3,13 +3,34 @@
 # deploy.sh — Bootstrap AWS account for adamdaniel.ai CI/CD
 # =============================================================================
 #
-# One-time setup that creates:
+# Thin wrapper around the cms-platform repo's PARAMETERIZED bootstrap stack.
+# This site no longer vendors its own CloudFormation template — the template
+# (and the deploy logic) are the single source of truth in cms-platform, so a
+# fix made there (e.g. the CloudFront ErrorCachingMinTTL=0 fix) flows to every
+# consumer site on the next platform_ref bump, instead of having to be applied
+# in two places.
+#
+# How it works (mirrors the repo-wide ".cms-platform/ checkout-at-platform_ref"
+# pattern the reusable-workflow callers use — see deploy-preview.yml, which
+# `actions/checkout`s the platform repo at inputs.platform_ref into
+# .cms-platform/):
+#   1. Read platform_repo + platform_ref from platform.lock.
+#   2. Check the platform repo out at that ref into .cms-platform/ (a dot-dir
+#      Jekyll ignores; already gitignored — never committed).
+#   3. Export adamdaniel.ai's site parameters and delegate to the platform's
+#      .cms-platform/infrastructure/bootstrap/deploy.sh, which deploys
+#      .cms-platform/infrastructure/bootstrap/template.yaml as the
+#      `adamdaniel-ai-bootstrap` stack with CAPABILITY_NAMED_IAM.
+#
+# One-time setup that creates (via the platform template):
 #   1. S3 bucket for CloudFormation/SAM deployment artifacts
 #   2. GitHub OIDC identity provider in AWS IAM
 #   3. IAM role for GitHub Actions (assumed via OIDC — no long-lived keys)
+#   4. ACM certs + preview/production CloudFront distributions + Route53 records
 #
 # Prerequisites:
 #   • AWS CLI v2  (aws --version)
+#   • git         (to check out the platform repo)
 #   • AWS credentials configured (aws configure or IAM role)
 #
 # Usage:
@@ -22,11 +43,6 @@
 # =============================================================================
 
 set -euo pipefail
-
-STACK_NAME="adamdaniel-ai-bootstrap"
-AWS_REGION="${AWS_REGION:-us-east-1}"
-CREATE_OIDC_PROVIDER="${CREATE_OIDC_PROVIDER:-true}"
-HOSTED_ZONE_ID="${HOSTED_ZONE_ID:-}"
 
 # ── Colour output ──────────────────────────────────────────────────────────
 BLUE='\033[0;34m'
@@ -45,134 +61,65 @@ error() {
 
 # ── Validate prerequisites ─────────────────────────────────────────────────
 command -v aws >/dev/null 2>&1 || error "AWS CLI not found. Install: https://docs.aws.amazon.com/cli/latest/userguide/getting-started-install.html"
+command -v git >/dev/null 2>&1 || error "git not found — needed to check out the cms-platform template."
 
-# ── Move to script directory ───────────────────────────────────────────────
+# ── Locate repo root + platform.lock ───────────────────────────────────────
 SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
-cd "$SCRIPT_DIR"
+REPO_ROOT="$(cd "$SCRIPT_DIR/../.." && pwd)"
+LOCK_FILE="$REPO_ROOT/platform.lock"
+[[ -f "$LOCK_FILE" ]] || error "platform.lock not found at $LOCK_FILE"
 
-info "Deploying stack: ${STACK_NAME} to ${AWS_REGION}"
-info "Create OIDC provider: ${CREATE_OIDC_PROVIDER}"
+# Parse platform_repo + platform_ref out of platform.lock (the same lock the
+# reusable-workflow callers pin platform_ref from). Format is `key: value`.
+read_lock() {
+  # shellcheck disable=SC2016  # awk field refs ($1/$2), not shell expansion.
+  awk -v k="$1" '$1==k":" {print $2; exit}' "$LOCK_FILE"
+}
+PLATFORM_REPO="${PLATFORM_REPO:-$(read_lock platform_repo)}"
+PLATFORM_REF="${PLATFORM_REF:-$(read_lock platform_ref)}"
+[[ -n "$PLATFORM_REPO" ]] || error "platform_repo not found in $LOCK_FILE"
+[[ -n "$PLATFORM_REF" ]] || error "platform_ref not found in $LOCK_FILE"
 
-# ── Auto-detect Route53 hosted zone if not specified ───────────────────────
-if [[ -z "$HOSTED_ZONE_ID" ]]; then
-  info "Looking up Route53 hosted zone for adamdaniel.ai…"
-  # shellcheck disable=SC2016  # backticks are JMESPath literal syntax in --query, not shell expansion.
-  HOSTED_ZONE_ID=$(aws route53 list-hosted-zones-by-name \
-    --dns-name "adamdaniel.ai" \
-    --query 'HostedZones[?Name==`adamdaniel.ai.`].Id' \
-    --output text | sed 's|/hostedzone/||')
-  [[ -z "$HOSTED_ZONE_ID" ]] && error "No Route53 hosted zone found for adamdaniel.ai. Set HOSTED_ZONE_ID manually."
-  info "Found hosted zone: ${HOSTED_ZONE_ID}"
-fi
+# ── Check the platform out at platform_ref into .cms-platform/ ──────────────
+# Mirrors the workflow pattern (actions/checkout repository=<platform_repo>
+# ref=<platform_ref> path=.cms-platform). The dot-dir is gitignored + excluded
+# from Jekyll, so it never pollutes the site or the working tree.
+PLATFORM_DIR="$REPO_ROOT/.cms-platform"
+PLATFORM_URL="${PLATFORM_URL:-https://github.com/${PLATFORM_REPO}.git}"
 
-# ── Deploy ─────────────────────────────────────────────────────────────────
-aws cloudformation deploy \
-  --template-file template.yaml \
-  --stack-name "$STACK_NAME" \
-  --region "$AWS_REGION" \
-  --capabilities CAPABILITY_NAMED_IAM \
-  --no-fail-on-empty-changeset \
-  --parameter-overrides \
-  "CreateOIDCProvider=${CREATE_OIDC_PROVIDER}" \
-  "HostedZoneId=${HOSTED_ZONE_ID}" \
-  "PreviewDomainName=*.adamdaniel.ai"
+info "Platform: ${PLATFORM_REPO}@${PLATFORM_REF}"
+info "Checking platform out into .cms-platform/ …"
+rm -rf "$PLATFORM_DIR"
+git clone --quiet --depth 1 --branch "$PLATFORM_REF" "$PLATFORM_URL" "$PLATFORM_DIR" \
+  || error "Failed to check out ${PLATFORM_REPO}@${PLATFORM_REF} into .cms-platform/"
 
-# ── Fetch outputs ──────────────────────────────────────────────────────────
-info "Fetching stack outputs…"
-OUTPUTS=$(aws cloudformation describe-stacks \
-  --stack-name "$STACK_NAME" \
-  --region "$AWS_REGION" \
-  --query 'Stacks[0].Outputs' \
-  --output json)
+PLATFORM_DEPLOY="$PLATFORM_DIR/infrastructure/bootstrap/deploy.sh"
+PLATFORM_TEMPLATE="$PLATFORM_DIR/infrastructure/bootstrap/template.yaml"
+[[ -f "$PLATFORM_TEMPLATE" ]] || error "Platform bootstrap template missing: $PLATFORM_TEMPLATE"
+[[ -f "$PLATFORM_DEPLOY" ]] || error "Platform bootstrap deploy script missing: $PLATFORM_DEPLOY"
+success "Platform checked out — deploying from $PLATFORM_TEMPLATE"
 
-ROLE_ARN=$(echo "$OUTPUTS" | python3 -c "
-import json, sys
-outputs = json.load(sys.stdin)
-for o in outputs:
-    if o['OutputKey'] == 'RoleArn':
-        print(o['OutputValue'])
-        break
-")
+# ── adamdaniel.ai site parameters ──────────────────────────────────────────
+# These reproduce the live `adamdaniel-ai-bootstrap` stack's parameters exactly.
+# Everything else (RESOURCE_PREFIX=adamdaniel-ai, the three bucket names,
+# STACK_NAME=adamdaniel-ai-bootstrap, PREVIEW_DOMAIN=*.adamdaniel.ai) derives
+# from APEX_DOMAIN inside the platform deploy.sh — see its defaults. HOSTED_ZONE_ID
+# is auto-detected from Route53 there if unset, preserving the old behavior.
+# CAPABILITY_NAMED_IAM is applied by the platform deploy.sh.
+export GITHUB_ORG="${GITHUB_ORG:-Adam-S-Daniel}"
+export GITHUB_REPO="${GITHUB_REPO:-adamdaniel.ai}"
+export APEX_DOMAIN="${APEX_DOMAIN:-adamdaniel.ai}"
+export AWS_REGION="${AWS_REGION:-us-east-1}"
+export CREATE_OIDC_PROVIDER="${CREATE_OIDC_PROVIDER:-true}"
+# adamdaniel.ai is LIVE at its apex — the platform template gates apex/www A-records
+# on CreateApexDnsRecords (DEFAULT false, for pre-go-live sites). Force it true so a
+# redeploy never deletes the production apex/www DNS (would take the site offline).
+export CREATE_APEX_DNS_RECORDS="${CREATE_APEX_DNS_RECORDS:-true}"
+# HOSTED_ZONE_ID passes through if the caller exported it; otherwise the
+# platform script auto-detects it from Route53 (same as the old behavior).
 
-BUCKET_NAME=$(echo "$OUTPUTS" | python3 -c "
-import json, sys
-outputs = json.load(sys.stdin)
-for o in outputs:
-    if o['OutputKey'] == 'ArtifactsBucketName':
-        print(o['OutputValue'])
-        break
-")
-
-CF_DISTRIBUTION_ID=$(echo "$OUTPUTS" | python3 -c "
-import json, sys
-outputs = json.load(sys.stdin)
-for o in outputs:
-    if o['OutputKey'] == 'PreviewDistributionId':
-        print(o['OutputValue'])
-        break
-")
-
-PREVIEW_URL=$(echo "$OUTPUTS" | python3 -c "
-import json, sys
-outputs = json.load(sys.stdin)
-for o in outputs:
-    if o['OutputKey'] == 'PreviewURL':
-        print(o['OutputValue'])
-        break
-")
-
-PROD_CF_DISTRIBUTION_ID=$(echo "$OUTPUTS" | python3 -c "
-import json, sys
-outputs = json.load(sys.stdin)
-for o in outputs:
-    if o['OutputKey'] == 'ProductionDistributionId':
-        print(o['OutputValue'])
-        break
-")
-
-PROD_URL=$(echo "$OUTPUTS" | python3 -c "
-import json, sys
-outputs = json.load(sys.stdin)
-for o in outputs:
-    if o['OutputKey'] == 'ProductionURL':
-        print(o['OutputValue'])
-        break
-")
-
-# ── Summary ────────────────────────────────────────────────────────────────
-echo ""
-success "Bootstrap complete!"
-echo ""
-echo "  ┌─────────────────────────────────────────────────────────────────┐"
-echo "  │  Stack outputs                                                  │"
-echo "  ├─────────────────────────────────────────────────────────────────┤"
-echo "  │                                                                 │"
-echo -e "  │  Role ARN:            ${YELLOW}${ROLE_ARN}${NC}"
-echo -e "  │  Artifacts bucket:    ${YELLOW}${BUCKET_NAME}${NC}"
-echo -e "  │  Preview CF ID:       ${YELLOW}${CF_DISTRIBUTION_ID}${NC}"
-echo -e "  │  Preview URL:         ${YELLOW}${PREVIEW_URL}${NC}"
-echo -e "  │  Production CF ID:    ${YELLOW}${PROD_CF_DISTRIBUTION_ID}${NC}"
-echo -e "  │  Production URL:      ${YELLOW}${PROD_URL}${NC}"
-echo "  │                                                                 │"
-echo "  ├─────────────────────────────────────────────────────────────────┤"
-echo "  │  Next steps                                                     │"
-echo "  ├─────────────────────────────────────────────────────────────────┤"
-echo "  │                                                                 │"
-echo "  │  1. Add these GitHub Actions secrets:                           │"
-echo "  │     Repo → Settings → Secrets → Actions → New secret            │"
-echo "  │                                                                 │"
-echo -e "  │     Name:  ${YELLOW}AWS_ROLE_ARN${NC}"
-echo -e "  │     Value: ${YELLOW}${ROLE_ARN}${NC}"
-echo "  │                                                                 │"
-echo -e "  │     Name:  ${YELLOW}PREVIEW_CLOUDFRONT_ID${NC}"
-echo -e "  │     Value: ${YELLOW}${CF_DISTRIBUTION_ID}${NC}"
-echo "  │                                                                 │"
-echo -e "  │     Name:  ${YELLOW}PRODUCTION_CLOUDFRONT_ID${NC}"
-echo -e "  │     Value: ${YELLOW}${PROD_CF_DISTRIBUTION_ID}${NC}"
-echo "  │                                                                 │"
-echo "  │  2. Remove old access key secrets (after verifying OIDC works): │"
-echo -e "  │     Delete: ${YELLOW}AWS_ACCESS_KEY_ID${NC}"
-echo -e "  │     Delete: ${YELLOW}AWS_SECRET_ACCESS_KEY${NC}"
-echo "  │                                                                 │"
-echo "  └─────────────────────────────────────────────────────────────────┘"
-echo ""
+# ── Delegate to the platform's bootstrap deploy.sh ─────────────────────────
+# It cd's into its own script dir and deploys ./template.yaml (i.e.
+# .cms-platform/infrastructure/bootstrap/template.yaml) as the
+# adamdaniel-ai-bootstrap stack, then prints the stack outputs + next steps.
+exec bash "$PLATFORM_DEPLOY"
