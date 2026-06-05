@@ -33,9 +33,4 @@ admin/commit.json
 admin/config.yml
 admin/config-local.yml
 .cms-platform/
-# Intermediate JSON records from e2e/manual-capture.js. The collator
-# (scripts/build-contributor-manual.js) reads these and emits
-# docs/CONTRIBUTOR_MANUAL.md, which IS committed. The raw JSON is
-# regenerated on every capture run, so checking it in adds noise.
-manual-capture/
 

@@ -1,7 +1,8 @@
 #!/usr/bin/env bash
 #
-# Pre-commit lint of STAGED files only — a fast "shift-left" mirror of the
-# code-quality.yml CI gate. Each language's linter runs solely on the files
+# Pre-commit lint of STAGED files only — the consumer's local "shift-left"
+# lint gate (the platform keeps the heavyweight code-quality lint internal, so
+# this hook is the lint for consumer code). Each language's linter runs solely on the files
 # of that language staged in this commit, and ONLY if its tool is on PATH;
 # a missing tool prints a one-line notice and is skipped (CI is the hard
 # gate, so a contributor without the full toolchain is never blocked).
