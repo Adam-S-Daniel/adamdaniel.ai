@@ -10,5 +10,5 @@ group :jekyll_plugins do
   # cms-platform theme (ships layouts/includes/assets/plugins + the Decap
   # render hook + the admin/ UI as of v0.1.4). Kept in lockstep with
   # platform.lock; Dependabot bumps the tag.
-  gem "cms-platform-theme", git: "https://github.com/Adam-S-Daniel/cms-platform", glob: "theme/*.gemspec", tag: "v0.1.20"
+  gem "cms-platform-theme", git: "https://github.com/Adam-S-Daniel/cms-platform", glob: "theme/*.gemspec", tag: "v0.1.21"
 end
