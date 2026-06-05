@@ -101,7 +101,12 @@ parameterized by `ResourcePrefix` / `ProductionDomainName` / bucket names / `Git
 exports adamdaniel.ai's site params (`APEX_DOMAIN=adamdaniel.ai`, etc., which derive
 `RESOURCE_PREFIX=adamdaniel-ai`, the three bucket names, `STACK_NAME=adamdaniel-ai-bootstrap`,
 `PREVIEW_DOMAIN=*.adamdaniel.ai`), and delegates to `.cms-platform/infrastructure/bootstrap/deploy.sh`
-(which deploys the platform template with `CAPABILITY_NAMED_IAM`). A bootstrap-infra fix
+(which deploys the platform template with `CAPABILITY_NAMED_IAM`). **The wrapper exports
+`CREATE_APEX_DNS_RECORDS=true`** — adamdaniel.ai is LIVE at its apex and the
+apex/www A-records are STACK-MANAGED, but the platform template gates them on
+`CreateApexDnsRecords` (default `false`, safe for fresh sites). Without that
+export a redeploy would DELETE the live apex DNS (site offline) — a
+reviewer-caught regression in the template-removal PR (#1922). Do NOT drop it. A bootstrap-infra fix
 (e.g. CloudFront `ErrorCachingMinTTL=0`) is now made **once in cms-platform** and flows here on the
 next `platform_ref` bump — never apply it locally. This mirrors jodidaniel.com, which has no local
 bootstrap template either. (`infrastructure/rum/` is **not** affected — its template is not an exact
