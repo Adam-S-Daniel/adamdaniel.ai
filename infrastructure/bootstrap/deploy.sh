@@ -111,6 +111,10 @@ export GITHUB_REPO="${GITHUB_REPO:-adamdaniel.ai}"
 export APEX_DOMAIN="${APEX_DOMAIN:-adamdaniel.ai}"
 export AWS_REGION="${AWS_REGION:-us-east-1}"
 export CREATE_OIDC_PROVIDER="${CREATE_OIDC_PROVIDER:-true}"
+# adamdaniel.ai is LIVE at its apex — the platform template gates apex/www A-records
+# on CreateApexDnsRecords (DEFAULT false, for pre-go-live sites). Force it true so a
+# redeploy never deletes the production apex/www DNS (would take the site offline).
+export CREATE_APEX_DNS_RECORDS="${CREATE_APEX_DNS_RECORDS:-true}"
 # HOSTED_ZONE_ID passes through if the caller exported it; otherwise the
 # platform script auto-detects it from Route53 (same as the old behavior).
 
