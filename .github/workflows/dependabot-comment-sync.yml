@@ -45,10 +45,10 @@ permissions:
 
 jobs:
   sync:
-    uses: Adam-S-Daniel/cms-platform/.github/workflows/dependabot-comment-sync.yml@v0.1.16
+    uses: Adam-S-Daniel/cms-platform/.github/workflows/dependabot-comment-sync.yml@v0.1.17
     with:
       # Pin to the SAME ref as the `uses:` pin above so the script matches.
-      platform_ref: v0.1.16
+      platform_ref: v0.1.17
     secrets:
       # Fine-grained PAT with `workflows: write` so the follow-up commit can
       # push the refreshed workflow files. This site stores it as
