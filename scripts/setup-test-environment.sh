@@ -135,7 +135,7 @@ Run the test stack:
   npx playwright test e2e/cms-smoke.spec.js      # Decap admin save/delete
   bundle exec jekyll build                       # site build
   cd oauth-proxy && python3 -m pytest test_lambda.py -v   # OAuth proxy
-  bundle exec ruby _plugins_test/auto_tag_pages_test.rb   # Jekyll plugin unit tests
+  bundle exec ruby _plugins_test/finalize_gate_test.rb   # Jekyll plugin unit tests (gem-owned plugins; specs migrating to the gem's theme/spec/)
 
 Notes:
   - The bundler `path` is set to `vendor/bundle/` so gems live alongside
