@@ -43,7 +43,7 @@ jekyll serve --livereload          # http://localhost:4000
 npx decap-server                   # CMS local backend (port 8081)
 
 # AWS infrastructure
-bash infrastructure/bootstrap/deploy.sh     # deploy/update bootstrap stack
+bash infrastructure/bootstrap/deploy.sh     # deploy/update bootstrap stack (consumes the PLATFORM template — see note below)
 bash oauth-proxy/deploy.sh                  # deploy OAuth proxy (needs env vars)
 
 # Tests
@@ -90,6 +90,22 @@ npx playwright test e2e/glow-banding.spec.js       # single test file
 | Preview URL | `https://preview-pr${N}.adamdaniel.ai` |
 | IAM role | `adamdaniel-ai-github-actions` |
 | OAuth proxy stack | `adamdaniel-ai-oauth-proxy` |
+
+**Bootstrap template is PLATFORM-OWNED (do not re-vendor it).** This repo no longer
+ships its own `infrastructure/bootstrap/template.yaml`; the CloudFormation template is
+the single source of truth in **cms-platform** (`infrastructure/bootstrap/template.yaml`,
+parameterized by `ResourcePrefix` / `ProductionDomainName` / bucket names / `GitHubRepo`).
+`infrastructure/bootstrap/deploy.sh` is a thin wrapper that reads `platform_repo` +
+`platform_ref` from `platform.lock`, checks the platform out at that ref into `.cms-platform/`
+(the same gitignored dot-dir the reusable-workflow callers use — see `deploy-preview.yml`),
+exports adamdaniel.ai's site params (`APEX_DOMAIN=adamdaniel.ai`, etc., which derive
+`RESOURCE_PREFIX=adamdaniel-ai`, the three bucket names, `STACK_NAME=adamdaniel-ai-bootstrap`,
+`PREVIEW_DOMAIN=*.adamdaniel.ai`), and delegates to `.cms-platform/infrastructure/bootstrap/deploy.sh`
+(which deploys the platform template with `CAPABILITY_NAMED_IAM`). A bootstrap-infra fix
+(e.g. CloudFront `ErrorCachingMinTTL=0`) is now made **once in cms-platform** and flows here on the
+next `platform_ref` bump — never apply it locally. This mirrors jodidaniel.com, which has no local
+bootstrap template either. (`infrastructure/rum/` is **not** affected — its template is not an exact
+vendored copy of the platform's and is out of scope.)
 
 ## Content model
 

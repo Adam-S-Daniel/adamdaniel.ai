@@ -6,7 +6,8 @@
 # pipeline (.github/workflows/deploy-preview.yml) publishes a second,
 # draft-cycle-stable alias at `preview-cms-<slug>.adamdaniel.ai`, syncing the
 # build to the S3 prefix `cms-<slug>/`. The CloudFront preview-router
-# (infrastructure/bootstrap/template.yaml) maps that host back to the prefix
+# (defined in the platform-owned bootstrap template, cms-platform
+# infrastructure/bootstrap/template.yaml) maps that host back to the prefix
 # purely by string match `^preview-cms-([a-z0-9-]+)\.adamdaniel\.ai$`, so the
 # ONLY constraints on <slug> are that `preview-cms-<slug>` be a valid DNS
 # label: lowercase [a-z0-9-] and <= 63 octets. `preview-cms-` is 12 chars, so

@@ -236,9 +236,11 @@ review.
 
 ### G. CDN routing (no browser, just function exec)
 
-`infrastructure/bootstrap/template.yaml` defines two CloudFront Functions
-inline. The specs pull the function source out of the YAML and run it in
-Node, so the template stays the single source of truth.
+The bootstrap template (now platform-owned, in **cms-platform** at
+`infrastructure/bootstrap/template.yaml`) defines two CloudFront Functions
+inline. The specs (which live in the platform alongside the template) pull the
+function source out of the YAML and run it in Node, so the template stays the
+single source of truth.
 
 | Spec | Tests | Catches |
 | --- | --- | --- |

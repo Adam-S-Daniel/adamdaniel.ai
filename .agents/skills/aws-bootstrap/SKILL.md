@@ -88,8 +88,15 @@ All policies are scoped to `adamdaniel-ai-*` prefixed resources:
 
 ## Template location
 
-`infrastructure/bootstrap/template.yaml` — vanilla CloudFormation (no SAM transform).
-`infrastructure/bootstrap/deploy.sh` — idempotent deploy script.
+The CloudFormation template is **no longer vendored in this repo** — it is the
+single source of truth in **cms-platform** at `infrastructure/bootstrap/template.yaml`
+(vanilla CloudFormation, no SAM transform; parameterized by `ResourcePrefix` /
+`ProductionDomainName` / bucket names / `GitHubRepo`).
+`infrastructure/bootstrap/deploy.sh` — idempotent deploy script; a thin wrapper that
+checks the platform out at the pinned `platform_ref` (from `platform.lock`) into
+`.cms-platform/` and delegates to `.cms-platform/infrastructure/bootstrap/deploy.sh`,
+which deploys `.cms-platform/infrastructure/bootstrap/template.yaml`. Edit the template
+in cms-platform and bump `platform_ref` here — never re-vendor it.
 
 ## Sibling stack: CloudWatch RUM
 

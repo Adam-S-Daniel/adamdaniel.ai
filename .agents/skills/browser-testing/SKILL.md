@@ -143,7 +143,7 @@ Some specs run under Playwright's runner purely for its discovery + parallelism,
 | Spec | What it exercises |
 |---|---|
 | `e2e/preview-config-patch.spec.js` | `scripts/patch-preview-config.sh` — copies `admin/config.yml` into a temp dir, runs the script, asserts the patched output |
-| `e2e/cloudfront-preview-router.spec.js` | Extracts the inline CloudFront Function from `infrastructure/bootstrap/template.yaml`, evals it in Node, asserts the host → S3-prefix routing table |
+| `e2e/cloudfront-preview-router.spec.js` (platform-owned; runs in cms-platform alongside the template) | Extracts the inline CloudFront Function from the platform's `infrastructure/bootstrap/template.yaml`, evals it in Node, asserts the host → S3-prefix routing table |
 
 They ignore the `page` fixture and don't need Jekyll to be running — treat them as unit tests that happen to share the test harness.
 
