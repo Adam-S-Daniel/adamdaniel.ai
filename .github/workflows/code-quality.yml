@@ -238,7 +238,7 @@ jobs:
         # Repointed from the deleted local `./.github/actions/post-failure-comment`
         # to the platform's composite (same interface) now that the dogfood
         # consumes machinery from cms-platform. Pinned to the platform SHA.
-        uses: Adam-S-Daniel/cms-platform/.github/actions/post-failure-comment@81a367e874ad41b5d546e4108c560fca2f7095b3  # v0.1.12 (2026-06-04)
+        uses: Adam-S-Daniel/cms-platform/.github/actions/post-failure-comment@7a0dcc3dfa9db6eedf41a48ba8b7458192e74145  # v0.1.13 (2026-06-05)
         with:
           mode: post
           log-file: /tmp/lint.log
@@ -248,7 +248,7 @@ jobs:
 
       - name: Resolve failure summary on success
         if: ${{ success() && github.event_name == 'pull_request' }}
-        uses: Adam-S-Daniel/cms-platform/.github/actions/post-failure-comment@81a367e874ad41b5d546e4108c560fca2f7095b3  # v0.1.12 (2026-06-04)
+        uses: Adam-S-Daniel/cms-platform/.github/actions/post-failure-comment@7a0dcc3dfa9db6eedf41a48ba8b7458192e74145  # v0.1.13 (2026-06-05)
         with:
           mode: resolve
           marker: code-quality-failure-summary
