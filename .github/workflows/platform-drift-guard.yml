@@ -6,6 +6,6 @@ on:
     paths: ['.claude/skills/**']
 jobs:
   guard:
-    uses: Adam-S-Daniel/cms-platform/.github/workflows/platform-drift-guard.yml@v0.1.24
+    uses: Adam-S-Daniel/cms-platform/.github/workflows/platform-drift-guard.yml@v0.1.25
     with:
-      platform_ref: v0.1.24
+      platform_ref: v0.1.25
