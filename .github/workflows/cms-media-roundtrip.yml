@@ -22,14 +22,13 @@ on:
   workflow_dispatch:
   push:
     branches: [main]
+    # #70: push triggers ONLY on this caller file — prod OWNS the shared
+    # infra paths (admin/**, playwright.config.js, package*.json, _config.yml,
+    # _layouts/post.html) on push; this loop covers them via its 15:00 cron.
+    # Disjoint push paths across the three loops = no co-arrival eviction in
+    # the shared prod-mutating-loop lane.
     paths:
       - .github/workflows/cms-media-roundtrip.yml
-      - admin/**
-      - playwright.config.js
-      - package.json
-      - package-lock.json
-      - _config.yml
-      - _layouts/post.html
 
 permissions:
   contents: read
@@ -38,9 +37,9 @@ permissions:
 
 jobs:
   media-roundtrip:
-    uses: Adam-S-Daniel/cms-platform/.github/workflows/cms-media-roundtrip.yml@v0.1.28
+    uses: Adam-S-Daniel/cms-platform/.github/workflows/cms-media-roundtrip.yml@v0.1.29
     with:
       # Pin to the SAME ref as the `uses:` pin above so the harness matches.
-      platform_ref: v0.1.28
+      platform_ref: v0.1.29
     secrets:
       CMS_E2E_PAT: ${{ secrets.CMS_E2E_PAT }}
