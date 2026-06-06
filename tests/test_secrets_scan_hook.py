@@ -153,11 +153,11 @@ def test_secrets_scan_passes_clean_diff(synthetic_repo: Path) -> None:
 @pytest.mark.skipif(_NOT_LINUX, reason="bash hook is exercised on Unix-likes")
 @pytest.mark.skipif(_NO_GITLEAKS, reason="gitleaks not installed")
 def test_secrets_scan_respects_allowlisted_test_fixture(synthetic_repo: Path) -> None:
-    """A fake-token under an allowlisted path (oauth-proxy/test_lambda.py)
+    """A fake-token under an allowlisted path (e2e/admin-reviews-auth.spec.js)
     must not block the commit, otherwise the .gitleaks.toml exemption is
-    broken and the OAuth lambda tests can't be edited."""
-    fake = 'access_token = "ghp_testaccessTokenForUnitTests1234567890"\n'
-    _stage(synthetic_repo, "oauth-proxy/test_lambda.py", fake)
+    broken and the admin-reviews auth specs can't be edited."""
+    fake = 'const token = "ghp_testaccessTokenForUnitTests1234567890";\n'
+    _stage(synthetic_repo, "e2e/admin-reviews-auth.spec.js", fake)
     result = _bash(synthetic_repo / "scripts" / "secrets-scan.sh", cwd=synthetic_repo)
     assert result.returncode == 0, (
         f"allowlisted fixture should have passed\nstdout: {result.stdout}\nstderr: {result.stderr}"

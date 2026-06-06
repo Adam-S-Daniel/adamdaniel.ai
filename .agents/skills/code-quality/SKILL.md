@@ -15,7 +15,7 @@ npm run lint                        # eslint + stylelint + markdownlint
 npm run format                      # prettier --write (JS only)
 
 # Python (tools via pip; CI pins ruff/bandit/mypy)
-ruff check && ruff format --check && mypy && bandit -r oauth-proxy scripts tests -c pyproject.toml
+ruff check && ruff format --check && mypy && bandit -r scripts tests -c pyproject.toml
 
 # Ruby — standalone, Ruby >= 3.3 (NOT bundle exec; see below)
 gem install rubocop:1.86.2 rubocop-performance:1.26.1 && rubocop
