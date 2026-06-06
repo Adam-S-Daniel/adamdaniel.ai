@@ -4,10 +4,11 @@
 # lint gate (the platform keeps the heavyweight code-quality lint internal, so
 # this hook is the lint for consumer code). Each language's linter runs solely on the files
 # of that language staged in this commit, and ONLY if its tool is on PATH;
-# a missing tool prints a one-line notice and is skipped (CI is the hard
-# gate, so a contributor without the full toolchain is never blocked).
+# a missing tool prints a one-line notice and is skipped (this hook is the
+# only consumer lint backstop, so a contributor without the full toolchain
+# is never blocked).
 #
-# Bypass for one commit (emergency only — CI still lints the PR):
+# Bypass for one commit (emergency only — this is the only consumer lint):
 #   SKIP_LINT_STAGED=1 git commit ...
 set -euo pipefail
 
@@ -33,7 +34,7 @@ filter() {
 
 have() { command -v "$1" >/dev/null 2>&1; }
 RC=0
-note() { echo "lint-staged: $1 not installed — skipping (CI will lint it)"; }
+note() { echo "lint-staged: $1 not installed — skipping (this hook is the only consumer lint)"; }
 
 # ── JavaScript: eslint + prettier ────────────────────────────────────
 mapfile -t JS < <(filter '(^|/)(e2e|admin|scripts)/.*\.js$|\.config\.js$')
@@ -85,6 +86,6 @@ if [ "${#CSS[@]}" -gt 0 ]; then
 fi
 
 if [ "$RC" -ne 0 ]; then
-  echo "lint-staged: FAIL — fix the issues above or bypass with SKIP_LINT_STAGED=1 (CI still lints)."
+  echo "lint-staged: FAIL — fix the issues above or bypass with SKIP_LINT_STAGED=1 (this is the only consumer lint)."
 fi
 exit "$RC"
