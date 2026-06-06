@@ -224,15 +224,15 @@ Real-user monitoring is via Amazon CloudWatch RUM, deployed as a sibling CloudFo
 
 ## Code quality
 
-Every language in the repo has a best-in-class linter + static-analyzer + style tool, configured to pass at a strong-but-pragmatic strength. The checks run in three places: locally on demand (`npm run lint`, or each tool directly), as a staged-file pre-commit guard, and in CI (`code-quality.yml`).
+Every language in the repo has a best-in-class linter + static-analyzer + style tool, configured to pass at a strong-but-pragmatic strength. The heavyweight lint toolchain is **platform-internal** — there is no consumer lint CI here. The checks run locally on demand (`npm run lint`, or each tool directly) and as a staged-file pre-commit guard (`scripts/lint-staged.sh`), the consumer's only lint backstop.
 
-| Language | Lint / style | Security / types | Config | CI command |
+| Language | Lint / style | Security / types | Config | Command |
 | --- | --- | --- | --- | --- |
 | JavaScript | ESLint 10 (flat) + Prettier | `eslint-plugin-security`, `eslint-plugin-no-unsanitized` | `eslint.config.js`, `.prettierrc.json` | `eslint "e2e/**/*.js" "admin/**/*.js" "scripts/*.js" "*.config.js"` + `prettier --check` |
 | Python | Ruff (lint + format) | Bandit, mypy | `pyproject.toml` (`[tool.ruff]`/`[tool.bandit]`/`[tool.mypy]`) | `ruff check` · `ruff format --check` · `mypy` · `bandit -r oauth-proxy scripts tests -c pyproject.toml` |
 | Ruby | RuboCop (+performance) | — | `.rubocop.yml` | `rubocop` (standalone, Ruby ≥ 3.3 — see below) |
 | Shell | shfmt | ShellCheck | inline directives | `shellcheck $(git ls-files '*.sh') .githooks/pre-commit` · `shfmt -i 2 -ci -bn -d ...` |
-| YAML / Actions | yamllint | actionlint (+shellcheck on `run:`) | `.yamllint.yml` | `yamllint -c .yamllint.yml .github/` · `actionlint -ignore '...head_ref... is potentially untrusted'` |
+| YAML / Actions | yamllint | actionlint (+shellcheck on `run:`) | — | `yamllint .github/` · `actionlint -ignore '...head_ref... is potentially untrusted'` |
 | CSS | Stylelint (standard) | — | `.stylelintrc.json` | `stylelint "assets/css/*.css" "admin/*.css"` |
 | Markdown | markdownlint-cli2 | — | `.markdownlint.jsonc` + `.markdownlint-cli2.jsonc` | `markdownlint-cli2` |
 
@@ -245,13 +245,11 @@ Every language in the repo has a best-in-class linter + static-analyzer + style 
 - **ESLint** — `security/detect-object-injection` and `security/detect-non-literal-fs-filename` are off (heuristic noise in static-site build/test/admin glue with no untrusted-request surface). The remaining `detect-*-regexp` findings are **warnings**, not errors (the current hits are linear regexes over trusted/bounded input). `no-unsanitized/property` is disabled inline at 6 admin `innerHTML` sinks that already escape via `esc()` or use constant strings.
 - **Python** — Ruff `select = E,W,F,I,B,UP,C4,SIM,S`; test trees ignore `S101/S603/S607/S105/S106/S107` (idiomatic `assert`, controlled-argv subprocess, fixture tokens). mypy is pragmatic (`ignore_missing_imports`). Bandit `# nosec` (with reason) on the OAuth proxy's hardcoded GitHub https URLs / fixture tokens.
 - **Ruby** — `Style/Documentation` off (file headers suffice); `Lint/MissingSuper` excluded for the synthetic `Jekyll::Page` subclasses; metrics tuned for generator code.
-- **YAML/Actions** — yamllint `line-length`/`document-start` off, `truthy: check-keys:false` (so `on:` stays unquoted); the test-locked configs (`admin/config*.yml`, `_config.yml`, `.github/rulesets/`) are in its `ignore:`. actionlint's two `head_ref … potentially untrusted` advisories on same-repo Decap PRs are suppressed via a precise `-ignore` regex (every other input is still flagged); intentional `run:`-block shellcheck findings carry inline `# shellcheck disable=` comments.
+- **YAML/Actions** — when run locally, yamllint is invoked with `line-length`/`document-start` off and `truthy: check-keys:false` (so `on:` stays unquoted), and the test-locked configs (`admin/config*.yml`, `_config.yml`, `.github/rulesets/`) are skipped. actionlint's two `head_ref … potentially untrusted` advisories on same-repo Decap PRs are suppressed via a precise `-ignore` regex (every other input is still flagged); intentional `run:`-block shellcheck findings carry inline `# shellcheck disable=` comments.
 - **CSS** — Stylelint relaxes `selector-class-pattern`, `no-descending-specificity`, `selector-max-specificity` for `admin/admin-mobile.css`'s intentional two-class Emotion-tie selectors (see *Mobile / responsive admin*); that file is otherwise byte-stable.
 - **Markdown** — `MD013` (line-length), `MD033` (inline HTML), `MD041`, `MD038` off for GFM docs.
 
-**CI — `code-quality.yml`** is advisory (NOT in `main.json`, so a lint-infra hiccup never blocks a merge). A `changes` job computes per-language booleans from the PR diff and the `lint` job runs only the toolchains for languages that changed; on failure it posts a gitleaks-scrubbed summary as a PR comment via the `post-failure-comment` composite, so the failure is visible inline to humans and to agents through the PR API.
-
-**Local — pre-commit hook.** `scripts/lint-staged.sh` (wired into `.githooks/pre-commit` and `.gitconfig-fragment`) lints only the **staged** files of each language, and **skips any linter whose tool is absent** — CI is the hard gate, so a contributor without the full toolchain is never blocked. Bypass one commit with `SKIP_LINT_STAGED=1`. `npm run lint` / `npm run format` cover the npm-based tools.
+**Local — pre-commit hook.** `scripts/lint-staged.sh` (wired into `.githooks/pre-commit` and `.gitconfig-fragment`) lints only the **staged** files of each language, and **skips any linter whose tool is absent**. This hook is the consumer's only lint backstop — the heavyweight toolchain is platform-internal, so a contributor without the full toolchain is never blocked. Bypass one commit with `SKIP_LINT_STAGED=1`. `npm run lint` / `npm run format` cover the npm-based tools.
 
 **Repetition, dead code, constants.** The standardisation pass also de-duplicated within each language (e.g. e2e specs reuse `prodTarget()`/`previewTarget()` from `e2e/cms-host.js` rather than hardcoding hosts; the OAuth proxy's GitHub URLs/timeout are module constants), removed unused symbols (every linter's unused-import/var rule is on), and confirmed there are no orphan code files (all `_layouts`/`_includes` are referenced via `layout:`/`include`, all `scripts/` by a workflow or `package.json`). When adding code, prefer extending an existing shared helper/constant over copying.
 
@@ -820,7 +818,7 @@ Every e2e test runs across a matrix of browsers, viewports, text sizes, and colo
 
 The matrix is split into a **public-page lane** (8 projects, full browser × viewport diversity for the rendered site) and an **admin lane** (2 projects, the only two browsers admin UI is exercised on). Project routing is tag-based — see "Tag-based filtering" below.
 
-**Public-page lane** — runs every spec that does NOT carry an `@admin-*` tag. Each project's `grepInvert: /@admin-write\b|@admin-read\b|@admin-screenshots\b/` excludes admin specs.
+**Public-page lane** — runs every spec that does NOT carry an `@admin-*` tag. Each project's `grepInvert: /@admin-write\b|@admin-read\b/` excludes admin specs.
 
 | Project | Browser | Viewport | Special |
 | --- | --- | --- | --- |
@@ -833,11 +831,11 @@ The matrix is split into a **public-page lane** (8 projects, full browser × vie
 | `chromium-light` | Chromium | 1920×1080 | `colorScheme: light` |
 | `chromium-forced-colors` | Chromium | 1920×1080 | `forcedColors: active` |
 
-**Admin lane** — runs only specs tagged `@admin-write`, `@admin-read`, or `@admin-screenshots`. Public-page specs do NOT run on these projects.
+**Admin lane** — runs only specs tagged `@admin-write` or `@admin-read`. Public-page specs do NOT run on these projects.
 
 | Project | Browser | Viewport | Tags accepted |
 | --- | --- | --- | --- |
-| `chromium-desktop-3k` | Chromium | 3000×1500 | `@admin-write` + `@admin-read` + `@admin-screenshots` |
+| `chromium-desktop-3k` | Chromium | 3000×1500 | `@admin-write` + `@admin-read` |
 | `webkit-iphone16` | WebKit | 393×852 (deviceScaleFactor 3, isMobile, hasTouch) | `@admin-read` only |
 
 The two admin projects intentionally cover the two browsers a real contributor uses: Chrome on a high-DPI desktop and Safari on iPhone 16. No Windows project — see "Tag-based filtering" for the rationale.
@@ -850,7 +848,6 @@ Specs that drive the admin UI are tagged via Playwright's `{ tag: [...] }` optio
 | --- | --- | --- |
 | `@admin-write` | Drives `/admin/*` AND mutates state (Decap Save → `cms/*` PR, decap-server FS write, etc.) | `chromium-desktop-3k` only — single browser is sufficient and writes are heavy/serial |
 | `@admin-read` | Drives `/admin/*` but is read-only (DOM contract, HTTP byte parity, mocked APIs) | `chromium-desktop-3k` + `webkit-iphone16` — engine-dependent admin UI assertions need both |
-| `@admin-screenshots` | Manual-walkthrough specs that emit `docs/manual-screenshots/*.png` via `manual-capture.js` | `chromium-desktop-3k` only — `manual-capture.js` writes to project-INDEPENDENT paths, so two parallel projects would race + last-write-wins |
 | *(untagged)* | Public-page specs (`tags.spec.js`, `feeds-and-share.spec.js`, `visual-regression.spec.js`, etc.) | All 8 public-lane projects |
 
 **Why word-bounded regexes** (`/@admin-read\b/`): Playwright's `grep` is substring-matching by default. Without the `\b`, `/@admin-read/` would match a hypothetical future tag like `@admin-readonly`, silently routing it to the wrong project. The `\b` anchors at the tag's end so `@admin-read` matches only itself.
@@ -880,7 +877,7 @@ Playwright fetches its browser binaries from a small set of CDNs the first time 
 
 If these are blocked, `npx playwright install` hangs or fails with a 403 / DNS-resolution error.
 
-CI does NOT hit these CDNs — the e2e matrix, parity, finalize, canary-prod, and cms-publish-loop-{host,prod} jobs all run inside `mcr.microsoft.com/playwright:v<version>-noble`, which ships the browsers + apt deps prebaked. The image tag is enforced to match `package-lock.json`'s `@playwright/test` version by the `select` job's drift-guard step. The CDNs only matter for fresh local clones and the rare workflow that still calls `playwright install` (e.g. `visual-regression.yml`, `regenerate-manual.yml`).
+CI does NOT hit these CDNs — the e2e matrix, parity, finalize, canary-prod, and cms-publish-loop-{host,prod} jobs all run inside `mcr.microsoft.com/playwright:v<version>-noble`, which ships the browsers + apt deps prebaked. The image tag is enforced to match `package-lock.json`'s `@playwright/test` version by the `select` job's drift-guard step. The CDNs only matter for fresh local clones and the rare workflow that still calls `playwright install` (e.g. `visual-regression.yml`).
 
 ### Custom fixture (`e2e/base.js`)
 
