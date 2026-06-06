@@ -110,8 +110,6 @@ exclude:
   - vendor
   - package.json
   - package-lock.json
-  - playwright.config.js
-  - playwright.regression.config.js
   - e2e
   # The cms-platform e2e lane checks the platform out into .cms-platform/.
   # It's not site content and is dot-prefixed (Jekyll ignores it by default);

@@ -4,8 +4,6 @@
   "description": "Personal website and blog for Adam Daniel — Freelance AI Engineer.",
   "main": "index.js",
   "scripts": {
-    "test": "npx playwright test",
-    "test:regression-video": "npx playwright test --config=playwright.regression.config.js",
     "lint": "npm run lint:js && npm run lint:css && npm run lint:md",
     "lint:js": "eslint \"admin/**/*.js\" \"scripts/*.js\" \"*.config.js\"",
     "lint:css": "stylelint \"assets/css/*.css\" \"admin/*.css\"",

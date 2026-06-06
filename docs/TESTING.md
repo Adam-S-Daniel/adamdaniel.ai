@@ -142,7 +142,7 @@ two lists drift.
 | Workflow | Triggers | Specs |
 | --- | --- | --- |
 | `e2e-tests.yml` | PR, push to main | All `e2e/*.spec.js` and `e2e/*.test.js` (subset gated by selector on PRs) |
-| `visual-regression.yml` | PR | Uses its own `playwright.regression.config.js` and `e2e/regression-video.spec.js` only |
+| `visual-regression.yml` | PR | Uses its own `playwright.regression.config.js` and `regression-video.spec.js` only (both platform-delivered via the `.cms-platform/e2e` harness, not vendored here) |
 | `cms-editorial-workflow.yml` | Every PR (no path/branch filter — `validate-content` must always report for the ruleset) | Front-matter validation in-line (no specs invoked) |
 | `publish-scheduled-posts.yml` | Hourly cron | Runs `scripts/publish_scheduled_posts.py`; no specs |
 
@@ -195,7 +195,7 @@ by `admin/preview-bridge.js`. Two angles cover its contract.
 | --- | --- | --- |
 | [`e2e/preview-shell.spec.js`](../e2e/preview-shell.spec.js) | 13 | `/preview/` serves 200 with site chrome, switches layouts via `?collection=`, applies postMessage / BroadcastChannel updates, refuses cross-origin messages, renders markdown widgets (images, lists, code), is `noindex`. Chromium-desktop only — DOM contract, not visual. |
 | [`e2e/preview-bridge.spec.js`](../e2e/preview-bridge.spec.js) | 3 | The bridge registers a `postSave` listener with `window.CMS`, broadcasts entry data via BroadcastChannel, exposes the preview-URL helper. Stubbed `window.CMS` — no Decap boot. |
-| [`e2e/preview-config-patch.spec.js`](../e2e/preview-config-patch.spec.js) | 4 | `scripts/patch-preview-config.sh` rewrites `site_url`, `display_url`, `backend.branch` correctly and leaves `preview_path` alone. |
+| [`e2e/preview-config-patch.spec.js`](../e2e/preview-config-patch.spec.js) | 4 | The platform-delivered `patch-preview-config.sh` (run by the preview reusable from `.cms-platform/scripts/`, not vendored here) rewrites `site_url`, `display_url`, `backend.branch` correctly and leaves `preview_path` alone. |
 
 ### E. CMS admin specs (browser, chromium-desktop-3k only)
 
@@ -252,7 +252,9 @@ single source of truth.
 `e2e/regression-video.spec.js` is invoked only by
 `.github/workflows/visual-regression.yml` via
 `playwright.regression.config.js`. Not part of the main matrix —
-listed under `testIgnore` in `playwright.config.js`. It captures
+listed under `testIgnore` in `playwright.config.js`. (Both configs
+are platform-delivered with the `.cms-platform/e2e` harness, no
+longer vendored in this repo.) It captures
 per-page screenshots of the PR build vs production for the
 side-by-side review video.
 

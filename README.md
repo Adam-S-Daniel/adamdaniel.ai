@@ -285,7 +285,7 @@ Folders grouped by purpose. Anything not listed is incidental.
 | Path | Holds |
 | --- | --- |
 | `e2e/` | Playwright specs + helpers. See [`docs/TESTING.md`](docs/TESTING.md) for the per-spec walkthrough. |
-| `playwright.config.js`, `playwright.regression.config.js` | Test runner configuration. |
+| Playwright runner config | Platform-delivered — `playwright.config.js` / `playwright.regression.config.js` ship with the e2e harness from `.cms-platform/e2e`, not vendored in this repo. |
 | `oauth-proxy/test_lambda.py` | OAuth Lambda unit tests. |
 
 ### Infrastructure
@@ -295,7 +295,7 @@ Folders grouped by purpose. Anything not listed is incidental.
 | `infrastructure/bootstrap/` | One-time AWS setup (CloudFormation templates, deploy scripts). |
 | `oauth-proxy/` | AWS Lambda + API Gateway implementing the GitHub OAuth handshake Decap requires. |
 | `.github/workflows/` | CI/CD: deploy-production, deploy-preview, e2e-tests, visual-regression, cms-editorial-workflow, publish-scheduled-posts. |
-| `scripts/` | Build-time helpers (`patch-preview-config.sh`, `setup-test-environment.sh`, `write-commit-json.sh`, `generate-showcase.js`, etc.). |
+| `scripts/` | Build-time helpers (`setup-test-environment.sh`, `write-commit-json.sh`, `generate-showcase.js`, etc.). |
 | `docs/` | Long-form documentation: [`CONTENT_GUIDE.md`](docs/CONTENT_GUIDE.md), [`TESTING.md`](docs/TESTING.md). |
 
 ## Branching Strategy (visual)
