@@ -8,6 +8,12 @@
 #
 # Site identity (CMS_PROD_URL / CMS_APEX) + the PROD_PLAYGROUND_MODE
 # sunset gate are read from THIS repo's VARS by the reusable workflow.
+#
+# Real push-event validation of the #1815 fix is exercised by touching ONLY
+# this caller file: a push to main on this path fires THIS loop alone (no
+# cms-media-roundtrip / cms-publish-loop-host co-arrival in the shared
+# prod-mutating-loop lane — see cms-platform#70), so the recursion-gate runs
+# the REAL prod-mutate job rather than a bump-skip.
 name: CMS Publish Loop — Prod Mutation Playground
 run-name: >-
   ${{ github.event_name == 'push'
