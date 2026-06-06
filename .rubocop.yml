@@ -1,5 +1,6 @@
-# RuboCop configuration scoped to this repo's Ruby surface: the Jekyll
-# plugins in _plugins/ and their plain-Ruby unit tests in _plugins_test/.
+# RuboCop configuration scoped to this repo's Ruby surface: the plain-Ruby
+# workflow-shape lints in _plugins_test/ (the Jekyll plugins themselves are
+# now gem-delivered by cms-platform, so _plugins/ no longer exists here).
 # Nothing else in the repo is Ruby, so the Include list is deliberately
 # narrow and the generated _site/, vendored gems, and node_modules are
 # excluded outright.
@@ -16,7 +17,6 @@ AllCops:
   # Lint only our own Ruby. Without an explicit Include, RuboCop's default
   # glob would also try to lint Ruby it finds under vendored/build dirs.
   Include:
-    - '_plugins/**/*.rb'
     - '_plugins_test/**/*.rb'
   Exclude:
     - 'vendor/**/*'
@@ -43,9 +43,9 @@ Style/TrailingCommaInArrayLiteral:
 Style/TrailingCommaInHashLiteral:
   EnforcedStyleForMultiline: consistent_comma
 
-# Every module/class here is preceded by a file-level comment block
-# explaining its purpose (see the headers in each _plugins/ file). A
-# duplicate per-class doc comment would be noise, so don't require one.
+# Every file here is preceded by a file-level comment block explaining its
+# purpose (see the headers in each _plugins_test/ file). A duplicate
+# per-class doc comment would be noise, so don't require one.
 Style/Documentation:
   Enabled: false
 
@@ -76,14 +76,3 @@ Metrics/PerceivedComplexity:
 Metrics/BlockLength:
   Exclude:
     - '_plugins_test/**/*.rb'
-
-# ── Lint ────────────────────────────────────────────────────────────────
-# Jekyll::Page subclasses (TagPage, FeedPage) deliberately do NOT call
-# super in #initialize: the parent's initializer expects a different
-# signature and reads files from disk, whereas these synthetic pages set
-# their own ivars and call #process. Calling super would break them. This
-# is the documented Jekyll plugin idiom for generated pages.
-Lint/MissingSuper:
-  Exclude:
-    - '_plugins/auto_tag_pages.rb'
-    - '_plugins/tag_feeds.rb'

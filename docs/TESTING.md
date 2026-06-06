@@ -146,8 +146,9 @@ two lists drift.
 | `cms-editorial-workflow.yml` | Every PR (no path/branch filter — `validate-content` must always report for the ruleset) | Front-matter validation in-line (no specs invoked) |
 | `publish-scheduled-posts.yml` | Hourly cron | Runs `scripts/publish_scheduled_posts.py`; no specs |
 
-Plugin and OAuth-proxy unit tests are run inside `e2e-tests.yml` as
-non-Playwright steps before the browser matrix.
+Jekyll plugin and OAuth-proxy unit tests are now owned upstream by
+cms-platform (gem `theme/spec/` + the platform `oauth-proxy/`) and run in the
+platform's own CI, not on this consumer.
 
 ## 4. Test categories
 
@@ -164,13 +165,16 @@ downstream depends on. Listed in `select-specs.js`'s `ALWAYS_RUN`.
 | [`e2e/select-specs.test.js`](../e2e/select-specs.test.js) | 14 | The selector itself — empty changeset → skip, fanout → all, docs → baseline, etc. |
 | [`e2e/visual-regression-skip-review.test.js`](../e2e/visual-regression-skip-review.test.js) | 5 | The auto-approve-when-no-diffs path in `visual-regression.yml` (workflow-level YAML invariants). |
 
-### B. Plugin and proxy unit tests (Ruby / Python, no browser)
+### B. Workflow-shape lints (Ruby, no browser)
 
 | File | Tests | Catches |
 | --- | --- | --- |
-| [`_plugins_test/auto_tag_pages_test.rb`](../_plugins_test/auto_tag_pages_test.rb) | 8 | `summarise()` correctly partitions curated vs in-line tags, sorts/dedups, normalises slugs, handles edge cases (nil tags, non-Latin names). The Jekyll-integration path is not exercised; that's covered by `cms-publish-flow.spec.js`. |
-| [`_plugins_test/normalize_empty_slug_test.rb`](../_plugins_test/normalize_empty_slug_test.rb) | 9 | `normalize_empty_slug.rb` doesn't strip a real slug, does fall through to a date-derived slug when blank, etc. |
-| [`oauth-proxy/test_lambda.py`](../oauth-proxy/test_lambda.py) | 13 | OAuth proxy Lambda: `/health`, `/auth` redirects to GitHub with the right scope, `/callback` returns the `authorization:github:success:<JSON>` postMessage HTML, OPTIONS preflight CORS, GitHub-token-error handling. |
+| [`_plugins_test/finalize_gate_test.rb`](../_plugins_test/finalize_gate_test.rb) | — | Workflow-shape lint: the `finalize` job + ruleset together gate e2e shards 2-4. |
+| [`_plugins_test/required_check_stubs_paths_test.rb`](../_plugins_test/required_check_stubs_paths_test.rb) | — | Workflow-shape lint: required-check-stub paths mirror `e2e-tests.yml`'s `paths-ignore`. |
+
+The Jekyll plugin unit tests (slug normalisation, etc.) and the OAuth-proxy
+Lambda tests are now owned upstream by **cms-platform** (gem theme/spec + the
+platform `oauth-proxy/`), not vendored or run here.
 
 ### C. Public-site DOM specs (browser, all 8 projects)
 
@@ -272,7 +276,7 @@ What this suite does *not* yet cover:
   → publish → image live on adamdaniel.ai → remove → delete via Media
   UI → live 404) is `e2e/cms-media-roundtrip.spec.js`, gated to
   `cms-publish-loop-prod.yml`.
-- **Production OAuth handshake against the real Lambda.** `admin-reviews-auth.spec.js` simulates the popup messages directly; the real popup → Lambda → GitHub round-trip isn't reachable from a hermetic test. Covered by the unit tests in `oauth-proxy/test_lambda.py` and operationally by users.
+- **Production OAuth handshake against the real Lambda.** `admin-reviews-auth.spec.js` simulates the popup messages directly; the real popup → Lambda → GitHub round-trip isn't reachable from a hermetic test. Covered by the OAuth-proxy unit tests upstream in cms-platform and operationally by users.
 - **Accessibility.** No axe / WCAG asserts. Add if the site grows beyond a personal portfolio.
 - **Pages collection's public route.** The Pages collection is enabled in the CMS but the public site routing for `pages/<slug>` is currently disabled/hidden. When that route ships, follow the **FUTURE CONTENT TYPES** pattern documented at the top of `cms-publish-flow.spec.js`: drive Decap → create entry → assert file lands → rebuild → GET the public URL → assert layout-expected DOM → cleanup. Apply the same recipe for any *new* collection added to `admin/config*.yml`.
 
@@ -286,10 +290,9 @@ ALWAYS-RUN (no browser):
   select-specs.test.js            selector logic                    14 tests
   visual-regression-skip-review   workflow YAML                      5 tests
 
-UNIT (Ruby / Python):
-  _plugins_test/auto_tag_pages_test.rb        plugin shaping          8 cases
-  _plugins_test/normalize_empty_slug_test.rb  slug fallback           9 cases
-  oauth-proxy/test_lambda.py                  Lambda handler         13 cases
+WORKFLOW-SHAPE LINTS (Ruby):
+  _plugins_test/finalize_gate_test.rb              finalize merge gate
+  _plugins_test/required_check_stubs_paths_test.rb stub paths mirror
 
 PUBLIC SITE (browser, 8 projects):
   blog-post.spec.js               post layout DOM                    3 tests
@@ -327,7 +330,7 @@ Is the thing you're testing a YAML / JSON / template invariant?
   → cms-config.spec.js (or a new always-run structural spec)
 
 Is it a pure function in Ruby / Python?
-  → _plugins_test/*.rb or oauth-proxy/test_lambda.py
+  → a tests/*.py case (or, for gem-owned Jekyll plugins, upstream in cms-platform's theme/spec/)
 
 Does it render to a public-site URL?
   → blog-post.spec.js / tags.spec.js / a new <feature>.spec.js

@@ -12,8 +12,6 @@ target-version = "py311"
 # Only lint/format the Python this repo owns; the tree is a Jekyll site with a
 # large amount of JS/Ruby/shell that ruff must not touch.
 include = [
-    "oauth-proxy/lambda.py",
-    "oauth-proxy/test_lambda.py",
     "scripts/publish_scheduled_posts.py",
     "tests/**/*.py",
     "pyproject.toml",
@@ -39,36 +37,31 @@ select = [
 # default / Enum string values trip the hardcoded-password heuristics
 # (S105/S107).
 "tests/**/*.py" = ["S101", "S603", "S607", "S105", "S106", "S107"]
-"oauth-proxy/test_lambda.py" = ["S101", "S105", "S106", "S107"]
 
 # ── Bandit: security static analysis ─────────────────────────────────────────
 [tool.bandit]
 # The top-level tests/ tree legitimately uses assert and subprocess with
 # trusted, hardcoded argv (no shell=True, no user-controlled binary), so prune
-# it from bandit's recursive walk. `oauth-proxy/test_lambda.py` lives under a
-# production dir and so is still scanned; its two fake-fixture B105/B107
-# findings are suppressed inline with a narrow `# nosec`. Genuine findings in
-# production code (oauth-proxy/lambda.py, scripts/) are addressed inline with a
-# narrow `# nosec` carrying a justification — nothing real is blanket-skipped.
+# it from bandit's recursive walk. Genuine findings in production code
+# (scripts/) are addressed inline with a narrow `# nosec` carrying a
+# justification — nothing real is blanket-skipped.
 exclude_dirs = ["tests", "node_modules", "vendor"]
 
 # ── Mypy: pragmatic static typing ────────────────────────────────────────────
 [tool.mypy]
 python_version = "3.11"
 files = [
-    "oauth-proxy/lambda.py",
-    "oauth-proxy/test_lambda.py",
     "scripts/publish_scheduled_posts.py",
     "tests",
 ]
-# boto3, yaml and the AWS Lambda runtime have no stubs in this env.
+# boto3 and yaml have no stubs in this env.
 ignore_missing_imports = true
 warn_unused_ignores = true
 warn_redundant_casts = true
 no_implicit_optional = true
 check_untyped_defs = true
-# `lambda.py` is not a valid module name to import, so mypy analyses it as a
-# standalone file; allow that and don't insist every test helper is annotated.
+# Standalone scripts (e.g. scripts/publish_scheduled_posts.py) are analysed
+# as files outside a package, so allow that.
 explicit_package_bases = true
 
 [[tool.mypy.overrides]]
@@ -79,6 +72,6 @@ explicit_package_bases = true
 #     installed in this env; the suite isn't type-driven against it.
 #   * `_PWSH = shutil.which(...) or shutil.which(...)` is `str | None`; the
 #     tests narrow it with skipif() at runtime, which mypy can't follow.
-module = ["tests.*", "test_lambda", "conftest"]
+module = ["tests.*", "conftest"]
 disallow_untyped_defs = false
 disable_error_code = ["import-untyped", "list-item"]

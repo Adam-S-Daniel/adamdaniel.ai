@@ -1,136 +1,94 @@
 #!/usr/bin/env bash
 # =============================================================================
-# deploy.sh — Deploy the Sveltia CMS OAuth Proxy to AWS
+# deploy.sh — Deploy the CMS OAuth proxy (DELEGATING WRAPPER)
 # =============================================================================
 #
-# Prerequisites:
-#   • AWS CLI v2  (aws --version)
-#   • AWS SAM CLI (sam --version)
-#   • AWS credentials configured (aws configure or IAM role)
-#   • A GitHub OAuth App created at:
-#       https://github.com/settings/developers → "OAuth Apps" → "New OAuth App"
-#     Settings to use:
-#       Application name:      adamdaniel.ai CMS
-#       Homepage URL:          https://adamdaniel.ai
-#       Authorization callback URL: (run this script once to get the URL, then update)
+# This is the file the scaffolder (scaffold/create-site.js) emits into a NEW
+# consuming site as `oauth-proxy/deploy.sh`. The site does NOT vendor the OAuth
+# proxy's lambda.py / template.yaml — those are the single source of truth in
+# cms-platform, so a fix made there (e.g. the /prod/health handler) flows to
+# every consumer on the next platform_ref bump instead of being forked.
+#
+# How it works (mirrors infrastructure/bootstrap/deploy.sh + the repo-wide
+# ".cms-platform/ checkout-at-platform_ref" pattern the reusable-workflow
+# callers use):
+#   1. Read platform_repo + platform_ref from platform.lock.
+#   2. Check the platform out at that ref into .cms-platform/ (a dot-dir Jekyll
+#      ignores; gitignored — never committed).
+#   3. Source infrastructure/site-params.env for the OAuth app id/secret +
+#      ALLOWED_ORIGINS + STACK_NAME, then delegate to the platform's
+#      .cms-platform/oauth-proxy/deploy.sh (sam build + deploy of the platform
+#      template under THIS site's stack name).
+#
+# Default GitHub OAuth scope is `repo,user,workflow` (the platform default).
+# IMPORTANT: if a redeploy WIDENS the scope your live OAuth App was authorized
+# with, the OAuth App owner must MANUALLY re-consent (re-authorize the app)
+# once — that is a human step GitHub requires; it cannot be automated.
+#
+# Prerequisites: AWS CLI v2, AWS SAM CLI, git, AWS credentials, a GitHub OAuth
+# App, and a filled-in infrastructure/site-params.env (copy from
+# infrastructure/site-params.env.example / the platform example).
 #
 # Usage:
-#   export GITHUB_CLIENT_ID=your_client_id
-#   export GITHUB_CLIENT_SECRET=your_client_secret
-#   bash deploy.sh
-#
-# Cost: $0.00/month under AWS free tier (1M Lambda + 1M API Gateway requests).
+#   bash oauth-proxy/deploy.sh
+# (Idempotent — safe to re-run; an in-place stack update keeps the same
+#  API Gateway endpoint, so _config.yml cms.oauth_base_url is unchanged.)
 # =============================================================================
 
 set -euo pipefail
 
-STACK_NAME="adamdaniel-ai-oauth-proxy"
-AWS_REGION="${AWS_REGION:-us-east-1}"
-SAM_S3_BUCKET="${SAM_S3_BUCKET:-adamdaniel-ai-cfn-artifacts}"
-ALLOWED_ORIGINS="${ALLOWED_ORIGINS:-https://adamdaniel.ai}"
-GITHUB_SCOPE="${GITHUB_SCOPE:-repo,user}"
-
-# ── Colour output ──────────────────────────────────────────────────────────
-BLUE='\033[0;34m'
-GREEN='\033[0;32m'
-YELLOW='\033[1;33m'
-RED='\033[0;31m'
-NC='\033[0m'
-
+BLUE='\033[0;34m'; GREEN='\033[0;32m'; YELLOW='\033[1;33m'; RED='\033[0;31m'; NC='\033[0m'
 info() { echo -e "${BLUE}[INFO]${NC}  $*"; }
 success() { echo -e "${GREEN}[OK]${NC}    $*"; }
 warn() { echo -e "${YELLOW}[WARN]${NC}  $*"; }
-error() {
-  echo -e "${RED}[ERROR]${NC} $*" >&2
-  exit 1
-}
+error() { echo -e "${RED}[ERROR]${NC} $*" >&2; exit 1; }
 
-# ── Validate required env vars ────────────────────────────────────────────
-[[ -z "${GITHUB_CLIENT_ID:-}" ]] && error "GITHUB_CLIENT_ID is not set"
-[[ -z "${GITHUB_CLIENT_SECRET:-}" ]] && error "GITHUB_CLIENT_SECRET is not set"
+command -v aws >/dev/null 2>&1 || error "AWS CLI not found."
+command -v git >/dev/null 2>&1 || error "git not found — needed to check out the cms-platform OAuth proxy."
 
-# ── Move to script directory ──────────────────────────────────────────────
+# ── Locate repo root + platform.lock (oauth-proxy/ is ONE level below root) ──
 SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
-cd "$SCRIPT_DIR"
+REPO_ROOT="$(cd "$SCRIPT_DIR/.." && pwd)"
+LOCK_FILE="$REPO_ROOT/platform.lock"
+[[ -f "$LOCK_FILE" ]] || error "platform.lock not found at $LOCK_FILE"
 
-info "Deploying stack: ${STACK_NAME} to ${AWS_REGION}"
+read_lock() {
+  # shellcheck disable=SC2016  # awk field refs ($1/$2), not shell expansion.
+  awk -v k="$1" '$1==k":" {print $2; exit}' "$LOCK_FILE"
+}
+PLATFORM_REPO="${PLATFORM_REPO:-$(read_lock platform_repo)}"
+PLATFORM_REF="${PLATFORM_REF:-$(read_lock platform_ref)}"
+[[ -n "$PLATFORM_REPO" ]] || error "platform_repo not found in $LOCK_FILE"
+[[ -n "$PLATFORM_REF" ]] || error "platform_ref not found in $LOCK_FILE"
 
-# ── sam build ────────────────────────────────────────────────────────────
-info "Building SAM application…"
-sam build \
-  --template-file template.yaml \
-  --region "$AWS_REGION"
-
-# ── sam deploy ───────────────────────────────────────────────────────────
-info "Deploying to AWS…"
-
-DEPLOY_ARGS=(
-  --template-file .aws-sam/build/template.yaml
-  --stack-name "$STACK_NAME"
-  --region "$AWS_REGION"
-  --capabilities CAPABILITY_IAM
-  --no-confirm-changeset
-  --parameter-overrides
-  "GitHubClientId=${GITHUB_CLIENT_ID}"
-  "GitHubClientSecret=${GITHUB_CLIENT_SECRET}"
-  "AllowedOrigins=${ALLOWED_ORIGINS}"
-  "GitHubScope=${GITHUB_SCOPE}"
-)
-
-# Resolve S3 bucket for artifacts (SAM managed or pre-existing)
-if [[ -n "$SAM_S3_BUCKET" ]]; then
-  DEPLOY_ARGS+=(--s3-bucket "$SAM_S3_BUCKET")
+# ── Load site parameters (OAuth id/secret, ALLOWED_ORIGINS, STACK_NAME) ─────
+# Pre-exported env wins; otherwise source the (gitignored) site-params.env.
+PARAMS_FILE="$REPO_ROOT/infrastructure/site-params.env"
+if [[ -f "$PARAMS_FILE" ]]; then
+  info "Sourcing $PARAMS_FILE"
+  set -a; # shellcheck disable=SC1090
+  source "$PARAMS_FILE"; set +a
 else
-  DEPLOY_ARGS+=(--resolve-s3)
+  warn "infrastructure/site-params.env not found — relying on already-exported env (GITHUB_CLIENT_ID/SECRET, ALLOWED_ORIGINS, STACK_NAME)."
 fi
 
-sam deploy "${DEPLOY_ARGS[@]}"
+# ── Check the platform out at platform_ref into .cms-platform/ ──────────────
+PLATFORM_DIR="$REPO_ROOT/.cms-platform"
+PLATFORM_URL="${PLATFORM_URL:-https://github.com/${PLATFORM_REPO}.git}"
+info "Platform: ${PLATFORM_REPO}@${PLATFORM_REF}"
+info "Checking platform out into .cms-platform/ …"
+rm -rf "$PLATFORM_DIR"
+git clone --quiet --depth 1 --branch "$PLATFORM_REF" "$PLATFORM_URL" "$PLATFORM_DIR" \
+  || error "Failed to check out ${PLATFORM_REPO}@${PLATFORM_REF} into .cms-platform/"
 
-# ── Print outputs ────────────────────────────────────────────────────────
-info "Fetching stack outputs…"
-OUTPUTS=$(aws cloudformation describe-stacks \
-  --stack-name "$STACK_NAME" \
-  --region "$AWS_REGION" \
-  --query 'Stacks[0].Outputs' \
-  --output json)
+PLATFORM_DEPLOY="$PLATFORM_DIR/oauth-proxy/deploy.sh"
+PLATFORM_TEMPLATE="$PLATFORM_DIR/oauth-proxy/template.yaml"
+[[ -f "$PLATFORM_TEMPLATE" ]] || error "Platform OAuth template missing: $PLATFORM_TEMPLATE"
+[[ -f "$PLATFORM_DEPLOY" ]] || error "Platform OAuth deploy script missing: $PLATFORM_DEPLOY"
+success "Platform checked out — deploying $PLATFORM_TEMPLATE under stack ${STACK_NAME:-<STACK_NAME unset>}"
 
-API_URL=$(echo "$OUTPUTS" | python3 -c "
-import json, sys
-outputs = json.load(sys.stdin)
-for o in outputs:
-    if o['OutputKey'] == 'ApiUrl':
-        print(o['OutputValue'])
-        break
-")
-
-CALLBACK_URL=$(echo "$OUTPUTS" | python3 -c "
-import json, sys
-outputs = json.load(sys.stdin)
-for o in outputs:
-    if o['OutputKey'] == 'CallbackEndpoint':
-        print(o['OutputValue'])
-        break
-")
-
-# ── Summary ──────────────────────────────────────────────────────────────
-echo ""
-success "Deployment complete!"
-echo ""
-echo "  ┌─────────────────────────────────────────────────────────────────┐"
-echo "  │  Next steps                                                     │"
-echo "  ├─────────────────────────────────────────────────────────────────┤"
-echo "  │                                                                 │"
-echo -e "  │  1. Update your GitHub OAuth App callback URL to:              │"
-echo -e "  │     ${YELLOW}${CALLBACK_URL}${NC}"
-echo "  │                                                                 │"
-echo "  │  2. Update admin/config.yml in your repo:                       │"
-echo "  │                                                                 │"
-echo "  │     backend:                                                    │"
-echo "  │       name: github                                              │"
-echo "  │       repo: Adam-S-Daniel/adamdaniel.ai                        │"
-echo "  │       branch: main                                              │"
-echo -e "  │       base_url: ${YELLOW}${API_URL}${NC}"
-echo "  │       auth_endpoint: prod/auth                                  │"
-echo "  │                                                                 │"
-echo "  └─────────────────────────────────────────────────────────────────┘"
-echo ""
+# ── Delegate to the platform's oauth-proxy deploy.sh ───────────────────────
+# It cd's into its own dir, sam build/deploy's ./template.yaml under STACK_NAME
+# (defaults FUNCTION_NAME=STACK_NAME, GITHUB_SCOPE=repo,user,workflow), and
+# prints the ApiUrl to put in _config.yml cms.oauth_base_url.
+exec bash "$PLATFORM_DEPLOY"
