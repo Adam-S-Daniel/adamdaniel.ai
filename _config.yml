@@ -43,6 +43,12 @@ collections:
   projects:
     output: false  # Set to true to restore individual /projects/<slug>/ pages.
     permalink: /projects/:slug/
+  # Tools — small self-contained interactive things (each entry embeds a
+  # static app from /assets/tools/<slug>/). Listed at /tools/, individual
+  # pages at /tools/<slug>/. Editable in the CMS via admin/collections.site.yml.
+  tools:
+    output: true
+    permalink: /tools/:slug/
   tags:
     output: true
     permalink: /tags/:slug/
@@ -65,6 +71,11 @@ defaults:
       type: "projects"
     values:
       layout: "project"
+  - scope:
+      path: ""
+      type: "tools"
+    values:
+      layout: "tool"
   - scope:
       path: ""
       type: "tags"

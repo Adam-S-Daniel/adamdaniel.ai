@@ -1,0 +1,37 @@
+---
+layout: default
+---
+<div class="container">
+  <article class="post tool">
+    <header class="post-header">
+      <h1>{{ page.title }}</h1>
+      {% if page.description %}
+      <p class="subtitle">{{ page.description }}</p>
+      {% endif %}
+      <div class="post-meta tool-links">
+        {% if page.embed_src %}
+        <a class="project-link" href="{{ page.embed_src | relative_url }}" target="_blank" rel="noopener">Open full screen ↗</a>
+        {% endif %}
+        {% if page.source_url %}
+        <a class="project-link" href="{{ page.source_url }}" target="_blank" rel="noopener noreferrer">Source ↗</a>
+        {% endif %}
+      </div>
+    </header>
+
+    {% if page.embed_src %}
+    <div class="tool-embed" style="margin: 1.5rem 0;">
+      <iframe
+        src="{{ page.embed_src | relative_url }}"
+        title="{{ page.title }}"
+        loading="lazy"
+        style="width:100%; height:85vh; min-height:560px; border:1px solid var(--border); border-radius:8px; background:#FDFBF7;"></iframe>
+    </div>
+    {% endif %}
+
+    {% if content != "" %}
+    <div class="post-content">
+      {{ content }}
+    </div>
+    {% endif %}
+  </article>
+</div>
