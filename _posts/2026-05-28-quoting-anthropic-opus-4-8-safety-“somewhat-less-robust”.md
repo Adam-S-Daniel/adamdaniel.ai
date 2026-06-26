@@ -1,6 +1,8 @@
 ---
 title: "Quoting Anthropic: Opus 4.8 Safety “somewhat less robust”"
 date: 2026-05-28 15:35:00 -0400
+tags:
+  - quotes
 published: true
 test_fixture: false
 ---
