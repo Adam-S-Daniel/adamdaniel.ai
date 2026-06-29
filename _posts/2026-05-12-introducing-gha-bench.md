@@ -19,11 +19,19 @@ A panel of judges (Google Gemini and Claude Haiku) then [evaluates](https://gith
 
 The table below now includes **Opus 4.8** — at medium, high, and xhigh effort, plus a new "ultra" effort that layers in multi-agent orchestration — alongside Opus 4.7, Sonnet 4.6, Opus 4.6, and Haiku 4.5. Every row is graded on a single shared curve pooled across all runs, so the letter grades are comparable across models.
 
-Adjust the sliders according to your priorities.
+Pick a preset, or adjust the sliders yourself.
 
 <!-- html-embed:start -->
 <div class="post-embed">
 <div class="bws-widget">
+  <div class="bws-presets">
+    <span class="bws-presets-label">Presets:</span>
+    <button type="button" class="bws-preset" data-preset="balanced">Balanced</button>
+    <button type="button" class="bws-preset" data-preset="quality">Max quality</button>
+    <button type="button" class="bws-preset" data-preset="qpd">Quality on a budget</button>
+    <button type="button" class="bws-preset" data-preset="budget">Cheapest</button>
+    <button type="button" class="bws-preset" data-preset="speed">Fastest</button>
+  </div>
   <div class="bws-sliders">
     <div class="bws-slider-row">
       <label class="bws-label" for="bws-duration">Duration</label>
@@ -65,6 +73,26 @@ Adjust the sliders according to your priorities.
 .bws-widget { box-sizing: border-box; max-width: 100%; }
 .bws-widget *, .bws-widget *::before, .bws-widget *::after { box-sizing: inherit; }
 .bws-widget .bws-sliders { margin-bottom: 1em; }
+.bws-widget .bws-presets {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.4em;
+  align-items: center;
+  margin-bottom: 0.9em;
+}
+.bws-widget .bws-presets-label { font-weight: 600; }
+.bws-widget .bws-preset {
+  cursor: pointer;
+  padding: 0.25em 0.75em;
+  border: 1px solid;
+  border-radius: 999px;
+  background: transparent;
+  color: inherit;
+  font: inherit;
+  line-height: 1.4;
+}
+.bws-widget .bws-preset:hover { background: rgba(127, 127, 127, 0.15); }
+.bws-widget .bws-preset.bws-active { font-weight: 700; background: rgba(127, 127, 127, 0.22); }
 .bws-widget .bws-slider-row {
   display: grid;
   grid-template-columns: minmax(8em, 14em) 1fr 4em;
@@ -259,9 +287,41 @@ Adjust the sliders according to your priorities.
     render();
   }
 
+  function clearActivePreset() {
+    var btns = document.querySelectorAll(".bws-preset");
+    for (var i = 0; i < btns.length; i++) btns[i].classList.remove("bws-active");
+  }
+
   KEYS.forEach(function (k) {
-    el(k).addEventListener("input", function () { redistribute(k); });
+    el(k).addEventListener("input", function () { clearActivePreset(); redistribute(k); });
   });
+
+  // Preset weightings (each sums to 100). Keys: duration, cost, tests, workflow.
+  var PRESETS = {
+    balanced: { duration: 25, cost: 25, tests: 25, workflow: 25 },
+    quality:  { duration: 10, cost: 10, tests: 45, workflow: 35 },
+    qpd:      { duration: 10, cost: 35, tests: 35, workflow: 20 },
+    budget:   { duration: 15, cost: 55, tests: 15, workflow: 15 },
+    speed:    { duration: 55, cost: 15, tests: 15, workflow: 15 }
+  };
+  function applyPreset(name) {
+    var p = PRESETS[name];
+    if (!p) return;
+    KEYS.forEach(function (k) { el(k).value = p[k]; });
+    var btns = document.querySelectorAll(".bws-preset");
+    for (var i = 0; i < btns.length; i++) {
+      btns[i].classList.toggle("bws-active", btns[i].getAttribute("data-preset") === name);
+    }
+    render();
+  }
+  (function () {
+    var btns = document.querySelectorAll(".bws-preset");
+    for (var i = 0; i < btns.length; i++) {
+      btns[i].addEventListener("click", function () {
+        applyPreset(this.getAttribute("data-preset"));
+      });
+    }
+  })();
 
   render();
 })();
