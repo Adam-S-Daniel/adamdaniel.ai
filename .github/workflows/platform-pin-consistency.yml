@@ -24,6 +24,6 @@ permissions:
 
 jobs:
   pin-consistency:
-    uses: Adam-S-Daniel/cms-platform/.github/workflows/platform-pin-consistency.yml@v0.1.42
+    uses: Adam-S-Daniel/cms-platform/.github/workflows/platform-pin-consistency.yml@v0.1.43
     with:
-      platform_ref: v0.1.42
+      platform_ref: v0.1.43
