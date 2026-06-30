@@ -278,7 +278,6 @@ Folders grouped by purpose. Anything not listed is incidental.
 | Path | Holds |
 | --- | --- |
 | `_config.yml`, `Gemfile` | Jekyll configuration and Ruby dependencies. |
-| `_plugins_test/` | Plain-Ruby workflow-shape lints (`finalize_gate_test.rb`, `required_check_stubs_paths_test.rb`). The Jekyll plugins themselves are gem-delivered by cms-platform. |
 | `_data/` | Build-time data (e.g. `reading_times.yml`). |
 
 ### Tests

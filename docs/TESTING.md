@@ -115,8 +115,8 @@ fires `select`/`unit`/`parity`/`e2e (1)`/`finalize` — yet branch
 protection *requires* them, so the PR would block forever.
 `required-check-stubs.yml` fires on the byte-mirror of that
 `paths-ignore:` list and emits trivial green jobs of the same names.
-`_plugins_test/required_check_stubs_paths_test.rb` fails the build if the
-two lists drift.
+Upstream, cms-platform's `e2e/required-check-stub-paths.test.js` covers
+this byte-mirror invariant so the two lists can't drift unnoticed.
 
 ### Footguns (verified)
 
@@ -124,9 +124,10 @@ two lists drift.
   `required-check-stubs.yml` historically only stubbed
   `select/unit/parity/e2e (1)/finalize`, so a docs/tooling-only PR sat
   blocked on `e2e-admin` ("Expected — waiting"). An `e2e-admin` stub
-  job was added and `_plugins_test/required_check_stubs_paths_test.rb`
-  now asserts *every* path-filtered required context (not just paths
-  parity) has a stub job, so this class of gap can't recur silently.
+  job was added, and the stub-path mirror invariant — now enforced
+  upstream by cms-platform's `e2e/required-check-stub-paths.test.js` —
+  keeps *every* path-filtered required context (not just paths parity)
+  covered by a stub job, so this class of gap can't recur silently.
 - **`_sass/**` has no PR coverage** — not a fanout pattern, no
   `SPEC_RULES` match, absent from `visual-regression.yml`'s `paths:`. A
   Sass-only PR runs the baseline only, no visual signal.
@@ -167,13 +168,13 @@ downstream depends on. Listed in `select-specs.js`'s `ALWAYS_RUN`.
 
 ### B. Workflow-shape lints (Ruby, no browser)
 
-| File | Tests | Catches |
-| --- | --- | --- |
-| [`_plugins_test/finalize_gate_test.rb`](../_plugins_test/finalize_gate_test.rb) | — | Workflow-shape lint: the `finalize` job + ruleset together gate e2e shards 2-4. |
-| [`_plugins_test/required_check_stubs_paths_test.rb`](../_plugins_test/required_check_stubs_paths_test.rb) | — | Workflow-shape lint: required-check-stub paths mirror `e2e-tests.yml`'s `paths-ignore`. |
-
-The Jekyll plugin unit tests (slug normalisation, etc.) and the OAuth-proxy
-Lambda tests are now owned upstream by **cms-platform** (gem theme/spec + the
+The plain-Ruby workflow-shape lints that used to live in `_plugins_test/`
+have been retired — nothing in this thin-caller consumer ran them. Their
+invariants are now owned upstream by **cms-platform**: the required-check-stub
+path mirror is covered by `e2e/required-check-stub-paths.test.js`, and the
+`finalize`-gate shape is asserted by the platform's own e2e-tests workflow
+suite. The Jekyll plugin unit tests (slug normalisation, etc.) and the
+OAuth-proxy Lambda tests are likewise owned upstream (gem theme/spec + the
 platform `oauth-proxy/`), not vendored or run here.
 
 ### C. Public-site DOM specs (browser, all 8 projects)
@@ -289,10 +290,6 @@ ALWAYS-RUN (no browser):
   visual-change-guard.spec.js     snapshot updates bounded           1 test
   select-specs.test.js            selector logic                    14 tests
   visual-regression-skip-review   workflow YAML                      5 tests
-
-WORKFLOW-SHAPE LINTS (Ruby):
-  _plugins_test/finalize_gate_test.rb              finalize merge gate
-  _plugins_test/required_check_stubs_paths_test.rb stub paths mirror
 
 PUBLIC SITE (browser, 8 projects):
   blog-post.spec.js               post layout DOM                    3 tests
