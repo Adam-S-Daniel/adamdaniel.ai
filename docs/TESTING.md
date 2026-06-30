@@ -74,7 +74,7 @@ lane (`TEST_LANE=local` drives `e2e`/`e2e-admin`, `TEST_LANE=real` drives
 | Fanout file (`_layouts/`, `_includes/`, `_config.yml`, `assets/css/`, `_plugins/`, `Gemfile*`, `package*.json`, `e2e/base.js`, `playwright*.config.js`, `.github/workflows/e2e-tests.yml`) | `all` | full 8-project matrix; on the **real** lane this is *not* `all` but a subset of every `@lane:real` spec |
 | A changed `e2e/*.spec.js`/`*.test.js` | `subset` | that spec adds itself (then lane-filtered) |
 | Path matches a `SPEC_RULES` entry (e.g. `_posts/**` → `cms-smoke`, `blog-post`, …) | `subset` | the matched specs |
-| Docs-only (`README.md`, `AGENTS.md`, `docs/`, `.agents/skills/`) | `skip` | baseline only |
+| Docs-only (`README.md`, `AGENTS.md`, `docs/`) | `skip` | baseline only |
 | No rule matched / only baseline survivors | `skip` | 1-shard baseline |
 
 The `scope=skip` baseline run executes only `compute-visual-diffs.test.js`,
@@ -131,9 +131,9 @@ this byte-mirror invariant so the two lists can't drift unnoticed.
 - **`_sass/**` has no PR coverage** — not a fanout pattern, no
   `SPEC_RULES` match, absent from `visual-regression.yml`'s `paths:`. A
   Sass-only PR runs the baseline only, no visual signal.
-- **Large tooling PRs** (`tests/**`, `scripts/bootstrap.sh`,
-  `.githooks/**`) fire e2e-tests for real but collapse to a 1-shard
-  baseline — green gate, near-zero behavioural coverage.
+- **Large tooling PRs** (`.githooks/**`, `scripts/**`) fire e2e-tests
+  for real but collapse to a 1-shard baseline — green gate, near-zero
+  behavioural coverage.
 - **`parity` is required but has no `needs:`** and runs against live
   prod; if `adamdaniel.ai` is degraded, every PR's `parity` fails
   independent of the diff.
@@ -327,7 +327,7 @@ Is the thing you're testing a YAML / JSON / template invariant?
   → cms-config.spec.js (or a new always-run structural spec)
 
 Is it a pure function in Ruby / Python?
-  → a tests/*.py case (or, for gem-owned Jekyll plugins, upstream in cms-platform's theme/spec/)
+  → upstream in cms-platform (its `theme/spec/` for gem-owned Jekyll plugins, or its own test suite) — this consumer vendors no local unit-test suite.
 
 Does it render to a public-site URL?
   → blog-post.spec.js / tags.spec.js / a new <feature>.spec.js

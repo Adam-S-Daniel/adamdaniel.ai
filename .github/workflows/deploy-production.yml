@@ -20,7 +20,6 @@ on:
       - 'CLAUDE.md'
       - 'docs/**'
       - 'e2e/**'
-      - 'tests/**'
       - 'infrastructure/**'
       - 'oauth-proxy/**'
       - 'scripts/**'
@@ -36,7 +35,7 @@ permissions:
 
 jobs:
   deploy:
-    uses: Adam-S-Daniel/cms-platform/.github/workflows/deploy-production.yml@v0.1.45
+    uses: Adam-S-Daniel/cms-platform/.github/workflows/deploy-production.yml@v0.1.46
     with:
       apex_domain: adamdaniel.ai
       prod_bucket: adamdaniel-ai-production

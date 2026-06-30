@@ -1,5 +1,6 @@
-# Thin caller — weekly skills sync from the platform. Pin platform_ref to a tag.
-name: Skills sync
+# Thin caller — weekly pre-commit guard sync from the platform. Pin platform_ref to a tag.
+# Delivers + keeps current the secrets-scan + lint-staged pre-commit guards (issue #116).
+name: Dev-hooks sync
 on:
   schedule:
     - cron: "0 6 * * 1" # Mondays 06:00 UTC
@@ -9,7 +10,7 @@ permissions:
   pull-requests: write
 jobs:
   sync:
-    uses: Adam-S-Daniel/cms-platform/.github/workflows/skills-sync.yml@v0.1.46
+    uses: Adam-S-Daniel/cms-platform/.github/workflows/dev-hooks-sync.yml@v0.1.46
     with:
       platform_ref: v0.1.46
     secrets:
