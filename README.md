@@ -141,7 +141,7 @@ Most workflows declare path filters on their triggers so diffs which can't possi
 | `visual-regression.yml` | `paths` (positive list) | Runs only on template / styling / admin / pipeline-tooling changes. **CMS-managed content paths are intentionally excluded** (`_posts/**`, `_tags/**`, `_projects/**`, `pages/**`, `_e2e/**`, `assets/images/uploads/**`) — content-only PRs (the kind every CMS Save produces) guarantee pixel diffs by design, so the regression video adds runner time without signal. Mixed PRs that also touch a template path still trigger the workflow. |
 | `e2e-tests.yml` | `paths-ignore` (PR + push to `main`) | Coarse-skip for docs-only / unrelated-CI-only diffs. `e2e/select-specs.js` still does the fine-grained "which specs to run" cut at runtime for diffs that *do* affect anything testable. |
 | `cms-publish-loop-host.yml`, `cms-publish-loop-prod.yml` | `paths` (positive, PR only) | Workflow-level path filter — these specs are not in the required-status-checks list, so workflow-level filtering is safe (no missing-check trap). The schedule/dispatch triggers always fire regardless of paths. |
-| `skills-sync.yml`, `dependabot-comment-sync.yml` | `paths` (positive) | Each filtered to its actual surface — the skills mirror tree and the workflow files + comment-sync script respectively. |
+| `dependabot-comment-sync.yml` | `paths` (positive) | Filtered to its actual surface — the workflow files + comment-sync script. (`skills-sync.yml` runs on schedule/dispatch only and is a no-op here — no local skills mirror.) |
 
 `deploy-preview.yml` is intentionally **not** path-filtered — its `closed`-action teardown step needs to run on every PR close, and `paths-ignore` would also skip teardown, leaking preview deployments. The build cost is moderate (~2-3 min) and the safety win of always tearing down the per-PR S3 prefix outweighs the savings.
 
@@ -175,8 +175,8 @@ Required secrets:
 ```bash
 # One-shot setup: installs everything needed to run the full test stack
 # locally on Debian/Ubuntu/WSL2 — apt packages (libnspr4, libnss3, ffmpeg,
-# ruby-full, python3), Bundler + Gemfile gems, npm deps, Playwright
-# browser binaries, and a project-local pytest venv. Idempotent.
+# ruby-full, python3), Bundler + Gemfile gems, npm deps, and Playwright
+# browser binaries. Idempotent.
 bash scripts/setup-test-environment.sh
 
 # Build and serve
@@ -194,8 +194,6 @@ node e2e/select-specs.js | jq -r '.files[]?' | xargs npx playwright test
 # Decap admin smoke test (boots decap-server + a static fileserver)
 npx playwright test e2e/cms-smoke.spec.js --project chromium-desktop
 
-# Other suites
-python3 -m pytest tests/ -v                              # Python test suite
 ```
 
 The Jekyll plugin unit tests and the OAuth-proxy Lambda tests are owned upstream

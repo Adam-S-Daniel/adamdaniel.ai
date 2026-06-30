@@ -20,7 +20,6 @@ on:
       - 'CLAUDE.md'
       - 'docs/**'
       - 'e2e/**'
-      - 'tests/**'
       - 'infrastructure/**'
       - 'oauth-proxy/**'
 
