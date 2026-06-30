@@ -33,13 +33,13 @@ permissions:
 
 jobs:
   visual-regression:
-    # Pinned to cms-platform v0.1.46 (single-version lockstep). Carries the
+    # Pinned to cms-platform v0.1.47 (single-version lockstep). Carries the
     # always-report + screenshot-path + serve-path fixes — the PR side renders
     # the real built site, so no-change PRs come back ~0 diffs and
     # approve-regression auto-passes. platform_ref MUST match the @<ref> pin.
-    uses: Adam-S-Daniel/cms-platform/.github/workflows/visual-regression.yml@v0.1.46
+    uses: Adam-S-Daniel/cms-platform/.github/workflows/visual-regression.yml@v0.1.47
     with:
-      platform_ref: v0.1.46
+      platform_ref: v0.1.47
     secrets:
       # Optional — drop any the site doesn't use. The AWS steps no-op when
       # PREVIEW_BUCKET (a repo var) is unset; the CloudFront invalidation
