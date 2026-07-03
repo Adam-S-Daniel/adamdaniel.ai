@@ -23,7 +23,7 @@ The proximate cause is almost always **another** PR upstream:
 In each case an operator triaging the failure has to manually run
 `gh pr list`, eyeball `mergeable_state`, cross-reference workflow runs,
 and decide whether to wait, rebase, or kick a workflow. The
-[`cms-stuck-pr-triage`](../../.agents/skills/cms-stuck-pr-triage/SKILL.md)
+`cms-stuck-pr-triage` (now a cms-platform skill)
 skill captures that pattern, but it still requires a human or an agent
 to read the failed-test comment, recognize the symptom, and walk the
 diagnosis manually. The user's stored feedback says it explicitly: when
@@ -203,7 +203,7 @@ visible but don't compete with the real failure for attention.
 ### Extend the cms-stuck-pr-triage skill instead
 
 The existing
-[`cms-stuck-pr-triage`](../../.agents/skills/cms-stuck-pr-triage/SKILL.md)
+`cms-stuck-pr-triage` (now a cms-platform skill)
 skill already encodes the manual diagnosis steps. We could leave it
 there and rely on agents reading the skill on each incident. Rejected
 because the skill helps humans/agents triage *after* they notice the
@@ -280,8 +280,9 @@ workflow-level layer remains the outer-Playwright-timeout catch-all.
   whose `canonical()` and `HEAD_REF_ALLOWLIST` the diagnostic re-uses
   to stay in sync.
 - `e2e/with-stuck-pr-diagnostic.js` — the in-spec wrapper.
-- `.agents/skills/cms-stuck-pr-triage/SKILL.md` — the manual-triage
-  companion skill; the diagnostic is the "look here first" shortcut.
+- the cms-platform `cms-stuck-pr-triage` skill — the manual-triage
+  companion (platform-delivered; no longer vendored here); the diagnostic
+  is the "look here first" shortcut.
 - [Decap CMS editorial workflow](https://decapcms.org/docs/editorial-workflows/)
   — context on why this repo has so many short-lived `cms/<col>/<slug>`
   PRs in flight at once, which is the population the diagnostic
