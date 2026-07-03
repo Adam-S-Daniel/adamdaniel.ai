@@ -932,7 +932,7 @@ node scripts/generate-showcase.js                           # produces before/af
 
 ## Failure-comment composite action
 
-Workflow logs are not directly readable by the Claude agent (no `gh` CLI, the GitHub MCP server has no `actions/runs/.../logs` tool, and unauthenticated `curl` to `api.github.com/.../actions/runs/.../logs` returns 403). To make CI failures triage-able from inside a PR conversation, every Playwright-running workflow forwards its captured log to a shared composite action:
+In environments with no pre-authenticated `gh` cli, workflow logs are not directly readable (the GitHub MCP server has no `actions/runs/.../logs` tool and unauthenticated `curl` to `api.github.com/.../actions/runs/.../logs` returns 403). To make CI failures triage-able from inside a PR conversation, every Playwright-running workflow forwards its captured log to a shared composite action:
 
 ```yaml
 # Caller-side gating — failure() / success() at the workflow
