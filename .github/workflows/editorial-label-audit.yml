@@ -2,7 +2,7 @@ name: Editorial label audit
 # Daily check that no editorial-workflow PR is missing its decap-cms/<status>
 # label — i.e. /admin (prod + every preview) won't show the persistent Decap
 # "adding labels to N of your Editorial Workflow entries" dialog. The platform
-# owns the audit logic; this thin caller schedules it. Since v0.1.49 the audit
+# owns the audit logic; this thin caller schedules it. Since v0.1.50 the audit
 # SELF-HEALS (reusable default fix: true): it applies the missing label itself
 # — hence pull-requests: write — so a red run means "a fix didn't stick"
 # (needs a human), no longer "somebody must add a label". Detect-only red runs
@@ -18,6 +18,6 @@ permissions:
 
 jobs:
   audit:
-    uses: Adam-S-Daniel/cms-platform/.github/workflows/editorial-label-audit.yml@v0.1.49
+    uses: Adam-S-Daniel/cms-platform/.github/workflows/editorial-label-audit.yml@v0.1.50
     with:
-      platform_ref: v0.1.49
+      platform_ref: v0.1.50
