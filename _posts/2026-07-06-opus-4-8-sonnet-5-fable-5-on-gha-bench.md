@@ -1,22 +1,27 @@
 ---
-title: "Opus 4.8 on GHA-bench: the new quality leader, at a price"
-slug: opus-4-8-on-gha-bench
-date: 2026-06-28 12:00:00 -0400
-excerpt: Anthropic's Opus 4.8 is now the strongest model on GHA-bench at writing
-  and testing GitHub Actions — and also the slowest and most expensive. Here's the
-  shape of the tradeoff.
+title: "Opus 4.8, Sonnet 5, and Fable 5 on GHA-bench: the new leaderboard"
+slug: opus-4-8-sonnet-5-fable-5-on-gha-bench
+date: 2026-07-06 12:00:00 -0400
+excerpt: GHA-bench now covers three new Anthropic models. Opus 4.8 is still the
+  quality leader, Fable 5 buys near-top quality at a premium, and Sonnet 5
+  stretches from bargain to contender depending on effort. Explore the tradeoffs
+  with the interactive table.
 featured_image: /assets/images/uploads/img_9581.png
 published: false
 ---
-[GHA-bench](https://github.com/Adam-S-Daniel/GHA-bench) — my benchmark for how well coding agents author and test GitHub Actions — now includes Anthropic's **Opus 4.8**. The short version: it's the best model I've measured at this task, and also the slowest and priciest. Here's the shape of the tradeoff.
+[GHA-bench](https://github.com/Adam-S-Daniel/GHA-bench) — my benchmark for how well coding agents author and test GitHub Actions — has picked up **three new Anthropic models** since [the original post](/introducing-gha-bench): **Opus 4.8**, **Sonnet 5**, and **Fable 5**, the first of the new Claude 5 family and a tier that sits above Opus. The short version: Opus 4.8 at its highest efforts is still the best I've measured at this task, Fable 5 gets close to that quality in half the wall-clock — for a premium price — and Sonnet 5 stretches from "cheapest usable" to "genuine contender" depending on how much effort you buy.
 
-The run is a full sweep: 7 tasks × 5 scripting languages × 4 effort levels = 140 agent runs, each graded by a panel of judges (Google Gemini and Claude Haiku) on test comprehensiveness and code quality.
+The data is three full sweeps, graded by the same panel of judges (Google Gemini and Claude Haiku) on test comprehensiveness and code quality, and pooled with the earlier Opus-4.7-era baselines onto one shared grading curve:
+
+- **Opus 4.8** — 7 tasks × 5 scripting languages × 4 effort levels (medium / high / xhigh / the new "ultra") = 140 runs
+- **Sonnet 5** — 100 runs across three effort levels (low / medium / high)
+- **Fable 5** — 7 tasks × 4 languages × 2 effort levels (medium / high) = 56 runs
 
 **How to read the numbers:** duration and cost figures here are *geometric* means — outlier-damped, so one unusually slow run can't dominate a cell — and runs that hit the 30-minute timeout count against the duration statistics at their recorded wall clock (a ≥ marks a measurement the timeout capped). The tables also pool the benchmark's two PowerShell variants (script-file vs. inline-tool) into a single `pwsh` column; in this harness they turned out to be replicates of each other.
 
 ## Opus 4.8 tops the quality charts
 
-Across the board, Opus 4.8 produces the strongest **tests** and the strongest **deliverable code** of any model in the benchmark — including the newer Sonnet 5 and Fable 5 runs that have joined the dataset since this comparison was first drawn up. At high, xhigh, and the new "ultra" effort it earns A‑/A grades for test quality in nearly every language — for example A (4.6) on the default language at ultra effort, and A (4.5) for PowerShell at high. The two judges, despite coming from different labs, agree on the ranking (Spearman rank correlations of +0.66 to +0.85 across the model and language-by-model rankings), so this isn't one judge's quirk.
+Across the board, Opus 4.8 produces the strongest **tests** of any model in the benchmark — the newcomers included — and deliverable code at the top of the board (only Fable 5 at high effort matches it on workflow craft). At high, xhigh, and the new "ultra" effort it earns A‑/A grades for test quality in nearly every language — for example A (4.6) on the default language at ultra effort, and A (4.5) for PowerShell at high. The two judges, despite coming from different labs, agree on the ranking (Spearman rank correlations of +0.66 to +0.85 across the model and language-by-model rankings), so this isn't one judge's quirk.
 
 ## …but you pay for it
 
@@ -26,7 +31,7 @@ If you want most of Opus 4.8's quality without the worst of the bill, **medium e
 
 ## The new "ultra" effort
 
-This run introduces a fourth effort level — **"ultra"** — which layers multi-agent orchestration on top of the highest reasoning setting. It tops the test-quality charts (it's the single best column for tests) but is the most expensive option on the board, and it's Opus‑4.8‑only, so there's no older-model baseline to compare it against yet. Treat it as "spend more for the most thorough tests," not as a free win.
+The Opus 4.8 sweep introduces a fourth effort level — **"ultra"** — which layers multi-agent orchestration on top of the highest reasoning setting. It tops the test-quality charts (it's the single best column for tests) but is the most expensive option on the board, and it's Opus‑4.8‑only, so there's no older-model baseline to compare it against yet. Treat it as "spend more for the most thorough tests," not as a free win.
 
 ## It iterates a lot — but it isn't getting stuck
 
@@ -38,9 +43,28 @@ Opus 4.8 writes **more and denser tests** than its predecessor, and it shows: it
 
 So read "~2× the traps" as **"iterates ~2× more granularly," not "fails ~2× as often."** A good chunk of the gap is also a measurement artifact (the way 4.8 prefixes its shell commands defeats the detector's de-duplication) plus a Claude Code version difference between the two runs, not the model spinning its wheels. The [full investigation](https://github.com/Adam-S-Daniel/GHA-bench/blob/main/results/analysis/opus48-trap-investigation_2026-06-28.md) has the details.
 
+## Sonnet 5: pick your effort, pick your product
+
+Sonnet 5 is really three different products depending on where you set the effort knob:
+
+- **Low effort is the budget pick.** Typical runs land in 6–9 minutes for **$0.60–$1.20** — the cheapest thing on the board after Haiku 4.5 — but the tests it writes are thin: C-range everywhere, down to D+ in TypeScript. Fine for scaffolding a workflow; don't trust the test suite it leaves behind.
+- **Medium is the middle path** — B-range speed and cost, B-range quality. Unremarkable in both directions.
+- **High effort turns Sonnet 5 into a genuine quality contender** — A‑ tests in PowerShell (4.2) and TypeScript (4.3), in Opus 4.8 territory — but it pays in time: 13–25 minutes typical, and it is the most timeout-prone configuration in the benchmark. **Six of its 35 high-effort runs hit the 30-minute wall** (five of them in PowerShell), and those timeouts now count against its duration stats — that's what the ≥30min "slowest run" figures in the table are.
+
+## Fable 5: near-top quality, premium bill
+
+Fable 5 is the first of Anthropic's Claude 5 family — a new tier above Opus, priced accordingly at **double Opus rates** ($10 / $50 per million tokens vs. $5 / $25). On this benchmark it mostly earns it:
+
+- At **medium** effort it writes A-grade tests in three of the four languages — A (4.5) in PowerShell, A (4.4) in TypeScript, A‑ (4.1) in bash — in 8–15 minutes. That's Opus-4.8-at-ultra-class test quality at roughly half the wall clock.
+- **High** effort adds time and money ($5.47–$5.98 typical) without adding much: the grades barely move. Medium is clearly its value point.
+- It's the only new model with a **clean sheet**: zero failures and zero timeouts across all 56 runs.
+- One quirk worth knowing: on the free-choice ("default") language its test quality drops a full letter grade (B‑ 3.2, at both efforts) versus the pinned languages. Tell it what language to use and it shines; let it choose and it coasts.
+
+The catch is the bill: D/D‑ on the cost curve in every language. If budget matters, Opus 4.8 at medium effort buys a similar test-quality profile for roughly half the price (with bash as its own weak spot).
+
 ## Which should you use? Try it yourself
 
-Pick a preset, or drag the sliders to weight speed, cost, test quality, and code quality for *your* situation — the table re-ranks every model / effort / language combination live. (Same widget as in [the original GHA-bench post](/introducing-gha-bench), now with Opus 4.8, the new "ultra" effort, and the Sonnet 5 and Fable 5 runs that have landed since. Hover or long-press a Duration cell to see that combination's slowest run; † marks combos where a run hit the 30-minute timeout.)
+There's no single answer — so weight it yourself. Pick a preset (**Balanced**, **Max quality**, **Quality on a budget**, **Cheapest**, **Fastest**) or drag the sliders to weight speed, cost, test quality, and code quality for *your* situation, and the table re-ranks all 76 model / effort / language combinations live. Hover or long-press a Duration cell to see that combination's slowest run; † marks combos where a run hit the 30-minute timeout.
 
 <!-- html-embed:start -->
 <div class="post-embed">
@@ -377,4 +401,4 @@ The complete data lives in the [cross-run report](https://github.com/Adam-S-Dani
 
 *\* The Gemini judge now runs via Google's Antigravity (`agy`) CLI, which replaced the retired Gemini CLI in June 2026. It grades about 0.3 points stricter on a 1–5 scale than the prior harness (overall correlation r ≈ 0.90), so Opus 4.8's quality grades are, if anything, very slightly conservative relative to the older models'.*
 
-*\*\* The two runs being compared used different Claude Code versions (2.1.112–132 across the pooled Opus 4.7 rows, 2.1.193/195 for Opus 4.8). A clean, model-only comparison would re-run both on the same version; that's on the to-do list.*
+*\*\* The runs being compared used different Claude Code versions (2.1.112–132 across the pooled Opus 4.7 rows; 2.1.193/195 for Opus 4.8; 2.1.197/198 for Sonnet 5; 2.1.198 for Fable 5). A clean, model-only comparison would re-run everything on one version; that's on the to-do list.*
