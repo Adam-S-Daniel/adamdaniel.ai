@@ -29,13 +29,22 @@ trailing-slash redirects (e.g. `/admin` → `/admin/`) don't leak the
 internal key space. Pages on preview and prod share the same
 root-relative URL structure (no `/pr-N/` in any visible URL).
 
-**`admin/` is GEM-DELIVERED (do not re-vendor the machinery).** As of cms-platform v0.1.4 the Decap admin UI + its `config*.base.yml` templates ship inside the `cms-platform-theme` gem (pinned in `Gemfile` / `platform.lock`); the gem's Decap render hook copies that machinery into `_site/admin/` and renders `_site/admin/config.yml` at build time. This repo therefore tracks **only the site-owned seam** `admin/collections.site.yml` (`.example` is the template) — the per-site collection list the render hook splices into the platform's base collections; the `admin/*.js` / `admin/*.base.yml` / `admin/index*.html` machinery is **no longer vendored here** (the full e2e harness moved to the platform too — `e2e/` is no longer tracked in this repo). To change the admin UI, edit it in **cms-platform** and ship a release; the sync path is a gem bump (`Gemfile` tag + `platform.lock`, via Dependabot). Do NOT copy admin machinery back into this repo — a re-vendored copy would shadow the gem and silently drift. Anything below that references in-repo `admin/config*.yml` or `e2e/cms-*.spec.js` describes the platform-owned source of truth, not files you edit here.
+**`admin/` is GEM-DELIVERED (do not re-vendor the machinery).** As of cms-platform v0.1.4 the Decap admin UI + its `config*.base.yml` templates ship inside the `cms-platform-theme` gem (pinned in `Gemfile` / `platform.lock`); the gem's Decap render hook copies that machinery into `_site/admin/` and renders `_site/admin/config.yml` at build time. This repo therefore tracks **only the site-owned seam TEMPLATE** `admin/collections.site.yml.example` — a contributor copies it to `admin/collections.site.yml` (untracked, not gitignored — the real seam file is local-only / never committed) to supply the per-site collection list the render hook splices into the platform's base collections; the `admin/*.js` / `admin/*.base.yml` / `admin/index*.html` machinery is **no longer vendored here** (the full e2e harness moved to the platform too — `e2e/` is no longer tracked in this repo). To change the admin UI, edit it in **cms-platform** and ship a release; the sync path is a gem bump (`Gemfile` tag + `platform.lock`, via Dependabot). Do NOT copy admin machinery back into this repo — a re-vendored copy would shadow the gem and silently drift. Anything below that references in-repo `admin/config*.yml` or `e2e/cms-*.spec.js` describes the platform-owned source of truth, not files you edit here.
 
 ## Environment / WSL
 
 - **No `sudo` in the non-interactive shell.** Do NOT run `sudo` commands inside the non-interactive bash session — they fail because no password prompt is available. Instead, output the `sudo` commands for the user to run manually in their own terminal.
 
 ## Key commands
+
+**Check out the platform e2e harness before running any Playwright command locally.**
+`scripts/setup-test-environment.sh` does NOT check out `.cms-platform/` or the e2e
+harness (verified: zero `cms-platform` matches in that script — it only installs apt
+packages, Bundler/Gemfile gems, npm deps, and Playwright browser binaries). Before
+`npx playwright test`, `e2e/select-specs.js`, or anything that resolves
+`.cms-platform/e2e/playwright.config.js` will work, separately check out
+`Adam-S-Daniel/cms-platform` at the `platform_ref` pinned in `platform.lock` into
+`.cms-platform/` yourself — matching what the CI reusable workflows do.
 
 ```bash
 # Local dev
@@ -118,8 +127,8 @@ vendored copy of the platform's and is out of scope.)
 | Collection | Folder | Type | Key fields |
 | --- | --- | --- | --- |
 | Posts | `_posts/` | folder | title, date, tags, excerpt, featured_image, published, publish_date, test_fixture (hidden) |
-| Tags | `_tags/` | folder | name, description |
-| Projects | `_projects/` | folder | title, technology, url_link, featured, images (gallery) |
+| Tags | `_tags/` | folder | name, description. The `_tags/` directory currently exists but is empty (only `.gitkeep` — no curated tag files checked in today); the Decap collection is still configured. |
+| Projects | `_projects/` | folder | title, technology, url_link, featured, images (gallery). The `_projects/` directory currently does not exist on disk at all in this repo checkout; the Decap collection still defines `_projects/` as a folder collection, so creating an entry (or the directory) works — only the on-disk directory is currently absent. |
 | Pages | `pages/` | folder | title, body, permalink, published (was `files:` until PR #33) |
 | E2E Canaries | `_e2e/` | folder | system collection used by `e2e/cms-publish-loop*.spec.js` and `e2e/cms-delete-published.spec.js`; URLs at `/e2e/canary-{post,page,project}/`. Excluded from feeds, sitemap, and listings; rendered with `noindex,nofollow`. The publish-loop tests drive admin actions against these stable, unadvertised entries and assert the result on the public site. Between runs the body is reset to a baseline so the URLs always show innocuous content. `create: true, delete: true`: both flags exist so the UI-driven delete spec can drive the full CRUD lifecycle without back doors — `create: true` lets the test seed its throw-away `canary-delete-<runId>.md` fixture via the editor's "+ New E2E Canary" button instead of `seedFixtureViaPr`; `delete: true` is what makes the "Delete published entry" menuitem render. The `[E2E TEST FIXTURES — DO NOT EDIT]` collection label is the convention-only guardrail against accidental editor-driven mutation. |
 
@@ -135,7 +144,7 @@ The earlier Sveltia CMS bundle silently ignored `publish_mode: editorial_workflo
 
 ### Atom feeds
 
-Per-tag Atom feeds at `/tags/<slug>/feed.xml` are generated by the gem-delivered `tag_feeds` Jekyll plugin (from cms-platform), mirroring `jekyll-feed`'s shape so the same readers parse both. The plugin is order-independent: it collects tags directly from posts rather than reading `site.config["all_tags"]` left by `auto_tag_pages.rb`, so it works whether `auto_tag_pages` runs before or after it. The feed XML body lives in `_layouts/atom_feed.xml`. The RSS icon is rendered by `_includes/feed-link.html`, mounted on `_layouts/default.html` (site-wide feed) and `_layouts/tag.html` (per-tag feed). The site-wide feed at `/feed.xml` continues to come from `jekyll-feed`.
+Per-tag Atom feeds at `/tags/<slug>/feed.xml` are generated by the gem-delivered `tag_feeds` Jekyll plugin (from cms-platform), mirroring `jekyll-feed`'s shape so the same readers parse both. The plugin is order-independent: it collects tags directly from posts rather than reading `site.config["all_tags"]` left by `auto_tag_pages.rb`, so it works whether `auto_tag_pages` runs before or after it. The feed XML body lives in the gem-delivered `_layouts/atom_feed.xml` (cms-platform theme, not vendored in this repo). The RSS icon is rendered by `_includes/feed-link.html`, mounted on `_layouts/default.html` (site-wide feed) and `_layouts/tag.html` (per-tag feed). The site-wide feed at `/feed.xml` continues to come from `jekyll-feed`.
 
 Editor-facing walkthrough: [`docs/CONTENT_GUIDE.md`](docs/CONTENT_GUIDE.md).
 
@@ -146,7 +155,7 @@ Editors get a WYSIWYG preview of the page they're editing without publishing. Th
 **Surfaces:**
 
 - `preview.md` → `/preview/` — a Jekyll page that uses `_layouts/preview.html`. Accepts `?collection=posts|pages|projects` to pick the layout shell.
-- `_layouts/preview.html` — hosts the three layout variants, picks one at runtime, and listens for draft content via `window.postMessage` and a `BroadcastChannel("adamdaniel-cms-preview")`.
+- The gem-delivered `_layouts/preview.html` (cms-platform theme, not vendored in this repo) — hosts the three layout variants, picks one at runtime, and listens for draft content via `window.postMessage` and a `BroadcastChannel("adamdaniel-cms-preview")`.
 - `admin/preview-bridge.js` — loaded after Decap in both `admin/index.html` and `admin/index-local.html`. Registers a `postSave` event listener with Decap's public API (`CMS.registerEventListener`) and broadcasts entry data on every save.
 
 **Flow:** editor opens `/preview/` in a second tab (or snaps it side-by-side with the admin) → edits in the CMS → hits Save → every open preview tab updates within a frame. Same-origin only: `BroadcastChannel` is origin-scoped and the `postMessage` listener rejects foreign origins.
@@ -227,12 +236,12 @@ Every language in the repo has a best-in-class linter + static-analyzer + style 
 
 | Language | Lint / style | Security / types | Config | Command |
 | --- | --- | --- | --- | --- |
-| JavaScript | ESLint 10 (flat) + Prettier | `eslint-plugin-security`, `eslint-plugin-no-unsanitized` | `eslint.config.js`, `.prettierrc.json` | `eslint "e2e/**/*.js" "admin/**/*.js" "scripts/*.js" "*.config.js"` + `prettier --check` |
-| Python | Ruff (lint + format) | Bandit, mypy | `pyproject.toml` (`[tool.ruff]`/`[tool.bandit]`/`[tool.mypy]`) | `ruff check` · `ruff format --check` · `mypy` · `bandit -r scripts tests -c pyproject.toml` |
-| Ruby | RuboCop (+performance) | — | `.rubocop.yml` | `rubocop` (standalone, Ruby ≥ 3.3 — see below) |
+| JavaScript | ESLint 10 (flat) + Prettier | `eslint-plugin-security`, `eslint-plugin-no-unsanitized` | `eslint.config.js`, `.prettierrc.json` | `eslint "e2e/**/*.js" "admin/**/*.js" "scripts/*.js" "*.config.js"` + `prettier --check` — note `e2e/**` is itself stale as a LOCAL target: `e2e/` is no longer tracked in this repo (the harness moved to cms-platform), so this command currently has nothing to lint under that glob either |
+| Python | Ruff (lint + format) | Bandit, mypy | `pyproject.toml` (`[tool.ruff]`/`[tool.bandit]`/`[tool.mypy]`) | `ruff check` · `ruff format --check` · `mypy` · `bandit -r scripts tests -c pyproject.toml` — this describes the PLATFORM-internal toolchain; there is no `pyproject.toml`, no `tests/` dir, and no `.py` files anywhere in this consumer repo today (`scripts/publish_scheduled_posts.py` is not tracked here either — it runs upstream in cms-platform, invoked by the `publish-scheduled-posts.yml` reusable). Nothing local for this toolchain to lint. |
+| Ruby | RuboCop (+performance) | — | `.rubocop.yml` | `rubocop` (standalone, Ruby ≥ 3.3 — see below) — mirrors the Python situation: zero `.rb` files exist in this repo (RuboCop's target Ruby surface, the Jekyll plugins/generators, is entirely gem-delivered now), so there is nothing local for it to lint either. |
 | Shell | shfmt | ShellCheck | inline directives | `shellcheck $(git ls-files '*.sh') .githooks/pre-commit` · `shfmt -i 2 -ci -bn -d ...` |
 | YAML / Actions | yamllint | actionlint (+shellcheck on `run:`) | — | `yamllint .github/` · `actionlint -ignore '...head_ref... is potentially untrusted'` |
-| CSS | Stylelint (standard) | — | `.stylelintrc.json` | `stylelint "assets/css/*.css" "admin/*.css"` |
+| CSS | Stylelint (standard) | — | `.stylelintrc.json` | `stylelint "assets/css/*.css" "admin/*.css"` — both targets are gem-delivered now (theme CSS ships via `cms-platform-theme`); neither `assets/css/` nor any `admin/*.css` exists in this repo, so — like the Python/Ruby rows above — there is currently nothing local for Stylelint to check. |
 | Markdown | markdownlint-cli2 | — | `.markdownlint.jsonc` + `.markdownlint-cli2.jsonc` | `markdownlint-cli2` |
 
 **Line width — 100 columns, house-wide.** The formatters that reflow code all target 100: Prettier (`printWidth: 100`, on top of the otherwise-standard config), Ruff (`line-length = 100`), and RuboCop (`Layout/LineLength: Max: 100`). `.editorconfig` carries `max_line_length = 100` as the editor hint. The 80-column default wrapped Playwright method chains onto 3-4 lines each and inflated the JS line count far past what the dedup pass removed; 100 keeps statements on one line without sprawling. **Markdown and YAML opt out** (`max_line_length = off`; yamllint `line-length: disable`; markdownlint `MD013: false`) — prose, long URLs/tables, and workflow `${{ }}` expressions / SHA-pin comments run longer by nature, and rewrapping them is pure churn. CSS has no line-length rule. When adding a new code language, set its formatter's width to 100 too.
@@ -252,7 +261,7 @@ Every language in the repo has a best-in-class linter + static-analyzer + style 
 
 **Repetition, dead code, constants.** The standardisation pass also de-duplicated within each language (e.g. e2e specs reuse `prodTarget()`/`previewTarget()` from `e2e/cms-host.js` rather than hardcoding hosts; the OAuth proxy's GitHub URLs/timeout are module constants), removed unused symbols (every linter's unused-import/var rule is on), and confirmed there are no orphan code files (all `_layouts`/`_includes` are referenced via `layout:`/`include`, all `scripts/` by a workflow or `package.json`). When adding code, prefer extending an existing shared helper/constant over copying.
 
-**Parse structured formats with a real parser — never hand-roll.** Tests and scripts that read GitHub Actions workflows, `action.yml`, or the Decap/Jekyll config YAML go through the [`yaml`](https://www.npmjs.com/package/yaml) library (JS) or `YAML.safe_load_file(..., aliases: true)` (Ruby), never a regex/line-scanner. The shared `e2e/workflow-yaml-utils.js` helpers (`parseYaml`, `jobs`, `runScripts`, `jobSubBlock`, `allStrings`, `events`) wrap the parser for the workflow-lint suite; structural assertions read the parsed object, and shell/JS/expression checks run against parser-extracted string values rather than grepping raw file text. GitHub enabled YAML anchors in workflows on 2025-09-18, so a line-based scanner now silently mis-reads aliased values — the parser resolves them. (The two exceptions that intentionally stay text-based: `scripts/sync-action-pin-comments.sh`, a comment-*preserving* `uses:` SHA-pin rewriter a structural parser would strip, and `e2e/cms-config-preview-delta.spec.js`, which locks the line-level diff a `sed` patch script produces. `scripts/secrets-scan.sh`'s single `GITLEAKS_VERSION:` grep and the front-matter field reads in a few e2e specs / `scripts/publish_scheduled_posts.py` also stay as targeted reads — surgical or zero anchor exposure.)
+**Parse structured formats with a real parser — never hand-roll.** Tests and scripts that read GitHub Actions workflows, `action.yml`, or the Decap/Jekyll config YAML go through the [`yaml`](https://www.npmjs.com/package/yaml) library (JS) or `YAML.safe_load_file(..., aliases: true)` (Ruby), never a regex/line-scanner. The shared `e2e/workflow-yaml-utils.js` helpers (`parseYaml`, `jobs`, `runScripts`, `jobSubBlock`, `allStrings`, `events`) wrap the parser for the workflow-lint suite; structural assertions read the parsed object, and shell/JS/expression checks run against parser-extracted string values rather than grepping raw file text. GitHub enabled YAML anchors in workflows on 2025-09-18, so a line-based scanner now silently mis-reads aliased values — the parser resolves them. (The two exceptions that intentionally stay text-based: `scripts/sync-action-pin-comments.sh`, a comment-*preserving* `uses:` SHA-pin rewriter a structural parser would strip, and `e2e/cms-config-preview-delta.spec.js`, which locks the line-level diff a `sed` patch script produces. `scripts/secrets-scan.sh`'s single `GITLEAKS_VERSION:` grep and the front-matter field reads in a few e2e specs also stay as targeted reads — surgical or zero anchor exposure. (`publish_scheduled_posts.py` is not a file in this repo at all anymore — it's platform-owned, invoked via the `publish-scheduled-posts.yml` reusable.))
 
 ## Workflow path-filtering rule
 
@@ -281,24 +290,37 @@ the verified footguns. Keep both in sync when you change path filters.
 
 | Workflow | Trigger | Path-filtering mechanism | Salient paths |
 | --- | --- | --- | --- |
-| `canary-prod.yml` | `schedule`, `workflow_dispatch` | n/a (cron-only) | n/a |
-| `claude.yml` | `issue_comment`, `pull_request_review_comment`, `pull_request_review`, `issues` | n/a (event-driven, gated on `@claude` mention) | n/a |
-| `cms-delete-published-preview.yml` | `workflow_dispatch` | n/a (dispatch-only — needs a live preview env to target) | n/a. `inputs.pr_number` selects the preview env; the spec self-skips unless `CMS_E2E_PAT` + `PR_NUMBER` + `PR_HEAD_REF` are set. NOT a required check (heavy loops stay off the merge path) |
-| `cms-editorial-workflow.yml` | `pull_request` | **none, intentionally** — required check on every feature-branch PR (see ruleset note); the validation is cheap (<2 min) so always-run is the right call | n/a |
-| `cms-publish-loop-host.yml` | `schedule`, `push` (main), `workflow_dispatch` | `paths` (positive, push to main) | `_e2e/canary-{post,page,project}.md`, `_posts/2024-01-02-e2e-unpublish-canary.md`, `admin/**`, `playwright.config.js`, `package*.json`, `_config.yml`, `_layouts/{canary,default}.html`, the workflow itself + sibling `{cms-editorial-workflow,deploy-production}.yml`. Runs **post-merge** (not per-PR — the spec drives a REAL prod mutation; firing it on every concurrent PR raced the shared canary and poisoned `canary-content.test.js` on every concurrent PR; PR #1067). **`e2e/**` is deliberately NOT salient**: spec/helper changes are validated by the daily cron, not synchronously. Schedule and dispatch always fire (no path filter); recursion is gated by a cheap **`recursion-gate` job** (shared `.github/actions/cms-recursion-gate` composite + single-source `e2e/cms-recursion-churn.js`) that **skips the heavy loop job when every file the push changed is this loop's own canary churn** — a changed-files decision, message-format independent, that replaced the old `publish: `/`head_ref` job-level `if` guard which Decap's `Update Post "…"` self-merge template structurally evaded (run 26108485428). Same pattern in the two sibling loops (`cms-publish-loop-prod.yml`, `cms-media-roundtrip.yml`); the structural wiring is lint-locked by `e2e/workflow-prod-loop-serialized.test.js` |
-| `cms-publish-loop-prod.yml` | `push` (main), `workflow_dispatch` | `paths` (positive, push to main) | `e2e/cms-publish-loop-prod-mutate.spec.js`, `e2e/{prod-mutate-fixture,cms-fixture-pr,decap-pat,github-actions-poll,base}.js`, `admin/**`, `playwright.config.js`, `package*.json`, `_config.yml`, `_layouts/post.html`, the workflow itself. Runs **post-merge** (not per-PR): the spec drives a REAL prod mutation, so firing it on every concurrent PR raced the shared canary + the deploy-production queue and flaked. The actual mutation is gated by `vars.PROD_PLAYGROUND_MODE == 'true'` (sunset switch). #1771 step 4 made it create+delete an ephemeral per-run post (no committed fixture salient path) |
-| `cms-preview-loops.yml` | `workflow_dispatch` | n/a (dispatch-only) | n/a — runs the 3 issue-#999 preview-parity specs (`cms-publish-loop-prod-mutate-preview`, `cms-unpublish-republish-preview`, `cms-tags-lifecycle-preview`) against an open PR's preview env. NOT a required check (no `pull_request` trigger → never a PR status context → no ruleset/stub entry); the heavy preview round trips stay off the merge path, only the lightweight `preview-media` gate is required. Sibling of `cms-publish-loop-preview.yml` |
-| `dependabot-auto-merge.yml` | `pull_request` | n/a (job-level `if: github.actor == 'dependabot[bot]'` skips for everyone else) | n/a |
-| `dependabot-comment-sync.yml` | `pull_request_target` (opened/synchronize/reopened) | `paths` (positive) | `.github/workflows/**`, `scripts/sync-action-pin-comments.{sh,test.sh}`. Job-level `if: github.event.pull_request.user.login == 'dependabot[bot]'` skips for everyone else |
-| `deploy-preview.yml` | `pull_request` | `paths-ignore` | everything EXCEPT docs (README/AGENTS/CLAUDE/ANALYTICS_SETUP/`docs/**`), `e2e/**`, screenshots/recordings/test-results, playwright configs, `package*.json`, `_plugins_test/**`, `oauth-proxy/**`, `infrastructure/**`, sibling workflows; the workflow itself and `scripts/patch-preview-config.sh` ARE salient |
-| `deploy-production.yml` | `push` to `main` | `paths-ignore` | everything EXCEPT docs, `_plugins_test/**`, `oauth-proxy/**`, `infrastructure/**`, `e2e/**`, screenshots/recordings/test-results, playwright configs, `package*.json`, license/lint files, dev-only scripts, sibling workflows; the workflow itself, `Gemfile*`, and `admin/**` ARE salient |
-| `e2e-tests.yml` | `pull_request` | `paths-ignore` (coarse) plus `e2e/select-specs.js` runtime cut (fine — picks which specs to run) | site source under `_layouts/`, `_includes/`, `_config.yml`, `assets/css/`, `_plugins/`, `_plugins_test/`, `package*.json`, `Gemfile*`, `e2e/base.js`, `playwright*.config.js` (fanout — run all specs); per-file matches in `SPEC_RULES` (subset); doc-only changes run a smoke baseline only |
-| `label-non-decap-prs.yml` | `pull_request` (opened, reopened), `push` (main), `workflow_dispatch` | `pull_request`: **none, intentionally** — the tag decision keys off the PR's head ref, not its diff, so a non-Decap PR touching any file must be seen; path-filtering would make it miss exactly the PRs it exists to catch. Cheap (one labelling API call, no checkout/build), fires only on opened/reopened (never per-push), and is NOT a required check, so always-run is free (same rationale as `cms-editorial-workflow.yml`/`dependabot-auto-merge.yml`). `push` (main): `paths` positive, **the workflow file itself only** | Tags any PR NOT created by Decap with `not-decap-created`. "Decap-created" = head ref starts with `cms/` (Decap's default `branchPrefix`, the same signal `e2e/cms-fixture-pr.js` + `sweep-stale-cms-prs.yml` key off), with the `Automatically generated by Decap CMS` body marker + `decap-cms/*` labels as corroborating signals so a genuine Decap PR is never mis-tagged. The `pull_request` arm tags one PR on open/reopen; the `push` (main, self-path only) + `workflow_dispatch` arms run the all-PR backfill (open + closed + merged) — so the retroactive pass runs automatically when this workflow lands on main and the label set self-heals on any later edit to it. Backfill is idempotent + additive (`dry_run` input to preview), throttles to ~1 label-write/s (GitHub secondary-rate guidance) with retry, and self-times to a Step Summary — so only the first run is slow (~1s × untagged-non-Decap-PR count; ~9-10 min over the ~557 non-Decap of 1732 PRs at time of writing), later runs finish in seconds |
-| `preview-media.yml` | `pull_request` | **none, intentionally** — required check on the always-run + early-skip pattern; an early step detects media-salient changes and the job reports success immediately when none changed | `assets/images/uploads/**`, `admin/config{,-local}.yml`, `_config.yml`, `_layouts/{post,canary}.html`, `scripts/patch-preview-config.sh`, `e2e/cms-host.js`, `e2e/preview-media-resolves.spec.js`, the workflow itself (detected in-step, not via `paths:`) |
-| `publish-scheduled-posts.yml` | `schedule`, `workflow_dispatch` | n/a (cron-only) | n/a |
-| `secrets-scan.yml` | `pull_request`, `push` to `main`, weekly `schedule`, `workflow_dispatch` | **none, intentionally** — gitleaks must scan the entire diff / history regardless of file type | n/a |
-| `visual-regression.yml` | `pull_request` | `paths` (positive) | templates / rendering / styling: `_layouts/**`, `_includes/**`, `_plugins/**`, `_data/**`, `admin/**`, `_config.yml`, `Gemfile*`, root `index.html` / `404.html` / `robots.txt` / `preview.md`, `assets/css/**`, `assets/js/**`, `assets/images/logo.svg`; pipeline tools (`e2e/{detect-changed-pages,compute-visual-diffs,generate-video,regression-video}.{js,sh,spec.js}`, `playwright.regression.config.js`, the workflow itself). **CMS-managed content is intentionally excluded** (`_posts/**`, `_tags/**`, `_projects/**`, `pages/**`, `_e2e/**`, `assets/images/uploads/**`) — content-only PRs guarantee pixel diffs, so the regression video adds runner time without signal. |
 | `auto-resolve-newline-conflict.yml` | `workflow_run` (after `cms-editorial-workflow`), `workflow_dispatch` | n/a (event-driven, gated by script's PR allowlists) | n/a |
+| `canary-prod.yml` | `schedule`, `workflow_dispatch` | n/a (cron-only, read-only prod probe) | n/a |
+| `cleanup-stale-fixture-branches.yml` | `schedule`, `workflow_dispatch` | n/a (cron-only; sweeps this repo's stale fixture branches/PRs via the GitHub API, no site build) | n/a |
+| `cms-automerge-nudge.yml` | `schedule` (every 5 min), `workflow_dispatch` | n/a (cron-only; re-enables auto-merge on a stuck-but-green CMS PR via the API) | n/a |
+| `cms-delete-published-preview.yml` | `workflow_dispatch` | n/a (dispatch-only — needs a live preview env to target) | n/a. `inputs.pr_number` selects the preview env; the spec self-skips unless `CMS_E2E_PAT` + `PR_NUMBER` + `PR_HEAD_REF` are set. NOT a required check (heavy loops stay off the merge path) |
+| `cms-editorial-workflow.yml` | `pull_request` types `[opened, synchronize, labeled]` | **none, intentionally** — required check on every PR (see ruleset note); the validation is cheap (<2 min) so always-run is the right call | n/a |
+| `cms-media-roundtrip.yml` | `schedule`, `push` (main), `workflow_dispatch` | `paths` (positive, push to main) | Only the workflow's own file (`.github/workflows/cms-media-roundtrip.yml`). Prod (`cms-publish-loop-prod.yml`) owns the shared infra paths (`admin/**`, `package*.json`, `_config.yml`) on push; this loop covers them via its own 15:00 UTC cron instead, keeping the three real-prod loops' push-trigger paths disjoint (no co-arrival eviction in the shared `prod-mutating-loop` concurrency lane — see #1892 below) |
+| `cms-preview-loops.yml` | `workflow_dispatch` | n/a (dispatch-only) | n/a — runs the 3 issue-#999 preview-parity specs (`cms-publish-loop-prod-mutate-preview`, `cms-unpublish-republish-preview`, `cms-tags-lifecycle-preview`) against an open PR's preview env. NOT a required check (no `pull_request` trigger → never a PR status context); the heavy preview round trips stay off the merge path. Sibling of `cms-publish-loop-preview.yml` |
+| `cms-publish-loop-host.yml` | `schedule` (12:00 UTC daily), `push` (main), `workflow_dispatch` | `paths` (positive, push to main) | `cms-publish-loop-host.yml` itself plus the three `_e2e/canary-{post,page,project}.md` fixtures — narrowed to this loop's OWN canary surfaces only (#1892: it used to also list `admin/**`/`playwright.config.js`/`package*.json`/`_config.yml`, which overlapped `cms-publish-loop-prod.yml`'s push paths and caused co-arrival eviction in the shared `prod-mutating-loop` lane; the gem-delivered `_layouts/{canary,default}.html` entries were later dropped too — `_layouts/` isn't tracked in this repo, so they could never match, PR #2472). Runs post-merge; recursion gated by the shared `recursion-gate` job |
+| `cms-publish-loop-preview.yml` | `workflow_dispatch` (required `pr_number` input) | n/a (dispatch-only) | n/a — preview-env sibling of `cms-publish-loop-host.yml`; drives the canary publish loop against a PR's preview surface. NOT a required check |
+| `cms-publish-loop-prod.yml` | `push` (main), `workflow_dispatch` | `paths` (positive, push to main) | `cms-publish-loop-prod.yml` itself, `admin/**`, `package.json`, `package-lock.json`, `_config.yml` (the gem-delivered `playwright.config.js` / `_layouts/post.html` entries were dropped in PR #2472 — untracked here, they could never match). Runs **post-merge** (not per-PR): the spec drives a REAL prod mutation, so firing it on every concurrent PR raced the shared canary + the deploy-production queue and flaked. Gated by repo var `PROD_PLAYGROUND_MODE == 'true'` |
+| `dependabot-auto-merge.yml` | `pull_request` | n/a (job-level `if: github.actor == 'dependabot[bot]'` skips for everyone else) | n/a |
+| `dependabot-comment-sync.yml` | `pull_request_target` (opened/synchronize/reopened), `push` (every branch), `workflow_dispatch` | `paths` (positive) on the `pull_request_target` arm only — `.github/workflows/**`. The `push` arm has NO paths filter (fires on every push to every branch; added to suppress GitHub Actions' phantom zero-job `push` runs, see the `secrets.X in step-level if:` pitfall note) | Reusable's first step no-ops immediately for any non-Dependabot `pull_request_target`, and for any `push` (the push arm exists only to replace GHA's phantom failure row with a real ~5s success) |
+| `deploy-preview.yml` | `pull_request` types `[opened, synchronize, reopened, closed]` | `paths-ignore` | everything EXCEPT `README.md`, `AGENTS.md`, `CLAUDE.md`, `docs/**`, `e2e/**`, `infrastructure/**`, `oauth-proxy/**` (7 entries) |
+| `deploy-production.yml` | `push` to `main`, `workflow_dispatch` | `paths-ignore` | everything EXCEPT the same 7 as `deploy-preview.yml` PLUS `scripts/**`; `workflow_dispatch` ignores `paths-ignore` |
+| `dev-hooks-sync.yml` | `schedule` (Mondays 06:00 UTC), `workflow_dispatch` | n/a (cron-only; syncs the pre-commit guard files from the platform) | n/a |
+| `e2e-stub.yml` | `pull_request` | `paths` (positive) — a byte-for-byte mirror of `e2e-tests.yml`'s `paths-ignore` list | `README.md`, `AGENTS.md`, `CLAUDE.md`, `docs/**`, `infrastructure/**`, `oauth-proxy/**`, `LICENSE`, `.gitignore`. Emits a trivial green `e2e` job so the required `e2e / e2e` context is never MISSING on a doc/infra-only PR |
+| `e2e-tests.yml` | `pull_request` targeting `main` | `paths-ignore` | `README.md`, `AGENTS.md`, `CLAUDE.md`, `docs/**`, `infrastructure/**`, `oauth-proxy/**`, `LICENSE`, `.gitignore` — the diff-aware spec selection, sharding, and per-spec rules described in `docs/TESTING.md` §2 now run INSIDE the platform's single reusable `e2e` job, not as this repo's own workflow-level filters |
+| `editorial-label-audit.yml` | `schedule` (13:00 UTC daily), `workflow_dispatch` | n/a (cron-only; scans + self-heals `decap-cms/*` labels via the API) | n/a |
+| `label-non-decap-prs.yml` | `pull_request` (opened, reopened), `push` (main), `workflow_dispatch` | `pull_request`: **none, intentionally** — the tag decision keys off the PR's head ref, not its diff. `push` (main): `paths` positive, the workflow file itself only | Tags any PR NOT created by Decap with `not-decap-created` |
+| `parity-preview.yml` | `pull_request` targeting `main` | **none, intentionally** — required check on the always-run + early-skip pattern; the reusable's selector reports success immediately when no `@parity-preview` spec applies | n/a — runs the `@parity-preview` spec subset (sitemap, console-clean, draft-isolation, image-alt-text, admin-bundle-parity) against the PR's own `preview-pr<N>.adamdaniel.ai` surface |
+| `platform-bump.yml` | `schedule` (Mondays 07:00 UTC), `workflow_dispatch` | n/a (cron-only; opens the platform version-bump PR) | n/a |
+| `platform-drift-guard.yml` | `pull_request` | `paths` (positive) | `.claude/skills/**` only — `admin/` dropped from this guard's scope since cms-platform v0.1.4 (ships via the theme gem, no longer byte-guarded here) |
+| `platform-pin-consistency.yml` | `pull_request` targeting `main` | **none, intentionally** — a version skew can be introduced by editing ANY pin-bearing file (every workflow `uses:@`, `Gemfile`, `Gemfile.lock`, `platform.lock`), so the gate runs on every PR as a fast pure-fs check | n/a |
+| `preview-media.yml` | `pull_request` | **none, intentionally** — required check on the always-run + early-skip pattern; an early step detects media-salient changes and the job reports success immediately when none changed | `assets/images/uploads/**`, `admin/config{,-local}.yml`, `_config.yml`, `_layouts/{post,canary}.html`, `scripts/patch-preview-config.sh`, `e2e/cms-host.js`, `e2e/preview-media-resolves.spec.js`, the workflow itself (detected in-step, not via `paths:`) |
+| `publish-scheduled-posts.yml` | `schedule` (14:00 UTC daily), `workflow_dispatch` | n/a (cron-only) | n/a |
+| `regression-review-reaper.yml` | `pull_request` types `[synchronize, closed]` | n/a (event-driven; rejects orphaned `regression-review` pending deployments via the API) | n/a |
+| `secrets-scan.yml` | `pull_request`, `push` to `main`, weekly `schedule` (Sundays 07:00 UTC), `workflow_dispatch` | **none, intentionally** — gitleaks must scan the entire diff / history regardless of file type | n/a |
+| `skills-sync.yml` | `schedule` (Mondays 06:00 UTC), `workflow_dispatch` | n/a (cron-only; no-op here — no local skills mirror) | n/a |
+| `sweep-stale-cms-prs.yml` | `schedule` (04:00 UTC daily), `workflow_dispatch` (`dry_run`, `threshold_hours` inputs) | n/a (cron-only; sweeps this repo's stale CMS PRs/branches/fixtures via the API) | n/a |
+| `visual-regression.yml` | `pull_request` types `[opened, synchronize, reopened]` | **NO paths filter — fires on every PR.** Content-only-skip is decided INSIDE the platform's reusable workflow (`e2e/visual-regression-salient.js`), not by a caller-level `paths:` (a required-check gate can't be workflow-level path-filtered without recreating the missing-check trap) | n/a at the caller level |
 
 When you add a new workflow, append it to this table in the same commit, and set `run-name:` per the grammar in [§ Workflow run naming](#workflow-run-naming).
 
@@ -383,7 +405,7 @@ URL shown in comment:
 
 ### `cms-editorial-workflow.yml`
 
-**Trigger:** `pull_request` types `[opened, synchronize, labeled]` targeting `main`, only when files in `_posts/`, `_projects/`, `_tags/`, or `pages/` change.
+**Trigger:** `pull_request` types `[opened, synchronize, labeled]`. No path filter — fires on every PR (required check on every PR; see the ruleset note and the matching table entry above).
 
 **Secrets needed:** none (uses built-in `GITHUB_TOKEN`).
 
@@ -430,7 +452,7 @@ A thin daily caller (cron `0 13 * * *` + `workflow_dispatch`) that delegates to 
 
 Uses a separate Playwright config (`playwright.regression.config.js`) and spec (`regression-video.spec.js`) — both platform-delivered via the e2e harness copied from `.cms-platform/e2e`, no longer vendored here — to avoid interfering with the main test suite.
 
-**Path-filtered to template / styling / tooling changes only.** CMS-managed content paths (`_posts/**`, `_tags/**`, `_projects/**`, `pages/**`, `_e2e/**`, `assets/images/uploads/**`) are intentionally **not** in the trigger list. The editorial-workflow PR generated by every Save in the CMS touches one of those paths and nothing else; running visual regression on those PRs is pure noise (the pixel diff is the *intent* of the edit, not a regression to flag). Mixed PRs that touch both content and a template path still trigger the workflow because of the template-path match. The lint test in `e2e/visual-regression-content-skip.test.js` enforces that content paths stay excluded.
+**No caller-level `paths:` filter — fires on every PR.** The caller has no `paths:`/`paths-ignore:` at all (verified against `.github/workflows/visual-regression.yml`); content-only-skip is decided INSIDE the platform's reusable workflow, via its own salience check (`e2e/visual-regression-salient.js`), not by a workflow-level path filter. CMS-managed content paths (`_posts/**`, `_tags/**`, `_projects/**`, `pages/**`, `_e2e/**`, `assets/images/uploads/**`) are the ones the reusable's salience check treats as non-salient. The editorial-workflow PR generated by every Save in the CMS touches one of those paths and nothing else; running the heavy visual-regression build on those PRs is pure noise (the pixel diff is the *intent* of the edit, not a regression to flag). Mixed PRs that touch both content and a template path still run the heavy build because of the template-path match. The lint test in `e2e/visual-regression-content-skip.test.js` enforces that content paths stay excluded from the reusable's salience check.
 
 #### Job: `generate`
 
@@ -493,7 +515,7 @@ Uses `regression-review` GitHub Environment with required reviewers (all write-a
 
 **Gating:** path-based via `e2e/select-specs.js`. Triggers when something contributor-relevant changed: `admin/**`, `_layouts/{post,page,project,canary,default,preview}.html`, `_e2e/**`, `scripts/patch-preview-config.sh`, `.github/workflows/{cms,deploy}-*.yml`, `e2e/{cms,decap-pat,github-actions-poll,canary-content}.*`. Self-skips when `CMS_E2E_PAT` isn't set (so forks/Dependabot don't run it). Runs once on `chromium-desktop-3k`.
 
-**Branch-protection ruleset:** `cms-feature-branches` (id 15756474, see `.github/rulesets/cms-feature-branches.json`) requires `validate-content` on PRs into `cms/**`, `claude/**`, `feat/**`, `fix/**`, `chore/**`, `test/**`, `ci/**`, `docs/**`. Without this required check, GitHub's mergeable_state goes "unstable" the moment the auto-merge job's own pending state is queued — which is exactly what bit PR #78 and motivated issue #79.
+**Branch-protection ruleset:** `cms-feature-branches` (id 15756474, see `.github/rulesets/cms-feature-branches.json`) requires the context `editorial / validate-content` on PRs into `cms/**`, `claude/**`, `feat/**`, `fix/**`, `chore/**`, `test/**`, `ci/**`, `docs/**`. Without this required check, GitHub's mergeable_state goes "unstable" the moment the auto-merge job's own pending state is queued — which is exactly what bit PR #78 and motivated issue #79.
 
 **When this workflow looks "stuck":** the workflow run is rarely the bug. The publish-loop opens a `cms/<col>/<slug>` PR and waits for it to auto-merge; if a *prior* run's PR is still open with failed required checks (typically because it was opened against a base that pre-dates a recent CI fix on `main`), every subsequent run times out at ~13–40 min with `Timed out waiting for PR #N to merge`. First action: `gh pr list --state open --search "head:cms"` and audit any BLOCKED PRs — close stale ones (`gh pr close N --delete-branch`) and the next workflow run opens fresh against current `main`. Don't restart the workflow before clearing the queue. The full procedure lives in the cms-platform `cms-stuck-pr-triage` skill.
 
@@ -503,7 +525,7 @@ Sibling to the `cms-publish-loop` and `cms-publish-loop-preview` specs, but oper
 
 **Trigger:** `push` to `main` with workflow-level `paths:` filter, plus `workflow_dispatch`. It runs **post-merge**, not speculatively per-PR: the spec drives a REAL mutation against production, so firing it on every concurrent PR raced the shared prod canary and the `deploy-production` queue and flaked non-deterministically (PR #1067). It only fires when a push to `main` touches a salient file; otherwise it doesn't run. This is safe because `prod-mutate` is not in the branch-protection required-status-checks list (it never was a PR context after the path-filter move; verify via `gh api repos/Adam-S-Daniel/adamdaniel.ai/rules/branches/main`), so not running on PRs blocks no merge. Manual `workflow_dispatch` always forces a real run regardless of paths.
 
-**Salient paths:** the spec, the e2e helpers it imports (`prod-mutate-fixture.js`, `cms-fixture-pr.js`, `decap-pat.js`, `github-actions-poll.js`, `base.js`), `admin/**`, `playwright.config.js`, `package*.json`, `_config.yml`, `_layouts/post.html`, and the workflow file itself. (#1771 step 4 retired the committed `_posts/2099-01-01-e2e-mutation-canary.md` salient path — the per-run post is built in code, never committed.)
+**Salient paths:** `admin/**`, `package*.json`, `_config.yml`, and the workflow file itself (the e2e spec/helpers and `playwright.config.js` / `_layouts/post.html` are platform-/gem-delivered, not tracked here — the dead path entries were dropped in PR #2472). (#1771 step 4 retired the committed `_posts/2099-01-01-e2e-mutation-canary.md` salient path — the per-run post is built in code, never committed.)
 
 **Gating layers, in order:**
 
@@ -515,7 +537,7 @@ When all three pass, the spec runs against `https://adamdaniel.ai/admin/`: it CR
 
 > **Thin callers now:** `cms-publish-loop-host.yml` and `cms-publish-loop-prod.yml` (and their preview siblings) are thin callers that delegate to the platform's reusable workflows; the e2e harness + specs described here live in **cms-platform**, not this repo (`e2e/` is no longer tracked here). The triggers, run-name, and the gating notes above are owned by these site-side caller files.
 
-**Loop co-arrival eviction — host vs prod sharing the `prod-mutating-loop` lane (#1892).** All real-prod loops serialise through one shared `prod-mutating-loop` concurrency group on each loop's heavy job (see "Loop-aware required checks" below). That group is `cancel-in-progress: false`, which holds an **in-flight** holder but **drops a co-arriving sibling** — if two loop jobs are queued in the same instant, only one survives and the other is silently evicted (NOT queued behind it). The bug: `cms-publish-loop-host.yml` and `cms-publish-loop-prod.yml` both used to trigger on the same shared infra `paths:` (`admin/**`, `playwright.config.js`, `package*.json`, `_config.yml`), so a single push to `main` fired BOTH — they co-arrived in the shared lane and the host job evicted the prod-mutate job. **Fix:** the host caller's `push` trigger is narrowed to **its own canary surfaces only** (`cms-publish-loop-host.yml`, `_e2e/canary-*.md`, `_layouts/{canary,default}.html`) — zero path overlap with prod. Prod owns the infra-change canary on push; host still covers those paths via its daily 12:00 UTC cron. When editing either caller's `paths:`, keep the two trigger sets disjoint or the eviction returns.
+**Loop co-arrival eviction — host vs prod sharing the `prod-mutating-loop` lane (#1892).** All real-prod loops serialise through one shared `prod-mutating-loop` concurrency group on each loop's heavy job (see "Loop-aware required checks" below). That group is `cancel-in-progress: false`, which holds an **in-flight** holder but **drops a co-arriving sibling** — if two loop jobs are queued in the same instant, only one survives and the other is silently evicted (NOT queued behind it). The bug: `cms-publish-loop-host.yml` and `cms-publish-loop-prod.yml` both used to trigger on the same shared infra `paths:` (`admin/**`, `playwright.config.js`, `package*.json`, `_config.yml`), so a single push to `main` fired BOTH — they co-arrived in the shared lane and the host job evicted the prod-mutate job. **Fix:** the host caller's `push` trigger is narrowed to **its own canary surfaces only** (`cms-publish-loop-host.yml`, `_e2e/canary-*.md`; the gem-delivered `_layouts/{canary,default}.html` entries were later dropped as dead paths, PR #2472) — zero path overlap with prod. Prod owns the infra-change canary on push; host still covers those paths via its daily 12:00 UTC cron. When editing either caller's `paths:`, keep the two trigger sets disjoint or the eviction returns.
 
 ### `cms-preview-loops.yml` (preview-parity loops — issue #999)
 
@@ -547,7 +569,7 @@ Both legs go through the shared **`e2e/run-cms-loop.js`** spine (the extracted, 
 
 ### `sweep-stale-cms-prs.yml`
 
-Cleans up automation-only artefacts that crashed test runs leak. Runs daily at 04:00 UTC (two hours before the host-loop's 06:00 cron) plus `workflow_dispatch` with `dry_run` and `threshold_hours` inputs.
+Cleans up automation-only artefacts that crashed test runs leak. Runs daily at 04:00 UTC (eight hours before the host-loop's 12:00 UTC cron) plus `workflow_dispatch` with `dry_run` and `threshold_hours` inputs.
 
 **Three-tier sweep, all age-gated by `THRESHOLD_HOURS` (default 6h):**
 
@@ -566,7 +588,7 @@ Two further content-sweep steps (`if: !inputs.dry_run`) reap throw-away fixtures
 
 ### `auto-resolve-newline-conflict.yml`
 
-A **thin caller** that delegates to the platform's reusable `Adam-S-Daniel/cms-platform/.github/workflows/auto-resolve-newline-conflict.yml@v0.1.27`; the resolver script + its tests are **platform-delivered** (run from the platform's `.cms-platform/scripts/` copy, no longer vendored here). The behaviour below describes the platform-owned logic the caller invokes — the triggers/run-name are owned by this site-side caller file.
+A **thin caller** that delegates to the platform's reusable `auto-resolve-newline-conflict.yml` (pinned per `platform.lock` / the workflow's own `uses:@` line — the authoritative, Dependabot-bumped pin); the resolver script + its tests are **platform-delivered** (run from the platform's `.cms-platform/scripts/` copy, no longer vendored here). The behaviour below describes the platform-owned logic the caller invokes — the triggers/run-name are owned by this site-side caller file.
 
 Belt-and-suspenders for the class of bug PR #882 represents — a Decap-opened `cms/<col>/<slug>` PR whose only diff vs main is newline-mangling (`\n` → `\n\n`, `\n\n` → `\n\n\n\n`, blank between `---` and body eaten — the Slate WYSIWYG round-trip signature). When a sibling cleanup PR has already landed the canonical baseline to main, the still-open Decap PR conflicts with main even though both canonical-collapse forms are identical. Without this resolver the PR sits in `dirty` state until a human notices.
 
@@ -651,19 +673,46 @@ Required status checks (current):
 
 | Check | Workflow | Notes |
 | --- | --- | --- |
-| `validate-content` | `cms-editorial-workflow.yml` | Always fires (no path filter) — front-matter + Jekyll build sanity check |
-| `scan` | `secrets-scan.yml` | Always fires (gitleaks must scan every PR diff) |
-| `select`, `unit`, `parity`, `e2e (1)`, `finalize` | `e2e-tests.yml` | Fire on every PR EXCEPT those whose entire diff matches `paths-ignore` (docs-only). Required checks block such PRs from merging — owner can override, or expand the PR with a small non-doc change to satisfy the gate. `e2e (1)` is shard 1 of the dynamic matrix (always present per `pickShardCount()` + the workflow's `case "$shard_count"` block); `finalize` is the matrix roll-up (`if: !cancelled()`, `needs: [e2e]`, last step re-fails on any shard failure) — keeping both gives shard-name resilience plus a single roll-up signal |
+| `editorial / validate-content` | `cms-editorial-workflow.yml` → cms-platform reusable | Always fires (no path filter) — front-matter + Jekyll build sanity check |
+| `scan / scan` | `secrets-scan.yml` → cms-platform reusable | Always fires (gitleaks must scan every PR diff) |
+| `parity / parity` | `parity-preview.yml` → cms-platform reusable | Always-run + early-skip: runs the `@parity-preview` spec subset against the PR's own `preview-pr<N>` surface, reporting success immediately when no such spec applies |
+| `preview-media / preview-media` | `preview-media.yml` → cms-platform reusable | Always-run + early-skip: read-only probe that a media-salient PR's preview surface serves the expected asset; auto-passes on non-media PRs |
+| `e2e / e2e` | `e2e-tests.yml` (or `e2e-stub.yml` on doc/infra-only PRs) → cms-platform reusable | The reusable runs the ENTIRE Playwright suite (selection, dynamic sharding, and finalize) inside one `workflow_call` job — this collapses the old per-repo `select` / `unit` / `e2e (1)` / `e2e-admin` / `finalize` contexts into the single `e2e` check. `e2e-tests.yml` carries `paths-ignore` (README/AGENTS/CLAUDE/docs/infrastructure/oauth-proxy/LICENSE/.gitignore); `e2e-stub.yml` mirrors that list byte-for-byte and emits a trivial green `e2e` job so the required context is never MISSING on a doc/infra-only PR |
+| `visual-regression / approve-regression` | `visual-regression.yml` → cms-platform reusable | No path filter (fires on every PR); the reusable's `approve-regression` gate runs `if: always()` and enters the `regression-review` environment only when visually-different pages were found, auto-passing otherwise — so it always reports a status |
 
-`prod-mutate` (`cms-publish-loop-prod.yml`) was historically required but is not anymore — it (and `host-loop`/`cms-publish-loop-host.yml`) now triggers on `push` to `main`, not `pull_request`, so the check never appears on a PR at all (post-merge real-prod loop; PR #1067). `deploy-preview` and `approve-regression` are excluded for the related missing-check-trap reason (path-filtered `pull_request`). Re-promoting any of them would require converting to the always-run + early-skip pattern first.
+`prod-mutate` (`cms-publish-loop-prod.yml`) and `host-loop` (`cms-publish-loop-host.yml`)
+were historically required but are not anymore — both trigger on `push` to `main`,
+not `pull_request`, so the check never appears on a PR at all (post-merge real-prod
+loops; PR #1067). `deploy-preview` remains excluded for the missing-check-trap reason
+(path-filtered `pull_request`, no always-run fallback). Re-promoting either would
+require converting to the always-run + early-skip pattern first.
 
-**Required status checks are the default.** Any CI job that runs on pull requests is assumed to be a required check and must be enforced via the `main` ruleset before a branch can merge. Do NOT leave checks optional unless this section documents a specific reason. When adding new workflow jobs, update `.github/rulesets/main.json` and reapply in the same commit.
+**Required status checks are the default.** Any CI job that runs on pull requests is
+assumed to be a required check and must be enforced via the `main` ruleset before a
+branch can merge. Do NOT leave checks optional unless this section documents a
+specific reason. When adding new workflow jobs, update `.github/rulesets/main.json`
+and reapply in the same commit.
 
-**Required-check + path-filter trap:** GitHub blocks the merge when a required check is *missing* (because path filtering prevented the workflow from running) — it doesn't auto-pass missing checks. Workflows promoted to required must therefore use the always-run + early-skip pattern (see `cms-publish-loop-prod.yml`) so the named check is always present. The `e2e-tests.yml` jobs above are accepted-as-blockers on truly doc-only PRs; if that becomes painful, convert e2e-tests.yml to the always-run pattern in a follow-up.
+**Required-check + path-filter trap:** GitHub blocks the merge when a required check
+is *missing* (because path filtering prevented the workflow from running) — it
+doesn't auto-pass missing checks. Workflows promoted to required therefore use
+either the always-run + early-skip pattern (`parity-preview.yml`, `preview-media.yml`,
+`visual-regression.yml`'s `approve-regression` gate) or a byte-mirrored stub workflow
+that fires on the primary workflow's ignored paths and emits the same-named job
+(`e2e-stub.yml` for `e2e-tests.yml`) — either way the named check is always present.
 
-Auto-merge is enabled in repository settings. Direct pushes to `main` are allowed for the repository owner only.
+Auto-merge is enabled in repository settings. Direct pushes to `main` are allowed for
+the repository owner only.
 
-The same required-checks list governs Dependabot's unattended-merge pipeline (`dependabot-auto-merge.yml`). When a Dependabot PR enables auto-merge, GitHub holds the merge until every check above reports success — so a vulnerable browser fixture, a regressed pixel, or a broken Jekyll build all block the bump. `prod-mutate` is no longer required (workflow-level `paths:` filtering would make it miss on most Dependabot PRs), but `e2e-tests.yml`'s subset selector still picks up the publish-loop spec for Dependabot bumps that touch `package*.json` — so the matrix still surfaces Decap/Playwright incompatibilities before merge, just under the `e2e (1)` / `finalize` umbrella rather than its own dedicated check.
+The same required-checks list governs Dependabot's unattended-merge pipeline
+(`dependabot-auto-merge.yml`). When a Dependabot PR enables auto-merge, GitHub holds
+the merge until every check above reports success — so a vulnerable browser fixture,
+a regressed pixel, or a broken Jekyll build all block the bump. `prod-mutate` is no
+longer required (workflow-level `paths:` filtering would make it miss on most
+Dependabot PRs), but `e2e-tests.yml`'s reusable still selects the publish-loop spec
+for Dependabot bumps that touch `package*.json` — so the matrix still surfaces
+Decap/Playwright incompatibilities before merge, just under the single `e2e / e2e`
+check rather than a dedicated one.
 
 ---
 
@@ -708,7 +757,6 @@ For the auto-merge gate to function, two settings need to be set in repo Setting
 
 Located at `/admin/reviews/` (separate from Decap CMS). Linked from a floating button on the CMS page.
 
-- Cobalt Thermal theme
 - GitHub OAuth authentication (reuses existing Lambda proxy). Implements the full Decap handshake: the popup posts `"authorizing:github"`, the dashboard echoes it back at the popup's origin, the popup releases an `"authorization:github:success:<JSON>"` payload, the dashboard parses the token. Skipping the echo leaves the popup spinning on "Completing authorisation…" forever — the same shape of bug Decap itself would surface if its handshake broke.
 - Lists all pending visual regression reviews
 - Embedded `<video>` player for regression videos hosted at `preview-pr{N}.adamdaniel.ai/regression.mp4`
@@ -718,20 +766,43 @@ Located at `/admin/reviews/` (separate from Decap CMS). Linked from a floating b
 
 ### `e2e-tests.yml`
 
-**Trigger:** pull request targeting `main`. The PR run is required by branch protection, so the merge commit on `main` is already covered — no post-merge re-run.
+**Trigger:** pull request targeting `main`, `paths-ignore`: `README.md`, `AGENTS.md`,
+`CLAUDE.md`, `docs/**`, `infrastructure/**`, `oauth-proxy/**`, `LICENSE`,
+`.gitignore`. The PR run is required by branch protection, so the merge commit on
+`main` is already covered — no post-merge re-run.
 
-**Jobs:** `unit`, `select`, `e2e` (sharded matrix), `parity`, `finalize`
+**Job:** a single `e2e` job that delegates the ENTIRE Playwright suite to the
+platform's reusable `e2e-tests.yml` (pinned via the `uses:@` line, in lockstep with `platform.lock`) via `workflow_call`. The reusable checks
+out the harness (`e2e/`, `playwright*.config.js`) from cms-platform, builds this site
+(`target: local` — a real `jekyll build` + `decap-server`), and runs the full
+matrix — the diff-aware selection, dynamic sharding, `SPEC_RULES`, and finalize
+roll-up described below all happen INSIDE that one reusable job, so this repo
+surfaces exactly one context: `e2e / e2e`. There is no longer a separate
+`select` / `unit` / sharded-`e2e` / `parity` / `finalize` set of jobs in THIS repo's
+own workflow file — `parity` is also its own caller now (`parity-preview.yml`,
+covered under "Required status checks" above), not a job inside `e2e-tests.yml`.
 
-1. **`unit`** — the reusable workflow's upstream unit lane (owned by cms-platform). This thin-caller consumer no longer ships local `_plugins_test/` Ruby lints; that workflow-shape invariant is now covered upstream by cms-platform's `e2e/required-check-stub-paths.test.js`. Ubuntu runner, no container.
-2. **`select`** — checks out the diff, runs `e2e/select-specs.js --base origin/main`, and decides the scope + shard count. Also runs the **Playwright image drift guard**: every `mcr.microsoft.com/playwright:v<version>-noble` tag in `.github/workflows/*.yml` must match `package-lock.json`'s `@playwright/test` version, otherwise the build fails with a one-line `sed` fix-up command.
-3. **`e2e`** — sharded Playwright matrix. Runs inside `mcr.microsoft.com/playwright:v1.59.1-noble`, so browsers + their apt deps are baked in (no `playwright install` / `install-deps` step). Installs `libyaml-0-2` + `build-essential` for Ruby `bundler-cache`, sets up Ruby 3.2 + Node 20, runs `npm ci`, then runs Playwright with `--shard=<n>/<count>`. The selector decides the scope:
-   - `all` — fanout files changed (`_layouts/`, `_includes/`, `_config.yml`, `assets/css/`, `_plugins/`, `package*.json`, `Gemfile*`, `e2e/base.js`, `playwright*.config.js`). Run the full matrix.
-   - `subset` — match each changed file against `SPEC_RULES` and run only the resulting list (always-run baseline included).
-   - `skip` — only docs (`README.md`, `AGENTS.md`, `docs/`) changed. Run the always-run baseline only as a smoke check.
-4. **`parity`** (`.github/workflows/parity-preview.yml`) — runs the @parity-preview spec subset (sitemap, console-clean, draft-isolation, image-alt-text, admin-bundle-parity) against `TARGET=preview` on the PR's own preview-pr<N>.adamdaniel.ai surface, with per-spec path-applicability via `selectParityPreviewSpecs()`. Polls preview reachability with a 20-min bound (`needs:` deploy-preview can't cross workflows). Non-blocking informational gate. Replaced the prior `parity` job in e2e-tests.yml that ran against prod. **Public-content scope (#1771 Cat-2 fix):** the content-crawl specs (sitemap, console-clean, image-alt-text) enumerate **real public content only** — they exclude E2E test-fixture canaries via the shared `isTestFixturePost` predicate in `e2e/public-content.js` (the single source of truth: `test_fixture: true` OR `sitemap: false` OR the structural `e2e-` slug signature). This is load-bearing: the ephemeral prod-loop posts are born `published: true` through the Decap UI and briefly serve mid-run, and a transient orphan one leaves on `main` (a post whose deleted image now 404s) would otherwise red-fail console-clean/image-alt-text — which run inside the **required** `e2e-admin` and `parity` checks — on *every* cms PR, including the loop's own create PR (the exact vicious cycle that wedged the loops; see "CI-flakiness invariants").
-5. **`finalize`** — merges per-shard blob reports into a single HTML report, assembles the per-test screenshot videos (see below), uploads the `playwright-report`, `per-test-videos`, and per-shard log artifacts, and posts the failure-summary PR comment.
+**Companion:** `e2e-stub.yml` fires on the byte-mirror of this file's
+`paths-ignore` list and emits a trivial green `e2e` job, so `e2e / e2e` is never a
+MISSING required check on a doc/infra-only PR (see "Required-check + path-filter
+trap" above).
 
-**Dynamic shard count.** `e2e/select-specs.js` returns a `shard_count` field in its envelope (1, 2, 3, or 4). Small subsets — `≤2` light browser specs — collapse to a single shard; mid-sized subsets to 2; the rest fan out to 4. The required check is `e2e (1)`, and the matrix array is built `[1..shard_count]`, so shard 1 always fires.
+**Inputs passed to the reusable:** `target: local`, `prod_url`, `apex`,
+`browser: all` (installs every engine), `pr_number`, `prod_playground_mode` (from
+this repo's `PROD_PLAYGROUND_MODE` var, gating the prod-mutate / real-loop specs),
+`platform_ref` (kept in lockstep with the `uses:@` pin).
+
+**Secrets:** `CMS_E2E_PAT` — optional; when unset, preview discovery falls back to
+`GITHUB_TOKEN` and the real-lane CMS specs self-skip.
+
+The subsections below (dynamic shard count, the spec-header skip directive, the
+always-run baseline, and the per-test screenshot videos) describe behavior that now
+runs INSIDE that single platform-delegated `e2e` job — they are platform-owned
+implementation detail, kept here because they still shape what a contributor needs
+to know when adding a spec, not because this repo's own workflow file implements
+them directly.
+
+**Dynamic shard count.** `e2e/select-specs.js` returns a `shard_count` field in its envelope (1, 2, 3, or 4). Small subsets — `≤2` light browser specs — collapse to a single shard; mid-sized subsets to 2; the rest fan out to 4. Sharding happens inside the reusable's single `e2e` job (the required check is `e2e / e2e`, not a per-shard context).
 
 **Spec-header directive.** A spec can opt OUT of selection on specific branches by adding `// @select-skip-when-head-ref-prefix: cms/` (or any comma-separated prefix list) to its head. The selector reads `GITHUB_HEAD_REF` and drops matching specs from the rule-matched set — the `ALWAYS_RUN` baseline is exempt. Used to shave bring-up cost on cms-bot PRs that don't need most browser specs.
 
@@ -787,7 +858,7 @@ The screenshot itself is **never overlaid** — each frame is composited by Imag
 
 Runs [gitleaks](https://github.com/gitleaks/gitleaks) via the official `gitleaks/gitleaks-action`. PRs scan only the diff against base; pushes to `main` and the weekly cron walk full history. The diff-only path catches "leak introduced by this PR"; the weekly sweep catches anything that landed via a force-push or rebase that the diff scan missed.
 
-The underlying gitleaks binary is pinned via `GITLEAKS_VERSION`. Bump deliberately, not on a whim.
+The underlying gitleaks binary's version pin lives in the PLATFORM's reusable `secrets-scan.yml` workflow, not in this repo's thin `secrets-scan.yml` caller (which has no `GITLEAKS_VERSION` key at all). Bump deliberately, not on a whim — that bump happens in cms-platform.
 
 Allowlist for known test fixtures lives in `.gitleaks.toml`. When a new test hardcodes a fake-looking token, add it there rather than disabling the workflow.
 
@@ -795,7 +866,7 @@ The platform-delivered post-failure-comment action's bundled `scrub-secrets.js` 
 
 #### Local pre-commit guard
 
-`scripts/secrets-scan.sh` runs `gitleaks protect --staged --redact` against the index before every commit, so a secret never reaches local history (or the reflog, which survives a force-push). It uses the same `.gitleaks.toml` as CI, and parses `GITLEAKS_VERSION` out of `secrets-scan.yml` at runtime — bumping CI's pin auto-updates the version the hook recommends, so there's a single source of truth.
+`scripts/secrets-scan.sh` runs `gitleaks protect --staged --redact` against the index before every commit, so a secret never reaches local history (or the reflog, which survives a force-push). It uses the same `.gitleaks.toml` as CI. Its local hook's `GITLEAKS_VERSION` parse targets THIS repo's own `secrets-scan.yml`, which is a thin caller with no pin of its own post-cutover (the pin lives in the platform's reusable workflow instead) — so the hook currently can't detect drift against the platform's actual pinned version; install whatever `gitleaks` version you have. There's no local drift check today.
 
 The hook is registered through both supported pathways:
 
@@ -856,14 +927,9 @@ Specs that drive the admin UI are tagged via Playwright's `{ tag: [...] }` optio
 
 iOS Chrome, iOS Firefox, iOS Edge, and iOS Safari all share the same browser engine — Apple bans third-party rendering engines on iOS. Playwright's `webkit` project covers all of them. So "iOS Chrome === iOS Safari === WebKit" — they're a single data point, not three. When triaging an iOS-only render bug, reproduce it under `webkit-tablet` (or any local WebKit) and you've covered every iOS browser.
 
-#### `?notheme` kill-switch (admin)
+#### `?notheme` kill-switch (admin) — HISTORICAL
 
-`admin/index.html` flips off the cobalt theme (the `<link rel="stylesheet" href="custom.css">` plus the inline `<style id="cobalt-inline-theme">`) when the URL contains a `notheme` query param. The script reads `URLSearchParams(location.search)` — i.e. the query string **before** the hash — so:
-
-- `https://adamdaniel.ai/admin/?notheme` works.
-- `https://adamdaniel.ai/admin/#/collections/posts?notheme` does **not** — Decap's hash-router puts that `?notheme` *inside* the hash fragment, where `location.search` can't see it.
-
-When triaging an iOS WebKit render bug that may be theme-induced, A/B with `/admin/?notheme` first, then navigate inside.
+The cobalt-thermal admin theme (`custom.css` + the inline `<style id="cobalt-inline-theme">`) and its `?notheme` kill-switch were retired in cms-platform PR #81 — this repo's `admin/` directory now tracks only `collections.site.yml.example`; there is no `custom.css` or `index.html` here, and the admin UI is gem-delivered. This is no longer a live, testable-today mechanism in this repo. `e2e/admin-notheme.spec.js` (also platform-owned now) asserts the theme markers are ABSENT on `/admin/`, so a future re-introduction of a theme must ship the kill-switch alongside it.
 
 #### Sandbox allowlist (Playwright browser downloads)
 
@@ -875,7 +941,7 @@ Playwright fetches its browser binaries from a small set of CDNs the first time 
 
 If these are blocked, `npx playwright install` hangs or fails with a 403 / DNS-resolution error.
 
-CI does NOT hit these CDNs — the e2e matrix, parity, finalize, canary-prod, and cms-publish-loop-{host,prod} jobs all run inside `mcr.microsoft.com/playwright:v<version>-noble`, which ships the browsers + apt deps prebaked. The image tag is enforced to match `package-lock.json`'s `@playwright/test` version by the `select` job's drift-guard step. The CDNs only matter for fresh local clones and the rare workflow that still calls `playwright install` (e.g. `visual-regression.yml`).
+CI does NOT hit these CDNs — the e2e matrix, parity, finalize, canary-prod, and cms-publish-loop-{host,prod} jobs all run inside `mcr.microsoft.com/playwright:v<version>-noble`, which ships the browsers + apt deps prebaked. The image tag is enforced to match `package-lock.json`'s `@playwright/test` version by the `select` job's drift-guard step. The CDNs only matter for fresh local clones and the rare reusable workflow that still calls `playwright install` — this repo's `visual-regression.yml` caller is a thin `uses:` delegation with no such step itself; if it happens, it's inside the platform's reusable workflow, not this repo's caller.
 
 ### Custom fixture (`e2e/base.js`)
 
@@ -931,6 +997,12 @@ node scripts/generate-showcase.js                           # produces before/af
 `scripts/generate-showcase.js` displays each snapshot as a before/after side-by-side pair (3.5s per slide) and records the session as `recordings/visual-regression-showcase.webm`. If no `-before` directory exists (first run), it shows current baselines only. The `-before` directory is auto-cleaned after the video is written.
 
 ## Failure-comment composite action
+
+The `uses: ./.github/actions/...` paths in the examples below are relative to the
+PLATFORM repo's own reusable workflows — this repo has no `.github/actions/`
+directory; every workflow here calls a platform reusable via
+`uses: Adam-S-Daniel/cms-platform/...@vX.Y.Z`, and the platform reusable is what
+invokes the composite internally.
 
 In environments with no pre-authenticated `gh` cli, workflow logs are not directly readable (the GitHub MCP server has no `actions/runs/.../logs` tool and unauthenticated `curl` to `api.github.com/.../actions/runs/.../logs` returns 403). To make CI failures triage-able from inside a PR conversation, every Playwright-running workflow forwards its captured log to a shared composite action:
 
@@ -992,13 +1064,12 @@ The composite action is **platform-delivered** — the callers reference the pla
 
 | Marker | Workflow / job |
 | --- | --- |
-| `e2e-failure-summary` | `e2e-tests.yml` → `finalize` (aggregates the e2e matrix) |
-| `unit-failure-summary` | `e2e-tests.yml` → `unit` |
-| `e2e-real-failure-summary` | `e2e-tests.yml` → `e2e-real` |
-| `parity-failure-summary` | `e2e-tests.yml` → `parity` |
-| `select-failure-summary` | `e2e-tests.yml` → `select` |
+| `e2e-failure-summary` | `e2e-tests.yml` → the single `e2e` job (replaces the old separate `unit-failure-summary` / `e2e-real-failure-summary` / `select-failure-summary` markers — those jobs no longer exist as separate contexts) |
+| `parity-preview-failure-summary` | `parity-preview.yml` → `parity` |
+| `preview-media-failure-summary` | `preview-media.yml` → `preview-media` |
 | `host-loop-failure-summary` | `cms-publish-loop-host.yml` |
 | `prod-mutate-failure-summary` | `cms-publish-loop-prod.yml` |
+| `media-roundtrip-failure-summary` | `cms-media-roundtrip.yml` |
 | `preview-loop-failure-summary` | `cms-publish-loop-preview.yml` |
 | `preview-delete-failure-summary` | `cms-delete-published-preview.yml` |
 | `preview-loops-failure-summary` | `cms-preview-loops.yml` (distinct from the singular `preview-loop-…`) |
@@ -1010,6 +1081,11 @@ The composite action is **platform-delivered** — the callers reference the pla
 The full convention (when to use, when NOT to use, common refactor pitfalls, how to test wiring) lives in the cms-platform `post-failure-comment` skill.
 
 ## Recursion gate composite action
+
+Same caveat as above: `.github/actions/cms-recursion-gate/action.yml` is a path
+inside the PLATFORM repo, not this one — this repo has no `.github/actions/`
+directory, and the platform's reusable loop workflows are what invoke this
+composite internally.
 
 The three real-prod loop workflows (`cms-publish-loop-host` / `cms-publish-loop-prod` / `cms-media-roundtrip`) mutate `_e2e`/`_posts`/`_tags` canaries through Decap, which auto-merges the resulting `cms/<col>/<slug>` PR back to `main`. That push to `main` matches the workflow's own `paths:` filter, so **the loop can re-trigger itself**. A cheap `recursion-gate` job (shared composite at `.github/actions/cms-recursion-gate/action.yml`) decides per event whether the heavy loop job runs; the loop job carries `needs: recursion-gate` + `if: ${{ needs.recursion-gate.outputs.run == 'true' }}` and **no other recursion `if:`**.
 
@@ -1044,11 +1120,11 @@ The unifying principle: **canonical state lives in exactly one place; everything
 
 The 2026-05 flakiness audit (#1723) traced the recurring CI reds to six classes. Each fix ships with a **lint-lock** that fails loud at CI time if reintroduced (the repo's standing pattern — don't sidestep them). Do NOT undo these:
 
-- **Never future-date a `_posts/` fixture you publish to verify its URL.** Jekyll *skips* future-dated posts unless `_config.yml` sets `future: true`. The prod-mutate / media loops now create **ephemeral** future-dated posts (`_posts/2099-12-31-e2e-*-<runId>.md`, born `published: true`); `future: true` is set **deliberately** so they build at all (without it a born-published future-dated post still 404s). This was THE dominant "Cat 1" root cause — the build log said `Skipping: …-canary.md has a future date`, `/blog/<slug>/` 404'd, and the in-spec reflect-wait timed out *every* run (misread as a deploy backlog). Real scheduling is `published: false` + `publish_date` (`scripts/publish_scheduled_posts.py`), NOT future-dates — so `future: true` exposes nothing else. **Lock:** `e2e/prod-mutate-fixture.test.js` → "ephemeral posts are BUILDABLE when published" (replaced the retired `fixture-baseline.test.js` PROD_FIXTURES guard, #1771 step 4).
+- **Never future-date a `_posts/` fixture you publish to verify its URL.** Jekyll *skips* future-dated posts unless `_config.yml` sets `future: true`. The prod-mutate / media loops now create **ephemeral** future-dated posts (`_posts/2099-12-31-e2e-*-<runId>.md`, born `published: true`); `future: true` is set **deliberately** so they build at all (without it a born-published future-dated post still 404s). This was THE dominant "Cat 1" root cause — the build log said `Skipping: …-canary.md has a future date`, `/blog/<slug>/` 404'd, and the in-spec reflect-wait timed out *every* run (misread as a deploy backlog). Real scheduling is `published: false` + `publish_date` (implemented by the platform-owned `publish_scheduled_posts.py`, invoked via the `publish-scheduled-posts.yml` reusable — not a local file in this repo), NOT future-dates — so `future: true` exposes nothing else. **Lock:** `e2e/prod-mutate-fixture.test.js` → "ephemeral posts are BUILDABLE when published" (replaced the retired `fixture-baseline.test.js` PROD_FIXTURES guard, #1771 step 4).
 
 - **`test_fixture: true` posts are excluded from the homepage + blog index** (`index.html`, `blog/index.html`) via a `where_exp: "post.test_fixture != true"` filter, so a briefly-published *committed* canary serves only at its own `/blog/<slug>/` URL (what the spec verifies), never in human-facing listings. Keep that filter on any new post listing. **Caveat (#1771 follow-up):** the *ephemeral* prod-loop posts are UI-created and land with `test_fixture: false` (the hidden widget the editor can't toggle), so this filter does NOT catch them — while one is briefly live (or orphaned on `main`) it can appear in the blog-index/homepage listing. That's a cosmetic, sub-run-duration leak, not a check-poisoner; the load-bearing protection for the *required-check* surface is the public-content **crawl** exclusion (next bullet), not this listing filter.
 
-- **The public-content `@parity` crawls exclude E2E test-fixture canaries (#1771 Cat-2 fix — DO NOT regress).** `sitemap.spec.js`, `console-clean.spec.js`, and `image-alt-text.spec.js` enumerate `/blog/` posts and assert public-quality invariants (in the sitemap, no `console.error`, every `<img>` has alt). Those invariants are for **real public content**, not the ephemeral prod-loop canaries. The ephemeral posts are born `published: true` through the Decap UI and briefly serve mid-run; worse, a crashed run can leave an orphan on `main` whose featured image was already deleted, so `/blog/<slug>/` 404s a resource. Before this fix the crawls enumerated those URLs and red-failed — and since they run inside the **required** `e2e-admin` (`@admin-read`) and `parity` checks, a single transient orphan `BLOCKED` *every* cms PR's merge gate, **including the loop's own create PR** (verified: create PR #1808 BLOCKED on `e2e-admin`/`parity`/`finalize` failing on `/blog/e2e-media-roundtrip-…/`). The loop's create PR then never merged → the post never served → the loop's serve leg timed out → the run failed → left another orphan → repeat. This is the exact #1723 Cat-2 class (transient `main` state poisoning a shared required check), reintroduced by the ephemeral redesign. **Fix:** a single shared predicate `isTestFixturePost` in `e2e/public-content.js` (the source of truth all three crawls use) excludes any post flagged `test_fixture: true` OR `sitemap: false` OR carrying the structural `e2e-` slug signature (`/^\d{4}-\d{2}-\d{2}-e2e-/i` on the filename, `^e2e-` on the URL slug). The slug signature is the load-bearing one: the UI-created posts carry NEITHER flag (the posts collection has no `sitemap`/`robots` widget and `test_fixture` is a hidden `default: false`), but the `slug:`/`date:` the spec types are reliably present. **Lock:** `e2e/public-content.test.js` ("test_fixture posts are excluded from the public-content crawl set", incl. the UI-shaped no-flag post and a console-clean-style end-to-end enumeration). Defence-in-depth: `sweep-stale-cms-prs.yml` reaps these orphans on a dedicated 3h threshold (vs 6h for human-hostable tiers; 3h is deliberately above the longest run's 95-min job timeout so the sweep can't reap a post still under active test) on a 3-hourly cron, so even a killed run's orphan is short-lived (~3-6h).
+- **The public-content `@parity` crawls exclude E2E test-fixture canaries (#1771 Cat-2 fix — DO NOT regress).** `sitemap.spec.js`, `console-clean.spec.js`, and `image-alt-text.spec.js` enumerate `/blog/` posts and assert public-quality invariants (in the sitemap, no `console.error`, every `<img>` has alt). Those invariants are for **real public content**, not the ephemeral prod-loop canaries. The ephemeral posts are born `published: true` through the Decap UI and briefly serve mid-run; worse, a crashed run can leave an orphan on `main` whose featured image was already deleted, so `/blog/<slug>/` 404s a resource. Before this fix the crawls enumerated those URLs and red-failed — and since they run inside the **required** `e2e-admin` (`@admin-read`) and `parity` checks, a single transient orphan `BLOCKED` *every* cms PR's merge gate, **including the loop's own create PR** (verified: create PR #1808 BLOCKED on `e2e-admin`/`parity`/`finalize` failing on `/blog/e2e-media-roundtrip-…/`). The loop's create PR then never merged → the post never served → the loop's serve leg timed out → the run failed → left another orphan → repeat. This is the exact #1723 Cat-2 class (transient `main` state poisoning a shared required check), reintroduced by the ephemeral redesign. **Fix:** a single shared predicate `isTestFixturePost` in `e2e/public-content.js` (the source of truth all three crawls use) excludes any post flagged `test_fixture: true` OR `sitemap: false` OR carrying the structural `e2e-` slug signature (`/^\d{4}-\d{2}-\d{2}-e2e-/i` on the filename, `^e2e-` on the URL slug). The slug signature is the load-bearing one: the UI-created posts carry NEITHER flag (the posts collection has no `sitemap`/`robots` widget and `test_fixture` is a hidden `default: false`), but the `slug:`/`date:` the spec types are reliably present. **Lock:** `e2e/public-content.test.js` ("test_fixture posts are excluded from the public-content crawl set", incl. the UI-shaped no-flag post and a console-clean-style end-to-end enumeration). Defence-in-depth: `sweep-stale-cms-prs.yml` reaps these orphans on a dedicated 3h age-threshold (vs 6h for human-hostable tiers; 3h is deliberately above the longest run's 95-min job timeout so the sweep can't reap a post still under active test). The sweep itself runs on a single once-daily cron (`0 4 * * *`, 04:00 UTC) — there is no 3-hourly cron anywhere in this repo's workflows — so once an orphan clears the 3h age-threshold it can still wait for the next daily pass; the actual wall-clock exposure window is up to ~24h from creation to the next sweep, not the "~3-6h" this once claimed.
 
 - **`deploy-pill.js`'s `waitForChangeReflected` gates on the user-facing URL, never the GHA API.** The queue-aware deadline extension is *injected* via `onBudgetExhausted` (`makeDeployQueueExtender` in `github-actions-poll.js`) so the helper stays DOM-pure. The extender is **activity-aware**: extend while the deploy lane is in-flight *or recently cycling*, fail fast only when genuinely quiescent (a single-instant idle probe produced false "chain never fired" verdicts between this repo's frequent deploys). Don't make `deploy-pill.js` poll the API for success, and don't revert the extender to instantaneous idle detection. **Lock:** `e2e/deploy-pill.test.js`.
 

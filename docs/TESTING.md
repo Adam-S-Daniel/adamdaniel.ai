@@ -49,18 +49,25 @@ spec/selector/runtime view.)
 
 **Layer 1 — workflow-level path filters.** Each `.github/workflows/*.yml`
 gates itself with `paths:`/`paths-ignore:`. The merge-gating required
-checks are `validate-content` (`cms-editorial-workflow.yml` — fires on
-*every* PR, no path filter), `scan` (`secrets-scan.yml` — every PR), and
-`select` / `unit` / `parity` / `e2e (1)` / `e2e-admin` / `finalize`
-(`e2e-tests.yml`, which carries a `paths-ignore:` list — so on a
-docs/tooling-only PR it doesn't fire at all → see "missing-check
-trap"), and `preview-media` (`preview-media.yml` — always-run +
-early-skip: fires on every PR with no path filter, runs a read-only
-probe that a committed `assets/images/uploads/` image resolves on the
-PR's `preview-pr<N>` surface only when media-salient paths changed;
-on a media-salient PR it HARD-FAILS if the preview env is absent —
-the trap-safe way to require `deploy-preview` success without making
-the path-filtered `deploy-preview.yml` itself a required context).
+checks today are `editorial / validate-content` (`cms-editorial-workflow.yml`
+— fires on *every* PR, no path filter), `scan / scan` (`secrets-scan.yml` —
+every PR), `parity / parity` (`parity-preview.yml` — its own caller now, not
+a job inside `e2e-tests.yml`; always-run + early-skip, reporting success
+immediately when no `@parity-preview` spec applies), `preview-media /
+preview-media` (`preview-media.yml` — always-run + early-skip: fires on
+every PR with no path filter, runs a read-only probe that a committed
+`assets/images/uploads/` image resolves on the PR's `preview-pr<N>` surface
+only when media-salient paths changed; on a media-salient PR it HARD-FAILS
+if the preview env is absent — the trap-safe way to require `deploy-preview`
+success without making the path-filtered `deploy-preview.yml` itself a
+required context), and `e2e / e2e` (`e2e-tests.yml`'s single reusable-owned
+job — or `e2e-stub.yml`'s same-named job on doc/infra-only PRs — which
+carries a `paths-ignore:` list — so on a docs/tooling-only PR the primary
+caller doesn't fire at all → see "missing-check trap"). The old separate
+`select` / `unit` / `e2e (1)` / `e2e-admin` / `finalize` contexts no longer
+exist as distinct required checks; they collapsed into the single `e2e / e2e`
+context when the reusable took over the whole Playwright suite in one
+`workflow_call` job.
 
 **Layer 2 — the diff-aware selector** (`e2e/select-specs.js`, unit-tested
 by `select-specs.test.js`). The `select` job runs it twice — once per
@@ -111,41 +118,48 @@ a `cms/*` canary-only changeset collapses to `scope:skip`.
 ### The missing-check trap and the stub mirror
 
 `e2e-tests.yml`'s `paths-ignore:` means a docs/tooling-only PR never
-fires `select`/`unit`/`parity`/`e2e (1)`/`finalize` — yet branch
-protection *requires* them, so the PR would block forever.
-`required-check-stubs.yml` fires on the byte-mirror of that
-`paths-ignore:` list and emits trivial green jobs of the same names.
-Upstream, cms-platform's `e2e/required-check-stub-paths.test.js` covers
-this byte-mirror invariant so the two lists can't drift unnoticed.
+fires the required `e2e / e2e` check — yet branch protection *requires*
+it, so the PR would block forever. `e2e-stub.yml` fires on the byte-mirror
+of that `paths-ignore:` list and emits a trivial green job named `e2e`, so
+the identical `e2e / e2e` context still reports on doc/infra-only PRs
+(`required-check-stubs.yml`, which used to stub several separate contexts,
+no longer exists — this repo's topology now has a single `e2e` context to
+stub). Upstream, cms-platform's `e2e/required-check-stub-paths.test.js`
+covers this byte-mirror invariant so the two lists can't drift unnoticed.
 
 ### Footguns (verified)
 
-- **`e2e-admin` stub gap — fixed.** `main.json` requires `e2e-admin`;
-  `required-check-stubs.yml` historically only stubbed
-  `select/unit/parity/e2e (1)/finalize`, so a docs/tooling-only PR sat
-  blocked on `e2e-admin` ("Expected — waiting"). An `e2e-admin` stub
-  job was added, and the stub-path mirror invariant — now enforced
-  upstream by cms-platform's `e2e/required-check-stub-paths.test.js` —
-  keeps *every* path-filtered required context (not just paths parity)
-  covered by a stub job, so this class of gap can't recur silently.
+- **`e2e-admin` stub gap — HISTORICAL, no longer applicable.** Under the
+  OLD multi-context topology, `main.json` required a separate `e2e-admin`
+  context and `required-check-stubs.yml` historically only stubbed
+  `select/unit/parity/e2e (1)/finalize`, so a docs/tooling-only PR could sit
+  blocked on `e2e-admin` ("Expected — waiting") until an `e2e-admin` stub job
+  was added. The topology has since collapsed every e2e-family context into
+  a single `e2e / e2e` check, satisfied on doc/infra-only PRs by `e2e-stub.yml`
+  — there is no `e2e-admin` context left to have a stub gap in. The general
+  lesson (a path-filtered required check needs a byte-mirrored stub, enforced
+  upstream by cms-platform's `e2e/required-check-stub-paths.test.js`) still
+  applies to whatever required contexts exist today.
 - **`_sass/**` has no PR coverage** — not a fanout pattern, no
   `SPEC_RULES` match, absent from `visual-regression.yml`'s `paths:`. A
   Sass-only PR runs the baseline only, no visual signal.
 - **Large tooling PRs** (`.githooks/**`, `scripts/**`) fire e2e-tests
   for real but collapse to a 1-shard baseline — green gate, near-zero
   behavioural coverage.
-- **`parity` is required but has no `needs:`** and runs against live
-  prod; if `adamdaniel.ai` is degraded, every PR's `parity` fails
-  independent of the diff.
+- **`parity` is required but has no `needs:`** and runs against the PR's
+  OWN `preview-pr<N>.adamdaniel.ai` surface (`parity-preview.yml`'s
+  reusable, per AGENTS.md's description of that caller), not live prod;
+  if that PR's preview build is degraded, its own `parity` check fails
+  independent of the diff — production health is not what's being probed.
 
 ## 3. Categories and which workflow runs them
 
 | Workflow | Triggers | Specs |
 | --- | --- | --- |
-| `e2e-tests.yml` | PR, push to main | All `e2e/*.spec.js` and `e2e/*.test.js` (subset gated by selector on PRs) |
+| `e2e-tests.yml` | PR only (no `push` trigger) | All `e2e/*.spec.js` and `e2e/*.test.js` (subset gated by selector on PRs) |
 | `visual-regression.yml` | PR | Uses its own `playwright.regression.config.js` and `regression-video.spec.js` only (both platform-delivered via the `.cms-platform/e2e` harness, not vendored here) |
 | `cms-editorial-workflow.yml` | Every PR (no path/branch filter — `validate-content` must always report for the ruleset) | Front-matter validation in-line (no specs invoked) |
-| `publish-scheduled-posts.yml` | Hourly cron | Runs `scripts/publish_scheduled_posts.py`; no specs |
+| `publish-scheduled-posts.yml` | Daily cron (14:00 UTC) | Runs the platform-owned `publish_scheduled_posts.py` (invoked via the `publish-scheduled-posts.yml` reusable — not a local file in this repo); no specs |
 
 Jekyll plugin and OAuth-proxy unit tests are now owned upstream by
 cms-platform (gem `theme/spec/` + the platform `oauth-proxy/`) and run in the
@@ -267,7 +281,7 @@ side-by-side review video.
 
 What this suite does *not* yet cover:
 
-- **Editorial workflow PR creation.** The local backend forces simple mode, so we can't drive the full `cms/<branch>` → PR → preview path from a spec. Covered structurally by `cms-config.spec.js` (asserting the flag is on) and operationally only by humans testing on `preview-pr<N>` deployments.
+- **Editorial workflow PR creation — narrower than it used to be.** The local backend forces simple mode, so a spec can't drive the full `cms/<branch>` → PR → preview path from a hermetic local-backend test. This is NOT the same as "entirely untested", though: the preview-side round trip through a real editorial-workflow PR IS covered operationally by the `cms-preview-loops.yml` / `cms-publish-loop-preview.yml` / `cms-delete-published-preview.yml` family (real-backend, `workflow_dispatch`-gated against an open PR's preview env, not run automatically on every PR — see AGENTS.md). What remains genuinely uncovered is a hermetic/local-backend test of PR creation itself, which the local-backend-forces-simple-mode constraint above rules out. Covered structurally by `cms-config.spec.js` (asserting the flag is on) and operationally by the preview-loop family plus humans testing on `preview-pr<N>` deployments.
 - **Media uploads — now covered.** `e2e/cms-image-upload.spec.js`,
   `e2e/cms-featured-image-lifecycle.spec.js`,
   `e2e/cms-inline-image.spec.js`, and `e2e/cms-project-gallery.spec.js`
@@ -310,7 +324,7 @@ CMS ADMIN (browser, chromium-desktop-3k):
   admin-reviews-stats.spec.js     stats grid + fallback              2 tests
 
 VISUAL REGRESSION (pixel baselines):
-  visual-regression.spec.js       4 public + 4 admin                 8 tests
+  visual-regression.spec.js       4 public (admin baselines retired)   4 tests
 
 CDN:
   cloudfront-preview-router       host → prefix mapping              7 tests
