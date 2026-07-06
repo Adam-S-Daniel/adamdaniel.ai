@@ -23,14 +23,16 @@ run-name: >-
 on:
   push:
     branches: [main]
+    # playwright.config.js and _layouts/post.html were dropped: neither is
+    # tracked in this repo (the e2e harness + Jekyll layouts are gem-/
+    # platform-delivered here, not vendored) so they could never match a
+    # push diff. Keep only paths that can actually change in this repo.
     paths:
       - .github/workflows/cms-publish-loop-prod.yml
       - admin/**
-      - playwright.config.js
       - package.json
       - package-lock.json
       - _config.yml
-      - _layouts/post.html
   workflow_dispatch:
 
 permissions:

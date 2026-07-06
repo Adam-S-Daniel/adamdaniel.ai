@@ -11,9 +11,14 @@ run-name: >-
 
 on:
   schedule:
-    # 12:00 UTC daily — tune per site. Keep clear of any prod-mutating
-    # loop crons so the probes don't share prod state.
-    - cron: '0 12 * * *'
+    # 10:00 UTC daily — tune per site. Keep clear of any prod-mutating
+    # loop crons so the probes don't share prod state: the daily schedule
+    # map is 04 sweep, 06 Mon dev-hooks/skills, 07 Mon platform-bump,
+    # 07 Sun secrets, 10 THIS canary, 11 cleanup, 12 host-loop (prod-mutating),
+    # 13 label-audit, 14 publish-scheduled, 15 media-roundtrip (prod-mutating).
+    # This was previously 0 12 * * * — an exact collision with
+    # cms-publish-loop-host.yml's prod-mutating cron; 10:00 UTC is free.
+    - cron: '0 10 * * *'
   workflow_dispatch:
 
 permissions:
