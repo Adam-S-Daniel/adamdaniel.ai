@@ -12,15 +12,17 @@ published: false
 
 The run is a full sweep: 7 tasks × 5 scripting languages × 4 effort levels = 140 agent runs, each graded by a panel of judges (Google Gemini and Claude Haiku) on test comprehensiveness and code quality.
 
+**How to read the numbers:** duration and cost figures here are *geometric* means — outlier-damped, so one unusually slow run can't dominate a cell — and runs that hit the 30-minute timeout count against the duration statistics at their recorded wall clock (a ≥ marks a measurement the timeout capped). The tables also pool the benchmark's two PowerShell variants (script-file vs. inline-tool) into a single `pwsh` column; in this harness they turned out to be replicates of each other.
+
 ## Opus 4.8 tops the quality charts
 
-Across the board, Opus 4.8 produces the strongest **tests** and the strongest **deliverable code** of any model in the benchmark. At high, xhigh, and the new "ultra" effort it earns A‑/A grades for test quality in nearly every language — for example A (4.6) on the default language at ultra effort, and A (4.5) for PowerShell at high. The two judges, despite coming from different labs, agree on the ranking (Spearman +0.83 on test quality, +0.90 on code quality), so this isn't one judge's quirk.
+Across the board, Opus 4.8 produces the strongest **tests** and the strongest **deliverable code** of any model in the benchmark — including the newer Sonnet 5 and Fable 5 runs that have joined the dataset since this comparison was first drawn up. At high, xhigh, and the new "ultra" effort it earns A‑/A grades for test quality in nearly every language — for example A (4.6) on the default language at ultra effort, and A (4.5) for PowerShell at high. The two judges, despite coming from different labs, agree on the ranking (Spearman rank correlations of +0.66 to +0.85 across the model and language-by-model rankings), so this isn't one judge's quirk.
 
 ## …but you pay for it
 
-The flip side is time and money. Relative to Opus 4.7, the premium is steepest at **medium** effort — roughly **+65% on both wall-clock time and cost** — and, interestingly, *compresses to about +15% at high effort* (4.7's "high" is comparatively expensive, so 4.8 closes the gap). At the top two efforts (xhigh and "ultra"), individual runs routinely take **15–25 minutes and cost $4.50–$7.35**, landing in the D / D‑ bands on the speed and cost curves.
+The flip side is time and money. Relative to Opus 4.7, the premium is steepest at **medium** effort — roughly **+54% on wall-clock time and +67% on cost** — and, interestingly, *compresses to about +30% at high effort* (4.7's "high" is comparatively expensive, so 4.8 closes part of the gap) before re-widening to about +75–80% at xhigh. At the top two efforts (xhigh and "ultra"), typical runs take **15–25 minutes and cost $4.30–$6.95** — with the slowest hitting the 30-minute timeout cap — landing in the D / D‑ bands on the speed and cost curves.
 
-If you want most of Opus 4.8's quality without the worst of the bill, **medium effort is the value sweet spot**: B+/B‑ on speed, C+/C on cost, and still A‑/B+ on test quality in several languages.
+If you want most of Opus 4.8's quality without the worst of the bill, **medium effort is the value sweet spot**: B+ on speed in three of the four languages, C+/C on cost, and still A‑ test quality everywhere except bash.
 
 ## The new "ultra" effort
 
@@ -38,7 +40,7 @@ So read "~2× the traps" as **"iterates ~2× more granularly," not "fails ~2× a
 
 ## Which should you use? Try it yourself
 
-Pick a preset, or drag the sliders to weight speed, cost, test quality, and code quality for *your* situation — the table re-ranks every model / effort / language combination live. (Same widget as in [the original GHA-bench post](/introducing-gha-bench), now with Opus 4.8 and the new "ultra" effort.)
+Pick a preset, or drag the sliders to weight speed, cost, test quality, and code quality for *your* situation — the table re-ranks every model / effort / language combination live. (Same widget as in [the original GHA-bench post](/introducing-gha-bench), now with Opus 4.8, the new "ultra" effort, and the Sonnet 5 and Fable 5 runs that have landed since. Hover or long-press a Duration cell to see that combination's slowest run; † marks combos where a run hit the 30-minute timeout.)
 
 <!-- html-embed:start -->
 <div class="post-embed">
@@ -86,6 +88,9 @@ Pick a preset, or drag the sliders to weight speed, cost, test quality, and code
     </thead>
     <tbody id="bws-tbody"></tbody>
   </table>
+  <p class="bws-footnote">&dagger; at least one run in this combination hit the 30-minute
+  timeout cap; its slowest-run figure (hover/long-press the Duration cell) is a lower
+  bound, shown with &ge;.</p>
 </div>
 
 <style>
@@ -139,6 +144,7 @@ Pick a preset, or drag the sliders to weight speed, cost, test quality, and code
 }
 .bws-widget .bws-table th { border-bottom-width: 2px; }
 .bws-widget .bws-table td:nth-child(n+3) { font-variant-numeric: tabular-nums; }
+.bws-widget .bws-footnote { font-size: 0.85em; opacity: 0.75; margin: 0.5em 0 0; }
 @media (max-width: 540px) {
   .bws-widget .bws-slider-row {
     grid-template-columns: 1fr 3.5em;
@@ -164,68 +170,84 @@ Pick a preset, or drag the sliders to weight speed, cost, test quality, and code
   };
 
   // [language, model, dur_tier, dur_label, cost_tier, cost_label,
-  //  tests_tier, tests_label, wf_tier, wf_label]
+  //  tests_tier, tests_label, wf_tier, wf_label, max_dur_label]
   var ROWS = [
-    ["default", "opus 4.8 1m med", "B+", "7.5min", "C+", "$1.89", "B+", "4.0", "B", "3.5"],
-    ["bash", "opus 4.8 1m med", "B-", "9.2min", "C", "$2.38", "B-", "3.2", "A-", "4.2"],
-    ["pwsh", "opus 4.8 1m med", "B+", "7.4min", "C+", "$1.81", "A-", "4.2", "B+", "4.0"],
-    ["pwsh-tool", "opus 4.8 1m med", "B-", "10.1min", "C", "$2.57", "A-", "4.2", "A-", "4.2"],
-    ["ts-bun", "opus 4.8 1m med", "C+", "11.7min", "C", "$2.73", "A-", "4.3", "A", "4.7"],
-    ["default", "opus 4.8 1m hi", "B-", "9.4min", "C", "$2.74", "B-", "3.4", "A-", "4.1"],
-    ["bash", "opus 4.8 1m hi", "B-", "10.5min", "C", "$2.80", "A-", "4.3", "A-", "4.3"],
-    ["pwsh", "opus 4.8 1m hi", "C", "13.8min", "C-", "$3.24", "A", "4.5", "B", "3.8"],
-    ["pwsh-tool", "opus 4.8 1m hi", "C", "12.4min", "C-", "$2.89", "A", "4.4", "B+", "4.1"],
-    ["ts-bun", "opus 4.8 1m hi", "C+", "12.2min", "D+", "$3.68", "A-", "4.3", "A-", "4.2"],
-    ["default", "opus 4.8 1m xhi", "C-", "15.3min", "D+", "$4.48", "A-", "4.4", "B+", "3.9"],
-    ["bash", "opus 4.8 1m xhi", "D", "20.3min", "D", "$5.74", "B+", "4.1", "B+", "3.9"],
-    ["pwsh", "opus 4.8 1m xhi", "D-", "21.9min", "D-", "$6.08", "A-", "4.3", "A", "4.4"],
-    ["pwsh-tool", "opus 4.8 1m xhi", "D-", "24.6min", "D-", "$6.51", "A", "4.5", "A-", "4.3"],
-    ["ts-bun", "opus 4.8 1m xhi", "D", "20.4min", "D", "$5.76", "A-", "4.4", "A-", "4.1"],
-    ["default", "opus 4.8 1m ultra", "D+", "17.0min", "D", "$4.90", "A", "4.6", "A-", "4.2"],
-    ["bash", "opus 4.8 1m ultra", "D", "19.9min", "D", "$5.39", "B+", "3.9", "A-", "4.1"],
-    ["pwsh", "opus 4.8 1m ultra", "D-", "23.2min", "D-", "$6.87", "A", "4.4", "B+", "4.1"],
-    ["pwsh-tool", "opus 4.8 1m ultra", "D-", "24.9min", "D-", "$6.39", "A", "4.5", "A-", "4.3"],
-    ["ts-bun", "opus 4.8 1m ultra", "D-", "24.0min", "D-", "$7.35", "A", "4.5", "B+", "3.9"],
-    ["default", "opus 4.7 1m med", "A+", "5.0min", "B", "$1.11", "B+", "3.9", "B", "3.8"],
-    ["bash", "opus 4.7 1m med", "A+", "4.7min", "B", "$1.13", "B-", "3.4", "B-", "3.4"],
-    ["pwsh", "opus 4.7 1m med", "B", "8.6min", "B-", "$1.61", "B", "3.6", "B", "3.5"],
-    ["pwsh-tool", "opus 4.7 1m med", "B+", "6.9min", "B-", "$1.48", "B+", "3.9", "B+", "4.1"],
-    ["ts-bun", "opus 4.7 1m med", "A-", "6.5min", "B", "$1.31", "B+", "4.0", "B", "3.8"],
-    ["default", "opus 4.7 1m hi", "B+", "7.6min", "C+", "$2.08", "B+", "4.0", "B", "3.6"],
-    ["bash", "opus 4.7 1m hi", "B", "8.7min", "C+", "$2.10", "B-", "3.4", "C+", "3.0"],
-    ["pwsh", "opus 4.7 1m hi", "B-", "9.4min", "C", "$2.58", "A-", "4.1", "B+", "4.0"],
-    ["pwsh-tool", "opus 4.7 1m hi", "B-", "10.6min", "C-", "$3.03", "B+", "3.9", "B+", "3.9"],
-    ["ts-bun", "opus 4.7 1m hi", "B", "9.0min", "C", "$2.56", "A-", "4.3", "B", "3.8"],
-    ["default", "opus 4.7 1m xhi", "B", "9.1min", "C", "$2.79", "A", "4.4", "B", "3.8"],
-    ["bash", "opus 4.7 1m xhi", "C", "13.6min", "C-", "$2.98", "B", "3.8", "B+", "4.1"],
-    ["pwsh", "opus 4.7 1m xhi", "C+", "12.0min", "C-", "$3.47", "A-", "4.2", "B", "3.8"],
-    ["pwsh-tool", "opus 4.7 1m xhi", "C+", "11.4min", "C-", "$3.49", "B+", "4.0", "B", "3.7"],
-    ["ts-bun", "opus 4.7 1m xhi", "C+", "12.2min", "C-", "$3.55", "B+", "4.1", "B+", "3.9"],
-    ["default", "opus 4.7 200k med", "A+", "4.5min", "B", "$1.17", "B", "3.8", "B", "3.8"],
-    ["bash", "opus 4.7 200k med", "A+", "4.9min", "B", "$1.26", "C+", "3.1", "B", "3.7"],
-    ["pwsh", "opus 4.7 200k med", "A-", "6.1min", "B-", "$1.55", "B+", "3.9", "B+", "3.9"],
-    ["pwsh-tool", "opus 4.7 200k med", "A", "5.7min", "B-", "$1.50", "B+", "4.1", "B", "3.6"],
-    ["ts-bun", "opus 4.7 200k med", "A-", "6.6min", "B-", "$1.45", "B+", "4.0", "B", "3.7"],
-    ["default", "sonnet 46 1m med", "A-", "6.4min", "B+", "$1.01", "B", "3.8", "B-", "3.4"],
-    ["bash", "sonnet 46 1m med", "B-", "10.1min", "B", "$1.36", "C", "2.9", "B-", "3.2"],
-    ["pwsh", "sonnet 46 1m med", "B", "8.2min", "B", "$1.12", "A-", "4.2", "C+", "3.1"],
-    ["pwsh-tool", "sonnet 46 1m med", "B-", "9.2min", "B", "$1.32", "B", "3.6", "C+", "3.1"],
-    ["ts-bun", "sonnet 46 1m med", "B+", "7.9min", "B", "$1.18", "B", "3.8", "B", "3.7"],
-    ["default", "sonnet 46 200k", "B", "8.3min", "B", "$1.22", "B", "3.6", "B+", "4.0"],
-    ["bash", "sonnet 46 200k", "B-", "9.8min", "B", "$1.35", "B", "3.8", "A-", "4.1"],
-    ["pwsh", "sonnet 46 200k", "B-", "9.2min", "B", "$1.22", "B", "3.7", "B-", "3.3"],
-    ["pwsh-tool", "sonnet 46 200k", "B-", "9.4min", "B", "$1.26", "B-", "3.4", "B", "3.6"],
-    ["ts-bun", "sonnet 46 200k", "B", "8.5min", "B", "$1.21", "B", "3.6", "B-", "3.2"],
-    ["default", "opus 46 200k", "A-", "6.7min", "B-", "$1.42", "B-", "3.4", "B", "3.5"],
-    ["bash", "opus 46 200k", "B", "8.3min", "B-", "$1.63", "B-", "3.4", "C+", "3.2"],
-    ["pwsh", "opus 46 200k", "B", "8.5min", "B-", "$1.68", "C+", "3.1", "B", "3.6"],
-    ["pwsh-tool", "opus 46 200k", "B", "8.1min", "B-", "$1.56", "B", "3.8", "B", "3.6"],
-    ["ts-bun", "opus 46 200k", "A-", "6.4min", "B", "$1.30", "B-", "3.2", "B-", "3.5"],
-    ["default", "haiku 45 200k", "B", "8.3min", "A+", "$0.42", "C-", "2.5", "C+", "3.0"],
-    ["bash", "haiku 45 200k", "B+", "7.9min", "A", "$0.60", "D+", "2.0", "C-", "2.6"],
-    ["pwsh", "haiku 45 200k", "A-", "6.4min", "A+", "$0.50", "D+", "2.1", "C+", "2.9"],
-    ["pwsh-tool", "haiku 45 200k", "B+", "7.2min", "A+", "$0.48", "C-", "2.5", "C-", "2.5"],
-    ["ts-bun", "haiku 45 200k", "A", "5.7min", "A+", "$0.48", "D", "1.9", "B-", "3.2"],
+    ["default", "opus 4.8 1m med", "B+", "7.4min", "C+", "$1.87", "A-", "4.1", "A-", "4.3", "9.9min"],
+    ["bash", "opus 4.8 1m med", "B+", "7.8min", "C+", "$2.06", "B-", "3.3", "B", "3.7", "23.9min"],
+    ["pwsh", "opus 4.8 1m med", "B+", "7.9min", "C+", "$2.03", "A-", "4.2", "B+", "4.1", "12.9min"],
+    ["ts-bun", "opus 4.8 1m med", "C+", "10.9min", "C", "$2.65", "A-", "4.4", "A-", "4.3", "23.0min"],
+    ["default", "opus 4.8 1m hi", "B-", "9.2min", "C", "$2.66", "B-", "3.4", "A-", "4.1", "12.2min"],
+    ["bash", "opus 4.8 1m hi", "B-", "10.3min", "C-", "$2.74", "A-", "4.3", "A-", "4.3", "15.0min"],
+    ["pwsh", "opus 4.8 1m hi", "C", "12.9min", "C-", "$3.04", "A", "4.5", "B+", "3.9", "17.3min"],
+    ["ts-bun", "opus 4.8 1m hi", "C+", "10.9min", "C-", "$3.33", "A-", "4.3", "A-", "4.2", "19.2min"],
+    ["default", "opus 4.8 1m xhi", "C-", "15.0min", "D+", "$4.31", "A-", "4.4", "B+", "3.9", "19.1min"],
+    ["bash", "opus 4.8 1m xhi", "D", "20.2min", "D-", "$5.67", "B+", "4.1", "B+", "3.9", "23.9min"],
+    ["pwsh", "opus 4.8 1m xhi", "D-", "24.6min", "D-", "$6.18", "A-", "4.4", "A-", "4.4", "≥30.0min"],
+    ["ts-bun", "opus 4.8 1m xhi", "D", "20.2min", "D-", "$5.69", "A-", "4.4", "A-", "4.1", "25.3min"],
+    ["default", "opus 4.8 1m ultra", "D+", "16.6min", "D", "$4.79", "A", "4.6", "A-", "4.2", "22.7min"],
+    ["bash", "opus 4.8 1m ultra", "D", "19.5min", "D", "$5.29", "B+", "3.9", "A-", "4.1", "26.1min"],
+    ["pwsh", "opus 4.8 1m ultra", "D-", "22.2min", "D-", "$5.98", "A", "4.5", "A-", "4.2", "33.6min"],
+    ["ts-bun", "opus 4.8 1m ultra", "D-", "23.5min", "D-", "$6.94", "A", "4.5", "B+", "3.9", "32.3min"],
+    ["default", "opus 4.7 1m med", "A+", "4.5min", "B", "$1.10", "B", "3.7", "B", "3.6", "8.2min"],
+    ["bash", "opus 4.7 1m med", "A+", "4.7min", "B", "$1.20", "B-", "3.2", "B-", "3.5", "7.1min"],
+    ["pwsh", "opus 4.7 1m med", "A-", "6.5min", "B-", "$1.47", "B+", "3.8", "B", "3.7", "22.5min"],
+    ["ts-bun", "opus 4.7 1m med", "A-", "6.5min", "B-", "$1.36", "B+", "3.9", "B", "3.7", "15.2min"],
+    ["default", "opus 4.7 1m hi", "B+", "7.5min", "C+", "$2.05", "B+", "4.1", "B+", "3.9", "10.3min"],
+    ["bash", "opus 4.7 1m hi", "B+", "7.6min", "C+", "$1.93", "B-", "3.4", "B", "3.5", "20.6min"],
+    ["pwsh", "opus 4.7 1m hi", "B-", "9.5min", "C", "$2.65", "A-", "4.1", "B+", "4.1", "18.4min"],
+    ["ts-bun", "opus 4.7 1m hi", "B", "8.8min", "C", "$2.48", "A-", "4.2", "B+", "3.9", "10.9min"],
+    ["default", "opus 4.7 1m xhi", "B", "8.9min", "C-", "$2.70", "A-", "4.2", "B+", "4.0", "13.4min"],
+    ["bash", "opus 4.7 1m xhi", "C+", "12.1min", "C-", "$2.88", "B", "3.8", "B+", "3.9", "39.8min"],
+    ["pwsh", "opus 4.7 1m xhi", "C+", "11.7min", "C-", "$3.35", "B+", "4.1", "B+", "3.9", "≥28.0min"],
+    ["ts-bun", "opus 4.7 1m xhi", "C+", "11.8min", "D+", "$3.43", "A-", "4.3", "B+", "3.9", "20.8min"],
+    ["default", "opus 4.7 200k med", "A+", "4.6min", "B", "$1.13", "B+", "3.8", "B", "3.6", "6.1min"],
+    ["bash", "opus 4.7 200k med", "A+", "4.5min", "B", "$1.09", "B-", "3.2", "A-", "4.2", "7.5min"],
+    ["pwsh", "opus 4.7 200k med", "A", "5.9min", "B-", "$1.49", "B", "3.8", "B", "3.5", "8.5min"],
+    ["ts-bun", "opus 4.7 200k med", "A", "5.4min", "B", "$1.31", "B", "3.8", "B-", "3.4", "6.9min"],
+    ["default", "opus 46 200k med", "B+", "7.0min", "B-", "$1.44", "B-", "3.4", "B-", "3.4", "9.2min"],
+    ["bash", "opus 46 200k med", "B+", "7.5min", "B-", "$1.55", "B-", "3.4", "B-", "3.4", "15.8min"],
+    ["pwsh", "opus 46 200k med", "B+", "7.8min", "B-", "$1.49", "C+", "3.1", "B", "3.6", "12.4min"],
+    ["ts-bun", "opus 46 200k med", "A-", "6.1min", "B", "$1.23", "B-", "3.3", "B-", "3.5", "10.3min"],
+    ["default", "opus 46 200k hi", "A-", "6.2min", "B-", "$1.33", "B", "3.6", "C+", "3.1", "8.3min"],
+    ["bash", "opus 46 200k hi", "B+", "7.6min", "B-", "$1.63", "B+", "4.1", "C+", "3.1", "19.3min"],
+    ["pwsh", "opus 46 200k hi", "B+", "7.6min", "B-", "$1.54", "B", "3.6", "B", "3.7", "18.5min"],
+    ["ts-bun", "opus 46 200k hi", "A-", "6.0min", "B", "$1.25", "B", "3.7", "B", "3.7", "9.0min"],
+    ["default", "sonnet 5 1m low", "A", "5.9min", "B", "$1.10", "C+", "3.0", "B", "3.6", "10.7min"],
+    ["bash", "sonnet 5 1m low", "B+", "7.1min", "A", "$0.59", "C", "2.9", "B", "3.5", "13.7min"],
+    ["pwsh", "sonnet 5 1m low", "B", "8.5min", "B", "$1.20", "C", "2.8", "C", "2.8", "15.4min"],
+    ["ts-bun", "sonnet 5 1m low", "B+", "7.8min", "B", "$1.07", "D+", "2.1", "C", "2.7", "12.0min"],
+    ["default", "sonnet 5 1m med", "B+", "7.9min", "C+", "$1.98", "C+", "3.1", "B+", "4.0", "11.5min"],
+    ["bash", "sonnet 5 1m med", "C+", "11.9min", "C-", "$2.77", "B+", "3.9", "C+", "3.1", "16.9min"],
+    ["pwsh", "sonnet 5 1m med", "C", "12.9min", "C", "$2.21", "B", "3.7", "B+", "3.9", "18.8min"],
+    ["ts-bun", "sonnet 5 1m med", "C", "12.8min", "C", "$2.64", "C+", "3.1", "B", "3.8", "17.0min"],
+    ["default", "sonnet 5 1m hi", "C", "13.1min", "D+", "$3.44", "B", "3.6", "B", "3.6", "18.0min"],
+    ["bash", "sonnet 5 1m hi", "D+", "18.2min", "D", "$4.96", "B", "3.8", "B", "3.7", "≥30.0min"],
+    ["pwsh", "sonnet 5 1m hi", "D-", "24.9min", "D", "$4.52", "A-", "4.2", "A-", "4.2", "≥30.0min"],
+    ["ts-bun", "sonnet 5 1m hi", "D", "21.1min", "D-", "$5.62", "A-", "4.3", "A-", "4.1", "25.3min"],
+    ["default", "sonnet 46 1m med", "A-", "6.1min", "B+", "$0.98", "B", "3.5", "B-", "3.2", "9.6min"],
+    ["bash", "sonnet 46 1m med", "B", "8.8min", "B", "$1.24", "C+", "3.1", "B-", "3.3", "29.1min"],
+    ["pwsh", "sonnet 46 1m med", "B", "8.1min", "B", "$1.13", "B", "3.7", "C+", "3.2", "16.7min"],
+    ["ts-bun", "sonnet 46 1m med", "B+", "7.5min", "B", "$1.12", "B", "3.7", "B", "3.5", "12.2min"],
+    ["default", "sonnet 46 200k med", "B+", "7.2min", "B", "$1.04", "B", "3.6", "B", "3.5", "11.7min"],
+    ["bash", "sonnet 46 200k med", "B", "8.3min", "B", "$1.10", "B", "3.5", "B", "3.8", "15.6min"],
+    ["pwsh", "sonnet 46 200k med", "B+", "7.4min", "B+", "$0.93", "B", "3.6", "B-", "3.3", "12.3min"],
+    ["ts-bun", "sonnet 46 200k med", "B+", "8.0min", "B+", "$1.02", "B-", "3.4", "C+", "3.1", "11.0min"],
+    ["default", "sonnet 46 200k hi", "B-", "9.6min", "B-", "$1.44", "B+", "3.9", "B-", "3.4", "14.9min"],
+    ["bash", "sonnet 46 200k hi", "C+", "10.7min", "B-", "$1.56", "B", "3.6", "B", "3.5", "17.4min"],
+    ["pwsh", "sonnet 46 200k hi", "B-", "10.5min", "B-", "$1.47", "B", "3.6", "B", "3.5", "15.1min"],
+    ["ts-bun", "sonnet 46 200k hi", "B", "8.9min", "B-", "$1.48", "B+", "3.9", "B", "3.8", "10.8min"],
+    ["default", "fable 5 1m med", "B", "8.7min", "D+", "$3.94", "B-", "3.2", "B+", "3.9", "12.1min"],
+    ["bash", "fable 5 1m med", "B+", "7.9min", "D+", "$3.61", "A-", "4.1", "B+", "4.1", "9.4min"],
+    ["pwsh", "fable 5 1m med", "C-", "14.7min", "D", "$4.57", "A", "4.5", "B", "3.6", "19.0min"],
+    ["ts-bun", "fable 5 1m med", "C+", "10.6min", "D", "$4.60", "A", "4.4", "A-", "4.1", "14.5min"],
+    ["default", "fable 5 1m hi", "C+", "11.3min", "D-", "$5.74", "B-", "3.2", "A", "4.4", "15.1min"],
+    ["bash", "fable 5 1m hi", "C+", "11.8min", "D", "$5.47", "A-", "4.3", "B+", "4.1", "13.7min"],
+    ["pwsh", "fable 5 1m hi", "D+", "16.9min", "D-", "$5.96", "A-", "4.4", "A-", "4.4", "21.5min"],
+    ["ts-bun", "fable 5 1m hi", "C+", "12.2min", "D-", "$5.98", "A-", "4.3", "B+", "3.9", "15.2min"],
+    ["default", "haiku 45 200k", "A+", "5.2min", "A+", "$0.40", "D+", "2.2", "C-", "2.5", "59.1min"],
+    ["bash", "haiku 45 200k", "B-", "9.8min", "A", "$0.56", "D+", "2.1", "C-", "2.6", "≥322.8min"],
+    ["pwsh", "haiku 45 200k", "A-", "6.6min", "A+", "$0.47", "D+", "2.3", "C-", "2.6", "≥29.1min"],
+    ["ts-bun", "haiku 45 200k", "A", "5.4min", "A+", "$0.46", "D+", "2.0", "C", "2.7", "8.5min"],
   ];
 
   var KEYS = ["tests", "workflow", "duration", "cost"];
@@ -269,11 +291,14 @@ Pick a preset, or drag the sliders to weight speed, cost, test quality, and code
     var html = "";
     for (var i = 0; i < scored.length; i++) {
       var r = scored[i].row;
+      var maxd = r[10] || "";
+      var cens = maxd.charAt(0) === "≥";
       html +=
         "<tr>" +
         "<td>" + r[1] + "</td>" +
         "<td>" + r[0] + "</td>" +
-        "<td>" + r[2] + " (" + r[3] + ")</td>" +
+        "<td title=\"Slowest run: " + maxd + (cens ? " (hit the timeout cap)" : "") + "\">" +
+          r[2] + " (" + r[3] + ")" + (cens ? "<sup>†</sup>" : "") + "</td>" +
         "<td>" + r[4] + " (" + r[5] + ")</td>" +
         "<td>" + r[6] + " (" + r[7] + ")</td>" +
         "<td>" + r[8] + " (" + r[9] + ")</td>" +
@@ -352,4 +377,4 @@ The complete data lives in the [cross-run report](https://github.com/Adam-S-Dani
 
 *\* The Gemini judge now runs via Google's Antigravity (`agy`) CLI, which replaced the retired Gemini CLI in June 2026. It grades about 0.3 points stricter on a 1–5 scale than the prior harness (overall correlation r ≈ 0.90), so Opus 4.8's quality grades are, if anything, very slightly conservative relative to the older models'.*
 
-*\*\* The two runs being compared used different Claude Code versions (2.1.131/132 for Opus 4.7, 2.1.195 for Opus 4.8). A clean, model-only comparison would re-run both on the same version; that's on the to-do list.*
+*\*\* The two runs being compared used different Claude Code versions (2.1.112–132 across the pooled Opus 4.7 rows, 2.1.193/195 for Opus 4.8). A clean, model-only comparison would re-run both on the same version; that's on the to-do list.*
