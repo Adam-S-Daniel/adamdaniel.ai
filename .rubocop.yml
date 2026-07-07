@@ -1,12 +1,11 @@
-# RuboCop configuration scoped to this repo's Ruby surface: the plain-Ruby
-# workflow-shape lints in _plugins_test/ (the Jekyll plugins themselves are
-# now gem-delivered by cms-platform, so _plugins/ no longer exists here).
-# Nothing else in the repo is Ruby, so the Include list is deliberately
-# narrow and the generated _site/, vendored gems, and node_modules are
-# excluded outright.
+# RuboCop configuration for this repo's (minimal) Ruby surface. The Jekyll
+# plugins are now gem-delivered by cms-platform, so neither _plugins/ nor a
+# local Ruby test harness lives here anymore; this config simply keeps any
+# incidental Ruby in the repo to the project's house style, and excludes the
+# generated _site/, vendored gems, and node_modules outright.
 #
-# CI runs:  rubocop  (standalone, NOT bundle exec — RuboCop is kept out
-# of the site Gemfile; see AGENTS.md → "Code quality").
+# RuboCop is run standalone (NOT bundle exec) — it's deliberately kept out of
+# the site Gemfile; see AGENTS.md → "Code quality".
 
 plugins:
   - rubocop-performance
@@ -14,10 +13,6 @@ plugins:
 AllCops:
   TargetRubyVersion: 3.3
   NewCops: enable
-  # Lint only our own Ruby. Without an explicit Include, RuboCop's default
-  # glob would also try to lint Ruby it finds under vendored/build dirs.
-  Include:
-    - '_plugins_test/**/*.rb'
   Exclude:
     - 'vendor/**/*'
     - 'node_modules/**/*'
@@ -43,26 +38,14 @@ Style/TrailingCommaInArrayLiteral:
 Style/TrailingCommaInHashLiteral:
   EnforcedStyleForMultiline: consistent_comma
 
-# Every file here is preceded by a file-level comment block explaining its
-# purpose (see the headers in each _plugins_test/ file). A duplicate
-# per-class doc comment would be noise, so don't require one.
+# A duplicate per-class doc comment would be noise, so don't require one.
 Style/Documentation:
   Enabled: false
 
-# The plain-Ruby test files intentionally define several tiny throwaway
-# fixtures at the top level (a Struct stand-in, a fake Liquid context, a
-# fake Jekyll doc). Splitting each into its own file would scatter a
-# single test's setup, so allow multiple per file in tests only.
-Style/OneClassPerFile:
-  Exclude:
-    - '_plugins_test/**/*.rb'
-
 # ── Metrics ────────────────────────────────────────────────────────────────
-# Jekyll generators/initializers are legitimately a bit longer than a
-# typical helper (they assemble Page objects field-by-field and shape
-# data). Keep the cops on as guardrails but with limits that fit
-# idiomatic Jekyll plugin code rather than forcing churn on working code.
-
+# Keep these cops on as guardrails, but with limits a little above RuboCop's
+# defaults so they fit this project's idioms rather than forcing churn on
+# working code.
 Metrics/MethodLength:
   Max: 25
 Metrics/AbcSize:
@@ -71,8 +54,3 @@ Metrics/CyclomaticComplexity:
   Max: 9
 Metrics/PerceivedComplexity:
   Max: 9
-# The plain-Ruby test files run their assertions inside one top-level
-# block per file; that is the intended shape, not a smell.
-Metrics/BlockLength:
-  Exclude:
-    - '_plugins_test/**/*.rb'
