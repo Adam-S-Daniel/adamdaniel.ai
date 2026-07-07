@@ -35,13 +35,13 @@ The Opus 4.8 sweep introduces a fourth effort level — **"ultra"** — which la
 
 ## It iterates a lot — but it isn't getting stuck
 
-Opus 4.8 writes **more and denser tests** than its predecessor, and it shows: it also trips GHA-bench's "trap" detectors (heuristics that flag things like re-running the same test command many times) about **twice as often** as Opus 4.7. That sounds alarming, so I hand-reviewed **all 201** of those occurrences. The result:
+Opus 4.8 writes **more and denser tests** than its predecessor, and it shows: it also trips GHA-bench's "trap" detectors (heuristics that flag things like re-running the same test command many times) about **twice as often** as Opus 4.7 — 0.97 vs. 0.44 firings per run at matched effort levels. That sounds alarming, so I hand-reviewed **all 201** occurrences the detectors originally flagged. The result:
 
 - **99% show no looping at all.**
 - **86%** are legitimate engineering — red-green TDD cycles, designing fixtures up front, fixing a real type error — that merely tripped a count-based heuristic.
 - **~1%** looked like genuine distress.
 
-So read "~2× the traps" as **"iterates ~2× more granularly," not "fails ~2× as often."** A good chunk of the gap is also a measurement artifact (the way 4.8 prefixes its shell commands defeats the detector's de-duplication) plus a Claude Code version difference between the two runs, not the model spinning its wheels. The [full investigation](https://github.com/Adam-S-Daniel/GHA-bench/blob/main/results/analysis/opus48-trap-investigation_2026-06-28.md) has the details.
+So read "~2× the traps" as **"iterates ~2× more granularly," not "fails ~2× as often."** The hand review also caught the detector itself misbehaving: 4.8 prefixes nearly every shell command with a long `cd` path, which was collapsing *distinct* commands into one de-duplication key and inflating the rerun count. That detector bug has [since been fixed](https://github.com/Adam-S-Daniel/GHA-bench/issues/27) — the ~2× figure above is from the corrected detector, so the gap that remains is real iteration style, not measurement. One caveat still stands: the two runs used different Claude Code versions. The [full investigation](https://github.com/Adam-S-Daniel/GHA-bench/blob/main/results/analysis/opus48-trap-investigation_2026-06-28.md) has the details.
 
 ## Sonnet 5: pick your effort, pick your product
 
