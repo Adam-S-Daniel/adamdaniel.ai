@@ -94,6 +94,13 @@ the PR preview environment, where the page loads as a real document.
 - New `_tools/*.md` entries render at build; no Decap UI delete spec exists for
   the collection, so the `create:`/`delete:` flags in `admin/collections.site.yml`
   are informational (both `true`, per the standing rule).
+- `assets/tools/claude-memory-map/index.html` is **automation-managed**: the
+  source repo's workflows sync it (PR w/ auto-merge) and mirror source-repo PRs
+  into `tool-preview/*` draft PRs for previews. Don't hand-edit the asset or
+  its `_data/tool_sources/` record here — see "Vendored-tool sync + previews"
+  in AGENTS.md. A tool synced this way needs the same two workflows in *its*
+  repo (copy `site-{sync,preview}.yml` + `scripts/sync-to-site.sh` from
+  claude-memory-map and change the slug/paths).
 - This skill lives at `.claude/skills/embeddable-tool-pages/` — the one
   site-owned skill in the repo (the old `.agents/skills/` mirror and the
   vendored platform skill set were removed in the #2007-P7 thin-ification).
