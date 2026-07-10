@@ -2,8 +2,10 @@
 title: A map of what Claude actually remembers
 slug: claude-memory-map
 date: 2026-06-25 09:00:00 -0400
-excerpt: Claude keeps separate memories in different places, and which ones follow you around depends entirely on how you use it. So I built an interactive map.
-published: false
+excerpt: Claude keeps separate memories in different places, and which ones
+  follow you around depends entirely on how you use it. So I built an
+  interactive map.
+published: true
 ---
 Claude's memory is scattered across more places than most people realize — and
 which memories follow you around depends entirely on *how* you're using it. A
