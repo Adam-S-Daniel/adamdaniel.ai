@@ -105,7 +105,10 @@ the PR preview environment, where the page loads as a real document.
   `approve-regression` gate with no human reviewer — a deliberate
   `NON_SALIENT_OVERRIDES` carve-out for `assets/tools/**` +
   `_data/tool_sources/**` in the platform's `visual-regression-salient.js`
-  (cms-platform#146). See AGENTS.md's "Visual-regression gotchas" (under
+  (cms-platform#146). This covers **updates to an existing tool only**: a
+  brand-new tool's PR necessarily adds `_tools/<slug>.md`, which IS salient,
+  so first-time additions get the full regression run + new-page manual
+  review. See AGENTS.md's "Visual-regression gotchas" (under
   `visual-regression.yml`) for the full mechanics — a sync PR that
   unexpectedly hits a human review prompt means something outside the tool's
   own asset changed.
