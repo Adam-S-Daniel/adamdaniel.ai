@@ -102,14 +102,13 @@ the PR preview environment, where the page loads as a real document.
   repo (copy `site-{sync,preview}.yml` + `scripts/sync-to-site.sh` from
   claude-memory-map and change the slug/paths).
 - A `tool-sync/*` PR is expected to auto-pass `visual-regression`'s
-  `approve-regression` gate with no human reviewer — deliberately so from the
-  cms-platform release that adds `assets/tools/**` + `_data/tool_sources/**`
-  to `e2e/visual-regression-salient.js`'s `NON_SALIENT_OVERRIDES` (pinned
-  ≤v0.1.58, it's a side effect of the tool's page not yet being in the
-  regression page universe, not an explicit carve-out). See AGENTS.md's
-  "Visual-regression gotchas" (under `visual-regression.yml`) for the full
-  mechanics — a sync PR that unexpectedly hits a human review prompt means
-  something outside the tool's own asset changed.
+  `approve-regression` gate with no human reviewer — a deliberate
+  `NON_SALIENT_OVERRIDES` carve-out for `assets/tools/**` +
+  `_data/tool_sources/**` in the platform's `visual-regression-salient.js`
+  (cms-platform#146). See AGENTS.md's "Visual-regression gotchas" (under
+  `visual-regression.yml`) for the full mechanics — a sync PR that
+  unexpectedly hits a human review prompt means something outside the tool's
+  own asset changed.
 - This skill lives at `.claude/skills/embeddable-tool-pages/` — the one
   site-owned skill in the repo (the old `.agents/skills/` mirror and the
   vendored platform skill set were removed in the #2007-P7 thin-ification).
