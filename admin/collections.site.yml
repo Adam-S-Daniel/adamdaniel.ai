@@ -1,0 +1,21 @@
+# Opt-in per-site collections, spliced into the platform's base collections at
+# build time (see admin/collections.site.yml.example). The platform machinery
+# collections — posts, tags, projects, pages, and the e2e canary — always stay.
+# Indentation matches the base list (2 spaces for `- name:`).
+  - name: tools
+    label: Tools
+    label_singular: Tool
+    folder: _tools
+    create: true
+    delete: true
+    slug: "{{slug}}"
+    preview_path: /tools/{{slug}}/
+    summary: "{{title}}"
+    fields:
+      - { name: title, label: Title, widget: string, required: true }
+      - { name: slug, label: URL slug, widget: string, required: true, hint: "Lowercase, dash-separated. Becomes /tools/<slug>/." }
+      - { name: description, label: Description, widget: text, required: false, hint: "One-line summary shown on the Tools index and the page header." }
+      - { name: featured, label: Featured, widget: boolean, default: false, hint: "Featured tools sort to the top of the Tools index." }
+      - { name: embed_src, label: Embed source path, widget: string, required: false, hint: "Path to the self-contained app, e.g. /assets/tools/<slug>/ — rendered in an iframe." }
+      - { name: source_url, label: Source URL, widget: string, required: false, hint: "Optional link to the source repo." }
+      - { name: body, label: Body, widget: markdown, required: false, hint: "Context shown below the embed." }
