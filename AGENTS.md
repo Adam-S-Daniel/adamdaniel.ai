@@ -273,6 +273,18 @@ committed `index.html` equals the deterministic build output, which is what
 makes "copy the committed file" ship the verified artifact. `tool-sync/*` and
 `tool-preview/*` are not `cms/*` branches, so the CMS PR sweeps ignore them.
 
+**Visual-regression gate treatment.** A `tool-sync/*` PR is expected to sail
+through `approve-regression` without a human reviewer. Pinned ≤v0.1.58 that's
+somewhat incidental (the tool's own page isn't in the regression page
+universe yet, and the nav-link diff is sub-threshold); from the release
+carrying cms-platform's `_site`-scan fix it becomes a deliberate
+`NON_SALIENT_OVERRIDES` carve-out in `e2e/visual-regression-salient.js` for
+`assets/tools/**` + `_data/tool_sources/**`, so the regression build doesn't
+even run on a sync-only diff. Either way: if a tool-sync PR ever DOES trigger
+a human regression-review prompt, something outside the tool's own asset
+changed — investigate before approving. Full mechanics: the "Visual-regression
+gotchas" subsection under the `visual-regression.yml` workflow docs below.
+
 ## Live preview
 
 Editors get a WYSIWYG preview of the page they're editing without publishing. The preview always renders with the real Jekyll layouts (`_layouts/post.html`, `_layouts/page.html`, `_layouts/project.html`), so styling drift is impossible by construction.
@@ -621,6 +633,15 @@ Uses `regression-review` GitHub Environment with required reviewers (all write-a
 | `blog/index.html` | `/blog/` |
 | `projects/index.html` | `/projects/` |
 | `_layouts/*`, `_includes/*`, `_config.yml`, `assets/css/*` | ALL pages marked changed |
+
+#### Visual-regression gotchas (new sections / site-owned collections)
+
+Two footguns bit the Tools section rollout (#2280) and are worth checking before adding any new site-owned collection or top-level route:
+
+- **New-section pages are invisible to the gate today.** Pinned ≤v0.1.58: `detect-changed-pages.js`'s `discoverAllPages()` has a `_site/`-scan code path, but it never engages in CI — the reusable's "Detect changed pages" step runs BEFORE `bundle exec jekyll build`, so `_site/` doesn't exist yet and it always falls back to the HARDCODED per-collection scan (posts/projects/tags/pages, plus `/`, `/blog/`, `/admin/`, `/admin/reviews/` — the table above). A brand-new site-owned collection's pages (e.g. `/tools/`, `/tools/<slug>/`) map to nothing in that table, so they're never screenshotted or diffed at all — not "auto-passed", genuinely absent from both the video and `diffs.json`. **From the release carrying the `_site`-scan fix** (next `platform_ref` bump past v0.1.58): the jekyll-build step moves ahead of page detection, so the canonical page universe becomes a scan of the built `_site/` — new collections are covered with zero per-collection mapping — and a brand-new page is additionally confirmed by prod answering 404/410 at capture time and scored "new", which routes it through the manual `regression-review` gate. **Practical effect: expect the first PR that adds a new section's pages (after that bump) to force a one-time human regression approval — expected, not a failure.**
+- **Sub-threshold and below-the-fold changes don't move the pixel diff.** The pixel threshold is 0.5% of the viewport; the Tools nav-link addition measured ~0.018% on every header-bearing page, so it auto-passed even on pages that WERE in scope. **From the same release:** a whitespace-normalized visible-text diff per page escalates a pixel-"identical" page to "different" — this catches small nav/text changes below the pixel threshold and below-the-fold content the 1920×1080 screenshot never captures.
+- **Tool-sync PRs auto-pass the gate — accidentally today, by design after the bump.** Pinned ≤v0.1.58: a tool-sync PR touches `assets/tools/<slug>/index.html` (matches no `SALIENT_PATTERNS` entry) and `_data/tool_sources/<slug>.yml` (DOES match the broad `/^_data\//` pattern, so the regression build actually runs) — it comes back clean only because the tool's own page isn't in the hardcoded universe (previous bullet) and the nav-link diff is sub-threshold, not because the pipeline intends to skip it. **From the release carrying the fix:** cms-platform's `e2e/visual-regression-salient.js` adds `assets/tools/**` and `_data/tool_sources/**` to `NON_SALIENT_OVERRIDES`, so a tool-sync PR whose diff is limited to those paths never triggers the regression build at all — deliberate, not incidental. A mixed PR that also touches a template/layout file stays salient and then also picks up the tool page's own delta, since the page universe includes it post-bump. See "Vendored-tool sync + previews" under the Tools section above for where this matters in practice.
+- **When adding a new top-level section:** re-check the "Salient paths per workflow" table above and the workflow-path-audit skill for any `paths`/`paths-ignore` list that needs widening, and expect a one-time manual `regression-review` approval the first time the new section's pages show up in a PR once the site-scan fix has shipped.
 
 ---
 
