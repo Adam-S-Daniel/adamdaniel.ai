@@ -98,17 +98,7 @@ note "Downloading Playwright browser binaries (chromium, firefox, webkit)…"
 npx --yes playwright install chromium firefox webkit
 ok "Playwright browsers + system deps installed"
 
-# ── 8. Python + pytest (for the tests/ suite) ─────────────────────────────
-apt_install python3 python3-pip python3-venv
-if ! python3 -c "import pytest" >/dev/null 2>&1; then
-  note "Installing pytest in a project-local venv (.venv)…"
-  python3 -m venv .venv
-  .venv/bin/pip install --quiet --upgrade pip
-  .venv/bin/pip install --quiet pytest
-fi
-ok "pytest available (use .venv/bin/pytest or pip-install pytest globally)"
-
-# ── 9. Final smoke: confirm Chromium can launch ───────────────────────────
+# ── 8. Final smoke: confirm Chromium can launch ───────────────────────────
 note "Smoke-testing Playwright's chromium launch…"
 node -e "
   const { chromium } = require('playwright');
@@ -132,14 +122,9 @@ Run the test stack:
   npx playwright test --project chromium-desktop-1080 # single-browser run
   npx playwright test e2e/cms-smoke.spec.js      # Decap admin save/delete
   bundle exec jekyll build                       # site build
-  python3 -m pytest tests/ -v                     # Python test suite
-  bundle exec ruby _plugins_test/finalize_gate_test.rb   # workflow-shape lint
 
 Notes:
   - The bundler `path` is set to `vendor/bundle/` so gems live alongside
     the repo. Delete that directory to fully reset the Ruby env.
-  - If your system python doesn't have pytest, this script created a
-    venv at .venv — use `.venv/bin/pytest` in that case (or
-    `source .venv/bin/activate`).
 ────────────────────────────────────────────────────────────────────────
 EOF

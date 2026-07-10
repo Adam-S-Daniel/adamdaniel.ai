@@ -94,4 +94,6 @@ the PR preview environment, where the page loads as a real document.
 - New `_tools/*.md` entries render at build; no Decap UI delete spec exists for
   the collection, so the `create:`/`delete:` flags in `admin/collections.site.yml`
   are informational (both `true`, per the standing rule).
-- Don't edit `.claude/skills/` — it's a mirror of `.agents/skills/`. Edit here.
+- This skill lives at `.claude/skills/embeddable-tool-pages/` — the one
+  site-owned skill in the repo (the old `.agents/skills/` mirror and the
+  vendored platform skill set were removed in the #2007-P7 thin-ification).

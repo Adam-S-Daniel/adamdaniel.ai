@@ -35,13 +35,14 @@ on:
     # co-arriving sibling). Prod owns the infra-change canary on push; host
     # still covers them via its daily 12:00 UTC cron. Zero path overlap = no
     # eviction.
+    # _layouts/canary.html and _layouts/default.html were dropped: `_layouts/`
+    # isn't tracked in this repo at all (gem-/platform-delivered), so neither
+    # path could ever match a push diff here.
     paths:
       - .github/workflows/cms-publish-loop-host.yml
       - _e2e/canary-post.md
       - _e2e/canary-page.md
       - _e2e/canary-project.md
-      - _layouts/canary.html
-      - _layouts/default.html
 
 permissions:
   contents: read
@@ -50,9 +51,9 @@ permissions:
 
 jobs:
   host-loop:
-    uses: Adam-S-Daniel/cms-platform/.github/workflows/cms-publish-loop-host.yml@v0.1.34
+    uses: Adam-S-Daniel/cms-platform/.github/workflows/cms-publish-loop-host.yml@v0.1.58
     with:
       # Pin to the SAME ref as the `uses:` pin above so the harness matches.
-      platform_ref: v0.1.34
+      platform_ref: v0.1.58
     secrets:
       CMS_E2E_PAT: ${{ secrets.CMS_E2E_PAT }}
