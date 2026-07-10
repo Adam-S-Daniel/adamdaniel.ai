@@ -245,33 +245,37 @@ First tool: `claude-memory-map` (vendored from
 `github.com/Adam-S-Daniel/claude-memory-map`). Full guide: the
 **embeddable-tool-pages** skill.
 
-**Vendored-tool sync + previews (claude-memory-map).** The vendored copy at
-`assets/tools/claude-memory-map/index.html` is **automation-managed — don't
-hand-edit it here**; change the source repo instead. The source repo pushes to
-this one (this repo carries no sync machinery; its normal PR pipeline does the
-rest):
+**Vendored-tool sync + previews.** This is the general contract for ANY tool
+repo that vendors onto `/tools/` (today's only instance: `claude-memory-map`).
+A synced tool's copy at `assets/tools/<slug>/index.html` is
+**automation-managed — don't hand-edit it here**; change the source repo
+instead. The source repo pushes to this one (this repo carries no sync
+machinery; its normal PR pipeline does the rest):
 
 - **Sync:** a merge to the source repo's `main` force-pushes branch
-  `tool-sync/claude-memory-map` (new copy + provenance in
-  `_data/tool_sources/claude-memory-map.yml`) and opens/reuses a PR with
+  `tool-sync/<slug>` (new copy + provenance in
+  `_data/tool_sources/<slug>.yml`) and opens/reuses a PR with
   **auto-merge** enabled — it lands when the required checks pass, then
   deploy-production takes it live. Provenance records the exact source commit;
   the workflow reads it back for compare links.
-- **Preview:** each source-repo PR touching the built `index.html` mirrors to
-  a **draft** PR from branch `tool-preview/claude-memory-map-pr-<n>`, so the
+- **Preview:** each source-repo PR touching the built tool mirrors to
+  a **draft** PR from branch `tool-preview/<slug>-pr-<n>`, so the
   standard deploy-preview publishes the changed tool at
-  `preview-pr<N>.adamdaniel.ai/tools/claude-memory-map/`. **Never merge these
+  `preview-pr<N>.adamdaniel.ai/tools/<slug>/`. **Never merge these
   drafts** — they close automatically when the source PR closes (deploy-preview
   teardown then runs as usual), and a merged source PR arrives via the
   `tool-sync` PR instead.
 
 Both flows authenticate with the `SITE_SYNC_TOKEN` fine-grained PAT stored in
-the **source** repo (Contents + Pull requests RW on this repo — a PAT so its
-PRs still trigger CI here). The workflows live in the source repo
-(`.github/workflows/site-{sync,preview}.yml`); its CI enforces that the
-committed `index.html` equals the deterministic build output, which is what
-makes "copy the committed file" ship the verified artifact. `tool-sync/*` and
-`tool-preview/*` are not `cms/*` branches, so the CMS PR sweeps ignore them.
+each **source** repo (Contents + Pull requests RW on this repo — a PAT so its
+PRs still trigger CI here; one shared token can serve every tool repo since
+the grant is entirely site-side). The workflows live in the source repo
+(`.github/workflows/site-{sync,preview}.yml` — claude-memory-map's are the
+reference implementation to copy for a new tool); source-repo CI must enforce
+that the committed artifact equals its deterministic build output, which is
+what makes "copy the committed file" ship the verified artifact. `tool-sync/*`
+and `tool-preview/*` are not `cms/*` branches, so the CMS PR sweeps ignore
+them.
 
 **Visual-regression gate treatment.** A `tool-sync/*` PR is expected to sail
 through `approve-regression` without a human reviewer: `assets/tools/**` +
