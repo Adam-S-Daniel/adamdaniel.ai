@@ -97,6 +97,12 @@ root-relative URL structure (no `/pr-N/` in any visible URL).
 ## Environment / WSL
 
 - **No `sudo` in the non-interactive shell.** Do NOT run `sudo` commands inside the non-interactive bash session — they fail because no password prompt is available. Instead, output the `sudo` commands for the user to run manually in their own terminal.
+- **Claude Code on the web: UTF-8 locale.** Web-session shells start with no
+  locale (`LANG`/`LC_ALL` unset → US-ASCII), which crashes `bundle exec jekyll
+  build` in the platform gem's Decap render hook ("invalid byte sequence in
+  US-ASCII"). The site-owned SessionStart hook `.claude/hooks/session-start.sh`
+  exports `LANG=C.UTF-8` for all session shells via `CLAUDE_ENV_FILE`; if a
+  shell somehow lacks it, prefix builds with `LANG=C.UTF-8`.
 
 ## Key commands
 
