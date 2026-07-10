@@ -245,33 +245,47 @@ First tool: `claude-memory-map` (vendored from
 `github.com/Adam-S-Daniel/claude-memory-map`). Full guide: the
 **embeddable-tool-pages** skill.
 
-**Vendored-tool sync + previews (claude-memory-map).** The vendored copy at
-`assets/tools/claude-memory-map/index.html` is **automation-managed — don't
-hand-edit it here**; change the source repo instead. The source repo pushes to
-this one (this repo carries no sync machinery; its normal PR pipeline does the
-rest):
+**Vendored-tool sync + previews.** This is the general contract for ANY tool
+repo that vendors onto `/tools/` (today's only instance: `claude-memory-map`).
+A synced tool's copy at `assets/tools/<slug>/index.html` is
+**automation-managed — don't hand-edit it here**; change the source repo
+instead. The source repo pushes to this one (this repo carries no sync
+machinery; its normal PR pipeline does the rest):
 
 - **Sync:** a merge to the source repo's `main` force-pushes branch
-  `tool-sync/claude-memory-map` (new copy + provenance in
-  `_data/tool_sources/claude-memory-map.yml`) and opens/reuses a PR with
+  `tool-sync/<slug>` (new copy + provenance in
+  `_data/tool_sources/<slug>.yml`) and opens/reuses a PR with
   **auto-merge** enabled — it lands when the required checks pass, then
   deploy-production takes it live. Provenance records the exact source commit;
   the workflow reads it back for compare links.
-- **Preview:** each source-repo PR touching the built `index.html` mirrors to
-  a **draft** PR from branch `tool-preview/claude-memory-map-pr-<n>`, so the
+- **Preview:** each source-repo PR touching the built tool mirrors to
+  a **draft** PR from branch `tool-preview/<slug>-pr-<n>`, so the
   standard deploy-preview publishes the changed tool at
-  `preview-pr<N>.adamdaniel.ai/tools/claude-memory-map/`. **Never merge these
+  `preview-pr<N>.adamdaniel.ai/tools/<slug>/`. **Never merge these
   drafts** — they close automatically when the source PR closes (deploy-preview
   teardown then runs as usual), and a merged source PR arrives via the
   `tool-sync` PR instead.
 
 Both flows authenticate with the `SITE_SYNC_TOKEN` fine-grained PAT stored in
-the **source** repo (Contents + Pull requests RW on this repo — a PAT so its
-PRs still trigger CI here). The workflows live in the source repo
-(`.github/workflows/site-{sync,preview}.yml`); its CI enforces that the
-committed `index.html` equals the deterministic build output, which is what
-makes "copy the committed file" ship the verified artifact. `tool-sync/*` and
-`tool-preview/*` are not `cms/*` branches, so the CMS PR sweeps ignore them.
+each **source** repo (Contents + Pull requests RW on this repo — a PAT so its
+PRs still trigger CI here; one shared token can serve every tool repo since
+the grant is entirely site-side). The workflows live in the source repo
+(`.github/workflows/site-{sync,preview}.yml` — claude-memory-map's are the
+reference implementation to copy for a new tool); source-repo CI must enforce
+that the committed artifact equals its deterministic build output, which is
+what makes "copy the committed file" ship the verified artifact. `tool-sync/*`
+and `tool-preview/*` are not `cms/*` branches, so the CMS PR sweeps ignore
+them.
+
+**Visual-regression gate treatment.** A `tool-sync/*` PR is expected to sail
+through `approve-regression` without a human reviewer: `assets/tools/**` +
+`_data/tool_sources/**` are a deliberate `NON_SALIENT_OVERRIDES` carve-out in
+the platform's `e2e/visual-regression-salient.js` (cms-platform#146), so a
+sync-only diff never triggers the regression build. If a tool-sync PR ever
+DOES trigger a human regression-review prompt, something outside the tool's
+own asset changed — investigate before approving. Full mechanics: the
+"Visual-regression gotchas" subsection under the `visual-regression.yml`
+workflow docs below.
 
 ## Live preview
 
@@ -621,6 +635,15 @@ Uses `regression-review` GitHub Environment with required reviewers (all write-a
 | `blog/index.html` | `/blog/` |
 | `projects/index.html` | `/projects/` |
 | `_layouts/*`, `_includes/*`, `_config.yml`, `assets/css/*` | ALL pages marked changed |
+
+#### Visual-regression gotchas (new sections / site-owned collections)
+
+Footguns that bit the Tools section rollout (#2280; fixed in cms-platform#146) — check these before adding any new site-owned collection or top-level route:
+
+- **New-section pages and the gate.** The regression page universe is a scan of the built `_site/`, so new site-owned collections are covered automatically — nothing to wire — and a brand-new page is confirmed by prod answering 404/410 at capture time, scored "new", and routed through the manual `regression-review` gate. **Expect the first PR adding a new section's pages to force a one-time human regression approval — expected, not a failure.** (Until #146 the universe was a hardcoded collection list — detect ran before the build — which is how #2280's `/tools/` pages shipped without ever being screenshotted. If `platform.lock` somehow still predates that release, treat the gate as blind to new sections and review their pages on the deploy preview manually.)
+- **Sub-threshold and below-the-fold changes don't move the pixel diff.** The pixel gate ignores diffs under 0.5% of the viewport — the #2280 Tools nav link measured ~0.018% per page and auto-passed. The visible-text check (same release) closes this: a whitespace-normalized text delta escalates a pixel-"identical" page to review, regardless of pixel count, and covers below-the-fold content the 1920×1080 screenshot never captures. Don't reason from pixel thresholds alone.
+- **Tool-sync PRs auto-pass the gate by design — for updates to EXISTING tools only.** `assets/tools/**` and `_data/tool_sources/**` are `NON_SALIENT_OVERRIDES` in the platform's `e2e/visual-regression-salient.js`: a sync-only diff never triggers the regression build — the substantive review happened in the tool's source repo (its PR + preview mirror). The carve-out can't smuggle in a **new** tool: `_tools/` is salient, and a new tool must add its `_tools/<slug>.md` entry (a sync update never touches it), so first-time additions run the full build and hit the new-page manual gate from the first bullet. Corollary: CMS/hand edits to a `_tools/*.md` entry are salient too — its copy renders on a public page. A mixed PR that also touches a template/layout stays salient and then also surfaces the tool page's own delta. (Pre-#146 sync PRs auto-passed *incidentally* — the build ran via the broad `_data/` salience but compared a page set that didn't include the tool.) See "Vendored-tool sync + previews" under the Tools section above.
+- **When adding a new top-level section:** re-check the "Salient paths per workflow" table above and the workflow-path-audit skill for any `paths`/`paths-ignore` list that needs widening, and expect the one-time manual `regression-review` approval from the first bullet.
 
 ---
 
