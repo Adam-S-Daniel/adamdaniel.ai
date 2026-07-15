@@ -1,0 +1,8 @@
+# Provenance of the vendored copy at assets/tools/claude-memory-constellation/.
+# Vendored by hand from the source repo's prototypes/ (no sync machinery for
+# this prototype yet — if it graduates, wire it into the source repo's
+# site-sync/site-preview workflows like claude-memory-map).
+repo: Adam-S-Daniel/claude-memory-map
+source_path: prototypes/constellation.html
+ref: main
+commit: 8ae716594993f3449b996001261cf651f2754c3f
