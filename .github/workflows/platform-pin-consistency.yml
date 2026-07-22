@@ -27,6 +27,6 @@ jobs:
   # edited fires only for base retargets (changes.base present) — title/body edits stay no-ops (#145)
   pin-consistency:
     if: github.event.action != 'edited' || github.event.changes.base.ref.from != ''
-    uses: Adam-S-Daniel/cms-platform/.github/workflows/platform-pin-consistency.yml@v0.1.65
+    uses: Adam-S-Daniel/cms-platform/.github/workflows/platform-pin-consistency.yml@v0.1.66
     with:
-      platform_ref: v0.1.65
+      platform_ref: v0.1.66

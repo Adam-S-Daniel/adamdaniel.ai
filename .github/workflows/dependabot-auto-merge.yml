@@ -19,4 +19,4 @@ jobs:
   # edited fires only for base retargets (changes.base present) — title/body edits stay no-ops (#145)
   auto-merge:
     if: github.event.action != 'edited' || github.event.changes.base.ref.from != ''
-    uses: Adam-S-Daniel/cms-platform/.github/workflows/dependabot-auto-merge.yml@v0.1.65
+    uses: Adam-S-Daniel/cms-platform/.github/workflows/dependabot-auto-merge.yml@v0.1.66
