@@ -22,9 +22,9 @@ jobs:
   # edited fires only for base retargets (changes.base present) — title/body edits stay no-ops (#145)
   preview-media:
     if: github.event.action != 'edited' || github.event.changes.base.ref.from != ''
-    uses: Adam-S-Daniel/cms-platform/.github/workflows/preview-media.yml@v0.1.68
+    uses: Adam-S-Daniel/cms-platform/.github/workflows/preview-media.yml@v0.1.69
     with:
       pr_number: ${{ github.event.pull_request.number }}
       base_ref: ${{ github.base_ref }}
       apex: adamdaniel.ai
-      platform_ref: v0.1.68
+      platform_ref: v0.1.69
