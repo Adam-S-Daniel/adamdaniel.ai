@@ -1057,13 +1057,28 @@ job's workers.
 
 #### Always-run baseline
 
-Cheap, deterministic, no browser:
+There is no per-diff spec SELECTION in the platform reusable — every project job
+runs the whole suite for its own project (see "one CI job per Playwright project"
+above), so "always-run" is now just the cheap, browser-free end of that suite
+rather than a separate tier. Representative members:
 
 - `e2e/compute-visual-diffs.test.js` — pure pngjs unit tests for the visual-diff classifier
 - `e2e/cms-config.spec.js` — YAML structural invariants for the Decap config (editorial workflow on, every folder collection has explicit create + delete, all required fields present, etc.)
-- `e2e/visual-change-guard.spec.js` — guards against unintended visual changes
+- the ~95 other pure-fs `e2e/*.test.js` lints the platform ships
 
-#### Per-test screenshot videos
+(`e2e/visual-change-guard.spec.js` used to be listed here; cms-platform v0.1.34
+deleted it — it only bounded the committed-PNG suite that release retired.)
+
+#### Per-test screenshot videos — OFF in CI (local-only)
+
+> **This pipeline does not run in CI.** The `finalize` job that assembled the
+> videos was adamdaniel-only and was NOT ported to the platform reusable, so
+> nothing in CI ever consumed the frames — the capture was pure cost, worst on the
+> link-crawling admin specs. The platform's `e2e-tests.yml` therefore sets
+> `DISABLE_PER_TEST_VIDEOS=1` (cms-platform v0.1.68). `screenshot: "on"` +
+> `video: "retain-on-failure"` still produce the artifacts a red run is diagnosed
+> from. Everything below describes the mechanism as it works **locally** (unset the
+> env var); if you ever wire the assembly into a reusable, unset it there too.
 
 Every browser-based test in the suite captures one full-page screenshot per main-frame navigation while it runs. The `finalize` job assembles these per-test frame sequences into individual videos with a 96px-tall metadata banner above the screenshot, and concatenates them into a master `_combined.mp4` for the run.
 
@@ -1188,7 +1203,11 @@ Playwright fetches its browser binaries from a small set of CDNs the first time 
 
 If these are blocked, `npx playwright install` hangs or fails with a 403 / DNS-resolution error.
 
-CI does NOT hit these CDNs — the e2e matrix, parity, finalize, canary-prod, and cms-publish-loop-{host,prod} jobs all run inside `mcr.microsoft.com/playwright:v<version>-noble`, which ships the browsers + apt deps prebaked. The image tag is enforced to match `package-lock.json`'s `@playwright/test` version by the `select` job's drift-guard step. The CDNs only matter for fresh local clones and the rare reusable workflow that still calls `playwright install` — this repo's `visual-regression.yml` caller is a thin `uses:` delegation with no such step itself; if it happens, it's inside the platform's reusable workflow, not this repo's caller.
+**CI hits these CDNs — and apt — on EVERY job.** This section used to say the opposite ("CI does NOT hit these CDNs … all run inside `mcr.microsoft.com/playwright:v<version>-noble`, which ships the browsers + apt deps prebaked"), and that has been false since the platform port: the GHCR prebaked runner image, the `container:` blocks, and the `select`/`finalize` jobs it referenced were all deliberately NOT ported (cms-platform's "Deliberately NOT ported" notes). Every platform-delivered harness lane installs its browser inline instead — `npx playwright install --with-deps <engine>` — so both the CDN download and an `apt-get install` of ~90 system packages are on every job's critical path.
+
+That is not academic: on 2026-08-07 the Ubuntu mirror served one `webkit-tablet` job at ~35 KB/s and its install took **39 minutes** (its tests took 41.6 s), which held a delete-recovery PR open for 40 minutes and failed a `cms-media-roundtrip` run — and a second lane did the same 67 minutes later. Since cms-platform v0.1.70 the install goes through the platform's `install-playwright-browsers` composite, which bounds each attempt (`timeout 420`) and retries up to 3 times, so a slow mirror costs minutes rather than being unbounded. Details + measurements: cms-platform's `docs/E2E-PARALLELISM.md`.
+
+The CDN allowlist above therefore matters for CI as well as for a fresh local clone.
 
 ### Custom fixture (`e2e/base.js`)
 
@@ -1277,7 +1296,7 @@ In environments with no pre-authenticated `gh` cli, workflow logs are not direct
 
 The action is mode-driven and does NOT detect job state itself. Earlier versions tried `${{ job.status }}` (silently empty inside composite `with:` blocks) and `failure()` / `success()` inside the action's own step `if:` clauses (also unreliable for our composite case). v3 pushes the gate to the caller, where `failure()` / `success()` are well-tested workflow primitives.
 
-For MULTI-job workflows (e.g. `e2e-tests.yml`'s `finalize` job posting on behalf of the upstream `e2e` matrix), `failure()` / `success()` reflect only the FINALIZE job's state, not the matrix's. Gate on `needs.<job>.result` instead:
+For MULTI-job workflows — a job posting on behalf of an upstream one, e.g. an aggregating gate reporting for the matrix beneath it — `failure()` / `success()` reflect only the POSTING job's state, not the matrix's. Gate on `needs.<job>.result` instead. (This repo no longer has such a call site: `e2e-tests.yml`'s per-project matrix jobs each post their own project-scoped comment from inside the job, so plain `failure()` / `success()` is correct there. The pattern is kept because it is the right shape whenever a downstream job reports for an upstream one.)
 
 ```yaml
 - if: ${{ needs.e2e.result == 'failure' && github.event_name == 'pull_request' }}
