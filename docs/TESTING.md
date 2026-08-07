@@ -70,10 +70,23 @@ context when the reusable took over the whole Playwright suite in one
 `workflow_call` job.
 
 **Layer 2 — the diff-aware selector** (`e2e/select-specs.js`, unit-tested
-by `select-specs.test.js`). The `select` job runs it twice — once per
-lane (`TEST_LANE=local` drives `e2e`/`e2e-admin`, `TEST_LANE=real` drives
-`e2e-real`). It diffs `origin/main...HEAD` and returns `scope` =
-`all` | `subset` | `skip`:
+by `select-specs.test.js`).
+
+> **This layer no longer applies to `e2e-tests.yml`.** That lane runs the
+> **whole** suite once its `paths-ignore` lets it fire, fanned out one CI job
+> per Playwright project inside the platform reusable — it gets its speed from
+> parallelism rather than from running less, so there is no "did the selector
+> miss my spec?" failure mode and no `select` job. Adding a spec needs no
+> `SPEC_RULES` entry for this lane.
+>
+> The selector is still live, and still governs the lanes that probe a
+> *deployed* surface and must genuinely no-op when a PR can't affect one:
+> **`parity-preview`** and **`preview-media`**. The table below describes its
+> scope logic, which remains accurate for those two lanes; the shard column is
+> historical (`--shard` is deliberately unused — see the platform's
+> `docs/E2E-PARALLELISM.md`).
+
+It diffs `origin/main...HEAD` and returns `scope` = `all` | `subset` | `skip`:
 
 | Change | Local scope | Result |
 | --- | --- | --- |
