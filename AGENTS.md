@@ -504,13 +504,16 @@ The `cms-publish-loop-prod.yml`, `cms-publish-loop-host.yml`, `dependabot-commen
 
 Quick reference. When you change one of the listed paths, the workflow either runs or (for required-check workflows) does its real work; when you only change paths NOT listed, the workflow is skipped or self-skips with success.
 
-This table is **Layer 1** (workflow-level firing) only. Which *specs*
-actually run inside `e2e-tests.yml` (the diff-aware selector) and which
-selected specs still self-skip at runtime (the heavy `@lane:real` CMS
-specs) is documented in [`docs/TESTING.md` §2 "Trigger map: what runs
-when"](docs/TESTING.md#2-trigger-map-what-runs-when) — including the
-missing-check trap, the stub mirror, the `cms/*` head-ref directive, and
-the verified footguns. Keep both in sync when you change path filters.
+This table is **Layer 1** (workflow-level firing) only. `e2e-tests.yml` runs
+the whole suite once it fires — one CI job per Playwright project — so the
+only *spec*-level question left on that lane is which heavy `@lane:real`
+CMS specs self-skip at runtime. That, plus the missing-check trap, the stub
+mirror, the `cms/*` head-ref directive, and the verified footguns, is in
+[`docs/TESTING.md` §2 "Trigger map: what runs
+when"](docs/TESTING.md#2-trigger-map-what-runs-when) — whose Layer 2
+(diff-aware selection) now applies to the `parity-preview` /
+`preview-media` lanes, not to `e2e-tests.yml`. Keep both in sync when you
+change path filters.
 
 | Workflow | Trigger | Path-filtering mechanism | Salient paths |
 | --- | --- | --- | --- |
@@ -531,7 +534,7 @@ the verified footguns. Keep both in sync when you change path filters.
 | `deploy-production.yml` | `push` to `main`, `workflow_dispatch` | `paths-ignore` | everything EXCEPT the same 7 as `deploy-preview.yml` PLUS `scripts/**`; `workflow_dispatch` ignores `paths-ignore` |
 | `dev-hooks-sync.yml` | `schedule` (Mondays 06:00 UTC), `workflow_dispatch` | n/a (cron-only; syncs the pre-commit guard files from the platform) | n/a |
 | `e2e-stub.yml` | `pull_request` | `paths` (positive) — a byte-for-byte mirror of `e2e-tests.yml`'s `paths-ignore` list | `README.md`, `AGENTS.md`, `CLAUDE.md`, `docs/**`, `infrastructure/**`, `oauth-proxy/**`, `LICENSE`, `.gitignore`. Emits a trivial green `e2e` job so the required `e2e / e2e` context is never MISSING on a doc/infra-only PR |
-| `e2e-tests.yml` | `pull_request` targeting `main` | `paths-ignore` | `README.md`, `AGENTS.md`, `CLAUDE.md`, `docs/**`, `infrastructure/**`, `oauth-proxy/**`, `LICENSE`, `.gitignore` — the diff-aware spec selection, sharding, and per-spec rules described in `docs/TESTING.md` §2 now run INSIDE the platform's single reusable `e2e` job, not as this repo's own workflow-level filters |
+| `e2e-tests.yml` | `pull_request` targeting `main` | `paths-ignore` | `README.md`, `AGENTS.md`, `CLAUDE.md`, `docs/**`, `infrastructure/**`, `oauth-proxy/**`, `LICENSE`, `.gitignore`. Beyond that filter the lane runs the **WHOLE** suite, fanned out one job per Playwright project inside the platform reusable — there is no diff-aware selection and no sharding on this lane (see "No diff-aware spec SELECTION on this lane" below). The selector still governs the `parity-preview` / `preview-media` lanes |
 | `editorial-label-audit.yml` | `schedule` (13:00 UTC daily), `workflow_dispatch` | n/a (cron-only; scans + self-heals `decap-cms/*` labels via the API) | n/a |
 | `label-non-decap-prs.yml` | `pull_request` (opened, reopened), `push` (main), `workflow_dispatch` | `pull_request`: **none, intentionally** — the tag decision keys off the PR's head ref, not its diff. `push` (main): `paths` positive, the workflow file itself only | Tags any PR NOT created by Decap with `not-decap-created` |
 | `parity-preview.yml` | `pull_request` targeting `main` | **none, intentionally** — required check on the always-run + early-skip pattern; the reusable's selector reports success immediately when no `@parity-preview` spec applies | n/a — runs the `@parity-preview` spec subset (sitemap, console-clean, draft-isolation, image-alt-text, admin-bundle-parity) against the PR's own `preview-pr<N>.adamdaniel.ai` surface |
