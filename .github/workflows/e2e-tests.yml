@@ -57,7 +57,7 @@ jobs:
       prod_playground_mode: ${{ vars.PROD_PLAYGROUND_MODE }}
       # Pin to the SAME ref as the `uses:` pin above so the harness matches.
       platform_ref: claude/playwright-parallelism-optimization-9n553g
-      # EXPERIMENT: worker count under measurement (empty = ci-matrix.js default).
+      # EXPERIMENT: empty = the worker count ci-matrix.js sets.
       workers: ""
     secrets:
       # Optional — drop this line if the site has no PAT. Preview discovery
