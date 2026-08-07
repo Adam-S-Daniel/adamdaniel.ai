@@ -910,7 +910,7 @@ Required status checks (current):
 | `scan / scan` | `secrets-scan.yml` → cms-platform reusable | Always fires (gitleaks must scan every PR diff) |
 | `parity / parity` | `parity-preview.yml` → cms-platform reusable | Always-run + early-skip: runs the `@parity-preview` spec subset against the PR's own `preview-pr<N>` surface, reporting success immediately when no such spec applies |
 | `preview-media / preview-media` | `preview-media.yml` → cms-platform reusable | Always-run + early-skip: read-only probe that a media-salient PR's preview surface serves the expected asset; auto-passes on non-media PRs |
-| `e2e / e2e` | `e2e-tests.yml` (or `e2e-stub.yml` on doc/infra-only PRs) → cms-platform reusable | The reusable runs the ENTIRE Playwright suite (selection, dynamic sharding, and finalize) inside one `workflow_call` job — this collapses the old per-repo `select` / `unit` / `e2e (1)` / `e2e-admin` / `finalize` contexts into the single `e2e` check. `e2e-tests.yml` carries `paths-ignore` (README/AGENTS/CLAUDE/docs/infrastructure/oauth-proxy/LICENSE/.gitignore); `e2e-stub.yml` mirrors that list byte-for-byte and emits a trivial green `e2e` job so the required context is never MISSING on a doc/infra-only PR |
+| `e2e / e2e` | `e2e-tests.yml` (or `e2e-stub.yml` on doc/infra-only PRs) → cms-platform reusable | The reusable fans the suite out over a `project` matrix (one job per Playwright project) behind an aggregating `e2e` gate job, so this stays the ONE required context — the per-project `e2e / project (<name>)` contexts are informational and named by no ruleset. `e2e-tests.yml` carries `paths-ignore` (README/AGENTS/CLAUDE/docs/infrastructure/oauth-proxy/LICENSE/.gitignore); `e2e-stub.yml` mirrors that list byte-for-byte and emits a trivial green `e2e` job so the required context is never MISSING on a doc/infra-only PR |
 | `visual-regression / approve-regression` | `visual-regression.yml` → cms-platform reusable | No path filter (fires on every PR); the reusable's `approve-regression` gate runs `if: always()` and enters the `regression-review` environment only when visually-different pages were found, auto-passing otherwise — so it always reports a status |
 
 `prod-mutate` (`cms-publish-loop-prod.yml`) and `host-loop` (`cms-publish-loop-host.yml`)
@@ -1005,15 +1005,31 @@ Located at `/admin/reviews/` (separate from Decap CMS). Linked from a floating b
 `main` is already covered — no post-merge re-run.
 
 **Job:** a single `e2e` job that delegates the ENTIRE Playwright suite to the
-platform's reusable `e2e-tests.yml` (pinned via the `uses:@` line, in lockstep with `platform.lock`) via `workflow_call`. The reusable checks
-out the harness (`e2e/`, `playwright*.config.js`) from cms-platform, builds this site
+platform's reusable `e2e-tests.yml` (pinned via the `uses:@` line, in lockstep
+with `platform.lock`) via `workflow_call`. The reusable checks out the harness
+(`e2e/`, `playwright*.config.js`) from cms-platform, builds this site
 (`target: local` — a real `jekyll build` + `decap-server`), and runs the full
-matrix — the diff-aware selection, dynamic sharding, `SPEC_RULES`, and finalize
-roll-up described below all happen INSIDE that one reusable job, so this repo
-surfaces exactly one context: `e2e / e2e`. There is no longer a separate
-`select` / `unit` / sharded-`e2e` / `parity` / `finalize` set of jobs in THIS repo's
-own workflow file — `parity` is also its own caller now (`parity-preview.yml`,
-covered under "Required status checks" above), not a job inside `e2e-tests.yml`.
+matrix. There is no separate `select` / `unit` / sharded-`e2e` / `parity` /
+`finalize` set of jobs in THIS repo's own workflow file — `parity` is its own
+caller now (`parity-preview.yml`, covered under "Required status checks" above).
+
+**Inside the reusable: one job per Playwright PROJECT** (cms-platform v0.1.68).
+The reusable fans out a `project` matrix — 10 jobs, each on its own runner,
+each running one project and installing only that project's browser engine —
+behind an aggregating `e2e` gate job. So this repo still surfaces exactly one
+REQUIRED context, `e2e / e2e`, plus 10 informational `e2e / project (<name>)`
+contexts that no ruleset names. Nothing here needed changing for that, and the
+`main` ruleset was NOT touched.
+
+Wall clock went from ~680 s to ~250 s on this repo. Worker counts differ per
+project on purpose (a 4-vCPU runner saturates at ~2 browser workers, so only the
+wait-bound admin projects go wider) and `--shard` is deliberately unused (it
+balances by test count, and this suite's per-test durations span 5 ms → 49 s).
+The measurements, the rejected alternatives, and how to re-measure live in the
+platform's [`docs/E2E-PARALLELISM.md`](https://github.com/Adam-S-Daniel/cms-platform/blob/main/docs/E2E-PARALLELISM.md).
+**Read that before re-tuning anything about e2e parallelism.** To dial workers
+down without a platform release, pass the reusable's `workers` input from this
+caller (e.g. `workers: "2"`).
 
 **Companion:** `e2e-stub.yml` fires on the byte-mirror of this file's
 `paths-ignore` list and emits a trivial green `e2e` job, so `e2e / e2e` is never a
@@ -1028,18 +1044,16 @@ this repo's `PROD_PLAYGROUND_MODE` var, gating the prod-mutate / real-loop specs
 **Secrets:** `CMS_E2E_PAT` — optional; when unset, preview discovery falls back to
 `GITHUB_TOKEN` and the real-lane CMS specs self-skip.
 
-The subsections below (dynamic shard count, the spec-header skip directive, the
-always-run baseline, and the per-test screenshot videos) describe behavior that now
-runs INSIDE that single platform-delegated `e2e` job — they are platform-owned
-implementation detail, kept here because they still shape what a contributor needs
-to know when adding a spec, not because this repo's own workflow file implements
-them directly.
+**No diff-aware spec SELECTION on this lane.** `e2e/select-specs.js` still
+exists in the harness, but `e2e-tests.yml` does not use it: the e2e lane runs
+the WHOLE suite on every PR and gets its speed from parallelism instead, so
+there is no "did the selector miss my spec?" failure mode. The selector (and its
+`SPEC_RULES` / `// @select-skip-when-head-ref-prefix:` header directive) drives
+the `parity-preview` and `preview-media` lanes, which probe a deployed preview
+and genuinely must no-op when a PR can't affect one.
 
-**Dynamic shard count.** `e2e/select-specs.js` returns a `shard_count` field in its envelope (1, 2, 3, or 4). Small subsets — `≤2` light browser specs — collapse to a single shard; mid-sized subsets to 2; the rest fan out to 4. Sharding happens inside the reusable's single `e2e` job (the required check is `e2e / e2e`, not a per-shard context).
-
-**Spec-header directive.** A spec can opt OUT of selection on specific branches by adding `// @select-skip-when-head-ref-prefix: cms/` (or any comma-separated prefix list) to its head. The selector reads `GITHUB_HEAD_REF` and drops matching specs from the rule-matched set — the `ALWAYS_RUN` baseline is exempt. Used to shave bring-up cost on cms-bot PRs that don't need most browser specs.
-
-Tests run with `fullyParallel: true` — all 8 projects execute concurrently within each shard.
+Tests run with `fullyParallel: true`, so a project's tests spread across that
+job's workers.
 
 #### Always-run baseline
 
@@ -1297,7 +1311,7 @@ The composite action is **platform-delivered** — the callers reference the pla
 
 | Marker | Workflow / job |
 | --- | --- |
-| `e2e-failure-summary` | `e2e-tests.yml` → the single `e2e` job (replaces the old separate `unit-failure-summary` / `e2e-real-failure-summary` / `select-failure-summary` markers — those jobs no longer exist as separate contexts) |
+| `e2e-failure-summary-<project>` | `e2e-tests.yml` → each per-project matrix job (e.g. `e2e-failure-summary-webkit-iphone16`). Project-scoped because matrix jobs sharing one marker would clobber each other's comment — and the marker names the project that went red |
 | `parity-preview-failure-summary` | `parity-preview.yml` → `parity` |
 | `preview-media-failure-summary` | `preview-media.yml` → `preview-media` |
 | `host-loop-failure-summary` | `cms-publish-loop-host.yml` |
