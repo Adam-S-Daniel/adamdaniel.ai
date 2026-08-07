@@ -209,7 +209,7 @@ npx playwright test --project chromium-desktop-1080 # single project (public lan
 npx playwright test e2e/glow-banding.spec.js       # single test file
 ```
 
-**Running the admin (`@admin-read` / `@admin-write`) e2e lane in a sandboxed / Claude-Code-web session.** Three gotchas bite in that order; CI hits none of them (it has the egress proxy's CA, prebaked browsers, and a working Jekyll):
+**Running the admin (`@admin-read` / `@admin-write`) e2e lane in a sandboxed / Claude-Code-web session.** Three gotchas bite in that order; CI hits none of them (it has the egress proxy's CA and a working Jekyll — CI installs browsers per job, not from a prebaked image, which is why the CDN allowlist below matters for CI too):
 
 1. **Decap never mounts — only the static "PENDING" banner, no Login button.** The `/admin` shells load the Decap bundle from `https://unpkg.com/decap-cms@…`; the sandbox's egress TLS proxy presents a CA that Playwright's bundled Chromium/WebKit don't trust, so the `<script src>` dies with `net::ERR_CERT_AUTHORITY_INVALID` (`curl` works — it trusts the system CA bundle; the browser doesn't). **Fix:** run with a throwaway config that sets `use.ignoreHTTPSErrors: true` — `playwright.localcert.config.js` is **gitignored** (CI has no such proxy, and the flag doesn't change the rendered DOM / aria tree):
 
