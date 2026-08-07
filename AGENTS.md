@@ -1021,10 +1021,19 @@ REQUIRED context, `e2e / e2e`, plus 10 informational `e2e / project (<name>)`
 contexts that no ruleset names. Nothing here needed changing for that, and the
 `main` ruleset was NOT touched.
 
-Wall clock went from ~680 s to ~250 s on this repo. Worker counts differ per
-project on purpose (a 4-vCPU runner saturates at ~2 browser workers, so only the
-wait-bound admin projects go wider) and `--shard` is deliberately unused (it
+Wall clock went from ~680 s to **~200-220 s** on this repo. Every project job
+runs at the SAME worker count (`150%` — 6 on a 4-vCPU runner). An earlier version
+of this paragraph said the counts "differ per project on purpose" because "a
+4-vCPU runner saturates at ~2 browser workers"; both halves were wrong. That
+saturation was an artifact of measuring 8 projects in ONE job — with one project
+per job, 6 workers beat 2 almost everywhere. `--shard` is deliberately unused (it
 balances by test count, and this suite's per-test durations span 5 ms → 49 s).
+
+The long pole is `webkit-iphone16` at ~200 s (~40 s install + ~140 s tests): that
+is WebKit's own test speed, not CI shape — it spends 141 s on the same
+`@admin-read` specs `chromium-desktop-3k` finishes in 104 s while ALSO running
+every `@admin-write` round trip. The platform doc prices the only remaining lever
+(sharding within a project) before you try it.
 The measurements, the rejected alternatives, and how to re-measure live in the
 platform's [`docs/E2E-PARALLELISM.md`](https://github.com/Adam-S-Daniel/cms-platform/blob/main/docs/E2E-PARALLELISM.md).
 **Read that before re-tuning anything about e2e parallelism.** To dial workers
