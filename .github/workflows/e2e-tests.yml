@@ -58,7 +58,7 @@ jobs:
       # Pin to the SAME ref as the `uses:` pin above so the harness matches.
       platform_ref: claude/playwright-parallelism-optimization-9n553g
       # EXPERIMENT: worker count under measurement (empty = config default 100%).
-      workers: ""
+      workers: "6"
     secrets:
       # Optional — drop this line if the site has no PAT. Preview discovery
       # then uses the job GITHUB_TOKEN and real-lane CMS specs self-skip.
