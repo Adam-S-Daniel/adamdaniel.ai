@@ -10,9 +10,9 @@ permissions:
   pull-requests: write
 jobs:
   sync:
-    uses: Adam-S-Daniel/cms-platform/.github/workflows/dev-hooks-sync.yml@v0.1.73
+    uses: Adam-S-Daniel/cms-platform/.github/workflows/dev-hooks-sync.yml@v0.1.74
     with:
-      platform_ref: v0.1.73
+      platform_ref: v0.1.74
     secrets:
       # Optional: a PAT so the sync PR triggers CI. Omit to use GITHUB_TOKEN.
       gh_token: ${{ secrets.CMS_PLATFORM_PAT }}
