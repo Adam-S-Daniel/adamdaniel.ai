@@ -958,7 +958,16 @@ check rather than a dedicated one.
 
 **Secrets needed:** none (uses built-in `GITHUB_TOKEN`).
 
-**Pairs with:** `.github/dependabot.yml` — defines the npm / bundler / github-actions ecosystems, a 7-day `cooldown.default-days` on every non-security update, and `update-types: [minor, patch]` grouping per ecosystem so the auto-merge pipeline isn't drowning in N PRs/week. The `docker` ecosystem is registered but **fully ignored** (`ignore: dependency-name: "*"`): the only image is the CI-runner's Playwright base (`.github/ci-runner/Dockerfile`), whose tag is hard-coupled to the npm `@playwright/test` version (enforced by `e2e-tests.yml`'s "Verify Playwright image version matches lockfile" drift guard). Dependabot can't bump a docker dep and an npm dep in one PR, so a docker-only base-image bump would desync the image from `package-lock.json` and fail the e2e matrix — the base image is bumped manually alongside the npm Playwright update instead.
+**Pairs with:** `.github/dependabot.yml` — 16 lines, **exactly two** ecosystems, each carrying only `package-ecosystem` / `directory: "/"` / `schedule: interval: weekly`:
+
+| ecosystem | what it bumps |
+| --- | --- |
+| `github-actions` | the `uses: Adam-S-Daniel/cms-platform/...@<tag>` pins in the workflow callers |
+| `bundler` | the `cms-platform-theme` gem |
+
+Nothing else is configured. There is **no `cooldown`** (the string doesn't appear in the file), **no `groups:` / `update-types:`** grouping, and **no `docker` or `npm` ecosystem** — so no `ignore:` key either. Earlier revisions of this section described all four; none of them ever existed here. Consequences worth knowing: because there is no `npm` ecosystem (despite a root `package.json` / `package-lock.json`), Dependabot never opens a `package-lock.json` bump PR on this repo; and because there is no `docker` ecosystem and no `.github/ci-runner/` directory at all, the whole CI-runner-image story that used to live in this paragraph is void here — see the CI-flakiness-invariants note on the Playwright image drift guard, which is platform-owned.
+
+**Cooldown is a PLATFORM-side knob, deliberately not a consumer one.** cms-platform's own `github-actions` ecosystem carries `cooldown: default-days: 7` (v0.1.76), mechanising its 7-day cooling-off for third-party action SHAs. A consumer intentionally gets **no** cooldown: here the `github-actions` ecosystem is what carries the platform pins (`uses:@<ref>` + composite SHA comments), so a cooldown would just delay release adoption on the site.
 
 #### Job: `auto-merge`
 
@@ -966,11 +975,6 @@ check rather than a dedicated one.
 2. Uses `dependabot/fetch-metadata` to pick up the update-type / dependency-name and validate the PR genuinely came from Dependabot
 3. Path-allowlist gate — diff must only touch `package*.json`, `Gemfile*`, or `.github/workflows/*.{yml,yaml}`. Anything else fails the job and disables auto-merge (idempotent — `gh pr merge --disable-auto || true`). This is the "no content will be altered" guarantee: a Dependabot PR can never ship a content change unattended, even if its branch were tampered with.
 4. On a clean diff: `gh pr merge --auto --squash` enables GitHub's native auto-merge. Branch protection's required-checks list (e2e + visual-regression / approve-regression) governs when the merge actually fires.
-
-#### Cooldown semantics
-
-- **Non-security updates** wait 7 days from the upstream release before Dependabot opens the PR. Per GitHub's spec, `cooldown` "is only available for version updates, not security updates", so the wait is automatic.
-- **Security updates** bypass cooldown — Dependabot opens the PR as soon as the advisory is detected, the PR lands on the same auto-merge gate, and ships the moment the test matrix is green.
 
 #### Visual-regression interaction
 
@@ -1410,13 +1414,23 @@ The 2026-05 flakiness audit (#1723) traced the recurring CI reds to six classes.
 
 - **`await-prod-deploy` step 2 defers a superseded/non-success deploy conclusion to step 3's ground-truth (descendant) check.** The `production` lane is `cancel-in-progress: false`, so a deploy queued for THIS merge can be `cancelled` while a newer sibling deploy carries the merge live (prod ends up ahead, not stale). Don't re-add a hard `exit 1` on the conclusion — "does prod serve this SHA or a newer descendant?" is the only gate, and it's strictly stronger. **Lock:** `e2e/workflow-prod-loop-serialized.test.js`.
 
-- **The ci-runner Playwright drift guard checks the Dockerfile `ARG`** (the platform-delivered `check-playwright-image-drift.js`, run by the platform's `select` lane — no longer a consumer-vendored script) — not just workflow files (no workflow references the raw `mcr.microsoft.com/playwright` image anymore). Bumping `@playwright/test` REQUIRES bumping `.github/ci-runner/Dockerfile`'s `PLAYWRIGHT_IMAGE_TAG` to match, or the rebuilt image pairs a new client with old browsers → `Executable doesn't exist` at launch. A Playwright `globalSetup` (`e2e/install-browsers-on-miss.js`) installs missing browsers as a runtime fallback. **Lock:** `e2e/playwright-image-drift.test.js`.
+- **The Playwright image-drift guard is PLATFORM-OWNED AND INERT HERE — it describes no invariant of this repo.** Verified against the filesystem: `.github/ci-runner/` **does not exist** in this repo (no `Dockerfile`, no `PLAYWRIGHT_IMAGE_TAG`), no workflow here references `mcr.microsoft.com/playwright`, and there is no `select` lane in this repo's `e2e-tests.yml` (it's a thin caller; the platform reusable fans out a `project` matrix instead). The guard's script + lint (`scripts/check-playwright-image-drift.js`, `e2e/playwright-image-drift.test.js`) live in cms-platform, and the lint is in that repo's `PLATFORM_META_SPECS`, so it is `testIgnore`'d in CONSUMER mode and never runs on this site at all. The original claim — that bumping `@playwright/test` requires bumping a local Dockerfile `ARG` in lockstep — was true of the retired GHCR prebaked ci-runner image, which the platform port deliberately dropped in favour of the inline per-lane browser install (see the "CI hits these CDNs — and apt — on EVERY job" note under the sandbox allowlist). Nothing in this repo needs to be kept in lockstep with a Playwright image tag. Still true and worth keeping: a Playwright `globalSetup` (`e2e/install-browsers-on-miss.js`, platform-delivered) installs missing browsers as a runtime fallback.
 
 - **`preview-media-resolves.spec.js` runs ONLY under `preview-media.yml`** (`RUN_PREVIEW_MEDIA_PROBE=1`, after that workflow's preview-reachability poll). Don't un-gate it — the general e2e matrix exposes `PR_NUMBER`, which previously un-skipped it there, where it probed a preview that may not exist and 404-flaked the required check.
 
 - **`parity-preview` / `preview-media` require a live preview only for RENDER-affecting PRs.** `selectParityPreviewSpecs` fans out on `RENDER_FANOUT_PATTERNS` only (the paths that also trigger `deploy-preview`), NOT test/CI-infra fanout (`e2e-tests.yml`, `package*.json`, playwright config, `e2e/base.js`). A pure-CI/test PR produces no preview, so demanding one there is a spurious hard-fail (it required an owner override every time). **Lock:** `e2e/select-specs.test.js`.
 
 See **ADR 0004** for the full investigation, including why the audit's original "deploy backlog" hypothesis for Cat 1 was wrong (the queue-aware wait's sharpened diagnostic is what exposed the future-date build-skip).
+
+### What cms-platform v0.1.76 changed for THIS repo
+
+Three items land on this site. The full argument for each lives in cms-platform's AGENTS.md; recorded here only where it changes how you read this repo's CI.
+
+- **The 9 PR-triggered callers no longer trigger on `pull_request: edited`** (`dependabot-auto-merge`, `deploy-preview`, `e2e-stub`, `e2e-tests`, `parity-preview`, `platform-pin-consistency`, `preview-media`, `secrets-scan`, `visual-regression`), and their now-dead `if: github.event.action != 'edited' …` job gates are gone. Why: a caller that SKIPS never invokes its reusable, so no check-run named `<caller job> / <reusable job>` is produced at all — an `edited` run therefore **withdraws** a required context an earlier run already reported green, and only a new SHA restores it, which a finished automated PR never gets (that stranded a `platform-bump` PR at "5 of 6 required status checks are expected"). This **reverts #145's base-retarget listener**: a PR retargeted onto a different base fires `edited` and, with no listener, the required suite won't re-run against the new base. That risk was **accepted on measurement** — the guard fired twice in four days and self-heals on any PR that gets a later push, against **zero base retargets in 60 PRs**. **`deploy-preview.yml` keeps `closed`** (it is the only caller that declares it): the reusable's teardown job — S3 `rm --recursive`, CloudFront invalidation, the preview bot-comment update — fires only on `action == closed`, so dropping it would leak every closed PR's `pr-N/` prefix forever with no red check.
+
+- **A loop's "the chain never fired" line is no longer proof of a trigger problem.** The deploy-lane diagnostic now asks whether the cms PR has actually MERGED before blaming the deploy chain, and reports `pr-awaiting-required-check` / `pr-required-check-red` (naming the check) instead of `no-deploy-fired` when it hasn't. Before the merge lands the `deploy-production` lane is idle for a completely innocent reason. **This repo hit exactly that:** host-loop run **31107474927** (2026-08-06) killed `cms-tags-lifecycle` at *"NO deploy-production run fired for your merge — the chain never fired"* after 908 s with in-flight 0 / queued 0, while the auto-merge was merely pending (908 s is well inside the ~30-min latency); the run's other two specs passed. Runs **30915982319** and **30822288078** are the same class. So when triaging an OLD log carrying that message, re-check whether the PR had merged yet — don't go looking for a broken `deploy-production` trigger.
+
+- **The scheduled-run health audit stopped alerting on runs that never got a runner.** GitHub marks a run `failure` when its jobs were cancelled before a runner was assigned, which is infrastructure noise, not a failure. **This repo had 4 such false alerts on 2026-08-06** (`cms-automerge-nudge` ×2, `cms-media-roundtrip`, `publish-scheduled-posts`); over a 168 h window the audit's alertable count goes **6 → 2**, and the two survivors are the real `cms-publish-loop-host` failures above. A `::notice::` still tallies what was suppressed, so a systemic runner outage stays visible.
 
 ## Preview environment flow
 

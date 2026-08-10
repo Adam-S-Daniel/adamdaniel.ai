@@ -55,3 +55,8 @@ jobs:
       # CMS_PLATFORM_PAT; the reusable skips cleanly with
       # a notice if it resolves empty.
       workflow_sha_comment_pat: ${{ secrets.CMS_PLATFORM_PAT }}
+      # GitHub App (Contents R/W, Pull requests R/W, Workflows R/W) is the
+      # fallback when no PAT configured; App ID read from vars.CMS_AUTOMATION_APP_ID.
+      # When neither credential exists the reusable skips cleanly with a notice.
+      # Required at v0.1.76+.
+      app_private_key: ${{ secrets.CMS_AUTOMATION_APP_PRIVATE_KEY }}
