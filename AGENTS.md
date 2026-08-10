@@ -302,7 +302,9 @@ Every language in the repo has a best-in-class linter + static-analyzer + style 
 
 **Local — pre-commit hook.** `scripts/lint-staged.sh` (wired into `.githooks/pre-commit` and `.gitconfig-fragment`) lints only the **staged** files of each language, and **skips any linter whose tool is absent**. This hook is the consumer's only lint backstop — the heavyweight toolchain is platform-internal, so a contributor without the full toolchain is never blocked. Bypass one commit with `SKIP_LINT_STAGED=1`. `npm run lint` / `npm run format` cover the npm-based tools.
 
-Per-language linter tables, deliberate rule relaxations, and the "parse structured formats with a real parser" convention describe the platform-internal toolchain (most of it has no local target left in this thin consumer — no `e2e/`, `admin/*.css`, `assets/css/`, `*.py`, `*.rb`, `pyproject.toml`, or `tests/` exist here today). Full detail lives in the **code-quality** skill.
+**Parse structured formats with a real parser — never hand-roll.** Anything that reads a workflow, an `action.yml`, or the Decap/Jekyll config YAML goes through a real parser (the [`yaml`](https://www.npmjs.com/package/yaml) library in JS, `YAML.safe_load_file(..., aliases: true)` in Ruby), never a regex or line-scanner. GitHub enabled YAML anchors in workflows on 2025-09-18, so a line-based scanner now silently mis-reads aliased values. Kept inline rather than deferred to a skill because it governs any script written here, not just the lint toolchain.
+
+Per-language linter tables and the deliberate rule relaxations describe the platform-internal toolchain, most of which has no local target left in this thin consumer — no `e2e/`, `admin/*.css`, `assets/css/`, `*.py`, `*.rb`, `pyproject.toml`, or `tests/` exist here today. Full detail lives in the **code-quality** skill.
 
 ## Workflow path-filtering rule
 
