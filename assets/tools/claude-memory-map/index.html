@@ -1,0 +1,748 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Which ways do you use Claude?</title>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/mermaid/11.12.0/mermaid.min.js"></script>
+<style>
+  :root { --paper:#FDFBF7; --ink:#3D3A34; --muted:#6B675E; --line:#E4DFD4;
+          --blue:#4A6B8F; --amber:#9A6F33; --wsl:#54805C; --win:#B06A4F;
+          --mac:#5B6B7F; --plum:#8F5C82; --web:#8A8478; }
+  * { box-sizing:border-box; margin:0; padding:0; }
+  html { scroll-behavior:smooth; }
+  body { background:var(--paper); color:var(--ink);
+         font-family:Helvetica, Arial, sans-serif; }
+  code { font-family:ui-monospace, 'Cascadia Code', Menlo, Consolas, monospace;
+         font-size:0.92em; background:#F3EFE6; border-radius:4px; padding:0 4px; }
+
+  header { position:sticky; top:0; z-index:30; background:var(--paper);
+           pointer-events:none; }
+  header > * { pointer-events:auto; }
+  header { 
+           border-bottom:1px solid var(--line); padding:14px 22px;
+           display:flex; align-items:baseline; gap:16px; flex-wrap:wrap; }
+  h1 { font-family:Georgia, 'Times New Roman', serif; font-weight:normal;
+       font-size:22px; margin-right:auto; }
+  .scopewrap { font-size:13px; color:var(--muted); display:flex; align-items:center; gap:6px; }
+  .scopewrap select { border:1px solid var(--line); border-radius:8px; background:#FFF;
+                      color:var(--ink); font-size:12.5px; padding:4px 6px; max-width:280px; }
+  #selcount { font-size:13px; color:var(--muted); }
+  #clearall { font-size:13px; color:var(--blue); cursor:pointer;
+              text-decoration:underline; background:none; border:none; padding:4px; }
+
+  .layout { display:grid; grid-template-columns:430px 1fr; gap:22px;
+            max-width:1500px; margin:0 auto; padding:20px 22px 60px; }
+  #panel { min-width:0; }
+  .lede { font-size:14px; color:var(--muted); margin:2px 2px 16px; }
+
+  .card { background:#FFFFFF; border:1px solid var(--line); border-radius:12px;
+          padding:12px 12px 10px; margin-bottom:16px; }
+  .card[data-tint="chat"] { border-left:3px solid var(--blue); }
+  .card[data-tint="code"] { border-left:3px solid var(--amber); }
+  .card[data-tint="cw"]   { border-left:3px solid var(--plum); }
+  .cardhead { font-size:12px; letter-spacing:1.6px; text-transform:uppercase;
+              color:var(--ink); margin:2px 4px 8px; display:flex;
+              align-items:center; gap:8px; flex-wrap:wrap; }
+  .cardsub { letter-spacing:0; text-transform:none; color:var(--muted);
+             font-size:12px; font-weight:normal; }
+  .chip { width:10px; height:10px; border-radius:3px; display:inline-block; }
+  .chip-chat { background:var(--blue); } .chip-code { background:var(--amber); }
+  .chip-cw { background:var(--plum); }
+  summary { cursor:pointer; list-style:none; }
+  details:not([open]) > *:not(summary) { display:none !important; }
+  summary::-webkit-details-marker { display:none; }
+  summary:focus-visible { outline:2px solid var(--blue); outline-offset:2px; border-radius:6px; }
+  summary.plat::before, summary.cardhead::before {
+    content:'▸'; display:inline-block; margin-right:6px; color:var(--muted);
+    transition:transform 120ms ease; }
+  details[open] > summary.plat::before, details[open] > summary.cardhead::before {
+    transform:rotate(90deg); }
+  @media (prefers-reduced-motion: reduce){ summary.plat::before, summary.cardhead::before { transition:none; } }
+  .cnt { font-size:11px; color:var(--muted); background:#F3EFE6; border-radius:9px;
+         padding:1px 8px; margin-left:4px; font-weight:normal; letter-spacing:0; text-transform:none; }
+  .platd { margin:6px 0; }
+  .plat { font-size:13.5px; font-weight:bold; margin:12px 6px 2px; }
+  .subgrp { font-size:12.5px; font-style:italic; color:var(--muted); margin:8px 6px 2px 18px; }
+
+  label { display:flex; align-items:center; gap:9px; min-height:44px;
+          scroll-margin-top:110px;
+          padding:8px 10px; margin:1px 0; border-radius:9px; cursor:pointer;
+          font-size:14px; line-height:1.35; }
+  label:hover { background:#F7F4EC; }
+  label:has(input:checked) { background:#F2F6F2; }
+  label.i1 { margin-left:14px; } label.i2 { margin-left:30px; }
+  input[type=checkbox] { accent-color:var(--blue); width:17px; height:17px;
+                         flex:0 0 auto; cursor:pointer; scroll-margin-top:120px; }
+  input[type=checkbox]:focus-visible { outline:2px solid var(--blue); outline-offset:2px; }
+  .lbl { flex:1; min-width:0; }
+  .tick { width:3px; align-self:stretch; border-radius:2px; flex:0 0 auto; }
+  .tick-mac{background:var(--mac);} .tick-win{background:var(--win);}
+  .tick-wsl{background:var(--wsl);} .tick-web{background:var(--web);}
+  .tick-acct{background:var(--blue);} .tick-quiet{background:#C9C3B6;}
+  .tick-cw{background:var(--plum);}
+  .inlinetick { display:inline-block; width:8px; height:11px; vertical-align:-1px; margin-right:2px; }
+  label.scopedim { opacity:.55; }
+  .scopenote { color:var(--amber); font-size:11.5px; font-style:italic; }
+  .fine { font-size:12px; color:var(--muted); font-style:italic; margin:4px 4px 0; }
+
+  #canvas { position:sticky; top:64px; height:calc(100vh - 86px);
+            display:flex; flex-direction:column; min-width:0; }
+  .canvasbar { display:flex; align-items:center; gap:12px; margin-bottom:8px; }
+  .canvasbar h2 { font-family:Georgia, serif; font-weight:normal; font-size:17px;
+                  margin-right:auto; }
+  #fitbtn { border:1px solid var(--line); background:#FFFFFF; color:var(--ink);
+            font-size:12.5px; border-radius:8px; padding:6px 12px; cursor:pointer; }
+  #fitbtn:hover { border-color:var(--blue); }
+  #hints { font-size:12.5px; color:var(--amber); margin-bottom:6px; min-height:0; }
+  #hints div { margin:2px 0; }
+  #diagram { background:#FFFFFF; border:1px solid var(--line); border-radius:12px;
+             padding:12px; overflow:auto; flex:1; min-height:280px;
+             -webkit-overflow-scrolling:touch; transition:opacity 120ms ease; }
+  #diagram.dim { opacity:0.35; }
+  #diagram svg { max-width:none !important; }
+  #diagram.fit svg { width:100% !important; height:auto !important; max-width:100% !important; }
+  .emptystate { color:var(--muted); font-size:14px; padding:28px 18px; }
+  .emptystate b { font-family:Georgia, serif; font-weight:normal; font-size:17px;
+                  display:block; margin-bottom:6px; color:var(--ink); }
+  .err { color:#A0552F; font-size:13.5px; }
+
+  .syncpanel { font-size:12.5px; background:#FFFFFF; border:1px solid var(--line);
+               border-radius:10px; padding:8px 12px; margin-bottom:8px; line-height:1.45; }
+  .syncpanel .insync b { color:var(--wsl); font-weight:bold; }
+  .syncpanel .notsync b { color:var(--win); font-weight:bold; }
+  .syncpanel .syncnote { color:var(--muted); font-style:italic; font-size:11.5px; margin-top:2px; }
+  .syncitem { display:block; padding:1px 0 1px 12px; }
+  .syncitem .swho { color:var(--muted); font-size:11.5px; }
+  .syncctl { float:right; }
+  .syncctl button { border:1px solid var(--line); background:#FFF; color:var(--blue);
+                    font-size:11px; border-radius:7px; padding:3px 9px; cursor:pointer; }
+  .legend { margin-top:5px; font-size:11.5px; color:var(--muted); }
+  .legend summary { cursor:pointer; color:var(--blue); }
+  .legend dl { margin:4px 0 0 4px; }
+  .legend dt { font-weight:bold; color:var(--ink); margin-top:3px; }
+  .legend dd { margin:0 0 0 12px; }
+  #syncmob { display:none; }
+
+  #mobilebar { display:none; }
+
+  @media (prefers-reduced-motion: reduce){
+    html { scroll-behavior:auto; }
+    #diagram { transition:none; }
+  }
+  @media (max-width: 900px){
+    .layout { grid-template-columns:1fr; padding:16px 12px 90px; gap:14px; }
+    h1 { font-size:19px; }
+    #canvas { position:static; height:auto; }
+    #syncdesk { display:none; }
+    #syncmob { display:block; flex-basis:100%; font-size:11.5px; padding:6px 10px;
+               margin:6px 0 0; max-height:96px; overflow-y:auto; }
+    #diagram { min-height:240px; max-height:70vh; }
+    #mobilebar.show { display:flex; position:fixed; left:0; right:0; bottom:0; z-index:40;
+      background:#FFFFFF; border-top:1px solid var(--line); padding:10px 16px;
+      align-items:center; gap:12px;
+      padding-bottom:calc(10px + env(safe-area-inset-bottom)); }
+    #mobilebar .barcount { font-size:13px; color:var(--muted); margin-right:auto; }
+    #viewmap { border:1.2px solid var(--blue); background:#EEF3F8; color:var(--ink);
+               font-size:14px; border-radius:9px; padding:9px 16px; cursor:pointer; }
+  }
+</style>
+</head>
+<body>
+<header>
+  <h1>Which ways do you use Claude?</h1>
+  <label class="scopewrap">I&rsquo;m interested in
+    <select id="scope">
+      <option value="across" selected>remembered across projects/repos</option>
+      <option value="within">remembered within one project/repo</option>
+      <option value="both">both</option>
+    </select>
+  </label>
+  <span id="selcount">0 contexts</span>
+  <button id="clearall">Clear all</button>
+  <div id="syncmob" class="syncpanel"></div>
+</header>
+
+<div class="layout">
+  <div id="panel">
+    <p class="lede">Check every way you use Claude. The map of what Claude remembers assembles as you go &mdash; what gets in, where it lives, and how it comes back out.</p>
+
+<details open class="card" data-tint="chat">
+  <summary class="cardhead"><span class="chip chip-chat"></span>Claude chat <span class="cnt" data-grp="chat"></span>
+    <span class="cardsub">claude.ai &middot; the Claude mobile app &middot; the Claude Desktop app</span></summary>
+  <label><input type="checkbox" id="ch_standalone"><span class="tick tick-acct"></span><span class="lbl">Chats not inside a Project (&ldquo;standalone&rdquo; chats) <span class="scopenote"></span></span></label>
+  <label><input type="checkbox" id="ch_project"><span class="tick tick-acct"></span><span class="lbl">Chats inside a Project</span></label>
+</details>
+
+<details open class="card" data-tint="cw">
+  <summary class="cardhead"><span class="chip chip-cw"></span>Claude Cowork <span class="cnt" data-grp="cw"></span>
+    <span class="cardsub">chat &amp; Cowork share one home &mdash; claude.ai &middot; mobile app &middot; desktop app</span></summary>
+  <div class="subgrp">Remote sessions &mdash; run on Anthropic&rsquo;s servers (beta, the default)</div>
+    <label class="i2"><input type="checkbox" id="cw_remote_project"><span class="tick tick-web"></span><span class="lbl">Inside a project</span></label>
+    <label class="i2"><input type="checkbox" id="cw_remote_noproj"><span class="tick tick-web"></span><span class="lbl">Outside a project <span class="scopenote"></span></span></label>
+  <div class="subgrp">Local sessions &mdash; run on your computer (Claude Desktop app only)</div>
+    <label class="i2"><input type="checkbox" id="cw_local_project"><span class="tick tick-cw"></span><span class="lbl">Inside a project</span></label>
+    <label class="i2"><input type="checkbox" id="cw_local_noproj"><span class="tick tick-cw"></span><span class="lbl">Outside a project</span></label>
+</details>
+
+<details open class="card" data-tint="code">
+  <summary class="cardhead"><span class="chip chip-code"></span>Claude Code <span class="cnt" data-grp="code"></span></summary>
+  <details class="platd"><summary class="plat" data-grp="mac">On your Mac <span class="cnt" data-grp="mac"></span></summary>
+    <div class="subgrp">In the Claude Desktop app</div>
+      <label class="i2"><input type="checkbox" id="mac_app_local"><span class="tick tick-mac"></span><span class="lbl">Local sessions</span></label>
+      <label class="i2"><input type="checkbox" id="mac_app_web"><span class="tick tick-web"></span><span class="lbl">Claude Code on the web sessions <span class="scopenote"></span></span></label>
+    <label class="i1"><input type="checkbox" id="mac_cli"><span class="tick tick-mac"></span><span class="lbl">In the terminal &mdash; the Claude Code CLI (command-line interface)</span></label>
+    <label class="i1"><input type="checkbox" id="mac_vscode"><span class="tick tick-mac"></span><span class="lbl">In VS Code with the Claude Code extension</span></label>
+  </details>
+<details class="platd"><summary class="plat" data-grp="win">On your Windows computer <span class="cnt" data-grp="win"></span></summary>
+    <div class="subgrp">In the Claude Desktop app</div>
+      <label class="i2"><input type="checkbox" id="win_app_local"><span class="tick tick-win"></span><span class="lbl">Local sessions (run on the Windows side)</span></label>
+      <label class="i2"><input type="checkbox" id="win_app_web"><span class="tick tick-web"></span><span class="lbl">Claude Code on the web sessions <span class="scopenote"></span></span></label>
+      <label class="i2"><input type="checkbox" id="win_app_rc_wsl"><span class="tick tick-wsl"></span><span class="lbl">Remote-controlling a CLI session running in WSL <span style="white-space:nowrap">(Remote Control, <code>/rc</code>)</span></span></label>
+    <div class="subgrp">In the terminal &mdash; the Claude Code CLI (command-line interface)</div>
+      <label class="i2"><input type="checkbox" id="win_cli_native"><span class="tick tick-win"></span><span class="lbl">Native Windows</span></label>
+      <label class="i2"><input type="checkbox" id="win_cli_wsl"><span class="tick tick-wsl"></span><span class="lbl">In WSL</span></label>
+    <div class="subgrp">In VS Code with the Claude Code extension</div>
+      <label class="i2"><input type="checkbox" id="win_vscode_wsl"><span class="tick tick-wsl"></span><span class="lbl">Connected to WSL (with the &ldquo;WSL&rdquo; extension, formerly &ldquo;Remote&nbsp;-&nbsp;WSL&rdquo;)</span></label>
+      <label class="i2"><input type="checkbox" id="win_vscode_local"><span class="tick tick-win"></span><span class="lbl">Local &mdash; not WSL</span></label>
+  </details>
+<label><input type="checkbox" id="code_web"><span class="tick tick-web"></span><span class="lbl">On the web &mdash; <code>claude.ai/code</code> in any browser <span class="scopenote"></span></span></label>
+</details>
+
+<p class="fine">A Cowork session runs remote or local for its whole life &mdash; you choose at start (the &ldquo;Beta&rdquo; button, or Settings &rarr; Cowork &rarr; &ldquo;Run new tasks in the cloud&rdquo;). Chat and Cowork share one home now, with one place for your projects and artifacts across both; a project tied to a local folder is Cowork-only, desktop-only. A remote session keeps working with your laptop closed, but can reach your local folders and tools only while the desktop app is open and connected &mdash; and remote scheduled tasks, which run with no device online, can&rsquo;t use local folders or local connectors at all. The desktop app remains the full Cowork experience &mdash; there Claude can also use your local files and browser. Remote sessions are rolling out over the next several weeks, Max plan first. Not on the map: Dispatch (the persistent assign-from-anywhere thread) and its memory; Claude Code&rsquo;s nested per-directory CLAUDE.md files, <code>.claude/rules</code>, and subagent memory; managed-policy files; organization instructions (Team/Enterprise &mdash; they apply across Chat, Cowork, and Code and outrank yours).</p>
+<p class="fine">Settings &rarr; Profile also holds your name, what Claude should call you, and what best describes your work &mdash; lightweight context Claude sees account-wide. The colored tick on each row marks the memory home it touches: <span class="tick tick-mac inlinetick"></span>Mac, <span class="tick tick-win inlinetick"></span>Windows, <span class="tick tick-wsl inlinetick"></span>WSL, <span class="tick tick-web inlinetick"></span>cloud, <span class="tick tick-acct inlinetick"></span>your account, <span class="tick tick-cw inlinetick"></span>Cowork.</p>
+
+  </div>
+
+  <div id="canvas">
+    <div class="canvasbar">
+      <h2>What Claude remembers &mdash; your selection</h2>
+      <button id="fitbtn">Fit width</button>
+    </div>
+    <div id="syncdesk" class="syncpanel"></div>
+    <div id="hints"></div>
+    <div id="diagram"></div>
+  </div>
+</div>
+
+<div id="mobilebar">
+  <span class="barcount" id="barcount"></span>
+  <button id="viewmap">View map</button>
+</div>
+
+<script>
+window.addEventListener('error', e => {
+  const d = document.getElementById('diagram');
+  if (d) d.insertAdjacentHTML('afterbegin', '<p class="err">Page error: '+(e.message||'unknown')+'</p>');
+});
+
+// ---------- canonical text blocks (single source of truth) ----------
+const Q = '&quot;';
+const NODES = {
+  C1:  `C1["Chats not inside a Project\n  (${Q}standalone${Q} chats)"]`,
+  C2:  `C2["Chats inside a Project"]`,
+  S1:  `S1["Saved facts (${Q}memory edits${Q})\n  (applied immediately, not the daily sync)"]`,
+  S2:  `S2["Chat-history summary\n  (${Q}memory summary${Q})"]`,
+  S3:  `S3["Project memory (${Q}project-scoped\n  memory${Q}) — one per Project"]`,
+  PRF: `PRF["Instructions for Claude — Settings → Profile\n  (${Q}Instructions${Q} in the app)\n  (kept in mind across chats & Cowork)"]`,
+  SET: `SET["Settings → Capabilities — Memory\n(${Q}View and edit memory${Q} opens the ${Q}Manage memory${Q} panel ·\nhome of the ${Q}Generate memory from chat history${Q} toggle)"]`,
+  MAPP:`MAPP["Claude Desktop app__MAPP_SUFFIX__"]`,
+  K6:  `K6["CLI on Mac — Terminal"]`,
+  K7:  `K7["VS Code with the\nClaude Code extension — Mac"]`,
+  WAPP:`WAPP["Claude Desktop app__WAPP_SUFFIX__"]`,
+  K4:  `K4["CLI in Windows — native"]`,
+  K5:  `K5["VS Code with the\nClaude Code extension —\nlocal (not WSL)"]`,
+  KW:  `KW["CLI in WSL"]`,
+  KV:  `KV["VS Code on Windows,\nconnected to WSL\n(the ${Q}WSL${Q} extension,\nformerly ${Q}Remote - WSL${Q})"]`,
+  C5:  `C5["On the web\n(fresh cloud sandbox per task)"]`,
+  C6R: `C6R["Session inside a project"]`,
+  C7R: `C7R["Session outside a project\n  (no memory carries forward)"]`,
+  C6L: `C6L["Session inside a project"]`,
+  C7L: `C7L["Session outside a project\n  (no memory carries forward)"]`,
+  GI:  `GI["Global instructions — Settings → Cowork\n  (standing instructions for every Cowork session)"]`,
+  FI:  `FI["Folder instructions — with a local folder\n  (project-specific context · Claude can\n  update them during a session)"]`,
+  S8:  `S8["Cowork sessions & files Claude delivers\n  (reopen on any surface · past remote\n  sessions found by title only)"]`,
+  W1:  `W1["User CLAUDE.md — WSL\n  (${Q}user instructions${Q})\n  (all projects on this side)"]`,
+  W2:  `W2["Claude's own notes — WSL\n  (${Q}auto memory${Q})\n  (one set per project, on this side only)"]`,
+  N1:  `N1["User CLAUDE.md — Windows\n  (${Q}user instructions${Q})\n  (all projects on this side)"]`,
+  N2:  `N2["Claude's own notes — Windows\n  (${Q}auto memory${Q})\n  (one set per project, on this side only)"]`,
+  M1:  `M1["User CLAUDE.md — Mac\n  (${Q}user instructions${Q})\n  (all projects on this Mac)"]`,
+  M2:  `M2["Claude's own notes — Mac\n  (${Q}auto memory${Q})\n  (one set per project, on this Mac only)"]`,
+};
+
+function s4Node(){
+  return `S4["Project notes file — CLAUDE.md\n  (${Q}project instructions${Q})\n  (one per repo,\n  read by whatever opens it)"]`;
+}
+
+function s7Node(remote){
+  if (remote) return `S7["Cowork project memory — one per project\n  (what Claude learns in one project\n  doesn't carry over to others)\n  (stored on that computer for desktop projects;\n  not yet documented for remote sessions)"]`;
+  return `S7["Cowork project memory\n  (what Claude learns in one project\n  doesn't carry over to others)"]`;
+}
+
+const BUNDLED = `you write the user file · it jots notes, incl. “remember this” · all read at session start`;
+const WRITE_READ = `you write it · read at session start`;
+
+const CHAT_FLOWS_ALL = [
+  ['C1','S2', 'C1 -- "synthesized daily" --> S2'],
+  ['C1','S1', 'C1 -- "saying “remember this”" --> S1'],
+  ['S1','S2', 'S1 -. "feeds" .-> S2'],
+  ['S2','C1', 'S2 -- "loaded into every new standalone chat" --> C1'],
+  ['S1','C1', 'S1 --> C1'],
+  ['C2','S3', 'C2 <-- "chatting · saying “remember this” · recalled in that Project’s chats" --> S3'],
+  ['S2','SET','S2 -. "displayed here, refreshed daily · export" .-> SET'],
+  ['SET','S1','SET -. "your edits (immediate) · imports (within a day)" .-> S1'],
+];
+
+const CLASSDEFS = `classDef ctx fill:#FFFFFF,stroke:#8A8478,stroke-width:1.2px,color:#3D3A34
+classDef quiet fill:#FDFBF7,stroke:#B7B1A4,stroke-width:1px,color:#6B675E
+classDef acct fill:#EEF3F8,stroke:#4A6B8F,stroke-width:1.2px,color:#3D3A34
+classDef repo fill:#F7F3E8,stroke:#9A6F33,stroke-width:1.2px,color:#3D3A34
+classDef wsl fill:#EFF5F0,stroke:#54805C,stroke-width:1.2px,color:#3D3A34
+classDef win fill:#FBF0EC,stroke:#B06A4F,stroke-width:1.2px,color:#3D3A34
+classDef mac fill:#EDF1F5,stroke:#5B6B7F,stroke-width:1.2px,color:#3D3A34
+classDef cwloc fill:#F6EFF4,stroke:#8F5C82,stroke-width:1.2px,color:#3D3A34`;
+
+const NODE_CLASS = {
+  ctx: ['C1','C2','MAPP','K6','K7','WAPP','K4','K5','KW','KV','C5','C6R','C6L','SET'],
+  quiet: ['C7R','C7L','S8'],
+  acct: ['S1','S2','S3','PRF'], repo: ['S4'],
+  wsl: ['W1','W2'], win: ['N1','N2'], mac: ['M1','M2'], cwloc: ['S7','FI','GI'],
+};
+const SG_STYLE = {
+  CHAT:'fill:#FDFBF7,stroke:#C9C3B6,stroke-width:1px,color:#6B675E',
+  CW:'fill:#FDFBF7,stroke:#C9C3B6,stroke-width:1px,color:#6B675E',
+  CWR:'fill:#FDFBF7,stroke:#C9C3B6,stroke-width:1px,color:#6B675E',
+  CWL:'fill:#FDFBF7,stroke:#C9C3B6,stroke-width:1px,color:#6B675E',
+  WSLSIDE:'fill:#FCFEFC,stroke:#A9C2AF,stroke-width:1px,color:#54805C',
+  WINSIDE:'fill:#FFFBF9,stroke:#D6A893,stroke-width:1px,color:#B06A4F',
+  MACSIDE:'fill:#FBFCFE,stroke:#9FAEBE,stroke-width:1px,color:#5B6B7F',
+  ACCT:'fill:#FBFDFF,stroke:#A8BBD1,stroke-width:1px,color:#4A6B8F',
+  REPO:'fill:#FFFEF9,stroke:#C9A36B,stroke-width:1px,color:#9A6F33',
+  WSLFS:'fill:#FCFEFC,stroke:#A9C2AF,stroke-width:1px,color:#54805C',
+  WINFS:'fill:#FFFBF9,stroke:#D6A893,stroke-width:1px,color:#B06A4F',
+  MACFS:'fill:#FBFCFE,stroke:#9FAEBE,stroke-width:1px,color:#5B6B7F',
+  CWLOC:'fill:#FEFCFE,stroke:#C2A9BB,stroke-width:1px,color:#8F5C82',
+};
+
+// ---------- composition ----------
+function compose(sel){
+  const hints = [];
+  const has = id => !!sel[id];
+
+  // implications
+  const kw  = has('win_cli_wsl') || has('win_app_rc_wsl');
+  if (has('win_app_rc_wsl') && !has('win_cli_wsl'))
+    hints.push('Remote-controlling a WSL CLI session implies a CLI session in WSL — added to the map.');
+  const k6  = has('mac_cli');
+
+  const wapp = has('win_app_local') || has('win_app_web') || has('win_app_rc_wsl');
+  const mapp = has('mac_app_local') || has('mac_app_web');
+  // side = an actual session running on that side (client-only desktop-app use doesn't count)
+  const winSide = has('win_app_local') || has('win_cli_native') || has('win_vscode_local');
+  const wslSide = kw || has('win_vscode_wsl');
+  const macSide = has('mac_app_local') || k6 || has('mac_vscode');
+  const c5 = has('code_web') || has('mac_app_web') || has('win_app_web');
+  const cwRemoteProject = has('cw_remote_project');
+  const cwRemoteNoproj  = has('cw_remote_noproj');
+  const cwLocalProject  = has('cw_local_project');
+  const cwLocalNoproj   = has('cw_local_noproj');
+  const cwRemote  = cwRemoteProject || cwRemoteNoproj;
+  const cwLocal   = cwLocalProject || cwLocalNoproj;
+  const cwSession = cwRemote || cwLocal;
+  const chatAny = has('ch_standalone') || has('ch_project');
+
+  const blocks = [];
+  const present = new Set();
+  const sgs = new Set();
+  const node = id => { present.add(id); return NODES[id]; };
+
+  // chat
+  if (chatAny){
+    const inner = [];
+    if (has('ch_standalone')) inner.push('  '+node('C1'));
+    if (has('ch_project'))    inner.push('  '+node('C2'));
+    sgs.add('CHAT');
+    blocks.push('subgraph CHAT["Claude chat — claude.ai, mobile and desktop apps"]\ndirection TB\n'+inner.join('\n')+'\nend');
+    if (has('ch_standalone')) blocks.push(node('SET'));
+  }
+  {
+    const acct = [];
+    if (has('ch_standalone')) { acct.push('  '+node('S1'), '  '+node('S2')); }
+    if (has('ch_project'))    acct.push('  '+node('S3'));
+    if (chatAny || cwSession) acct.push('  '+node('PRF'));
+    if (cwRemote) acct.push('  '+node('S8'));
+    if (acct.length){
+      sgs.add('ACCT');
+      blocks.push('subgraph ACCT["On your account — online, any device"]\ndirection TB\n'+acct.join('\n')+'\nend');
+    }
+  }
+
+  // code sides
+  function side(id, title, ids){
+    const inner = ids.filter(Boolean).map(n => '  '+node(n));
+    sgs.add(id);
+    blocks.push(`subgraph ${id}["${title}"]\ndirection TB\n`+inner.join('\n')+'\nend');
+  }
+  if (macSide) side('MACSIDE','runs on your Mac',
+      [has('mac_app_local')?'MAPP':null, k6?'K6':null, has('mac_vscode')?'K7':null]);
+  if (winSide) side('WINSIDE','runs on the Windows side',
+      [has('win_app_local')?'WAPP':null, has('win_cli_native')?'K4':null, has('win_vscode_local')?'K5':null]);
+  // desktop app as client only (web launcher / remote control): standalone node outside the side groups
+  if (mapp && !has('mac_app_local')) blocks.push(node('MAPP'));
+  if (wapp && !has('win_app_local')) blocks.push(node('WAPP'));
+  if (wslSide) side('WSLSIDE','runs on the WSL (Linux) side',
+      [kw?'KW':null, has('win_vscode_wsl')?'KV':null]);
+  if (c5) blocks.push(node('C5'));
+
+  // stores
+  const localCode = winSide || wslSide || macSide;
+  const s4 = localCode || c5;
+  if (s4){
+    present.add('S4'); sgs.add('REPO');
+    blocks.push('subgraph REPO["Saved with the project’s files"]\n  '+s4Node()+'\nend');
+  }
+  function fs(id, title, a, b){
+    sgs.add(id);
+    blocks.push(`subgraph ${id}["${title}"]\ndirection TB\n  `+node(a)+'\n  '+node(b)+'\nend');
+  }
+  if (macSide) fs('MACFS','Mac file system — ~/.claude','M1','M2');
+  if (winSide) fs('WINFS','Windows file system — C:\\Users\\you\\.claude','N1','N2');
+  if (wslSide) fs('WSLFS','WSL file system — ~/.claude','W1','W2');
+
+  // cowork
+  if (cwSession){
+    const groups = [];
+    if (cwRemote){
+      const rInner = [];
+      if (cwRemoteProject) rInner.push('    '+node('C6R'));
+      if (cwRemoteNoproj)  rInner.push('    '+node('C7R'));
+      sgs.add('CWR');
+      groups.push(`  subgraph CWR["Remote sessions — run on Anthropic's servers (beta, the default)"]\n  direction TB\n`+rInner.join('\n')+'\n  end');
+    }
+    if (cwLocal){
+      const lInner = [];
+      if (cwLocalProject) lInner.push('    '+node('C6L'));
+      if (cwLocalNoproj)  lInner.push('    '+node('C7L'));
+      sgs.add('CWL');
+      groups.push('  subgraph CWL["Local sessions — run on your computer (desktop app, isolated VM)"]\n  direction TB\n'+lInner.join('\n')+'\n  end');
+    }
+    sgs.add('CW');
+    blocks.push('subgraph CW["Claude Cowork — chat & Cowork share one home (claude.ai · mobile · desktop)"]\ndirection TB\n'+groups.join('\n\n')+'\nend');
+
+    blocks.push(node('GI'));
+    blocks.push(node('FI'));
+
+    if (cwLocalProject || cwRemoteProject){
+      present.add('S7');
+      if (cwRemoteProject){
+        blocks.push(s7Node(true));
+      } else {
+        sgs.add('CWLOC');
+        blocks.push('subgraph CWLOC["On one computer — Cowork"]\n  '+s7Node(false)+'\nend');
+      }
+    }
+  }
+
+  // flows
+  const flows = [];
+  for (const [a,b,edge] of CHAT_FLOWS_ALL)
+    if (present.has(a) && present.has(b)) flows.push(edge);
+
+  if (macSide){ flows.push(`MACSIDE <-- "${BUNDLED}" --> MACFS`); if (s4) flows.push(`MACSIDE <-- "${WRITE_READ}" --> S4`); }
+  if (winSide){ flows.push(`WINSIDE <-- "${BUNDLED}" --> WINFS`); if (s4) flows.push(`WINSIDE <-- "${WRITE_READ}" --> S4`); }
+  if (wslSide){ flows.push(`WSLSIDE <-- "${BUNDLED}" --> WSLFS`); if (s4) flows.push(`WSLSIDE <-- "${WRITE_READ}" --> S4`); }
+  if (c5 && present.has('S4')){
+    flows.push('S4 -- "read at session start" --> C5');
+    flows.push('C5 -. "can update it by saving changes to the project" .-> S4');
+  }
+  if (has('mac_app_web')) flows.push('MAPP -. "opens web sessions (they run in the cloud)" .-> C5');
+  if (has('win_app_web')) flows.push('WAPP -. "opens web sessions (they run in the cloud)" .-> C5');
+  if (has('win_app_rc_wsl'))
+    flows.push('WAPP -. "remote-controls it (Remote Control, /rc) · session + memory stay in WSL (observed)" .-> KW');
+
+  if (present.has('PRF')){
+    if (chatAny) flows.push('PRF -- "applied to every chat" --> CHAT');
+    if (cwSession) flows.push('PRF -- "applied to Cowork sessions (per the Settings-page description)" --> CW');
+  }
+  if (cwSession){
+    if (cwLocalProject && present.has('S7'))
+      flows.push('C6L <-- "learns from tasks in the project · applied to future tasks there" --> S7');
+    if (cwRemoteProject && present.has('S7'))
+      flows.push('C6R <-- "learns from tasks in the project · applied to future tasks there" --> S7');
+    if (cwLocal)
+      flows.push('CWL <-- "you or Claude writes them · added when a session uses that folder" --> FI');
+    if (cwRemote)
+      flows.push(`FI -. "via the Claude Desktop app — only while it's open & the folder is connected" .-> CWR`);
+    flows.push('GI -- "applied to every Cowork session" --> CW');
+    if (cwRemote)
+      flows.push(`CWR -- "the session + files Claude delivers are saved · working files aren't kept" --> S8`);
+  }
+
+  let noFlowIdx = -1;
+  if (cwSession){
+    const src = present.has('S2') ? 'S2' : (present.has('S3') ? 'S3' : (present.has('S1') ? 'S1' : null));
+    if (src){
+      noFlowIdx = flows.length;
+      flows.push(`${src} x-. "✕ MEMORY IS CHAT-ONLY — what Claude remembers about you in chat doesn't carry into Cowork yet" .-x CW`);
+    }
+  }
+
+  // node text suffixes for desktop-app nodes
+  let body = blocks.join('\n\n') + '\n\n' + flows.join('\n');
+  body = body.replace('__MAPP_SUFFIX__', has('mac_app_local') ? ' —\nlocal sessions' : '');
+  body = body.replace('__WAPP_SUFFIX__', has('win_app_local') ? ' —\nlocal sessions (Windows side)' : '');
+
+  // styles
+  const styleLines = [CLASSDEFS];
+  for (const [cls, ids] of Object.entries(NODE_CLASS)){
+    const here = ids.filter(n => present.has(n));
+    if (here.length) styleLines.push('class '+here.join(',')+' '+cls);
+  }
+  for (const [sg, st] of Object.entries(SG_STYLE))
+    if (sgs.has(sg)) styleLines.push('style '+sg+' '+st);
+  if (noFlowIdx >= 0) styleLines.push(`linkStyle ${noFlowIdx} stroke:#B06A4F,color:#B06A4F`);
+
+  const code = 'flowchart LR\n\n' + body + '\n\n' + styleLines.join('\n');
+  return { code, hints, empty: present.size === 0 };
+}
+
+const MERMAID_OK = typeof mermaid !== 'undefined';
+if (MERMAID_OK) mermaid.initialize({ startOnLoad:false, securityLevel:'loose', theme:'neutral',
+                                     flowchart:{ useMaxWidth:false } });
+const $ = id => document.getElementById(id);
+const IDS = ['ch_standalone','ch_project',
+  'mac_app_local','mac_app_web','mac_cli','mac_vscode',
+  'win_app_local','win_app_web','win_app_rc_wsl','win_cli_native','win_cli_wsl',
+  'win_vscode_wsl','win_vscode_local','code_web',
+  'cw_remote_project','cw_remote_noproj','cw_local_project','cw_local_noproj'];
+
+const EMPTY_HTML = '<div class="emptystate"><b>Nothing mapped yet.</b>Check a context on the left to see what Claude remembers there. Add more and watch the stores and flows connect.</div>';
+
+let renderCount = 0, timer = null, renderSeq = 0;
+
+function selection(){ const s = {}; IDS.forEach(i => s[i] = $(i).checked); return s; }
+function countChecked(){ return IDS.filter(i => $(i).checked).length; }
+
+const GROUPS = {
+  chat:['ch_standalone','ch_project'],
+  mac:['mac_app_local','mac_app_web','mac_cli','mac_vscode'],
+  win:['win_app_local','win_app_web','win_app_rc_wsl','win_cli_native','win_cli_wsl','win_vscode_wsl','win_vscode_local'],
+  cw:['cw_remote_project','cw_remote_noproj','cw_local_project','cw_local_noproj'],
+};
+GROUPS.code = [...GROUPS.mac, ...GROUPS.win, 'code_web'];
+
+function updateBadges(){
+  document.querySelectorAll('.cnt').forEach(el => {
+    const ids = GROUPS[el.dataset.grp];
+    const n = ids.filter(i => $(i).checked).length;
+    el.textContent = n + ' of ' + ids.length + ' selected';
+  });
+}
+
+const SCOPE_LACKS = {
+  across: ['code_web','mac_app_web','win_app_web'],
+  within: ['ch_standalone','cw_remote_noproj'],
+  both: [],
+};
+const SCOPE_NOTE = {
+  across: '— remembers nothing across repos',
+  within: '— remembers nothing project-scoped',
+};
+function updateScopeUI(){
+  const scope = $('scope').value;
+  ['code_web','mac_app_web','win_app_web','ch_standalone','cw_remote_noproj'].forEach(id => {
+    const el = $(id), row = el.closest('label'), note = row.querySelector('.scopenote');
+    const lacks = SCOPE_LACKS[scope].includes(id);
+    el.disabled = lacks && !el.checked;
+    row.classList.toggle('scopedim', lacks);
+    note.textContent = lacks ? SCOPE_NOTE[scope] : '';
+  });
+}
+
+function updateChrome(){
+  updateScopeUI();
+  updateBadges();
+  const n = countChecked();
+  $('selcount').textContent = n + (n === 1 ? ' context' : ' contexts');
+  $('barcount').textContent = n + (n === 1 ? ' context mapped' : ' contexts mapped');
+  $('mobilebar').classList.toggle('show', n > 0);
+}
+
+async function renderNow(){
+  const seq = ++renderSeq;
+  const { code, hints, empty } = compose(selection());
+  $('hints').innerHTML = hints.map(h => '<div>&#9432; '+h+'</div>').join('');
+  const d = $('diagram');
+  if (empty){ d.classList.remove('dim'); d.innerHTML = EMPTY_HTML; return; }
+  if (!MERMAID_OK){
+    d.innerHTML = '<p class="err">The diagram renderer (mermaid, from cdnjs.cloudflare.com) failed to load. Check the console/network for the script request, then reload.</p>'
+      + '<details style="margin-top:10px"><summary style="cursor:pointer;color:#4A6B8F">Show this map&rsquo;s Mermaid source instead</summary><pre style="white-space:pre-wrap;font-size:12px;margin-top:8px">'
+      + code.replace(/&/g,'&amp;').replace(/</g,'&lt;') + '</pre></details>';
+    return;
+  }
+  d.classList.add('dim');
+  try{
+    const { svg } = await mermaid.render('m'+(++renderCount), code);
+    if (seq !== renderSeq) return;            // a newer selection superseded this render
+    d.innerHTML = svg;
+  }catch(err){
+    if (seq !== renderSeq) return;
+    d.innerHTML = '<p class="err">Could not render: '+err.message+'</p><pre style="white-space:pre-wrap;font-size:11px">'+code.replace(/&/g,'&amp;').replace(/</g,'&lt;')+'</pre>';
+  }
+  d.classList.remove('dim');
+}
+
+function scheduleRender(){
+  updateChrome();
+  updateSync();
+  clearTimeout(timer);
+  timer = setTimeout(renderNow, 220);
+}
+
+// checking a Remote-controlling box checks its host CLI; unchecking the host releases the RC box
+const IMPLIES = { win_app_rc_wsl:'win_cli_wsl' };
+function propagate(id){
+  if (IMPLIES[id] && $(id).checked) $(IMPLIES[id]).checked = true;
+  for (const [rc, host] of Object.entries(IMPLIES))
+    if (host === id && !$(id).checked) $(rc).checked = false;
+}
+
+// ----- glanceable sync summary -----
+const SESSIONS = [
+  ['ch_standalone','Standalone chats',['chatmem','prefs']],
+  ['ch_project','Project chats',['projmem','prefs']],
+  ['mac_app_local','Desktop app (Mac)',['macumd','macauto','repo']],
+  ['mac_cli','CLI (Mac)',['macumd','macauto','repo']],
+  ['mac_vscode','VS Code (Mac)',['macumd','macauto','repo']],
+  ['win_app_local','Desktop app (Windows)',['winumd','winauto','repo']],
+  ['win_cli_native','CLI (Windows)',['winumd','winauto','repo']],
+  ['win_vscode_local','VS Code (Windows)',['winumd','winauto','repo']],
+  ['win_cli_wsl','CLI (WSL)',['wslumd','wslauto','repo']],
+  ['win_vscode_wsl','VS Code (WSL)',['wslumd','wslauto','repo']],
+  ['cw_remote_project','Remote Cowork project sessions',['cwmem','cwgi','prefs']],
+  ['cw_remote_noproj','Remote Cowork sessions (no project)',['cwgi','prefs']],
+  ['cw_local_project','Local Cowork project sessions',['cwmem','cwfi','cwgi','prefs']],
+  ['cw_local_noproj','Local Cowork sessions (no project)',['cwfi','cwgi','prefs']],
+];
+const SCOPE_OF = {
+  chatmem:'across', prefs:'across', macumd:'across', winumd:'across', wslumd:'across',
+  projmem:'within', repo:'within', macauto:'within', winauto:'within', wslauto:'within', cwmem:'within',
+  cwfi:'within', cwgi:'across',
+};
+const WINPATH = ['C:','Users','you','.claude'].join(String.fromCharCode(92));
+const STORE_BRIEF = {
+  chatmem:'Memory from chat history',
+  prefs:'Instructions for Claude',
+  projmem:'Project memory',
+  repo:'CLAUDE.md (repo)',
+  macumd:'Mac home — User CLAUDE.md', winumd:'Windows home — User CLAUDE.md', wslumd:'WSL home — User CLAUDE.md',
+  macauto:'Mac home — Auto memory', winauto:'Windows home — Auto memory', wslauto:'WSL home — Auto memory',
+  cwmem:'Cowork project memory',
+  cwgi:'Cowork global instructions',
+  cwfi:'Cowork folder instructions',
+};
+const STORE_FULL = {
+  chatmem:'Memory from chat history: chat-history summary (refreshed daily) + saved facts, spanning every standalone chat',
+  prefs:'Instructions for Claude (Settings → Profile; “Instructions” in the app): free-text standing instructions kept in mind across chats and Cowork',
+  projmem:'Project memory: one per claude.ai Project',
+  repo:'Project notes file — CLAUDE.md, saved in the repo',
+  macumd:'Mac file system (~/.claude) — user CLAUDE.md: your instructions, all projects on this Mac',
+  winumd:'Windows file system (' + WINPATH + ') — user CLAUDE.md: your instructions, all projects on this side',
+  wslumd:'WSL file system (~/.claude) — user CLAUDE.md: your instructions, all projects on this side',
+  macauto:'Mac file system (~/.claude) — auto memory: Claude’s own notes, one set per project',
+  winauto:'Windows file system (' + WINPATH + ') — auto memory: Claude’s own notes, one set per project',
+  wslauto:'WSL file system (~/.claude) — auto memory: Claude’s own notes, one set per project',
+  cwmem:'Cowork project memory: one per project — what Claude learns in one project doesn’t carry over to others',
+  cwgi:'Global instructions (Settings → Cowork): standing instructions applied to every Cowork session',
+  cwfi:'Folder instructions: attached to a local folder on desktop — you or Claude writes them, and Claude can update them mid-session',
+};
+const LEGEND_HTML = '<details class="legend"><summary>Legend</summary><dl>'
+  + '<dt>Memory from chat history</dt><dd>Claude’s account-level memory: the chat-history summary (refreshed daily) plus your saved facts (“memory edits”), loaded into every standalone chat on any device. Cross-project.</dd>'
+  + '<dt>Instructions for Claude</dt><dd>The free-text box in claude.ai Settings (“Instructions” in the app). The Settings page: “Claude will keep these in mind across chats and Cowork within Anthropic’s guidelines.” Docs add: account-wide, “applied to all of your conversations.”</dd>'
+  + '<dt>Project memory</dt><dd>A separate memory for each claude.ai Project.</dd>'
+  + '<dt>CLAUDE.md</dt><dd>The project notes file saved with the repo, read at session start by whatever opens it.</dd>'
+  + '<dt>User CLAUDE.md (Mac / Windows / WSL)</dt><dd>In that side’s <code>~/.claude</code> (Windows: <code>' + WINPATH + '</code>): your instructions for every project on that side. Cross-project, but each side keeps its own file.</dd>'
+  + '<dt>Auto memory (Mac / Windows / WSL)</dt><dd>Claude’s own notes (auto memory) in the same folder — one set per project, per side. Relocatable into a repo-tracked folder via the <code>autoMemoryDirectory</code> setting, so it travels with the repo instead of staying machine-local.</dd>'
+  + '<dt>Cowork project memory</dt><dd>One per Cowork project — Claude carries what it learns into future tasks in that project, and nothing into other projects. Desktop projects keep it on that computer; where it lives for remote sessions isn’t documented yet.</dd>'
+  + '<dt>Cowork global instructions</dt><dd>Standing instructions at Settings → Cowork, applied to every Cowork session. (Docs only show editing them in the desktop app; where they’re stored isn’t documented.)</dd>'
+  + '<dt>Cowork folder instructions</dt><dd>Instructions attached to a local folder on desktop. You write them or Claude does — it can update them mid-session. Remote sessions reach them only while the desktop app is open and connected.</dd>'
+  + '<dt>Memory is chat-only (for now)</dt><dd>Anthropic: “What Claude remembers about you in chat doesn’t carry into Cowork sessions yet.” Memory from chat history, project memory, and Cowork’s stores are separate worlds today.</dd>'
+  + '<dt>Cowork sessions & delivered files</dt><dd>Remote sessions and the files Claude delivers are saved to your Claude account and reopen on any surface — storage you can revisit, not memory Claude recalls on its own. Working files it doesn’t hand back die with the session’s sandbox. Past remote sessions are found by title only.</dd>'
+  + '</dl></details>';
+let labelMode = 'brief';
+function storeLabel(s){
+  const map = labelMode === 'brief' ? STORE_BRIEF : STORE_FULL;
+  return map[s];
+}
+function updateSync(){
+  const ctxs = SESSIONS.filter(([id]) => $(id).checked).map(([,name,st]) => ({name, st}));
+  if ($('code_web').checked || $('mac_app_web').checked || $('win_app_web').checked)
+    ctxs.push({name:'Claude Code on the web', st:['repo']});
+  const scope = $('scope').value;
+  if (scope !== 'both')
+    ctxs.forEach(c => { c.st = c.st.filter(s => SCOPE_OF[s] === scope); });
+  const notes = [];
+  const item = (s, who) => '<div class="syncitem">' + storeLabel(s)
+    + (who ? ' <span class="swho">— only in: ' + who.join(', ') + '</span>' : '') + '</div>';
+  let html;
+  let cover = {};
+  if (ctxs.length === 0){
+    html = '<div class="insync"><b>In sync across your selection:</b> —</div>'
+         + '<div class="notsync"><b>Kept separate:</b> —</div>';
+  } else {
+    ctxs.forEach(c => c.st.forEach(s => { (cover[s] = cover[s] || []).push(c.name); }));
+    const inSync = [], notSync = [];
+    for (const [s, who] of Object.entries(cover))
+      (who.length === ctxs.length ? inSync : notSync).push([s, who]);
+    if (ctxs.length === 1) notes.push('Only one context selected — nothing to sync across yet.');
+    if (cover.repo) notes.push('CLAUDE.md sync assumes the contexts open the same repo.');
+    html = '<div class="insync"><b>In sync across your selection:</b>'
+      + (inSync.length ? inSync.map(([s]) => item(s)).join('') : ' None') + '</div>'
+      + '<div class="notsync"><b>Kept separate:</b>'
+      + (notSync.length ? notSync.map(([s,who]) => item(s, who)).join('') : ' None') + '</div>';
+  }
+  const cwAnySel = GROUPS.cw.some(i => $(i).checked);
+  const chatAnySel = $('ch_standalone').checked || $('ch_project').checked;
+  if (cwAnySel && chatAnySel)
+    notes.push('Anthropic: "Memory is chat-only. What Claude remembers about you in chat doesn’t carry into Cowork sessions yet."');
+  const cwRemoteSel = $('cw_remote_project').checked || $('cw_remote_noproj').checked;
+  if (cover.cwfi && cwRemoteSel)
+    notes.push('Remote sessions reach folder instructions only while the desktop app is open and connected.');
+  html += notes.map(n => '<div class="syncnote">'+n+'</div>').join('');
+  const controls = '<div class="syncctl"><button id="labelmode">'
+    + (labelMode === 'brief' ? 'Full labels' : 'Brief labels') + '</button></div>';
+  const legend = labelMode === 'brief' ? LEGEND_HTML : '';
+  $('syncdesk').innerHTML = controls + html + legend;
+  $('syncmob').innerHTML = html + legend;
+
+}
+
+IDS.forEach(i => $(i).addEventListener('change', () => { propagate(i); scheduleRender(); }));
+$('clearall').addEventListener('click', () => {
+  IDS.forEach(i => { $(i).checked = false; });
+  scheduleRender();
+});
+$('fitbtn').addEventListener('click', () => {
+  const fit = $('diagram').classList.toggle('fit');
+  $('fitbtn').textContent = fit ? 'Actual size' : 'Fit width';
+});
+$('scope').addEventListener('change', () => { updateScopeUI(); updateSync(); });
+document.addEventListener('click', e => {
+  if (e.target && e.target.id === 'labelmode'){
+    labelMode = labelMode === 'brief' ? 'full' : 'brief';
+    updateSync();
+  }
+});
+$('viewmap').addEventListener('click', () =>
+  $('canvas').scrollIntoView({ block:'start', behavior:'smooth' }));
+
+if (window.matchMedia('(max-width: 900px)').matches){
+  $('diagram').classList.add('fit');
+  $('fitbtn').textContent = 'Actual size';
+}
+updateChrome();
+updateSync();
+$('diagram').innerHTML = EMPTY_HTML;
+</script>
+</body>
+</html>
