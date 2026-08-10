@@ -22,11 +22,11 @@ jobs:
   # edited fires only for base retargets (changes.base present) — title/body edits stay no-ops (#145)
   parity:
     if: github.event.action != 'edited' || github.event.changes.base.ref.from != ''
-    uses: Adam-S-Daniel/cms-platform/.github/workflows/parity-preview.yml@v0.1.75
+    uses: Adam-S-Daniel/cms-platform/.github/workflows/parity-preview.yml@v0.1.76
     with:
       pr_number: ${{ github.event.pull_request.number }}
       base_ref: ${{ github.base_ref }}
       apex: adamdaniel.ai
-      platform_ref: v0.1.75
+      platform_ref: v0.1.76
     secrets:
       CMS_E2E_PAT: ${{ secrets.CMS_E2E_PAT }}
