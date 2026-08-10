@@ -5,11 +5,11 @@
   "main": "index.js",
   "scripts": {
     "lint": "npm run lint:js && npm run lint:css && npm run lint:md",
-    "lint:js": "eslint \"admin/**/*.js\" \"scripts/*.js\" \"*.config.js\"",
-    "lint:css": "stylelint \"assets/css/*.css\" \"admin/*.css\"",
+    "lint:js": "eslint --no-error-on-unmatched-pattern \"admin/**/*.js\" \"scripts/*.js\" \"*.config.js\"",
+    "lint:css": "stylelint --allow-empty-input \"assets/css/*.css\" \"admin/*.css\"",
     "lint:md": "markdownlint-cli2",
-    "format": "prettier --write \"admin/**/*.js\" \"scripts/*.js\" \"*.config.js\"",
-    "format:check": "prettier --check \"admin/**/*.js\" \"scripts/*.js\" \"*.config.js\""
+    "format": "prettier --no-error-on-unmatched-pattern --write \"admin/**/*.js\" \"scripts/*.js\" \"*.config.js\"",
+    "format:check": "prettier --no-error-on-unmatched-pattern --check \"admin/**/*.js\" \"scripts/*.js\" \"*.config.js\""
   },
   "repository": {
     "type": "git",

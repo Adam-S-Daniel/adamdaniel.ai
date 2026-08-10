@@ -10,6 +10,10 @@ run-name: >-
 
 on:
   pull_request:
+    # No `edited`: a skipped caller emits NO check-run, so an `edited` run WITHDRAWS
+    # contexts an earlier run reported green — only a new SHA restores them (#222).
+    # `closed` IS load-bearing — the reusable's teardown-preview job keys on it
+    # (S3 rm --recursive + CloudFront invalidation + the bot comment update).
     types: [opened, synchronize, reopened, closed]
     branches: [main]
     # Customize per site (mirror deploy-production's list for what can't change
@@ -32,14 +36,14 @@ permissions:
 
 jobs:
   preview:
-    uses: Adam-S-Daniel/cms-platform/.github/workflows/deploy-preview.yml@v0.1.47
+    uses: Adam-S-Daniel/cms-platform/.github/workflows/deploy-preview.yml@v0.1.79
     with:
       apex_domain: adamdaniel.ai
       preview_bucket: adamdaniel-ai-previews
       # Keep unique per site so multiple sites' bots never clobber comments.
       bot_marker: adamdaniel-ai-preview-bot
       # Pin to the SAME ref as the `uses:` pin above so the helper scripts match.
-      platform_ref: v0.1.47
+      platform_ref: v0.1.79
     secrets:
       AWS_ROLE_ARN: ${{ secrets.AWS_ROLE_ARN }}
       PREVIEW_CLOUDFRONT_ID: ${{ secrets.PREVIEW_CLOUDFRONT_ID }}

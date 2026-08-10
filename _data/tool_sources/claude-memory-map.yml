@@ -1,0 +1,7 @@
+# Provenance of the vendored copy at assets/tools/claude-memory-map/.
+# Maintained by the source repo's site-sync/site-preview workflows
+# (github.com/Adam-S-Daniel/claude-memory-map) — don't hand-edit.
+repo: Adam-S-Daniel/claude-memory-map
+ref: main
+commit: 9c747d127750e8eab36bda374552035288be3227
+source_committed_at: 2026-07-16T19:53:06-04:00
