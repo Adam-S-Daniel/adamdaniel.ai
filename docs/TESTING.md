@@ -378,3 +378,122 @@ If you're adding a new content collection, follow the
 **FUTURE CONTENT TYPES** recipe at the top of
 `e2e/cms-publish-flow.spec.js` — that's the canonical pattern for
 "create entry via CMS → rebuild → assert public URL renders."
+
+## Browser matrix and harness (moved from AGENTS.md)
+
+Detail moved here from AGENTS.md's `## E2E testing` section: the full 10-project browser/viewport matrix, tag-based project routing, the custom test fixture, and CI-specific harness mechanics (sandbox CDN allowlist, per-project worker counts, apt/download bounding). One paragraph of that original section — the opening description of `e2e/visual-regression.spec.js`'s snapshot mechanism — was skipped as a duplicate of section 4.F above ("Visual regression", which already documents the same file, the same snapshot path, and the same per-project run scope); everything else was moved verbatim. The `?notheme` kill-switch HISTORICAL subsection (a retired admin theme that no longer exists in this repo) was deleted rather than moved.
+
+### E2E testing
+
+Every e2e test runs across a matrix of browsers, viewports, text sizes, and color settings. The matrix is defined as Playwright projects in the platform-delivered harness config (`.cms-platform/e2e/playwright.config.js`); the e2e harness is no longer vendored in this repo.
+
+#### Browser matrix (10 projects, two lanes)
+
+The matrix is split into a **public-page lane** (8 projects, full browser × viewport diversity for the rendered site) and an **admin lane** (2 projects, the only two browsers admin UI is exercised on). Project routing is tag-based — see "Tag-based filtering" below.
+
+**Public-page lane** — runs every spec that does NOT carry an `@admin-*` tag. Each project's `grepInvert: /@admin-write\b|@admin-read\b/` excludes admin specs.
+
+| Project | Browser | Viewport | Special |
+| --- | --- | --- | --- |
+| `chromium-desktop-1080` | Chromium | 1920×1080 | — |
+| `chromium-laptop` | Chromium | 1366×768 | — |
+| `chromium-mobile` | Chromium | 375×667 | — |
+| `firefox-desktop` | Firefox | 1920×1080 | — |
+| `webkit-tablet` | WebKit | 768×1024 | — |
+| `chromium-large-text` | Chromium | 1920×1080 | Root font 20px |
+| `chromium-light` | Chromium | 1920×1080 | `colorScheme: light` |
+| `chromium-forced-colors` | Chromium | 1920×1080 | `forcedColors: active` |
+
+**Admin lane** — runs only specs tagged `@admin-write` or `@admin-read`. Public-page specs do NOT run on these projects.
+
+| Project | Browser | Viewport | Tags accepted |
+| --- | --- | --- | --- |
+| `chromium-desktop-3k` | Chromium | 3000×1500 | `@admin-write` + `@admin-read` |
+| `webkit-iphone16` | WebKit | 393×852 (deviceScaleFactor 3, isMobile, hasTouch) | `@admin-read` only |
+
+The two admin projects intentionally cover the two browsers a real contributor uses: Chrome on a high-DPI desktop and Safari on iPhone 16. No Windows project — see "Tag-based filtering" for the rationale.
+
+#### Tag-based filtering
+
+Specs that drive the admin UI are tagged via Playwright's `{ tag: [...] }` option on `test.describe(...)` or `test(...)`. The tag controls which projects the spec runs on:
+
+| Tag | Meaning | Runs on |
+| --- | --- | --- |
+| `@admin-write` | Drives `/admin/*` AND mutates state (Decap Save → `cms/*` PR, decap-server FS write, etc.) | `chromium-desktop-3k` only — single browser is sufficient and writes are heavy/serial |
+| `@admin-read` | Drives `/admin/*` but is read-only (DOM contract, HTTP byte parity, mocked APIs) | `chromium-desktop-3k` + `webkit-iphone16` — engine-dependent admin UI assertions need both |
+| *(untagged)* | Public-page specs (`tags.spec.js`, `feeds-and-share.spec.js`, `visual-regression.spec.js`, etc.) | All 8 public-lane projects |
+
+**Why word-bounded regexes** (`/@admin-read\b/`): Playwright's `grep` is substring-matching by default. Without the `\b`, `/@admin-read/` would match a hypothetical future tag like `@admin-readonly`, silently routing it to the wrong project. The `\b` anchors at the tag's end so `@admin-read` matches only itself.
+
+**Tag the test.describe, not the test title.** The tag-in-title pattern (`test("foo @admin-read", ...)`) works but pollutes the test name in reports. The `{ tag: [...] }` option keeps titles clean and is the modern Playwright API.
+
+##### iOS-anything is WebKit
+
+iOS Chrome, iOS Firefox, iOS Edge, and iOS Safari all share the same browser engine — Apple bans third-party rendering engines on iOS. Playwright's `webkit` project covers all of them. So "iOS Chrome === iOS Safari === WebKit" — they're a single data point, not three. When triaging an iOS-only render bug, reproduce it under `webkit-tablet` (or any local WebKit) and you've covered every iOS browser.
+
+##### Sandbox allowlist (Playwright browser downloads)
+
+Playwright fetches its browser binaries from a small set of CDNs the first time `npx playwright install` runs. Sandboxed shells (and any local environment running `npx playwright install`) need outbound network access to:
+
+- `cdn.playwright.dev`
+- `playwright.download.prss.microsoft.com`
+- `playwright.azureedge.net`
+
+If these are blocked, `npx playwright install` hangs or fails with a 403 / DNS-resolution error.
+
+**CI hits these CDNs — and apt — on EVERY job.** This section used to say the opposite ("CI does NOT hit these CDNs … all run inside `mcr.microsoft.com/playwright:v<version>-noble`, which ships the browsers + apt deps prebaked"), and that has been false since the platform port: the GHCR prebaked runner image, the `container:` blocks, and the `select`/`finalize` jobs it referenced were all deliberately NOT ported (cms-platform's "Deliberately NOT ported" notes). Every platform-delivered harness lane installs its browser inline instead — `npx playwright install --with-deps <engine>` — so both the CDN download and an `apt-get install` of ~90 system packages are on every job's critical path.
+
+That is not academic: on 2026-08-07 the Ubuntu mirror served one `webkit-tablet` job at ~35 KB/s and its install took **39 minutes** (its tests took 41.6 s), which held a delete-recovery PR open for 40 minutes and failed a `cms-media-roundtrip` run — and a second lane did the same 67 minutes later. Since cms-platform v0.1.70 the install goes through the platform's `install-playwright-browsers` composite, which splits into two phases: the browser download is bounded (`timeout 420`, escalating to 1200s on the last of 3 attempts) and retried, while the apt half (`install-deps`) is retried but never bounded — bounding it once orphaned a root-owned `apt-get` that starved every retry on the dpkg lock (job 92989057569), so an unprivileged `timeout` can't safely kill it. A slow mirror now costs minutes on the download side and, on the apt side, is caught only by the job's own `timeout-minutes`. Details + measurements: cms-platform's `docs/E2E-PARALLELISM.md`.
+
+The CDN allowlist above therefore matters for CI as well as for a fresh local clone.
+
+#### Custom fixture (`e2e/base.js`)
+
+Tests import `{ test, expect }` from `./base` instead of `@playwright/test`. The fixture adds:
+
+- **`rootFontSize`** option — when set (e.g. `"20px"`), injects an init script that sets `document.documentElement.style.fontSize` before page load, simulating users with a larger browser default font.
+
+#### Writing tests
+
+1. Import from `./base`: `const { test, expect } = require("./base");`
+2. Tests automatically run across all 8 projects — no per-test matrix setup needed.
+3. To skip a test for specific projects, read the project config via `testInfo`:
+
+   ```js
+   test("my test", async ({ page }, testInfo) => {
+     test.skip(
+       testInfo.project.use.forcedColors === "active",
+       "Gradient rendering differs in forced-colors mode",
+     );
+     // ...
+   });
+   ```
+
+   Don't use `matchMedia()` for this — it's unreliable under Playwright's media emulation.
+
+#### Parallelism
+
+`fullyParallel: true` in the config means all tests across all projects run concurrently up to the worker count. Playwright auto-detects available CPU cores. The `webServer` builds Jekyll once and is shared across all workers.
+
+#### Screenshots and video
+
+Every test run captures screenshots (`screenshot: "on"`) and retains video on failure (`video: "retain-on-failure"`). These are stored in `test-results/` and uploaded as CI artifacts for post-run review.
+
+#### Visual regression
+
+- **Threshold:** 1% pixel diff allowed (`maxDiffPixelRatio: 0.01`)
+- **CI reporter:** HTML report with visual diffs uploaded as artifact
+- **Update baselines:** `npx playwright test e2e/visual-regression.spec.js --update-snapshots`
+- **First run for new projects:** missing baselines cause failure; generate with `--update-snapshots`
+
+#### Visual showcase
+
+After any change that could affect visual output, regenerate the showcase video and commit it alongside the change:
+
+```bash
+cp -r e2e/visual-regression.spec.js-snapshots{,-before}   # save old baselines
+npx playwright test e2e/visual-regression.spec.js --update-snapshots
+node scripts/generate-showcase.js                           # produces before/after video
+```
+
+`scripts/generate-showcase.js` displays each snapshot as a before/after side-by-side pair (3.5s per slide) and records the session as `recordings/visual-regression-showcase.webm`. If no `-before` directory exists (first run), it shows current baselines only. The `-before` directory is auto-cleaned after the video is written.
