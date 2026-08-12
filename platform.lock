@@ -3,4 +3,4 @@
 # and every uses:@ pin as one atomic PR; Dependabot is set to ignore the gem
 # (see .github/dependabot.yml). See the platform's docs/SYNC.md.
 platform_repo: Adam-S-Daniel/cms-platform
-platform_ref: v0.1.80
+platform_ref: v0.1.81
