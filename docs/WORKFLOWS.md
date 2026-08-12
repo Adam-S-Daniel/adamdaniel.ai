@@ -469,14 +469,16 @@ check rather than a dedicated one.
 
 **Secrets needed:** none (uses built-in `GITHUB_TOKEN`).
 
-**Pairs with:** `.github/dependabot.yml` — 16 lines, **exactly two** ecosystems, each carrying only `package-ecosystem` / `directory: "/"` / `schedule: interval: weekly`:
+**Pairs with:** `.github/dependabot.yml` — **exactly two** ecosystems, each carrying `package-ecosystem` / `directory: "/"` / `schedule: interval: weekly`, plus one `ignore:` entry under `bundler`:
 
 | ecosystem | what it bumps |
 | --- | --- |
-| `github-actions` | the `uses: Adam-S-Daniel/cms-platform/...@<tag>` pins in the workflow callers |
-| `bundler` | the `cms-platform-theme` gem |
+| `github-actions` | the `uses: Adam-S-Daniel/cms-platform/...@<tag>` pins in the workflow callers. Every `uses:` in this repo is a cms-platform reusable — zero third-party actions |
+| `bundler` | the site's own gems: `jekyll`, `webrick`, `jekyll-seo-tag`, `jekyll-feed`, `jekyll-sitemap`. **NOT** `cms-platform-theme` — see the `ignore` below |
 
-Nothing else is configured. There is **no `cooldown`** (the string doesn't appear in the file), **no `groups:` / `update-types:`** grouping, and **no `docker` or `npm` ecosystem** — so no `ignore:` key either. Earlier revisions of this section described all four; none of them ever existed here. Consequences worth knowing: because there is no `npm` ecosystem (despite a root `package.json` / `package-lock.json`), Dependabot never opens a `package-lock.json` bump PR on this repo; and because there is no `docker` ecosystem and no `.github/ci-runner/` directory at all, the whole CI-runner-image story that used to live in this paragraph is void here — see the CI-flakiness-invariants note on the Playwright image drift guard, which is platform-owned.
+**The `bundler` ecosystem `ignore`s `cms-platform-theme` (cms-platform#242).** `platform-bump.yml` owns that gem's version and moves it atomically with `platform.lock`, the `Gemfile.lock` revision and every `uses:@<tag>` pin; Dependabot could only ever move the `Gemfile`/`Gemfile.lock` half, so its bump was either redundant or actively skewed — #3076 rebased a stale PR forward without re-resolving its target and proposed a **downgrade**, `v0.1.80 → v0.1.75`. Note the ignore is deliberately **unscoped** (no `versions`, no `update-types`): a scoped one would not have stopped that PR. It suppresses security updates for that gem too, which costs nothing — it is a first-party git-sourced gem with no advisory-database entry, and `platform-bump` adopts every release including security fixes. Two platform lints hold the invariant (`dependabot-theme-gem-ignored.test.js` here, `scaffold-seeds-dependabot-ignore.test.js` on the template).
+
+There is **no `cooldown`** (the string doesn't appear in the file), **no `groups:` / `update-types:`** grouping, and **no `docker` or `npm` ecosystem**. Earlier revisions of this section described all four; none of them ever existed here. Consequences worth knowing: because there is no `npm` ecosystem (despite a root `package.json` / `package-lock.json`), Dependabot never opens a `package-lock.json` bump PR on this repo; and because there is no `docker` ecosystem and no `.github/ci-runner/` directory at all, the whole CI-runner-image story that used to live in this paragraph is void here — see the CI-flakiness-invariants note on the Playwright image drift guard, which is platform-owned.
 
 **The missing `npm` ecosystem is a DECISION, not an oversight — do not "fix" it.** Reviewed 2026-08-10 against the repaired Dependabot pipeline (which now merges bumps unattended), and the answer is no, for two independent reasons:
 
