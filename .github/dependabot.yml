@@ -6,7 +6,11 @@
 # atomic PR. Dependabot's job here is the site's OWN dependencies.
 version: 2
 updates:
-  # Third-party actions pinned by SHA in this site's thin workflow callers.
+  # Actions pinned in this site's thin workflow callers. Today every one of
+  # them is a cms-platform reusable, whose ref platform-bump also moves
+  # atomically; whether Dependabot should stop bumping those too is
+  # cms-platform#244. The ecosystem stays wired either way so a genuine
+  # third-party action is picked up the moment one is added.
   - package-ecosystem: github-actions
     directory: "/"
     schedule:
