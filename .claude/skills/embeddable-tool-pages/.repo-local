@@ -1,5 +1,0 @@
-# This skill is site-owned (repo-local).
-# The cms-platform `skills-sync` workflow treats any skill directory containing a
-# `.repo-local` file as opt-out of the platform sync: it is never overwritten or
-# deleted by the platform-authoritative rsync. Without this marker the sync
-# clobbered this skill on every run (see cms-platform PR #174, adamdaniel.ai#2593).

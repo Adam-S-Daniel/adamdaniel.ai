@@ -19,7 +19,12 @@
   // Never lint these:
   //  - Jekyll content markdown (_posts, _e2e, pages, preview.md) has YAML
   //    front matter and is content, not prose — owned elsewhere.
-  //  - Skill mirrors (.agents, .claude) are guarded by a sync check.
+  //  - Skill prose (.claude) follows the agentskills registry's conventions,
+  //    not this repo's prose rules, so it is linted there rather than here.
+  //    Since #3104 `.claude` mirrors nothing: all that remains is the
+  //    site-owned embeddable-tool-pages skill, which would still graduate to
+  //    the registry unchanged. (`.agents` is a vestigial entry — that
+  //    directory no longer exists.)
   //  - Build/vendor/output dirs.
   "ignores": [
     "node_modules",
