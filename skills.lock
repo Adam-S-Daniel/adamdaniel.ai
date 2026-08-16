@@ -1,6 +1,6 @@
 {
   "registry": "Adam-S-Daniel/agentskills",
-  "ref": "2d1b912389e3247ad98a5f2378c1fa80f1c2dbf6",
+  "ref": "b0518b8f50ccbb27c9851f30377c66f8238d46bc",
   "bundles": [
     "adam"
   ],
@@ -39,5 +39,5 @@
     "cms-platform/sveltia-cms-playwright-demo": "5b478d7bf5623a30513b118bf3ff478334d810691021a8dfa6fe0122b6bff1e4",
     "cms-platform/test-canary": "64ba15f83a5b491596982db7022d665bfc1c849eaeef62252f1cc5b346caba61"
   },
-  "generated_from": "2d1b912389e3247ad98a5f2378c1fa80f1c2dbf6"
+  "generated_from": "b0518b8f50ccbb27c9851f30377c66f8238d46bc"
 }
