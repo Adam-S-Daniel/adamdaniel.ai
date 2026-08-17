@@ -6,18 +6,40 @@
 # fixtures below are suppressed.
 #
 # When adding a new test that hardcodes a fake-looking token, add it
-# here rather than disabling gitleaks. See AGENTS.md "Secrets scan".
+# here rather than disabling gitleaks — as a `regexes` entry.
+#
+# Suppress by `regexes` — NEVER by `paths` (cms-platform issue #260). A
+# `paths` entry is not a finding filter: gitleaks skips the file ENTIRELY,
+# before any rule runs, so a REAL credential pasted into it is never
+# reported. This config used to exclude e2e/admin-reviews-(auth|stats).spec.js
+# that way. Measured on the pinned 8.30.1 over this repo's full history, the
+# entry suppressed nothing — a config carrying ONLY that path and no regexes
+# reports exactly what the bare default ruleset reports (5 findings either
+# way) — but both paths this entry covers DO appear in this repo's history
+# (as do the platform's other two fixture paths), so it sat one `git mv`
+# away from re-arming a whole-file, all-rules blind spot.
+#
+# Narrowing a `paths` entry does not work either: `regexTarget = "secret"`
+# is ACCEPTED — it names the allowlist's DEFAULT target, so it narrows
+# nothing — and gitleaks SILENTLY IGNORES unknown TOML keys, so a
+# `condition = "AND"` is dropped without warning and the path alone
+# re-suppresses the whole file. Delete, do not narrow.
+#
+# The "Allowlist canary" step in cms-platform's
+# .github/workflows/secrets-scan.yml enforces this: it plants a detectable
+# credential at every allowlisted path and fails if the config cannot see
+# it. It only probes paths matching files TRACKED at scan time, though, so
+# an entry matching nothing passes vacuously — so it would still pass on
+# the day the entry re-armed against an untracked path. (It is not what let
+# this one survive: the entry dates from 2026-04-29 and the canary only
+# reached this repo with the v0.1.84 bump, so for its whole life there was
+# no canary at all.)
 
 [extend]
 useDefault = true
 
 [[allowlists]]
 description = "adamdaniel.ai test fixtures"
-paths = [
-  # Admin-reviews specs hardcode a fake GitHub PAT to drive the auth
-  # flow without touching the real OAuth proxy.
-  '''e2e/admin-reviews-(auth|stats)\.spec\.js''',
-]
 regexes = [
   # Belt-and-braces: any ghp_*test*/ghp_*fake* literal anywhere.
   '''ghp_(test|fake)[A-Za-z0-9_]*''',
