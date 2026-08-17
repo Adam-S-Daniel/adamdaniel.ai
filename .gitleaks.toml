@@ -15,9 +15,9 @@
 # that way. Measured on the pinned 8.30.1 over this repo's full history, the
 # entry suppressed nothing — a config carrying ONLY that path and no regexes
 # reports exactly what the bare default ruleset reports (5 findings either
-# way) — but all four of the platform's fixture paths DO appear in this
-# repo's history, so it sat one `git mv` away from re-arming a whole-file,
-# all-rules blind spot.
+# way) — but both paths this entry covers DO appear in this repo's history
+# (as do the platform's other two fixture paths), so it sat one `git mv`
+# away from re-arming a whole-file, all-rules blind spot.
 #
 # Narrowing a `paths` entry does not work either: `regexTarget = "secret"`
 # is ACCEPTED — it names the allowlist's DEFAULT target, so it narrows
@@ -29,8 +29,11 @@
 # .github/workflows/secrets-scan.yml enforces this: it plants a detectable
 # credential at every allowlisted path and fails if the config cannot see
 # it. It only probes paths matching files TRACKED at scan time, though, so
-# an entry matching nothing passes vacuously — which is how this one
-# survived with green CI.
+# an entry matching nothing passes vacuously — so it would still pass on
+# the day the entry re-armed against an untracked path. (It is not what let
+# this one survive: the entry dates from 2026-04-29 and the canary only
+# reached this repo with the v0.1.84 bump, so for its whole life there was
+# no canary at all.)
 
 [extend]
 useDefault = true
