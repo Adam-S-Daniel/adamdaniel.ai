@@ -1,13 +1,13 @@
 {
   "registry": "Adam-S-Daniel/agentskills",
-  "ref": "1379ea11e1303a04e859eea37e014c4e0264c134",
+  "ref": "a42c06d6b4817bb35ec0d32df000bcda1394711e",
   "bundles": [
     "adam"
   ],
   "sources": [
     {
       "registry": "Adam-S-Daniel/cms-platform",
-      "ref": "679fb6147d4270eb74dba1d6e73179f9aad08ecd",
+      "ref": "3264e1599828cdaf45a12f552487f5126b1402c4",
       "bundles": [
         "cms-platform"
       ],
@@ -21,7 +21,7 @@
     "adam/github-actions-repo-settings": "fbe2e8cc76a6b67b7a7d146b7e457c0d4da31a78ce5e864c123ae162835822d6",
     "adam/review-bash-ci-reliability": "1e1c2993689cfe79b6f1345de09101ff7d3b4b902a34ae5b458ee86e3f28f8b9",
     "adam/skills-doctor": "37aeccfd4e1b8801a751e0154a9ebd4c0db20e42dc68443bafe7e7c98f8fbff9",
-    "adam/workflow-path-audit": "0184dec4c31eb20aea274d6b5f83bd725390c500e5e3beabe488e5a16a794c5e",
+    "adam/workflow-path-audit": "4986398a43997fd0b03ecc2e1f4dc46831b9c3903cef66d429bf0c070042c54f",
     "adam/writing-adrs": "4e9a4b9472bd3d92501bf0d7f882544ba66e8b03aa48bac7fa1689c45d903820",
     "cms-platform/admin-config-render": "4dc4d210a02c2668505a7dd91920f21530315297096827669b0d5b4ce89f0f74",
     "cms-platform/aws-bootstrap": "fcdbbcef7120b9f68c393a7fdcad1c35394c0ca172e2c0d0e8b640895f974d1f",
@@ -31,12 +31,12 @@
     "cms-platform/cms-stuck-pr-triage": "b4423b31c1dd5821bacd600dab1371c660e0d1b357adf678b79b96824451bc63",
     "cms-platform/code-quality": "d4eaf3d0ed7c910ed8f54791a93640a27c80af6f25630ebd4d0be2f3ed1069f3",
     "cms-platform/editorial-label-audit": "0c3874fdf6fe48ded41355e082e3abe28ae12ed5d86cf613772c63e0d3cddb36",
-    "cms-platform/github-actions-sha-pinning": "2c05b561d2b7d94ea9ec3dc9d964cb98a0629cabb937b9d34573028625481f52",
+    "cms-platform/github-actions-sha-pinning": "95b67c9f9f8e55be5d00dc307fe6c0b655e34673ccc9b8a0dab03527bb1bea04",
     "cms-platform/platform-release-and-bump": "40faa1a073c7b3e8d8076121869b86cb84df09e262d81afbf13185d8283b2293",
     "cms-platform/post-failure-comment": "5d5d48f5dad5f2a8965d8bfd0ba15661703052666fcf4dd97581dbc78f463252",
     "cms-platform/preview-environments": "5813f019692dded322af86f18235a6089c91ae0c0bb63101b3eb56bbe3b1bbec",
     "cms-platform/sveltia-cms-playwright-demo": "5b478d7bf5623a30513b118bf3ff478334d810691021a8dfa6fe0122b6bff1e4",
     "cms-platform/test-canary": "64ba15f83a5b491596982db7022d665bfc1c849eaeef62252f1cc5b346caba61"
   },
-  "generated_from": "1379ea11e1303a04e859eea37e014c4e0264c134"
+  "generated_from": "a42c06d6b4817bb35ec0d32df000bcda1394711e"
 }
