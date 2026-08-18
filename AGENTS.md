@@ -532,3 +532,27 @@ The one **site-owned** skill is `.claude/skills/embeddable-tool-pages/`
 project-skill location, and is site content rather than platform machinery, so
 no registry ships it and nothing syncs it. Neither bundle uses that basename,
 so the hook’s collision guard never has to arbitrate over it.
+
+## A green `e2e / e2e` is not proof the real e2e lane ran
+
+- **On a mixed PR — one touching both a code path and an ignored path — treat a
+  green `e2e / e2e` as unverified until you have watched the real run finish.**
+  Two workflows emit that same context: the heavy `e2e-tests.yml` and the
+  instant-green `e2e-stub.yml`, whose positive `paths:` byte-mirrors the real
+  caller's `paths-ignore:` (`README.md`, `AGENTS.md`, `CLAUDE.md`, `docs/**`,
+  `infrastructure/**`, `oauth-proxy/**`, `LICENSE`, `.gitignore`). A mixed PR
+  matches both filters, so **both fire**. Branch protection keys on the context
+  NAME, not on which workflow produced it — so if the stub reports green before
+  the real run's check-run exists, the context can read satisfied and auto-merge
+  can merge on the stub alone.
+- cms-platform's `e2e-required-stub.yml` header claims the opposite ("on a mixed
+  (docs + code) PR BOTH fire and the REAL e2e still gates"). PR #1711 — merged
+  2026-05-26 20:52 under the older multi-context topology — merged on stub greens
+  while the real e2e was still running, and it went red three minutes later. The
+  window is narrower now that the e2e family has collapsed into a single
+  `e2e / e2e`, and the race has not been re-reproduced under that topology — but
+  no fix has shipped either. Re-read the reusable's header before relying on its
+  reassurance; until it is qualified, treat it as unproven.
+- **So: when a mixed PR merges, watch the real run to completion**
+  (`gh run watch <run-id>`) and fix forward on `main` if it goes red. Don't walk
+  away on the merge notification.
