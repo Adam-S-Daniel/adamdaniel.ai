@@ -51,6 +51,11 @@ regexes = [
 # suppressed that line shape. The generator now writes `sha256:<hex>`
 # (agentskills#87): `:` falls outside the rule's capture class, which truncates
 # the capture below its 10-character floor, so the rule cannot fire at all and
-# there is nothing left to allowlist. Do not re-add an entry for it — if a lock
-# line ever trips this scan again, the lock has lost its label and THAT is the
-# bug.
+# there is nothing left to allowlist in the CURRENT file.
+#
+# History is a separate matter and is NOT covered by that fix: this scan reads
+# full history on push/schedule/dispatch, and the commit that introduced the
+# bare-hex digest is immutable. That one historical finding is accepted by exact
+# fingerprint in `.gitleaksignore` — see the reasoning there. Do not re-add a
+# blanket allowlist entry here: a NEW bare-hex lock line would mean the
+# generator stopped labelling, and that must still fail.
