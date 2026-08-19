@@ -1,0 +1,33 @@
+# gitleaks findings that are ACCEPTED, by exact fingerprint
+# (<commit>:<file>:<rule>:<line>). One line per finding; nothing else is
+# suppressed.
+#
+# Why this file exists, and why the fix that made it necessary was incomplete.
+#
+# `skills.lock` used to store a BARE 64-hex digest per skill. gitleaks'
+# generic-api-key rule fires on a keyword-bearing key beside a high-entropy
+# value, and exactly one lock line supplies the keyword:
+# "cms-platform/cms-platform-secrets". agentskills#87 fixed that AT THE SOURCE —
+# the generator now writes `sha256:<hex>`, and `:` falls outside the rule's
+# capture class, so the rule cannot fire on the CURRENT file. The blanket
+# `[[allowlists]]` entry that used to suppress the bare-hex line shape was
+# deleted with that change.
+#
+# What that missed: git history is immutable. `secrets-scan.yml` scans
+# `base..head` on a pull request but THE FULL REACHABLE HISTORY on push,
+# schedule and workflow_dispatch. Labelling the current lock cannot relabel the
+# commit that introduced the bare-hex one, so deleting the allowlist turned
+# every push to main red — while the PR that deleted it passed, because the PR
+# lane never scanned the offending commit. The PR's own green `scan` was not
+# evidence about the lane that actually breaks.
+#
+# A fingerprint is the right instrument here rather than restoring the blanket
+# allowlist: it accepts exactly one finding in one historical commit, and
+# leaves the rule live everywhere else — including on any FUTURE bare-hex lock
+# line, which would be a real defect (it would mean the generator stopped
+# labelling) and must still fail.
+#
+# Verify a change to this file with a `workflow_dispatch` run of
+# `secrets-scan.yml` on the branch — that path scans full history. A pull
+# request's own scan cannot test it.
+39d925036922e2c09344f062886e45a035fc996d:skills.lock:generic-api-key:31
