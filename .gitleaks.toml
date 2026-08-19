@@ -45,25 +45,12 @@ regexes = [
   '''ghp_(test|fake)[A-Za-z0-9_]*''',
 ]
 
-# skills.lock digests: suppress ONLY a lock ENTRY LINE — a "<bundle>/<skill>"
-# key whose value is a bare sha256. gitleaks' generic-api-key rule fires on one
-# such line, not because the digest is secret but because the rule wants a
-# secret-ish KEYWORD near a high-entropy value and a skill is literally named
-# `cms-platform-secrets`. The digest is a hash of public files in a public repo.
-#
-# This keys on the VALUE'S SHAPE, not the skill name, so a future skill named
-# *-secrets / *-token / *-key needs no further edit.
-#
-# Do NOT "simplify" this into a `paths` entry. A global allowlist `paths` entry
-# makes gitleaks skip the file ENTIRELY, before any rule runs — it is a
-# whole-file, all-rules blind spot, and `matchCondition`/`regexes` cannot narrow
-# it (measured 2026-08-16, gitleaks 8.30.1: adding the path dropped the scanned
-# byte count by exactly the size of skills.lock, and a planted AWS key + GitHub
-# PAT + Slack token in that file all went unreported). Matching the line shape
-# instead keeps every other rule live on the file: those same three planted
-# credentials are still reported, and a real 64-hex secret written as
-# `api_key = "<64 hex>"` anywhere in the repo is still reported.
-[[allowlists]]
-description = "skills.lock: <bundle>/<skill> entry lines carrying a bare sha256"
-regexTarget = "line"
-regexes = ['''^\s*"[A-Za-z0-9._-]+/[A-Za-z0-9._-]+": "[a-f0-9]{64}",?\s*$''']
+# NO skills.lock entry is needed here any more. The lock used to store a BARE
+# 64-hex digest, and gitleaks' generic-api-key rule fired on the one line whose
+# key carries a keyword ("cms-platform/cms-platform-secrets"), so an allowlist
+# suppressed that line shape. The generator now writes `sha256:<hex>`
+# (agentskills#87): `:` falls outside the rule's capture class, which truncates
+# the capture below its 10-character floor, so the rule cannot fire at all and
+# there is nothing left to allowlist. Do not re-add an entry for it — if a lock
+# line ever trips this scan again, the lock has lost its label and THAT is the
+# bug.
