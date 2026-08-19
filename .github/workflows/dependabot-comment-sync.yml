@@ -45,10 +45,10 @@ permissions:
 
 jobs:
   sync:
-    uses: Adam-S-Daniel/cms-platform/.github/workflows/dependabot-comment-sync.yml@v0.1.85
+    uses: Adam-S-Daniel/cms-platform/.github/workflows/dependabot-comment-sync.yml@v0.1.86
     with:
       # Pin to the SAME ref as the `uses:` pin above so the script matches.
-      platform_ref: v0.1.85
+      platform_ref: v0.1.86
     secrets:
       # Fine-grained PAT with `workflows: write` so the follow-up commit can
       # push the refreshed workflow files. This site stores it as
@@ -58,5 +58,5 @@ jobs:
       # GitHub App (Contents R/W, Pull requests R/W, Workflows R/W) is the
       # fallback when no PAT configured; App ID read from vars.CMS_AUTOMATION_APP_ID.
       # When neither credential exists the reusable skips cleanly with a notice.
-      # Required at v0.1.85+.
+      # Required at v0.1.86+.
       app_private_key: ${{ secrets.CMS_AUTOMATION_APP_PRIVATE_KEY }}
