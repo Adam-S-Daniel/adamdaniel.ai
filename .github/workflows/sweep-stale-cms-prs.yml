@@ -23,10 +23,10 @@ permissions:
   pull-requests: write
 jobs:
   sweep:
-    # Pinned to cms-platform v0.1.86 (single-version lockstep) — the reusable
+    # Pinned to cms-platform v0.1.87 (single-version lockstep) — the reusable
     # declares the CMS_E2E_PAT workflow_call secret, so we map it explicitly
     # like every other caller.
-    uses: Adam-S-Daniel/cms-platform/.github/workflows/sweep-stale-cms-prs.yml@v0.1.86
+    uses: Adam-S-Daniel/cms-platform/.github/workflows/sweep-stale-cms-prs.yml@v0.1.87
     secrets:
       CMS_E2E_PAT: ${{ secrets.CMS_E2E_PAT }}
     with:
