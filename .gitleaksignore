@@ -1,33 +1,45 @@
-# gitleaks findings that are ACCEPTED, by exact fingerprint
+# gitleaks findings ACCEPTED by exact fingerprint
 # (<commit>:<file>:<rule>:<line>). One line per finding; nothing else is
 # suppressed.
 #
-# Why this file exists, and why the fix that made it necessary was incomplete.
+# THIS FILE IS MEANT TO BECOME EMPTY. It exists only to carry one immutable
+# historical commit, and there is a specific point at which it can be deleted.
+# That point is described below, so nobody has to re-derive it.
 #
-# `skills.lock` used to store a BARE 64-hex digest per skill. gitleaks'
-# generic-api-key rule fires on a keyword-bearing key beside a high-entropy
-# value, and exactly one lock line supplies the keyword:
-# "cms-platform/cms-platform-secrets". agentskills#87 fixed that AT THE SOURCE —
-# the generator now writes `sha256:<hex>`, and `:` falls outside the rule's
-# capture class, so the rule cannot fire on the CURRENT file. The blanket
-# `[[allowlists]]` entry that used to suppress the bare-hex line shape was
-# deleted with that change.
+# ROOT CAUSE — a skill NAME, not a digest format.
+# gitleaks' generic-api-key rule needs a KEYWORD beside a high-entropy value.
+# Exactly one line in `skills.lock` supplied one, and it was the skill's own
+# name: `"cms-platform/cms-platform-secrets": "<64-hex>"`. The word "secrets"
+# was the whole trigger. cms-platform itself never saw this — its lock lists
+# only `adam/*` skills — so the repo that chose the name is not the repo that
+# broke.
 #
-# What that missed: git history is immutable. `secrets-scan.yml` scans
-# `base..head` on a pull request but THE FULL REACHABLE HISTORY on push,
-# schedule and workflow_dispatch. Labelling the current lock cannot relabel the
-# commit that introduced the bare-hex one, so deleting the allowlist turned
-# every push to main red — while the PR that deleted it passed, because the PR
-# lane never scanned the offending commit. The PR's own green `scan` was not
-# evidence about the lane that actually breaks.
+# TWO FIXES LANDED UPSTREAM, AND NEITHER ONE CAN CLEAN HISTORY.
+#   1. agentskills#87 labels lock digests `sha256:<hex>`; `:` falls outside
+#      the rule's capture class, truncating the capture below its 10-char floor.
+#   2. The skill is renamed to `consumer-repo-provisioning`, removing the
+#      keyword outright — the durable fix, since it needs no allowlist anywhere
+#      and immunises every consumer at once rather than one repo at a time.
+# Both change the WORKING TREE. The commit that introduced the old line is
+# immutable, and `secrets-scan.yml` scans `base..head` on a pull request but
+# THE FULL REACHABLE HISTORY on push, schedule and dispatch. That asymmetry is
+# why adamdaniel.ai#3215's own green `scan` job proved nothing about the lane that
+# was actually red.
 #
-# A fingerprint is the right instrument here rather than restoring the blanket
-# allowlist: it accepts exactly one finding in one historical commit, and
-# leaves the rule live everywhere else — including on any FUTURE bare-hex lock
-# line, which would be a real defect (it would mean the generator stopped
-# labelling) and must still fail.
+# WHEN TO DELETE THIS FILE — not before, or main goes red again.
+#   1. The rename has landed and this repo's `skills.lock` no longer contains
+#      any gitleaks keyword. Check: the lock key must not match
+#      access|auth|api|credential|creds|key|passwd|password|secret|token.
+#   2. This repo's history has been rewritten to remove the offending line, all
+#      refs pointing at the old commits are gone (branches, tags, AND pull
+#      requests), and every existing clone has been RE-CLONED rather than
+#      pulled — a stale clone that pulls will merge the old commits straight
+#      back in.
+#   3. Only then: empty this file and verify with a `workflow_dispatch` run of
+#      `secrets-scan.yml` on the branch. That is the only pre-merge lane that
+#      reads full history; a pull request's own scan cannot test it.
 #
-# Verify a change to this file with a `workflow_dispatch` run of
-# `secrets-scan.yml` on the branch — that path scans full history. A pull
-# request's own scan cannot test it.
+# A fingerprint rather than a blanket allowlist, deliberately: it pins one
+# finding in one commit on one line under one rule, so a FUTURE bare-hex or
+# keyword-bearing lock line — which would mean a real regression — still fails.
 39d925036922e2c09344f062886e45a035fc996d:skills.lock:generic-api-key:31
