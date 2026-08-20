@@ -2,8 +2,8 @@
 #
 # It does NOT own the platform version. `platform-bump.yml` does: that workflow
 # moves every cms-platform reference this repo pins — platform.lock, the gem,
-# the `uses:@<tag>` reusable pins, the composite `# vX.Y.Z` comments — as one
-# atomic PR. Dependabot's job here is the site's OWN dependencies.
+# the `uses:@<tag>` reusable pins — as one atomic PR. Dependabot's job here is
+# the site's OWN dependencies.
 version: 2
 updates:
   # Actions pinned in this site's thin workflow callers. Today every one of
@@ -73,9 +73,9 @@ updates:
       interval: weekly
     ignore:
       # why: platform-bump.yml owns this gem's version. It rewrites the Gemfile
-      # `tag:`, the Gemfile.lock git `revision:`, platform.lock's platform_ref,
-      # every reusable `uses:@<tag>` pin and every composite `# vX.Y.Z` comment
-      # as ONE atomic PR — which is exactly what lets
+      # `tag:`, the Gemfile.lock git `revision:`, platform.lock's platform_ref
+      # and every reusable `uses:@<tag>` pin as ONE atomic PR — which is
+      # exactly what lets
       # check-platform-pin-consistency.js --require-canonical pass on that PR
       # alone. Dependabot can only move the Gemfile/Gemfile.lock half, so its
       # bump is either redundant (platform-bump got there first) or skews the
