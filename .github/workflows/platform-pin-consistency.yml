@@ -28,9 +28,8 @@
 # WHAT MUST NEVER BE IGNORED — the checker reads these six inputs, so any of
 # them appearing under an ignored path would silently disable a real check:
 #   1. `platform.lock`                (the source of truth for `platform_ref`)
-#   2. `.github/workflows/**/*.y{a,}ml` (RECURSIVE: `uses:@<ref>`, composite
-#                                        `# vX.Y.Z` comments, each caller's
-#                                        `platform_ref:` input)
+#   2. `.github/workflows/**/*.y{a,}ml` (RECURSIVE: `uses:@<ref>` and each
+#                                        caller's `platform_ref:` input)
 #   3. `Gemfile`                      (the `cms-platform-theme` tag)
 #   4. `Gemfile.lock`
 #   5. `assets/images/uploads/e2e-preview-media-probe.png` — the `preview-media`
