@@ -7,7 +7,7 @@
   "sources": [
     {
       "registry": "Adam-S-Daniel/cms-platform",
-      "ref": "a59763c640d04c615f3cefe7fe145c361f3d8f13",
+      "ref": "633b865627e64a74fb20070ce09e44c2d1fc9a3c",
       "bundles": [
         "cms-platform"
       ],
@@ -29,10 +29,10 @@
     "cms-platform/ci-watcher-loops": "sha256:22a17973b50816b57aef797a2aaa7dbce11c559b8dc129febeba32652ab7e362",
     "cms-platform/cms-stuck-pr-triage": "sha256:b4423b31c1dd5821bacd600dab1371c660e0d1b357adf678b79b96824451bc63",
     "cms-platform/code-quality": "sha256:d4eaf3d0ed7c910ed8f54791a93640a27c80af6f25630ebd4d0be2f3ed1069f3",
-    "cms-platform/consumer-repo-provisioning": "sha256:18696ae96641c8a1d0eccf1bb6c487d17d40eb00c52114d594c31181139d9ad6",
+    "cms-platform/consumer-repo-provisioning": "sha256:c97b07a61dc16f412034faa167a13835a73315d51283d82888d2543faf5522ac",
     "cms-platform/editorial-label-audit": "sha256:0c3874fdf6fe48ded41355e082e3abe28ae12ed5d86cf613772c63e0d3cddb36",
-    "cms-platform/github-actions-sha-pinning": "sha256:c0b4e79f0d70979b608f5c9806032f27733604781fd8654b707fdbe6d74463da",
-    "cms-platform/platform-release-and-bump": "sha256:40faa1a073c7b3e8d8076121869b86cb84df09e262d81afbf13185d8283b2293",
+    "cms-platform/github-actions-sha-pinning": "sha256:c595bbe82ec2ec469e6123a9641b30a4460b09ea9de22913db2c28c9d9f34671",
+    "cms-platform/platform-release-and-bump": "sha256:6b8e7ef57190d1d69bb3cf49c263521e46f6e6a827c0e082bf8ae3d4bb225a7a",
     "cms-platform/post-failure-comment": "sha256:5d5d48f5dad5f2a8965d8bfd0ba15661703052666fcf4dd97581dbc78f463252",
     "cms-platform/preview-environments": "sha256:5813f019692dded322af86f18235a6089c91ae0c0bb63101b3eb56bbe3b1bbec",
     "cms-platform/sveltia-cms-playwright-demo": "sha256:5b478d7bf5623a30513b118bf3ff478334d810691021a8dfa6fe0122b6bff1e4",
