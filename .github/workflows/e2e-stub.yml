@@ -8,7 +8,7 @@
 # (the platform's required-check-stub-paths.test.js locks the canonical
 # template). The job MUST stay named `e2e` so the surfaced context is exactly
 # `e2e / e2e`. Pinned to the same cms-platform ref as the other callers
-# (@v0.1.91 — single-version lockstep).
+# (@v0.1.92 — single-version lockstep).
 name: E2E (docs-only stub)
 run-name: "${{ format('PR #{0} — {1}', github.event.pull_request.number, github.event.pull_request.title) }}"
 
@@ -34,4 +34,4 @@ permissions:
 
 jobs:
   e2e:
-    uses: Adam-S-Daniel/cms-platform/.github/workflows/e2e-required-stub.yml@v0.1.91
+    uses: Adam-S-Daniel/cms-platform/.github/workflows/e2e-required-stub.yml@v0.1.92
