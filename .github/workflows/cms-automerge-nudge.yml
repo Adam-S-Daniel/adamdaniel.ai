@@ -40,7 +40,7 @@ concurrency:
 
 jobs:
   nudge:
-    uses: Adam-S-Daniel/cms-platform/.github/workflows/cms-automerge-nudge.yml@v0.1.98
+    uses: Adam-S-Daniel/cms-platform/.github/workflows/cms-automerge-nudge.yml@v0.1.99
     with:
       # Required-status-check contexts this site's branch protection
       # enforces — mirror `.github/rulesets/main.json`. One per line.
@@ -55,5 +55,6 @@ jobs:
         e2e / e2e
         visual-regression / approve-regression
         prerelease-guard / prerelease-guard
+        site-verify / site-verify
     secrets:
       CMS_E2E_PAT: ${{ secrets.CMS_E2E_PAT }}
