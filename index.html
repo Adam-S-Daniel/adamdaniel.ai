@@ -47,7 +47,8 @@ title: Home
             {% if post.tags %}
             <div class="post-tags">
               {% for tag in post.tags limit:3 %}
-              <a class="tag-pill" href="{{ '/tags/' | append: tag | slugify | relative_url }}">{{ tag }}</a>
+              {%- assign tag_slug = tag | slugify -%}
+              <a class="tag-pill" href="{{ '/tags/' | append: tag_slug | append: '/' | relative_url }}">{{ tag }}</a>
               {% endfor %}
             </div>
             {% endif %}

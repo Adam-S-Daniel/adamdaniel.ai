@@ -1,0 +1,43 @@
+{
+  "registry": "Adam-S-Daniel/agentskills",
+  "ref": "8765dff291da9f85ce721336ee353d5d5229ae77",
+  "bundles": [
+    "adam"
+  ],
+  "sources": [
+    {
+      "registry": "Adam-S-Daniel/cms-platform",
+      "ref": "e727fc3e94d1ec2d264042eedeae566c4f90960e",
+      "bundles": [
+        "cms-platform"
+      ],
+      "layout": "skills"
+    }
+  ],
+  "skills": {
+    "adam/adam-writing-style": "sha256:a6f71e6d91694783225d4a7bb9e89be2264f46a7d28cde4c22d48cdd5acb8fa5",
+    "adam/debug-github-workflows": "sha256:a695b854250e5c6b8255558354108a406ba2197c500d27173cb7a83b9beb1ffd",
+    "adam/disarm-inherited-reach": "sha256:3e355e35d7012c34d475711e8b438bfc5075deb92982b7561e1f9bb40054b893",
+    "adam/finding-unknowns": "sha256:a67b7663b5b44d07cfddeb923ce19f3cf79447e052658a69cf7fcb985fc0130d",
+    "adam/github-actions-repo-settings": "sha256:6c940f5721c3a16351fe818b6761751d5c76f582893815c9394721f2ded1feb2",
+    "adam/review-bash-ci-reliability": "sha256:1e1c2993689cfe79b6f1345de09101ff7d3b4b902a34ae5b458ee86e3f28f8b9",
+    "adam/skills-doctor": "sha256:1762823b0d07544eb29b424de13f7bce36ecb7446816dedd84db6af58f874fae",
+    "adam/workflow-path-audit": "sha256:8a7c57bcd890bbab38c42473d8705f0b2521954385f03bf5289e3ec84d3fcdde",
+    "adam/writing-adrs": "sha256:4e9a4b9472bd3d92501bf0d7f882544ba66e8b03aa48bac7fa1689c45d903820",
+    "cms-platform/admin-config-render": "sha256:4dc4d210a02c2668505a7dd91920f21530315297096827669b0d5b4ce89f0f74",
+    "cms-platform/aws-bootstrap": "sha256:fcdbbcef7120b9f68c393a7fdcad1c35394c0ca172e2c0d0e8b640895f974d1f",
+    "cms-platform/browser-testing": "sha256:b19dd92e6b43ce63be89db744ca6e2ccd7a43a7d0a17a0d1fc082ee99249f4f6",
+    "cms-platform/ci-watcher-loops": "sha256:22a17973b50816b57aef797a2aaa7dbce11c559b8dc129febeba32652ab7e362",
+    "cms-platform/cms-stuck-pr-triage": "sha256:b4423b31c1dd5821bacd600dab1371c660e0d1b357adf678b79b96824451bc63",
+    "cms-platform/code-quality": "sha256:d4eaf3d0ed7c910ed8f54791a93640a27c80af6f25630ebd4d0be2f3ed1069f3",
+    "cms-platform/consumer-repo-provisioning": "sha256:c97b07a61dc16f412034faa167a13835a73315d51283d82888d2543faf5522ac",
+    "cms-platform/editorial-label-audit": "sha256:0c3874fdf6fe48ded41355e082e3abe28ae12ed5d86cf613772c63e0d3cddb36",
+    "cms-platform/github-actions-sha-pinning": "sha256:d399f380431098eceafd62bb15f10e1f3365f7ee4816f462a12f5c2ba16212a7",
+    "cms-platform/platform-release-and-bump": "sha256:6b8e7ef57190d1d69bb3cf49c263521e46f6e6a827c0e082bf8ae3d4bb225a7a",
+    "cms-platform/post-failure-comment": "sha256:5d5d48f5dad5f2a8965d8bfd0ba15661703052666fcf4dd97581dbc78f463252",
+    "cms-platform/preview-environments": "sha256:5813f019692dded322af86f18235a6089c91ae0c0bb63101b3eb56bbe3b1bbec",
+    "cms-platform/sveltia-cms-playwright-demo": "sha256:5b478d7bf5623a30513b118bf3ff478334d810691021a8dfa6fe0122b6bff1e4",
+    "cms-platform/test-canary": "sha256:64ba15f83a5b491596982db7022d665bfc1c849eaeef62252f1cc5b346caba61"
+  },
+  "generated_from": "8765dff291da9f85ce721336ee353d5d5229ae77"
+}

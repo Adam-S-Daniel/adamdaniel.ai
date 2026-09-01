@@ -1,6 +1,7 @@
 <!-- BEGIN MANAGED SECTION — DO NOT EDIT ABOVE "## Repo-specific additions" -->
 <!-- Source: _agent-guidance -->
 <!-- Sections: none -->
+<!-- Mode: stub -->
 
 # AGENTS.md
 
@@ -8,140 +9,61 @@
 > Edit only below the `## Repo-specific additions` header.
 > Everything above it will be overwritten on the next sync.
 
-## General guidelines
+## Fleet guidance is delivered once per session — not by this file
 
-- Read existing code before modifying it. Understand the patterns already in use.
-- Keep changes minimal and focused — fix what was asked, nothing more.
-- Do not add speculative features, premature abstractions, or unused helpers.
-- Prefer editing existing files over creating new ones.
-- Never commit secrets, credentials, or .env files.
+The account's full guidance — incidents, fleet policy, machine layout, the
+traps that cost real outages — is installed into **user memory**
+(`~/.claude/CLAUDE.md`) by the `fleet-memory` SessionStart hook, so it is
+loaded **once per session** no matter how many repos are attached. It used to
+be inlined here in every repo, which meant a session with 19 repos open
+carried 19 identical copies: 332.3k tokens of a 1M window, measured
+2026-08-29.
 
-## Workstation layout
+**Check the session-start verdict before you rely on it.** The hook prints one
+line:
 
-Repo locations are host-specific — match the convention of the machine you're on
-(on Windows, check `$env:COMPUTERNAME`).
+- `fleet-guidance: installed (v<id>, <n> bytes)` or `fleet-guidance: current` —
+  the full guidance is in context. Use it.
+- `fleet-guidance: DEGRADED — <reason>` — it is **not** in context. You have
+  only what is below. Read `agents-md/base.md` in the `_agent-guidance`
+  checkout (or on GitHub) before non-trivial work, and say in your reply that
+  you were running degraded.
+- `fleet-guidance: skipped (FLEET_GUIDANCE_SKIP set)` — also not in context,
+  but by the machine owner's deliberate choice, not a fault. User memory is
+  GLOBAL on a durable machine, so the guidance would otherwise load in every
+  unrelated project on that box; `FLEET_GUIDANCE_SKIP` opts out and removes any
+  block an earlier session installed. Read `agents-md/base.md` the same way you
+  would when degraded — just don't report it as a problem or try to "fix" it.
 
-- **`ZENDA`** (Windows): local clones live under `D:\repos\<github-owner-or-org>\<repo>`
-  (for example `D:\repos\adam-s-daniel\wsl-automation`). Clone new repos there, and
-  assume existing repos live there rather than under the user profile
-  (`C:\Users\<user>\...`).
+No verdict at all means the hook never ran — treat that as DEGRADED.
 
-## Code quality
+## The floor: rules that hold even when the guidance did not load
 
-- Follow the idioms and style already established in this repo.
-- Write code that is clear enough to not need comments; add comments only when intent is non-obvious.
-- Avoid introducing new dependencies unless strictly necessary.
-- Every public interface change should include corresponding test updates.
+These are the ones with teeth. They are restated here, deliberately, because a
+session that lost the guidance must not also lose these.
 
-## Security
-
-- Validate all external input (user input, API responses, file contents).
-- Never construct SQL, shell commands, or HTML by string concatenation with untrusted data.
-- Use parameterized queries, shell arrays, and context-aware escaping respectively.
-- Do not disable TLS verification, authentication, or CSRF protection.
-
-## Data exposure in CI and public repos
-
-Treat CI run logs, job summaries, artifacts, workflow run pages, and git history
-as **public** on a public repo. (Real incident: a workflow printed the owner's
-email addresses and their correspondents' into a public Actions log.)
-
-- **Never print personal or sensitive data to a log** — no emails, contacts,
-  names, IDs, mailbox sizes/counts, tokens, or anything "useful to an attacker or
-  scammer." Deliver sensitive results out-of-band (e.g. email the account itself,
-  write to a private store) and log only a non-identifying status line.
-- **Don't interpolate `${{ inputs.* }}` / `${{ github.event.* }}` into a `run:`
-  block** — the rendered command is echoed to the log. Read inputs from
-  `$GITHUB_EVENT_PATH` inside the script and `::add-mask::` sensitive values
-  before use. `::add-mask::` only scrubs the log *stream*, not other surfaces.
-- **Put sensitive config in secrets, not plaintext inputs or `vars`.** Only
-  secret *values* are masked in logs.
-- **Sanitize error output** — never dump an API/HTTP response body on failure (it
-  can quote personal data); reduce it to a status code + machine error type, and
-  keep the data-bearing serialization/call inside the try/catch.
-- **Least privilege:** set `permissions:` to the minimum (usually
-  `contents: read`) and require approval for outside-collaborator fork PRs.
-- **Test fixtures use reserved `example.com` / `example.net` domains only** —
-  never a real address; fixtures get committed and logged.
-
-### git history & metadata
-- **Sanitize before the first commit.** Fixing the current file does not remove
-  data from history. If sensitive data was committed, rewrite history to drop the
-  commits, delete every ref that points at them (branches, tags, **PRs**), and
-  force-push. GitHub garbage-collects unreachable objects on its own schedule
-  (days to weeks) — until then they remain reachable *by SHA* — and you can ask
-  GitHub Support to expedite for a public repo. (This is the deliberate exception
-  to "don't force-push"; it is a security remediation.)
-- **Commit with the GitHub `…@users.noreply.github.com` identity** on public
-  repos so a real email is not baked into commit author/committer metadata.
-
-## Automation vs branch protection
-
-Fleet repos enforce PR-only default branches via ruleset, managed as code in
-`repo-settings` (see its ADR 0001). Design automation accordingly:
-
-- Never design a bot that pushes to a protected default branch ad hoc — the
-  push is rejected (GH013), even from the repo's own workflows.
-- Generated data (badges, run summaries, reports, dashboards) belongs on a
-  dedicated unprotected results branch (e.g. skills-evals' `eval-results`);
-  consumers read from that branch and treat its content as untrusted.
-- The rare bot that genuinely must write to a default branch needs a ruleset
-  bypass actor declared in repo-settings' `fleet.yml` — never a hand-granted
-  UI bypass (the drift report flags those). The AGENTS.md sync App is the
-  standing example.
-- PR + auto-merge is not a sanctioned bot-write path for fleet repos; the
-  cms-platform-managed repos (outside the fleet ruleset) use it by their own
-  design.
-
-## Testing
-
-- Run the existing test suite before considering a task complete.
-- New behavior requires new tests; bug fixes require regression tests.
-- Tests should be deterministic — no sleeping, no network calls, no reliance on wall-clock time.
-
-## Subagent delegation (model routing)
-
-- Don't write code in the main loop: run the implementation in a subagent on an
-  appropriately lower-power model (e.g. the Agent tool's `model` override in
-  Claude Code; skip if the harness has no subagent support).
-- Route by mechanicalness: smallest model (haiku-class) for exactly-specified
-  edits — pin bumps, renames, config/doc tweaks; mid-tier (sonnet-class) for
-  normal implementation from a clear spec.
-- The main loop keeps root-cause investigation, architectural decisions,
-  writing the spec, and review of the subagent's diff before commit.
-- Escalate the model rather than ship a wrong diff when the task is genuinely
-  subtle (cross-repo invariants, race conditions).
-- Don't assume the subagent sees this file: general-purpose and custom
-  subagents receive the full memory hierarchy (imports included), but
-  Explore/Plan-type agents and SDK harnesses with `settingSources: []` skip
-  repo guidance entirely. Restate load-bearing constraints (style, test
-  command, invariants) in the delegation prompt, and don't hand
-  guidance-sensitive work to agents that won't see it.
-- Give the subagent a precise spec — files, exact changes, house style, the
-  test command to run. Subagent output is gated by the same test/CI proof as
-  any other change.
-
-## Skills ecosystem
-
-- The canonical skills registry is `github.com/Adam-S-Daniel/agentskills`,
-  organized as three bundle plugins — `adam` (general-purpose, cloud-safe;
-  default-on), `adam-local` (machine-bound), and `fastmail` — each holding
-  `skills/<skill>/` directories.
-- In Claude Code with the marketplace installed, invoke a skill as
-  `/adam:<skill>` (e.g. `/adam:pin-actions-to-sha`).
-- Local machines get the marketplace plus per-agent symlinks via that repo's
-  `setup.sh`.
-- Cloud sessions currently get **no** plugins from repo-declared settings — a
-  known Claude Code limitation (see agentskills' `docs/decisions/0001`) — so
-  don't assume bundle skills are available there.
-- New reusable skills graduate **into** the registry (sensitive ones into
-  `agentskills-private`) rather than living on in a consumer repo.
-
-## Git practices
-
-- Write concise commit messages that explain *why*, not just *what*.
-- One logical change per commit.
-- Do not amend published commits or force-push shared branches.
+- **Branch protection is real.** Fleet repos are PR-only on their default
+  branch; a direct push is rejected (GH013), even from the repo's own
+  workflows. Never design a bot that pushes to a protected default branch.
+- **Every `uses:` is pinned to a full 40-character commit SHA, with no
+  trailing version comment.** The one carve-out is a ref into this account's
+  own `cms-platform`, which stays on its release tag.
+- **Never commit secrets or `.env` files, and never print personal data to a
+  CI log** — logs, artifacts and git history on a public repo are public.
+- **A successful `git push` does not mean your commit exists.** A refused
+  pre-commit hook still lets the push report success. Verify with
+  `git merge-base --is-ancestor <sha> origin/<branch>` — it is the only check
+  that names both the commit and the ref.
+- **"The watch finished" is not "CI passed."** Read the parsed conclusions;
+  never infer pass/fail from a watch command's exit code.
+- **A GitHub 404 means "not authorized", not "not there."** Never report a
+  repo, PR or branch as gone on a 404 alone.
+- **The fleet spans TWO owners** — `Adam-S-Daniel` and `jodidaniel`. A query
+  scoped to one returns a plausible, complete-shaped, wrong answer.
+- **Anything you name gets its link** — what you hand over, what you are
+  waiting on, and what you cite as already done.
+- **Merge with a merge commit** (`gh pr merge --merge`); do not amend
+  published commits or force-push shared branches.
 
 <!-- END MANAGED SECTION -->
 ## Repo-specific additions
@@ -177,7 +99,7 @@ trailing-slash redirects (e.g. `/admin` → `/admin/`) don't leak the
 internal key space. Pages on preview and prod share the same
 root-relative URL structure (no `/pr-N/` in any visible URL).
 
-**`admin/` is GEM-DELIVERED (do not re-vendor the machinery).** As of cms-platform v0.1.4 the Decap admin UI + its `config*.base.yml` templates ship inside the `cms-platform-theme` gem (pinned in `Gemfile` / `platform.lock`); the gem's Decap render hook copies that machinery into `_site/admin/` and renders `_site/admin/config.yml` at build time. This repo therefore tracks **only the site-owned seam TEMPLATE** `admin/collections.site.yml.example` — a contributor copies it to `admin/collections.site.yml` (untracked, not gitignored — the real seam file is local-only / never committed) to supply the per-site collection list the render hook splices into the platform's base collections; the `admin/*.js` / `admin/*.base.yml` / `admin/index*.html` machinery is **no longer vendored here** (the full e2e harness moved to the platform too — `e2e/` is no longer tracked in this repo). To change the admin UI, edit it in **cms-platform** and ship a release; the sync path is a gem bump (`Gemfile` tag + `platform.lock`, via Dependabot). Do NOT copy admin machinery back into this repo — a re-vendored copy would shadow the gem and silently drift. Anything below that references in-repo `admin/config*.yml` or `e2e/cms-*.spec.js` describes the platform-owned source of truth, not files you edit here.
+**`admin/` is GEM-DELIVERED (do not re-vendor the machinery).** As of cms-platform v0.1.4 the Decap admin UI + its `config*.base.yml` templates ship inside the `cms-platform-theme` gem (pinned in `Gemfile` / `platform.lock`); the gem's Decap render hook copies that machinery into `_site/admin/` and renders `_site/admin/config.yml` at build time. This repo therefore tracks **only the site-owned seam TEMPLATE** `admin/collections.site.yml.example` — a contributor copies it to `admin/collections.site.yml` (untracked, not gitignored — the real seam file is local-only / never committed) to supply the per-site collection list the render hook splices into the platform's base collections; the `admin/*.js` / `admin/*.base.yml` / `admin/index*.html` machinery is **no longer vendored here** (the full e2e harness moved to the platform too — `e2e/` is no longer tracked in this repo). To change the admin UI, edit it in **cms-platform** and ship a release; the sync path is a gem bump (`Gemfile` tag + `platform.lock`) landed by **`platform-bump.yml`** — Dependabot's `bundler` ecosystem `ignore`s this gem (cms-platform#242). Do NOT copy admin machinery back into this repo — a re-vendored copy would shadow the gem and silently drift. Anything below that references in-repo `admin/config*.yml` or `e2e/cms-*.spec.js` describes the platform-owned source of truth, not files you edit here.
 
 ## Deeper references
 
@@ -298,7 +220,7 @@ Real-user monitoring is via Amazon CloudWatch RUM, deployed as a sibling CloudFo
 
 Every language in the repo has a best-in-class linter + static-analyzer + style tool, configured to pass at a strong-but-pragmatic strength. The heavyweight lint toolchain is **platform-internal** — there is no consumer lint CI here. The checks run locally on demand (`npm run lint`, or each tool directly) and as a staged-file pre-commit guard (`scripts/lint-staged.sh`), the consumer's only lint backstop.
 
-**Line width — 100 columns, house-wide.** The formatters that reflow code all target 100: Prettier (`printWidth: 100`, on top of the otherwise-standard config), Ruff (`line-length = 100`), and RuboCop (`Layout/LineLength: Max: 100`). `.editorconfig` carries `max_line_length = 100` as the editor hint. The 80-column default wrapped Playwright method chains onto 3-4 lines each and inflated the JS line count far past what the dedup pass removed; 100 keeps statements on one line without sprawling. **Markdown and YAML opt out** (`max_line_length = off`; yamllint `line-length: disable`; markdownlint `MD013: false`) — prose, long URLs/tables, and workflow `${{ }}` expressions / SHA-pin comments run longer by nature, and rewrapping them is pure churn. CSS has no line-length rule. When adding a new code language, set its formatter's width to 100 too.
+**Line width — 100 columns, house-wide.** The formatters that reflow code all target 100: Prettier (`printWidth: 100`, on top of the otherwise-standard config), Ruff (`line-length = 100`), and RuboCop (`Layout/LineLength: Max: 100`). `.editorconfig` carries `max_line_length = 100` as the editor hint. The 80-column default wrapped Playwright method chains onto 3-4 lines each and inflated the JS line count far past what the dedup pass removed; 100 keeps statements on one line without sprawling. **Markdown and YAML opt out** (`max_line_length = off`; yamllint `line-length: disable`; markdownlint `MD013: false`) — prose, long URLs/tables, and workflow `${{ }}` expressions run longer by nature, and rewrapping them is pure churn. CSS has no line-length rule. When adding a new code language, set its formatter's width to 100 too.
 
 **Local — pre-commit hook.** `scripts/lint-staged.sh` (wired into `.githooks/pre-commit` and `.gitconfig-fragment`) lints only the **staged** files of each language, and **skips any linter whose tool is absent**. This hook is the consumer's only lint backstop — the heavyweight toolchain is platform-internal, so a contributor without the full toolchain is never blocked. Bypass one commit with `SKIP_LINT_STAGED=1`. `npm run lint` / `npm run format` cover the npm-based tools.
 
@@ -347,16 +269,81 @@ Six root-caused, lint-locked flakiness classes from the 2026-05 CI audit — fut
 
 ## Skills
 
-This consumer no longer vendors a local skill mirror or agent-harness test
-framework. The platform’s agent skills are delivered via the cms-platform gem
-+ reusable workflows; this repo follows the clean-consumer shape (matching
-`jodidaniel.com`, which carries none) and vendors none. Removed in the
-#2007-P7 thin-ification; the secrets-scan + lint-staged pre-commit guards that
-used to ride the skills `bootstrap.sh` now arrive via the platform’s
-`dev-hooks-sync.yml` (see `docs/WORKFLOWS.md`, "`secrets-scan.yml`").
+**This consumer vendors no platform skills — do NOT re-vendor them.** Until
+issue #3104 it mirrored 15 of them byte-for-byte under `.claude/skills/`, kept
+in step by a weekly `skills-sync` rsync and a `platform-drift-guard` byte
+check. Both are gone: cms-platform v0.1.83 deleted the transport, and its
+`skills/` is now published as the federated **`cms-platform` bundle** in the
+`agentskills` marketplace. (The gem is NOT the skills channel — it ships the
+`/admin` machinery. The two are unrelated deliveries.)
+
+Skills reach an **ephemeral** session (cloud, CI runner, container) through the
+`skills-bootstrap` SessionStart hook in `.claude/hooks/`, copied verbatim from
+`agentskills` and wired in `.claude/settings.json`. It installs from the
+committed **`skills.lock`**, which pins two registries at immutable commits
+with a per-skill sha256: `Adam-S-Daniel/agentskills` for the `adam` bundle and
+`Adam-S-Daniel/cms-platform` for the `cms-platform` bundle — 23 skills, all
+verified before they land in `~/.claude/skills`. On a durable machine the hook
+is a deliberate no-op; the marketplace plugin install is authoritative there.
+
+Two things to know when touching this:
+
+- **`skills.lock` pins commits, not branches, so it does not self-update.** A
+  skill added or changed upstream reaches no session here until the lock is
+  regenerated against the published commit — with `agentskills`'
+  `scripts/generate_skills_lock.py` (`--check-current` reports the gap).
+  Bumping `platform_ref` does NOT move it; the two pins are independent.
+- **That hook’s SessionStart entry carries `timeout: 90`, not the `30` its
+  sibling uses.** The hook’s own budget for fetching all sources is 60s, so a
+  30s harness timeout would kill it mid-fetch and lose the fail-soft verdict it
+  exists to print. JSON has no comments, hence the note here.
+
+**Where the "see also the **X** skill" pointers in this file resolve.** They
+still resolve — a skill being delivered rather than vendored does not move it —
+but nothing in the repo shows you *which* bundle any given one comes from, so:
+the CMS/site-machinery skills (`browser-testing`, `admin-config-render`,
+`ci-watcher-loops`, `cms-stuck-pr-triage`, `editorial-label-audit`,
+`post-failure-comment`, `platform-release-and-bump`, `code-quality`,
+`preview-environments`, `aws-bootstrap`, `cms-platform-secrets`,
+`github-actions-sha-pinning`, `sveltia-cms-playwright-demo`, `test-canary`)
+are the `cms-platform` bundle; the general-purpose ones (`finding-unknowns`,
+`writing-adrs`, `skills-doctor`, …) are `adam`. The one that MOVED is
+**`workflow-path-audit`**, cited under "Workflow path-filtering
+rule" and in `docs/WORKFLOWS.md`: v0.1.83 dropped it from cms-platform and it
+now ships in `adam`. Same skill, same name, different bundle — which matters
+only if you go looking for its source.
+
+The secrets-scan + lint-staged pre-commit guards that used to ride the old
+skills `bootstrap.sh` arrive via the platform’s `dev-hooks-sync.yml` (see
+`docs/WORKFLOWS.md`, "`secrets-scan.yml`") — unaffected by any of this.
 
 The one **site-owned** skill is `.claude/skills/embeddable-tool-pages/`
 (how to add a `/tools/` page or embed a tool in a post — see
-`docs/CMS-ADMIN.md`, "Tools section"). It lives in Claude Code’s native project-skill location,
-not the removed `.agents/` mirror, and is site content rather than
-platform machinery — the platform skills-sync doesn’t manage it.
+`docs/CMS-ADMIN.md`, "Tools section"). It lives in Claude Code’s native
+project-skill location, and is site content rather than platform machinery, so
+no registry ships it and nothing syncs it. Neither bundle uses that basename,
+so the hook’s collision guard never has to arbitrate over it.
+
+## A green `e2e / e2e` is not proof the real e2e lane ran
+
+- **On a mixed PR — one touching both a code path and an ignored path — treat a
+  green `e2e / e2e` as unverified until you have watched the real run finish.**
+  Two workflows emit that same context: the heavy `e2e-tests.yml` and the
+  instant-green `e2e-stub.yml`, whose positive `paths:` byte-mirrors the real
+  caller's `paths-ignore:` (`README.md`, `AGENTS.md`, `CLAUDE.md`, `docs/**`,
+  `infrastructure/**`, `oauth-proxy/**`, `LICENSE`, `.gitignore`). A mixed PR
+  matches both filters, so **both fire**. Branch protection keys on the context
+  NAME, not on which workflow produced it — so if the stub reports green before
+  the real run's check-run exists, the context can read satisfied and auto-merge
+  can merge on the stub alone.
+- cms-platform's `e2e-required-stub.yml` header claims the opposite ("on a mixed
+  (docs + code) PR BOTH fire and the REAL e2e still gates"). PR #1711 — merged
+  2026-05-26 20:52 under the older multi-context topology — merged on stub greens
+  while the real e2e was still running, and it went red three minutes later. The
+  window is narrower now that the e2e family has collapsed into a single
+  `e2e / e2e`, and the race has not been re-reproduced under that topology — but
+  no fix has shipped either. Re-read the reusable's header before relying on its
+  reassurance; until it is qualified, treat it as unproven.
+- **So: when a mixed PR merges, watch the real run to completion**
+  (`gh run watch <run-id>`) and fix forward on `main` if it goes red. Don't walk
+  away on the merge notification.

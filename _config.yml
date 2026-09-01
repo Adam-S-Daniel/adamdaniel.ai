@@ -135,6 +135,10 @@ exclude:
   # listing it is explicit so it can never pollute _site or the e2e specs.
   - .cms-platform
   - platform.lock
+  # Same reasoning as platform.lock: a root-level machine-readable pin file,
+  # not site content. Jekyll copies any root file it is not told to exclude,
+  # so without this line skills.lock would be served at /skills.lock.
+  - skills.lock
   - admin/README.md
   - admin/collections.site.yml.example
   - docs
