@@ -3,11 +3,58 @@
 # trigger + run-name; delegates the single-version anti-skew gate (issue #29)
 # to the platform's reusable workflow.
 #
-# NO `paths:` filter on purpose: a version skew can be introduced by editing ANY
-# of the many pin-bearing files (every workflow `uses:@`, the Gemfile,
-# Gemfile.lock, or platform.lock), so this gate runs on every PR — it's a fast,
-# pure-fs check. (If this is ever made a REQUIRED check, the absence of a
-# `paths:` filter also avoids the missing-required-check trap.)
+# THIS FILE IS DELIBERATELY NOT BYTE-IDENTICAL TO THE PLATFORM TEMPLATE. The
+# `paths-ignore` below is site-tuned and adamdaniel.ai-only; jodidaniel.com's
+# copy carries a comment explaining why it does NOT get one. That divergence is
+# sanctioned: `check-platform-pin-consistency.js`'s own `structuralShape()`
+# compares top-level `permissions` plus each job's `uses`/`with` key-set/
+# `secrets`/`permissions`, and EXCLUDES `on:` triggers, `name`, `run-name`,
+# `concurrency` and `with` VALUES as "legitimately site-operational" — the same
+# carve-out that lets this repo trim the host-loop's push `paths:` (#1892).
+#
+# WHY A FILTER AT ALL. Measured over the 90 most recent runs (2026-08-20): this
+# workflow fires ~20x/day here at ~47s a run (mean 47.4s, median 46.0s over the
+# 90-run sample), and 81% of those come from `cms/*` editorial branches (71%)
+# and `agents-md-sync/*` (10%). A prose-only editorial
+# PR cannot introduce a version skew, so those runs are pure cost.
+#
+# WHY `paths-ignore` AND NOT `paths:`. The gate's premise is that a skew can be
+# introduced by editing ANY pin-bearing file. An allow-list that misses a future
+# pin-bearing file type silently stops checking it; an over-narrow ignore-list
+# merely costs a few harmless runs. Fail open. GitHub also skips the workflow
+# only when EVERY changed file matches the ignore list, so a mixed PR (a post
+# plus a workflow) still runs — which is exactly the wanted behaviour.
+#
+# WHAT MUST NEVER BE IGNORED — the checker reads these six inputs, so any of
+# them appearing under an ignored path would silently disable a real check:
+#   1. `platform.lock`                (the source of truth for `platform_ref`)
+#   2. `.github/workflows/**/*.y{a,}ml` (RECURSIVE: `uses:@<ref>` and each
+#                                        caller's `platform_ref:` input)
+#   3. `Gemfile`                      (the `cms-platform-theme` tag)
+#   4. `Gemfile.lock`
+#   5. `assets/images/uploads/e2e-preview-media-probe.png` — the `preview-media`
+#      sentinel, gated on git-blob sha1 62a5f8f4 (cms-platform#84)
+#   6. `.cms-platform/examples/site/.github/workflows/*` (fetched, not ours)
+#
+# (5) IS THE TRAP, and it is why `assets/**` is absent below. That sentinel
+# lives INSIDE the Decap `media_folder` (`media_folder: "assets/images/uploads"`
+# in the platform's `config.base.yml`), beside real editorial uploads — so a
+# `cms/*` branch CAN touch a pin-bearing path, and an `assets/**` ignore would
+# blind the check. `paths-ignore` has no negation syntax, so the un-ignorable
+# subtree cannot be carved back out; the list below therefore enumerates only
+# content subtrees that can never hold one of the six.
+#
+# NOT A REQUIRED CHECK, verified live 2026-08-20 against
+# `GET /repos/Adam-S-Daniel/adamdaniel.ai/rulesets` (ruleset `main`, id
+# 13985217): the required contexts are exactly `editorial / validate-content`,
+# `scan / scan`, `parity / parity`, `preview-media / preview-media`, `e2e / e2e`
+# and `visual-regression / approve-regression`. The context THIS file publishes
+# is `pin-consistency / pin-consistency` (the job ids, not the file name) and it
+# is not among them. That matters: a workflow excluded by `paths-ignore` emits
+# NO check run at all, so a required context would hang forever ("Waiting for
+# status to be reported"). If this is ever made required, this filter must be
+# removed or given a mirroring stub caller, exactly as `e2e-stub.yml` does for
+# `e2e / e2e`.
 #
 # Keep `platform_ref` pinned to the SAME release as the `uses:@<tag>` below —
 # this guard's whole point is that they (and every other platform pin) agree.
@@ -21,12 +68,36 @@ on:
     types: [opened, synchronize, reopened]
     branches:
       - main
+    # Content-only subtrees. None of them can hold any of the six pin-bearing
+    # inputs listed in the header. `assets/**` is deliberately ABSENT (the
+    # preview-media sentinel lives under `assets/images/uploads/`), and so are
+    # `_includes/`, `_layouts/`, `admin/`, `scripts/`, `infrastructure/` and
+    # `oauth-proxy/` — those are code, and leaving them out costs only a few
+    # harmless runs, which is the fail-open side of the trade.
+    paths-ignore:
+      - '_posts/**'
+      - '_tags/**'
+      - '_tools/**'
+      - '_data/**'
+      - '_e2e/**'
+      - 'blog/**'
+      - 'pages/**'
+      - 'projects/**'
+      - 'recordings/**'
+      - 'tags/**'
+      - 'tools/**'
+      - 'docs/**'
+      - 'README.md'
+      - 'AGENTS.md'
+      - 'CLAUDE.md'
+      - 'ANALYTICS_SETUP.md'
+      - 'LICENSE'
 
 permissions:
   contents: read
 
 jobs:
   pin-consistency:
-    uses: Adam-S-Daniel/cms-platform/.github/workflows/platform-pin-consistency.yml@v0.1.79
+    uses: Adam-S-Daniel/cms-platform/.github/workflows/platform-pin-consistency.yml@v0.1.98
     with:
-      platform_ref: v0.1.79
+      platform_ref: v0.1.98

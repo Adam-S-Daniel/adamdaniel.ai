@@ -10,10 +10,34 @@
             "timeout": 30
           }
         ]
+      },
+      {
+        "matcher": "startup|resume",
+        "hooks": [
+          {
+            "type": "command",
+            "command": "bash \"$CLAUDE_PROJECT_DIR/.claude/hooks/skills-bootstrap.sh\"",
+            "timeout": 90
+          }
+        ]
+      },
+      {
+        "matcher": "startup|resume",
+        "hooks": [
+          {
+            "type": "command",
+            "command": "bash \"$CLAUDE_PROJECT_DIR/.claude/hooks/fleet-memory.sh\"",
+            "timeout": 30
+          }
+        ]
       }
     ]
   },
   "worktree": {
-    "symlinkDirectories": ["vendor", "node_modules", ".bundle"]
+    "symlinkDirectories": [
+      "vendor",
+      "node_modules",
+      ".bundle"
+    ]
   }
 }

@@ -112,6 +112,10 @@ the PR preview environment, where the page loads as a real document.
   `visual-regression.yml`) for the full mechanics — a sync PR that
   unexpectedly hits a human review prompt means something outside the tool's
   own asset changed.
-- This skill lives at `.claude/skills/embeddable-tool-pages/` — the one
-  site-owned skill in the repo (the old `.agents/skills/` mirror and the
-  vendored platform skill set were removed in the #2007-P7 thin-ification).
+- This skill lives at `.claude/skills/embeddable-tool-pages/` and is the ONLY
+  thing left in that directory — the vendored platform skill set was removed in
+  #3104, and the platform's skills now ship as the federated `cms-platform`
+  bundle in the `agentskills` marketplace, reaching ephemeral sessions through
+  the `skills-bootstrap` SessionStart hook and the committed `skills.lock`.
+  This one is site content, so no registry ships it: it is repo-owned, and the
+  hook leaves it alone.
