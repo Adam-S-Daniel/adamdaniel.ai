@@ -7,7 +7,7 @@
   "sources": [
     {
       "registry": "Adam-S-Daniel/cms-platform",
-      "ref": "e727fc3e94d1ec2d264042eedeae566c4f90960e",
+      "ref": "02b1cf04f4ed803c4f5af4e0036b00ea7f0a9df9",
       "bundles": [
         "cms-platform"
       ],
@@ -26,14 +26,14 @@
     "adam/writing-adrs": "sha256:4e9a4b9472bd3d92501bf0d7f882544ba66e8b03aa48bac7fa1689c45d903820",
     "cms-platform/admin-config-render": "sha256:4dc4d210a02c2668505a7dd91920f21530315297096827669b0d5b4ce89f0f74",
     "cms-platform/aws-bootstrap": "sha256:fcdbbcef7120b9f68c393a7fdcad1c35394c0ca172e2c0d0e8b640895f974d1f",
-    "cms-platform/browser-testing": "sha256:b19dd92e6b43ce63be89db744ca6e2ccd7a43a7d0a17a0d1fc082ee99249f4f6",
+    "cms-platform/browser-testing": "sha256:23627048547cc9d5d5964247778301ee9b022e81b06f2849a17abd4100a8436f",
     "cms-platform/ci-watcher-loops": "sha256:22a17973b50816b57aef797a2aaa7dbce11c559b8dc129febeba32652ab7e362",
     "cms-platform/cms-stuck-pr-triage": "sha256:b4423b31c1dd5821bacd600dab1371c660e0d1b357adf678b79b96824451bc63",
     "cms-platform/code-quality": "sha256:d4eaf3d0ed7c910ed8f54791a93640a27c80af6f25630ebd4d0be2f3ed1069f3",
-    "cms-platform/consumer-repo-provisioning": "sha256:c97b07a61dc16f412034faa167a13835a73315d51283d82888d2543faf5522ac",
+    "cms-platform/consumer-repo-provisioning": "sha256:d3d237093ca22cc15ed0fdcedc8872e31ebe58b17f26670413480441959070cd",
     "cms-platform/editorial-label-audit": "sha256:0c3874fdf6fe48ded41355e082e3abe28ae12ed5d86cf613772c63e0d3cddb36",
     "cms-platform/github-actions-sha-pinning": "sha256:d399f380431098eceafd62bb15f10e1f3365f7ee4816f462a12f5c2ba16212a7",
-    "cms-platform/platform-release-and-bump": "sha256:6b8e7ef57190d1d69bb3cf49c263521e46f6e6a827c0e082bf8ae3d4bb225a7a",
+    "cms-platform/platform-release-and-bump": "sha256:c8ff2c06a353721b9ec1634b569ecad1d64b4f0aca46659ad9aae4c362d9b68d",
     "cms-platform/post-failure-comment": "sha256:5d5d48f5dad5f2a8965d8bfd0ba15661703052666fcf4dd97581dbc78f463252",
     "cms-platform/preview-environments": "sha256:5813f019692dded322af86f18235a6089c91ae0c0bb63101b3eb56bbe3b1bbec",
     "cms-platform/sveltia-cms-playwright-demo": "sha256:5b478d7bf5623a30513b118bf3ff478334d810691021a8dfa6fe0122b6bff1e4",
