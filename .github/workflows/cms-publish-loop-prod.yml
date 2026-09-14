@@ -26,12 +26,14 @@ on:
     # playwright.config.js and _layouts/post.html were dropped: neither is
     # tracked in this repo (the e2e harness + Jekyll layouts are gem-/
     # platform-delivered here, not vendored) so they could never match a
-    # push diff. Keep only paths that can actually change in this repo.
+    # push diff. package.json / package-lock.json followed on 2026-09-14,
+    # when the root npm toolchain was removed (nothing in CI ever installed
+    # it; the harness runs from the platform checkout, .cms-platform/), so
+    # they could never match either. Keep only paths that can actually
+    # change in this repo — the same set jodidaniel.com's caller carries.
     paths:
       - .github/workflows/cms-publish-loop-prod.yml
       - admin/**
-      - package.json
-      - package-lock.json
       - _config.yml
   workflow_dispatch:
 

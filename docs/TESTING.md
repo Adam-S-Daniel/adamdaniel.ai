@@ -262,9 +262,10 @@ theme. There is no theme to drift, and the editor's WYSIWYG surface is
 is still covered by `cms-smoke.spec.js` and `cms-editorial-workflow.spec.js`
 (field render + load / save / delete round-trips).
 
-`scripts/generate-showcase.js` produces a side-by-side video of every
-snapshot when the `*-snapshots-before/` directory exists, used for PR
-review.
+The former `scripts/generate-showcase.js` (a before/after showcase video of
+the snapshots, for PR review) was removed on 2026-09-14 together with the
+root npm toolchain; the snapshot directories it read left this repo with the
+harness, so it had nothing to render.
 
 ### G. CDN routing (no browser, just function exec)
 
@@ -483,17 +484,12 @@ Every test run captures screenshots (`screenshot: "on"`) and retains video on fa
 
 - **Threshold:** 1% pixel diff allowed (`maxDiffPixelRatio: 0.01`)
 - **CI reporter:** HTML report with visual diffs uploaded as artifact
-- **Update baselines:** `npx playwright test e2e/visual-regression.spec.js --update-snapshots`
+- **Update baselines:** from the platform harness checkout, `cd .cms-platform/e2e && SITE_ROOT=<this repo> npx playwright test visual-regression.spec.js --update-snapshots` (this repo has no root `node_modules`; Playwright is installed in the harness only)
 - **First run for new projects:** missing baselines cause failure; generate with `--update-snapshots`
 
-#### Visual showcase
+#### Visual showcase (retired)
 
-After any change that could affect visual output, regenerate the showcase video and commit it alongside the change:
-
-```bash
-cp -r e2e/visual-regression.spec.js-snapshots{,-before}   # save old baselines
-npx playwright test e2e/visual-regression.spec.js --update-snapshots
-node scripts/generate-showcase.js                           # produces before/after video
-```
-
-`scripts/generate-showcase.js` displays each snapshot as a before/after side-by-side pair (3.5s per slide) and records the session as `recordings/visual-regression-showcase.webm`. If no `-before` directory exists (first run), it shows current baselines only. The `-before` directory is auto-cleaned after the video is written.
+The before/after showcase video (`scripts/generate-showcase.js` →
+`recordings/visual-regression-showcase.webm`) was retired on 2026-09-14 with
+the root npm toolchain. The `recordings/` directory keeps the glow-banding
+peak screenshots and videos as historical artefacts; nothing regenerates it.
