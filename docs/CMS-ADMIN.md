@@ -2,6 +2,13 @@
 
 Reference for the Decap CMS content model (collections, fields, the automated-test-fixture convention) and the live-preview machinery (the `/preview/` page, the admin dashboard affordances, mobile responsiveness, and the HTML-embed widget seam). Read this when adding/changing a collection field, touching anything under the (gem-delivered) `admin/` UI behavior, or debugging why a preview/post link/mobile layout doesn't work as expected.
 
+## `admin/` is gem-delivered — do not re-vendor (moved from AGENTS.md)
+
+Moved verbatim from AGENTS.md's `## Architecture` section, which keeps the
+one-line ownership rule and a pointer here.
+
+**`admin/` is GEM-DELIVERED (do not re-vendor the machinery).** As of cms-platform v0.1.4 the Decap admin UI + its `config*.base.yml` templates ship inside the `cms-platform-theme` gem (pinned in `Gemfile` / `platform.lock`); the gem's Decap render hook copies that machinery into `_site/admin/` and renders `_site/admin/config.yml` at build time. This repo therefore tracks **only the site-owned seam TEMPLATE** `admin/collections.site.yml.example` — a contributor copies it to `admin/collections.site.yml` (untracked, not gitignored — the real seam file is local-only / never committed) to supply the per-site collection list the render hook splices into the platform's base collections; the `admin/*.js` / `admin/*.base.yml` / `admin/index*.html` machinery is **no longer vendored here** (the full e2e harness moved to the platform too — `e2e/` is no longer tracked in this repo). To change the admin UI, edit it in **cms-platform** and ship a release; the sync path is a gem bump (`Gemfile` tag + `platform.lock`) landed by **`platform-bump.yml`** — Dependabot's `bundler` ecosystem `ignore`s this gem (cms-platform#242). Do NOT copy admin machinery back into this repo — a re-vendored copy would shadow the gem and silently drift. Anything below that references in-repo `admin/config*.yml` or `e2e/cms-*.spec.js` describes the platform-owned source of truth, not files you edit here.
+
 ## Content model
 
 | Collection | Folder | Type | Key fields |

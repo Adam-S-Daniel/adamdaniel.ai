@@ -493,3 +493,49 @@ The before/after showcase video (`scripts/generate-showcase.js` →
 `recordings/visual-regression-showcase.webm`) was retired on 2026-09-14 with
 the root npm toolchain. The `recordings/` directory keeps the glow-banding
 peak screenshots and videos as historical artefacts; nothing regenerates it.
+
+## Test-Driven Design and the UI-test boundary (moved from AGENTS.md)
+
+Moved verbatim from AGENTS.md's `## Test-Driven Design` section, which now keeps
+only the red-green rule, the one-line "never bypass the UI" imperative, and the
+harness-hygiene carve-out in summary form. The full argument — which specs are
+covered, what counts as a back door, and why the setup/cleanup carve-out does not
+weaken the rule — lives here.
+
+- **Never bypass the UI in a UI test.** If a spec exists to validate that an editor's click does what we expect — driving Decap admin, the deploy-status pill, the publish-via-auto-merge shim from the editor's POV — the test MUST go through the actual UI. Calling the underlying API programmatically (e.g. `page.evaluate(fetch(...))` against the GitHub API, hitting the shim's `__callMerge` directly, peeking at workflow runs / PR state instead of waiting for the user-visible signal) defeats the test's purpose and lets a broken UI silently regress. If the UI is broken, the test surfacing that breakage IS the point — fix the UI, don't paper over it. The publish-via-auto-merge-browser.spec.js route-mocked unit test exists for the shim's internal contract; the real-network specs (`cms-publish-loop*`, `cms-delete-published`) cover the Decap-UI-driven chain end-to-end and must keep doing so.
+- **No back doors in the spec body — with an explicit harness-hygiene carve-out for setup/cleanup.** "Never bypass the UI" governs the *behaviour under test*: the spec's own forward (and, where applicable, backward) leg MUST drive the real Decap UI through Save → Status:Ready / `cms/ready` → auto-merge → deploy, never a programmatic API substitute. **Setup and post-test cleanup, however, MAY use the GitHub API for fixture LIFECYCLE** — reading a fixture's state from `main`, seeding/removing a fixture through a labelled fixture PR (`cms-fixture-pr.js`'s `seedFixtureViaPr`/`removeFixtureViaPr`), or an existence-only delete in `afterAll`. That is *harness hygiene* (resetting/reaping test state between runs), not the behaviour the spec validates, so it does not "skip the chain the test exists to validate" — the chain is still exercised by the spec body's UI-driven legs. The important invariant is that the **primary** leg stays UI-driven; only the safety-net is API. Per #1771 step 4 the prod-loop `afterAll` is now an existence-only **delete** (remove the uniquely-named ephemeral post if it is still on `main`) rather than a content-restore — there is no shared baseline to restore, so there is nothing for an API write to corrupt. (Where a spec *also* drives a backward leg through the UI — e.g. the toggle-only `cms-unpublish-republish` specs — that is still good practice for the extra coverage; it is no longer a hard requirement of this rule.) The route-mocked `publish-via-auto-merge-browser.spec.js` is still allowed to use the shim's programmatic `__callMerge` because that spec's entire reason for existing is the shim's internal contract, not the editor's experience.
+
+## Sandboxed-shell gotchas for the admin e2e lane (moved from AGENTS.md)
+
+Moved verbatim from AGENTS.md's `## Key commands` section, which keeps the
+harness-checkout instructions and the routine command block. CI hits none of
+these three (it has the egress proxy's CA and a working Jekyll — CI installs
+browsers per job, not from a prebaked image, which is why the CDN allowlist
+above matters for CI too).
+
+**Running the admin (`@admin-read` / `@admin-write`) e2e lane in a sandboxed / Claude-Code-web session.** Three gotchas bite in that order; CI hits none of them (it has the egress proxy's CA and a working Jekyll — CI installs browsers per job, not from a prebaked image, which is why the CDN allowlist below matters for CI too):
+
+1. **Decap never mounts — only the static "PENDING" banner, no Login button.** The `/admin` shells load the Decap bundle from `https://unpkg.com/decap-cms@…`; the sandbox's egress TLS proxy presents a CA that Playwright's bundled Chromium/WebKit don't trust, so the `<script src>` dies with `net::ERR_CERT_AUTHORITY_INVALID` (`curl` works — it trusts the system CA bundle; the browser doesn't). **Fix:** run with a throwaway config that sets `use.ignoreHTTPSErrors: true`, written INTO the harness checkout — `.cms-platform/` is gitignored as a whole, and the harness is the only place `@playwright/test` is installed now (CI has no such proxy, and the flag doesn't change the rendered DOM / aria tree):
+
+   ```js
+   // .cms-platform/e2e/playwright.localcert.config.js  (sandbox-only; gitignored)
+   const base = require("./playwright.config.js");
+   module.exports = { ...base, use: { ...base.use, ignoreHTTPSErrors: true } };
+   ```
+
+   then, from `.cms-platform/e2e` with `SITE_ROOT` exported: `npx playwright test <spec> --config=playwright.localcert.config.js`.
+2. **`bundle exec jekyll` → "command not found: jekyll" (rbenv shim not rehashed).** Don't fight it: build once with the full-path binary (`"$(rbenv which jekyll 2>/dev/null || echo /opt/rbenv/versions/*/bin/jekyll)" build`) and start the two servers **manually** — `.cms-platform/e2e/node_modules/.bin/serve _site -l 4000 --no-clipboard` + `.cms-platform/e2e/node_modules/.bin/decap-server` (both are harness devDependencies; the repo root has no `node_modules`). Playwright's `webServer.reuseExistingServer` (true off-CI) then sees ports 4000/8081 already up and skips its own failing `bundle exec jekyll build` command.
+3. **WebKit launch fails with missing `.so`s** (`libflite…`, `libwebpdemux…`). Once, from `.cms-platform/e2e`: `npx playwright install-deps webkit` (needs apt/root).
+
+## Code quality: lint toolchain, line width, pre-commit hook (moved from AGENTS.md)
+
+Moved verbatim from AGENTS.md's `## Code quality` section, which keeps each rule
+in one-line form plus the "parse structured formats with a real parser" rule
+(deliberately still inline there, because it governs any script written in this
+repo, not just the lint toolchain).
+
+**There is no lint toolchain in this repo, by decision (2026-09-14).** The root `package.json` — eslint, prettier, stylelint, markdownlint-cli2, and a second `@playwright/test` beside the harness's — its lockfile, and the matching config files were removed. Nothing in CI ever installed them: every reusable's `npm ci` runs in the platform's `.cms-platform/e2e` against *its* lockfile, so the root lockfile was exercised by nothing, Dependabot security jobs against it could not resolve (the last, `smol-toml` pinned by `markdownlint-cli2`, is run 34793815589), and `npx playwright` at the repo root resolved a different `@playwright/test` than the harness config it was handed. The heavyweight lint toolchain stays **platform-internal**; this thin consumer has almost nothing left for it to lint (no `e2e/`, `admin/*.css`, `assets/css/`, `*.py`, `*.rb`, `pyproject.toml`, or `tests/`). If a lint is ever wanted here again, the platform's **code-quality** skill is the reference, and a manifest should carry only that tool — never a copy of what the harness already installs.
+
+**Line width — 100 columns, house-wide.** The formatters that reflow code (all platform-side now; `.editorconfig` here carries only the hint) target 100: Prettier (`printWidth: 100`, on top of the otherwise-standard config), Ruff (`line-length = 100`), and RuboCop (`Layout/LineLength: Max: 100`). `.editorconfig` carries `max_line_length = 100` as the editor hint. The 80-column default wrapped Playwright method chains onto 3-4 lines each and inflated the JS line count far past what the dedup pass removed; 100 keeps statements on one line without sprawling. **Markdown and YAML opt out** (`max_line_length = off`; yamllint `line-length: disable`; markdownlint `MD013: false`) — prose, long URLs/tables, and workflow `${{ }}` expressions run longer by nature, and rewrapping them is pure churn. CSS has no line-length rule. When adding a new code language, set its formatter's width to 100 too.
+
+**Local — pre-commit hook.** `scripts/lint-staged.sh` (platform-delivered by `dev-hooks-sync.yml`, wired into `.githooks/pre-commit` and `.gitconfig-fragment`) lints only the **staged** files of each language, and **skips any linter whose tool is absent** — which, with no root `node_modules`, is every npm-based one here, so the hook is effectively inert on this repo and never blocks a commit. Bypass one commit with `SKIP_LINT_STAGED=1`.
