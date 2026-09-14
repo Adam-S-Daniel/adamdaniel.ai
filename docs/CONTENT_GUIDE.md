@@ -287,8 +287,11 @@ GitHub OAuth entirely and writes directly to your working tree:
 # Terminal 1 — Jekyll dev server (so /admin/ has somewhere to load from)
 bundle exec jekyll serve --livereload
 
-# Terminal 2 — Decap proxy that turns Save into a real file write
-npx decap-server
+# Terminal 2 — Decap proxy that turns Save into a real file write. This
+# repo has no root package.json, so `--yes` lets npx fetch it on demand
+# (or use .cms-platform/e2e/node_modules/.bin/decap-server once the
+# platform harness is installed — see AGENTS.md "Key commands").
+npx --yes decap-server
 ```
 
 Open <http://localhost:4000/admin/index-local.html>, click **Login**

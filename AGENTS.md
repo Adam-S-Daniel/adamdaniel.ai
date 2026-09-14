@@ -120,44 +120,48 @@ Progressive-disclosure docs — read the relevant one before working in that are
 ## Key commands
 
 **Check out the platform e2e harness before running any Playwright command locally.**
-`scripts/setup-test-environment.sh` does NOT check out `.cms-platform/` or the e2e
-harness (verified: zero `cms-platform` matches in that script — it only installs apt
-packages, Bundler/Gemfile gems, npm deps, and Playwright browser binaries). Before
-`npx playwright test`, `e2e/select-specs.js`, or anything that resolves
-`.cms-platform/e2e/playwright.config.js` will work, separately check out
-`Adam-S-Daniel/cms-platform` at the `platform_ref` pinned in `platform.lock` into
-`.cms-platform/` yourself — matching what the CI reusable workflows do.
+This repo vendors no Node toolchain: the root `package.json` was removed on
+2026-09-14 (nothing in CI ever installed it, and the second `@playwright/test` it
+left beside the harness's was a trap — see "Code quality"). The harness, and the
+`decap-server` / `serve` / `@playwright/test` it needs, live in cms-platform. Check
+out `Adam-S-Daniel/cms-platform` at the `platform_ref` pinned in `platform.lock`
+into `.cms-platform/` (matching what the CI reusable workflows do), `npm ci` in
+`.cms-platform/e2e`, and run Playwright FROM that directory with `SITE_ROOT`
+pointing at this repo. `scripts/setup-test-environment.sh` does not do the
+checkout; it installs apt packages and the Gemfile gems, and does the harness
+install + browser download too when `.cms-platform/` is already there.
 
 ```bash
 # Local dev
 jekyll serve --livereload          # http://localhost:4000
-npx decap-server                   # CMS local backend (port 8081)
+npx --yes decap-server             # CMS local backend (port 8081) — no root manifest, npx fetches it
+                                   # (.cms-platform/e2e/node_modules/.bin/decap-server once the harness is installed)
 
 # AWS infrastructure
 bash infrastructure/bootstrap/deploy.sh     # deploy/update bootstrap stack (consumes the PLATFORM template — see note below)
 bash oauth-proxy/deploy.sh                  # deploy OAuth proxy (delegates to the platform at platform_ref; needs env vars)
 
-# Tests
+# Tests — from the platform harness checkout, against this site
+export SITE_ROOT="$(git rev-parse --show-toplevel)"
+cd .cms-platform/e2e
 npx playwright test                               # full browser matrix (8 projects)
 npx playwright test --project chromium-desktop-1080 # single project (public lane)
-npx playwright test e2e/glow-banding.spec.js       # single test file
+npx playwright test glow-banding.spec.js           # single test file
 ```
 
 **Running the admin (`@admin-read` / `@admin-write`) e2e lane in a sandboxed / Claude-Code-web session.** Three gotchas bite in that order; CI hits none of them (it has the egress proxy's CA and a working Jekyll — CI installs browsers per job, not from a prebaked image, which is why the CDN allowlist below matters for CI too):
 
-1. **Decap never mounts — only the static "PENDING" banner, no Login button.** The `/admin` shells load the Decap bundle from `https://unpkg.com/decap-cms@…`; the sandbox's egress TLS proxy presents a CA that Playwright's bundled Chromium/WebKit don't trust, so the `<script src>` dies with `net::ERR_CERT_AUTHORITY_INVALID` (`curl` works — it trusts the system CA bundle; the browser doesn't). **Fix:** run with a throwaway config that sets `use.ignoreHTTPSErrors: true` — `playwright.localcert.config.js` is **gitignored** (CI has no such proxy, and the flag doesn't change the rendered DOM / aria tree):
+1. **Decap never mounts — only the static "PENDING" banner, no Login button.** The `/admin` shells load the Decap bundle from `https://unpkg.com/decap-cms@…`; the sandbox's egress TLS proxy presents a CA that Playwright's bundled Chromium/WebKit don't trust, so the `<script src>` dies with `net::ERR_CERT_AUTHORITY_INVALID` (`curl` works — it trusts the system CA bundle; the browser doesn't). **Fix:** run with a throwaway config that sets `use.ignoreHTTPSErrors: true`, written INTO the harness checkout — `.cms-platform/` is gitignored as a whole, and the harness is the only place `@playwright/test` is installed now (CI has no such proxy, and the flag doesn't change the rendered DOM / aria tree):
 
    ```js
-   // playwright.localcert.config.js  (sandbox-only; gitignored)
-   // The Playwright harness config is platform-delivered — base off the
-   // copy the platform checks out under `.cms-platform/e2e/`.
-   const base = require("./.cms-platform/e2e/playwright.config.js");
+   // .cms-platform/e2e/playwright.localcert.config.js  (sandbox-only; gitignored)
+   const base = require("./playwright.config.js");
    module.exports = { ...base, use: { ...base.use, ignoreHTTPSErrors: true } };
    ```
 
-   then `npx playwright test e2e/<spec> --config=playwright.localcert.config.js`.
-2. **`bundle exec jekyll` → "command not found: jekyll" (rbenv shim not rehashed).** Don't fight it: build once with the full-path binary (`"$(rbenv which jekyll 2>/dev/null || echo /opt/rbenv/versions/*/bin/jekyll)" build`) and start the two servers **manually** — `npx serve _site -l 4000 --no-clipboard` + `npx decap-server`. Playwright's `webServer.reuseExistingServer` (true off-CI) then sees ports 4000/8081 already up and skips its own failing `bundle exec jekyll build` command.
-3. **WebKit launch fails with missing `.so`s** (`libflite…`, `libwebpdemux…`). Once: `npx playwright install-deps webkit` (needs apt/root).
+   then, from `.cms-platform/e2e` with `SITE_ROOT` exported: `npx playwright test <spec> --config=playwright.localcert.config.js`.
+2. **`bundle exec jekyll` → "command not found: jekyll" (rbenv shim not rehashed).** Don't fight it: build once with the full-path binary (`"$(rbenv which jekyll 2>/dev/null || echo /opt/rbenv/versions/*/bin/jekyll)" build`) and start the two servers **manually** — `.cms-platform/e2e/node_modules/.bin/serve _site -l 4000 --no-clipboard` + `.cms-platform/e2e/node_modules/.bin/decap-server` (both are harness devDependencies; the repo root has no `node_modules`). Playwright's `webServer.reuseExistingServer` (true off-CI) then sees ports 4000/8081 already up and skips its own failing `bundle exec jekyll build` command.
+3. **WebKit launch fails with missing `.so`s** (`libflite…`, `libwebpdemux…`). Once, from `.cms-platform/e2e`: `npx playwright install-deps webkit` (needs apt/root).
 
 ## GitHub Actions secrets
 
@@ -218,15 +222,13 @@ Real-user monitoring is via Amazon CloudWatch RUM, deployed as a sibling CloudFo
 
 ## Code quality
 
-Every language in the repo has a best-in-class linter + static-analyzer + style tool, configured to pass at a strong-but-pragmatic strength. The heavyweight lint toolchain is **platform-internal** — there is no consumer lint CI here. The checks run locally on demand (`npm run lint`, or each tool directly) and as a staged-file pre-commit guard (`scripts/lint-staged.sh`), the consumer's only lint backstop.
+**There is no lint toolchain in this repo, by decision (2026-09-14).** The root `package.json` — eslint, prettier, stylelint, markdownlint-cli2, and a second `@playwright/test` beside the harness's — its lockfile, and the matching config files were removed. Nothing in CI ever installed them: every reusable's `npm ci` runs in the platform's `.cms-platform/e2e` against *its* lockfile, so the root lockfile was exercised by nothing, Dependabot security jobs against it could not resolve (the last, `smol-toml` pinned by `markdownlint-cli2`, is run 34793815589), and `npx playwright` at the repo root resolved a different `@playwright/test` than the harness config it was handed. The heavyweight lint toolchain stays **platform-internal**; this thin consumer has almost nothing left for it to lint (no `e2e/`, `admin/*.css`, `assets/css/`, `*.py`, `*.rb`, `pyproject.toml`, or `tests/`). If a lint is ever wanted here again, the platform's **code-quality** skill is the reference, and a manifest should carry only that tool — never a copy of what the harness already installs.
 
-**Line width — 100 columns, house-wide.** The formatters that reflow code all target 100: Prettier (`printWidth: 100`, on top of the otherwise-standard config), Ruff (`line-length = 100`), and RuboCop (`Layout/LineLength: Max: 100`). `.editorconfig` carries `max_line_length = 100` as the editor hint. The 80-column default wrapped Playwright method chains onto 3-4 lines each and inflated the JS line count far past what the dedup pass removed; 100 keeps statements on one line without sprawling. **Markdown and YAML opt out** (`max_line_length = off`; yamllint `line-length: disable`; markdownlint `MD013: false`) — prose, long URLs/tables, and workflow `${{ }}` expressions run longer by nature, and rewrapping them is pure churn. CSS has no line-length rule. When adding a new code language, set its formatter's width to 100 too.
+**Line width — 100 columns, house-wide.** The formatters that reflow code (all platform-side now; `.editorconfig` here carries only the hint) target 100: Prettier (`printWidth: 100`, on top of the otherwise-standard config), Ruff (`line-length = 100`), and RuboCop (`Layout/LineLength: Max: 100`). `.editorconfig` carries `max_line_length = 100` as the editor hint. The 80-column default wrapped Playwright method chains onto 3-4 lines each and inflated the JS line count far past what the dedup pass removed; 100 keeps statements on one line without sprawling. **Markdown and YAML opt out** (`max_line_length = off`; yamllint `line-length: disable`; markdownlint `MD013: false`) — prose, long URLs/tables, and workflow `${{ }}` expressions run longer by nature, and rewrapping them is pure churn. CSS has no line-length rule. When adding a new code language, set its formatter's width to 100 too.
 
-**Local — pre-commit hook.** `scripts/lint-staged.sh` (wired into `.githooks/pre-commit` and `.gitconfig-fragment`) lints only the **staged** files of each language, and **skips any linter whose tool is absent**. This hook is the consumer's only lint backstop — the heavyweight toolchain is platform-internal, so a contributor without the full toolchain is never blocked. Bypass one commit with `SKIP_LINT_STAGED=1`. `npm run lint` / `npm run format` cover the npm-based tools.
+**Local — pre-commit hook.** `scripts/lint-staged.sh` (platform-delivered by `dev-hooks-sync.yml`, wired into `.githooks/pre-commit` and `.gitconfig-fragment`) lints only the **staged** files of each language, and **skips any linter whose tool is absent** — which, with no root `node_modules`, is every npm-based one here, so the hook is effectively inert on this repo and never blocks a commit. Bypass one commit with `SKIP_LINT_STAGED=1`.
 
 **Parse structured formats with a real parser — never hand-roll.** Anything that reads a workflow, an `action.yml`, or the Decap/Jekyll config YAML goes through a real parser (the [`yaml`](https://www.npmjs.com/package/yaml) library in JS, `YAML.safe_load_file(..., aliases: true)` in Ruby), never a regex or line-scanner. GitHub enabled YAML anchors in workflows on 2025-09-18, so a line-based scanner now silently mis-reads aliased values. Kept inline rather than deferred to a skill because it governs any script written here, not just the lint toolchain.
-
-Per-language linter tables and the deliberate rule relaxations describe the platform-internal toolchain, most of which has no local target left in this thin consumer — no `e2e/`, `admin/*.css`, `assets/css/`, `*.py`, `*.rb`, `pyproject.toml`, or `tests/` exist here today. Full detail lives in the **code-quality** skill.
 
 ## Workflow path-filtering rule
 
