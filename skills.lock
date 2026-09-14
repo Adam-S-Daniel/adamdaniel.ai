@@ -7,7 +7,7 @@
   "sources": [
     {
       "registry": "Adam-S-Daniel/cms-platform",
-      "ref": "02b1cf04f4ed803c4f5af4e0036b00ea7f0a9df9",
+      "ref": "93216a8adedb3861c026c8eda1e92be0040e413c",
       "bundles": [
         "cms-platform"
       ],
@@ -24,7 +24,7 @@
     "adam/skills-doctor": "sha256:1762823b0d07544eb29b424de13f7bce36ecb7446816dedd84db6af58f874fae",
     "adam/workflow-path-audit": "sha256:8a7c57bcd890bbab38c42473d8705f0b2521954385f03bf5289e3ec84d3fcdde",
     "adam/writing-adrs": "sha256:4e9a4b9472bd3d92501bf0d7f882544ba66e8b03aa48bac7fa1689c45d903820",
-    "cms-platform/admin-config-render": "sha256:4dc4d210a02c2668505a7dd91920f21530315297096827669b0d5b4ce89f0f74",
+    "cms-platform/admin-config-render": "sha256:6173d9d6abcb4273473d69b1c11390ef2584bf8fd2f6090838d533cf6cf6289c",
     "cms-platform/aws-bootstrap": "sha256:fcdbbcef7120b9f68c393a7fdcad1c35394c0ca172e2c0d0e8b640895f974d1f",
     "cms-platform/browser-testing": "sha256:23627048547cc9d5d5964247778301ee9b022e81b06f2849a17abd4100a8436f",
     "cms-platform/ci-watcher-loops": "sha256:22a17973b50816b57aef797a2aaa7dbce11c559b8dc129febeba32652ab7e362",
