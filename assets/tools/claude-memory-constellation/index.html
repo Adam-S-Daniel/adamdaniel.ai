@@ -1,0 +1,1022 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover">
+<title>Your living memory constellation</title>
+<style>
+  :root{
+    --paper:#FDFBF7; --ink:#3D3A34; --muted:#6B675E; --line:#E4DFD4;
+    --blue:#4470A0; --amber:#9A6F33; --wsl:#54805C; --win:#B06A4F;
+    --mac:#6E7681; --plum:#8F5C82; --web:#8A8478;
+    --insync:#54805C; --sep:#B06A4F;
+  }
+  *{ box-sizing:border-box; margin:0; padding:0; }
+  html,body{ height:100%; }
+  body{
+    background:var(--paper); color:var(--ink); overflow:hidden;
+    font-family:Helvetica, Arial, sans-serif;
+    -webkit-font-smoothing:antialiased;
+  }
+  code{ font-family:ui-monospace,'Cascadia Code',Menlo,Consolas,monospace; font-size:.92em; }
+
+  /* ---------- top bar: title + always-visible sync readout ---------- */
+  #top{
+    position:fixed; top:0; left:0; right:0; z-index:20;
+    background:linear-gradient(to bottom, rgba(253,251,247,.97), rgba(253,251,247,.82) 70%, rgba(253,251,247,0));
+    padding:10px 16px 14px;
+  }
+  .toprow{ display:flex; align-items:baseline; gap:12px; flex-wrap:wrap; max-width:1500px; margin:0 auto; }
+  h1{ font-family:Georgia,'Times New Roman',serif; font-weight:normal; font-size:19px; letter-spacing:.2px; }
+  h1 .sub{ font-family:Helvetica,Arial,sans-serif; font-size:12px; color:var(--muted); margin-left:8px; }
+  #syncbar{
+    margin:9px auto 0; max-width:1500px; display:flex; align-items:center; gap:10px;
+    flex-wrap:wrap; cursor:pointer; user-select:none;
+    background:#FFFFFF; border:1px solid var(--line); border-radius:12px;
+    padding:8px 12px; box-shadow:0 1px 0 rgba(61,58,52,.03);
+  }
+  #syncbar .seg{ display:flex; align-items:center; gap:7px; font-size:13px; min-width:0; }
+  #syncbar .dot{ width:9px; height:9px; border-radius:50%; flex:0 0 auto; }
+  #syncbar .dot.ok{ background:var(--insync); }
+  #syncbar .dot.no{ background:var(--sep); }
+  #syncbar .lab{ font-weight:bold; }
+  #syncbar .lab.ok{ color:var(--insync); }
+  #syncbar .lab.no{ color:var(--sep); }
+  #syncbar .names{ color:var(--muted); overflow:hidden; text-overflow:ellipsis; white-space:nowrap; }
+  #syncbar .sep{ width:1px; align-self:stretch; background:var(--line); margin:0 2px; }
+  #syncbar .chev{ margin-left:auto; color:var(--muted); font-size:12px; transition:transform .15s ease; }
+  #syncbar.open .chev{ transform:rotate(180deg); }
+  #syncdetail{
+    display:none; max-width:1500px; margin:6px auto 0;
+    background:#FFFFFF; border:1px solid var(--line); border-radius:12px; padding:10px 14px;
+    font-size:12.5px; line-height:1.5; max-height:40vh; overflow:auto;
+  }
+  #syncbar.open + #syncdetail{ display:block; }
+  #syncdetail h4{ font-size:11px; letter-spacing:1.3px; text-transform:uppercase; margin:2px 0 5px; }
+  #syncdetail h4.ok{ color:var(--insync); } #syncdetail h4.no{ color:var(--sep); }
+  #syncdetail .srow{ display:flex; gap:8px; padding:5px 6px; align-items:baseline; width:100%;
+    background:none; border:none; border-radius:7px; text-align:left; cursor:pointer; color:var(--ink);
+    font:inherit; font-size:12.5px; }
+  #syncdetail .srow:hover{ background:#F7F4EC; }
+  #syncdetail .swatch{ width:8px; height:8px; border-radius:2px; margin-top:5px; flex:0 0 auto; }
+  #syncdetail .sname{ font-weight:bold; }
+  #syncdetail .swho{ color:var(--muted); font-size:11.5px; }
+  #syncdetail .note{ color:var(--muted); font-style:italic; margin-top:6px; font-size:11.5px; }
+  #syncdetail .grp+ .grp{ margin-top:8px; }
+
+  /* ---------- stage / canvas ---------- */
+  #stage{ position:fixed; left:0; right:0; top:0; bottom:0; z-index:1; }
+  #c{ display:block; width:100%; height:100%; touch-action:manipulation; }
+  #empty{
+    position:absolute; left:50%; top:44%; transform:translate(-50%,-50%);
+    text-align:center; color:var(--muted); max-width:340px; pointer-events:none;
+    transition:opacity .4s ease;
+  }
+  #empty b{ display:block; font-family:Georgia,serif; font-size:20px; color:var(--ink); margin-bottom:8px; font-weight:normal; }
+  #empty p{ font-size:14px; line-height:1.55; }
+  #empty .arrow{ margin-top:14px; font-size:22px; color:var(--line); }
+
+  /* ---------- inspector card ---------- */
+  #card{
+    position:fixed; z-index:30; width:322px; max-width:calc(100vw - 24px);
+    max-height:calc(100vh - 96px); overflow-y:auto; overscroll-behavior:contain;
+    background:#FFFFFF; border:1px solid var(--line); border-radius:14px;
+    box-shadow:0 8px 30px rgba(61,58,52,.16); padding:14px 15px 15px;
+    display:none;
+  }
+  #card.show{ display:block; }
+  #card .close{ position:absolute; top:8px; right:10px; border:none; background:none;
+    color:var(--muted); font-size:20px; line-height:1; cursor:pointer; padding:4px; z-index:2; }
+  #card .ctitle{ font-family:Georgia,serif; font-size:16.5px; line-height:1.25; padding-right:18px; margin-bottom:8px; }
+  #card .chome{ display:inline-flex; align-items:center; gap:6px; font-size:11.5px; color:var(--muted);
+    border:1px solid var(--line); border-radius:20px; padding:2px 9px; }
+  #card .chome .sw{ width:9px; height:9px; border-radius:50%; flex:0 0 auto; }
+  /* scope is its own block pill — never trails the home chip, so it can't wrap awkwardly */
+  #card .cscopetag{ display:block; width:max-content; max-width:100%; margin-top:7px;
+    font-size:10.5px; letter-spacing:.3px; color:var(--muted);
+    border:1px solid var(--line); border-radius:7px; padding:2px 8px; }
+  #card .csec{ margin-top:12px; }
+  #card .clab{ font-size:10px; letter-spacing:1.1px; text-transform:uppercase; color:var(--muted);
+    font-weight:bold; margin-bottom:3px; }
+  #card .cval{ font-size:12.5px; line-height:1.5; color:var(--ink); }
+  #card .cval code{ background:#F3EFE6; border-radius:4px; padding:1px 4px; word-break:break-all; }
+  #card .clinks{ display:flex; flex-wrap:wrap; gap:6px; }
+  #card .clink{ display:inline-flex; align-items:center; gap:6px; font-size:12px; color:var(--ink);
+    background:#F7F4EC; border:1px solid var(--line); border-radius:20px; padding:4px 10px 4px 9px;
+    min-height:30px; cursor:pointer; text-align:left; }
+  #card .clink:hover{ background:#F0EBDF; }
+  #card .clink .sw{ width:8px; height:8px; border-radius:50%; flex:0 0 auto; }
+  #card .cnone{ font-size:12px; color:var(--muted); font-style:italic; }
+  #card .csync{ font-size:12.5px; line-height:1.5; }
+  #card .csync.ok{ color:var(--insync); }
+  #card .csync.no{ color:var(--sep); }
+  #card .csync b{ font-weight:bold; }
+  #card .ccaveat{ font-size:11px; color:var(--muted); font-style:italic; margin-top:5px; line-height:1.4; }
+  #card .cact{ margin-top:12px; background:#F5F8F5; border:1px solid #CFE0D2; border-radius:9px; padding:9px 11px; }
+  #card .cact .clab{ color:var(--insync); }
+  #card .cact .cval{ font-size:12px; }
+  #card .cact .cval b{ font-weight:bold; }
+  #card .surprise{ margin-top:12px; background:#FBF0EC; border:1px solid #E4C7BC; border-radius:9px;
+    padding:8px 10px; font-size:12px; line-height:1.45; color:#8A4A32; display:flex; gap:7px; }
+  #card .surprise .bang{ font-weight:bold; }
+  #card .seehint{ font-size:10.5px; color:var(--muted); margin:6px 0 4px; }
+
+  /* ---------- bottom tray of chips ---------- */
+  #tray{
+    position:fixed; left:0; right:0; bottom:0; z-index:20;
+    background:linear-gradient(to top, var(--paper) 78%, rgba(253,251,247,.0));
+    padding:6px 16px calc(10px + env(safe-area-inset-bottom));
+  }
+  .traycard{
+    max-width:1500px; margin:0 auto; background:#FFFFFF; border:1px solid var(--line);
+    border-radius:16px 16px 12px 12px; box-shadow:0 -2px 16px rgba(61,58,52,.06);
+    padding:8px 12px 10px;
+  }
+  #trayhead{ display:flex; align-items:center; gap:10px; cursor:pointer; padding:2px 2px 6px; }
+  #trayhead .handle{ width:34px; height:4px; border-radius:3px; background:var(--line);
+    position:absolute; left:50%; transform:translateX(-50%); top:-2px; }
+  #trayhead .tlabel{ font-size:12px; letter-spacing:1.3px; text-transform:uppercase; color:var(--muted); }
+  #trayhead .tcount{ font-size:12px; color:var(--blue); }
+  #trayhead .tclear{ font-size:12px; color:var(--muted); text-decoration:underline; background:none; border:none; cursor:pointer; margin-left:auto; }
+  #trayhead .tcollapse{ font-size:12px; color:var(--muted); background:none; border:none; cursor:pointer; }
+  #groups{ display:flex; flex-wrap:wrap; gap:10px 18px; max-height:200px; overflow:auto; }
+  #flatchips{ display:none; }
+  #tray.collapsed #groups, #tray.collapsed #flatchips{ display:none; }
+  .group{ min-width:0; }
+  .glabel{ display:flex; align-items:center; gap:6px; font-size:11px; letter-spacing:.4px;
+    color:var(--muted); margin:3px 2px 5px; text-transform:uppercase; }
+  .glabel .gdot{ width:8px; height:8px; border-radius:50%; flex:0 0 auto; }
+  .chips{ display:flex; flex-wrap:wrap; gap:6px; }
+  .chip{
+    display:inline-flex; align-items:center; gap:7px; min-height:44px;
+    border:1px solid var(--line); background:#FFFFFF; color:var(--ink);
+    border-radius:22px; padding:0 14px; font-size:13px; cursor:pointer;
+    transition:background .12s ease, border-color .12s ease, box-shadow .12s ease;
+    white-space:nowrap;
+  }
+  .chip .cdot{ width:9px; height:9px; border-radius:50%; flex:0 0 auto; opacity:.4; transition:opacity .12s; }
+  .chip[aria-pressed="true"]{ background:#F2F6F2; border-color:#B7CDB9; box-shadow:inset 0 0 0 1px #DCEBDD; font-weight:bold; }
+  .chip[aria-pressed="true"] .cdot{ opacity:1; }
+  .chip:focus-visible{ outline:2px solid var(--blue); outline-offset:2px; }
+
+  @media (max-width:760px){
+    h1{ font-size:16px; }
+    h1 .sub{ display:none; }
+    #top{ padding:8px 10px 12px; }
+    #syncbar{ padding:7px 10px; gap:7px; }
+    #syncbar .names{ display:none; }
+    #tray{ padding:4px 8px calc(8px + env(safe-area-inset-bottom)); }
+    .traycard{ padding:6px 10px 8px; }
+    /* mobile default = peek: one horizontally-scrollable row, graph gets the screen */
+    #groups{ display:none; }
+    #flatchips{ display:flex; flex-wrap:nowrap; gap:6px; overflow-x:auto; padding-bottom:4px;
+      -webkit-overflow-scrolling:touch; scrollbar-width:none; }
+    #flatchips::-webkit-scrollbar{ display:none; }
+    #tray.expanded #flatchips{ display:none; }
+    #tray.expanded #groups{ display:block; max-height:52vh; overflow:auto; }
+    #tray.collapsed #flatchips, #tray.collapsed #groups{ display:none; }
+    .group{ margin-bottom:6px; }
+    .chips{ flex-wrap:nowrap; overflow-x:auto; padding-bottom:4px; -webkit-overflow-scrolling:touch; scrollbar-width:none; }
+    .chips::-webkit-scrollbar{ display:none; }
+    #card{ width:calc(100vw - 20px); left:10px !important; right:10px; max-height:64vh; }
+  }
+  @media (prefers-reduced-motion: reduce){
+    #empty, #syncbar .chev, .chip, #syncbar.open .chev{ transition:none; }
+  }
+</style>
+</head>
+<body>
+<div id="top">
+  <div class="toprow">
+    <h1>Your living memory constellation <span class="sub">what Claude remembers, and where it lives</span></h1>
+  </div>
+  <div id="syncbar" role="button" tabindex="0" aria-expanded="false">
+    <span class="seg"><span class="dot ok"></span><span class="lab ok">In sync</span><span class="names" id="syncOkNames">—</span></span>
+    <span class="sep"></span>
+    <span class="seg"><span class="dot no"></span><span class="lab no">Kept separate</span><span class="names" id="syncNoNames">—</span></span>
+    <span class="chev">▾</span>
+  </div>
+  <div id="syncdetail"></div>
+</div>
+
+<div id="stage">
+  <canvas id="c"></canvas>
+  <div id="empty">
+    <b>Your constellation is empty.</b>
+    <p>Pick a way you use Claude below. Each one flies in with the memory it touches &mdash; shared stores pull together, machine-local ones drift apart.</p>
+    <div class="arrow">&#8595;</div>
+  </div>
+  <div id="card" role="dialog" aria-label="Details">
+    <button class="close" aria-label="Close">&times;</button>
+    <div id="cardbody"></div>
+  </div>
+</div>
+
+<div id="tray">
+  <div class="traycard">
+    <div id="trayhead">
+      <span class="handle"></span>
+      <span class="tlabel">Ways you use Claude</span>
+      <span class="tcount" id="tcount">0 selected</span>
+      <button class="tclear" id="tclear" type="button">Clear</button>
+      <button class="tcollapse" id="tcollapse" type="button" aria-label="Collapse">Hide ▾</button>
+    </div>
+    <div id="flatchips"></div>
+    <div id="groups"></div>
+  </div>
+</div>
+
+<script>
+"use strict";
+window.addEventListener('error', e => {
+  const b = document.getElementById('cardbody');
+  if (b){ document.getElementById('card').classList.add('show');
+    b.innerHTML = '<div class="cfacts" style="color:#A0552F">Page error: '+(e.message||'unknown')+'</div>'; }
+});
+
+/* ============================ canonical model ============================ */
+const HOMES = {
+  account:{ label:'On your account — online, any device', color:'#4470A0', anchor:[0.46,0.12] },
+  repo:{    label:"Saved with the project's files",       color:'#9A6F33', anchor:[0.50,0.52] },
+  macfs:{   label:'Mac file system — ~/.claude',          color:'#6E7681', anchor:[0.19,0.44] },
+  winfs:{   label:'Windows file system — C:\\Users\\you\\.claude', color:'#B06A4F', anchor:[0.82,0.30] },
+  wslfs:{   label:'WSL file system — ~/.claude',          color:'#54805C', anchor:[0.80,0.78] },
+  cwloc:{   label:'On one computer — Cowork',             color:'#8F5C82', anchor:[0.26,0.84] },
+};
+const WEB_COLOR = '#8A8478';
+
+const WINPATH = 'C:\\Users\\you\\.claude';
+// Each store carries a Little-Snitch-style dossier: what gets IN, how it comes OUT,
+// and (where SPEC gives one) a concrete way to ACT on it. Facts verbatim from SPEC.
+const STORES = {
+  chatmem:{ name:'Memory from chat history', home:'account', scope:'across',
+    in:'Two parts — a chat-history summary (“memory summary”), synthesized daily from your standalone chats, plus saved facts (“memory edits”), applied immediately when you say “remember this”. Saved facts feed the summary.',
+    out:'Loaded into every new standalone chat.',
+    act:{ label:'Settings → Memory', text:'“Manage memory” — home of the “Generate memory from chat history” toggle. Your edits and imports become saved facts; export is available.' } },
+  prefs:{ name:'Instructions for Claude', home:'account', scope:'across',
+    in:'A free-text box you fill in at Settings → Profile (“Instructions” in the app).',
+    out:'Applied to every chat and to Cowork sessions. Anthropic: “Claude will keep these in mind across chats and Cowork within Anthropic’s guidelines.”',
+    act:{ label:'Settings → Profile', text:'Edit the “Instructions” box.' } },
+  projmem:{ name:'Project memory', home:'account', scope:'within',
+    in:'One per claude.ai Project. Filled by chatting in that Project and by saying “remember this” there.',
+    out:'Recalled in that Project’s chats only.',
+    act:null },
+  repo:{ name:'Project notes file — CLAUDE.md', home:'repo', scope:'within',
+    in:'You write it (code contexts); in Cowork you or Claude writes it (e.g. /init). Web sessions can update it by saving changes to the project.',
+    out:'Read at session start by whatever opens it. One per repo/project folder.',
+    act:{ label:'CLAUDE.md', text:'Lives at the project root — edit it like any file, or run /init to have Claude scaffold it.' } },
+  macumd:{ name:'User CLAUDE.md — Mac', home:'macfs', scope:'across',
+    in:'You write it; applies to all projects on this Mac.',
+    out:'Read at session start.',
+    act:{ label:'~/.claude/CLAUDE.md', text:'Edit this file on the Mac side.' } },
+  winumd:{ name:'User CLAUDE.md — Windows', home:'winfs', scope:'across',
+    in:'You write it; applies to all projects on the Windows side.',
+    out:'Read at session start.',
+    act:{ label:WINPATH+'\\CLAUDE.md', text:'Edit this file on the Windows side.' } },
+  wslumd:{ name:'User CLAUDE.md — WSL', home:'wslfs', scope:'across',
+    in:'You write it; applies to all projects on the WSL side.',
+    out:'Read at session start.',
+    act:{ label:'~/.claude/CLAUDE.md', text:'Edit this file inside WSL — a different file from the Windows one.' } },
+  macauto:{ name:'Auto memory — Mac', home:'macfs', scope:'within',
+    in:'Claude jots notes as it works, incl. “remember this”. One set per project, on this side only.',
+    out:'Read at session start.',
+    act:{ label:'autoMemoryDirectory', text:'Machine-local by default — this setting can move it into a repo-tracked folder so it travels with the project.' } },
+  winauto:{ name:'Auto memory — Windows', home:'winfs', scope:'within',
+    in:'Claude jots notes as it works, incl. “remember this”. One set per project, on the Windows side only.',
+    out:'Read at session start.',
+    act:{ label:'autoMemoryDirectory', text:'Machine-local by default — this setting can move it into a repo-tracked folder so it travels with the project.' } },
+  wslauto:{ name:'Auto memory — WSL', home:'wslfs', scope:'within',
+    in:'Claude jots notes as it works, incl. “remember this”. One set per project, on the WSL side only.',
+    out:'Read at session start.',
+    act:{ label:'autoMemoryDirectory', text:'Machine-local by default — this setting can move it into a repo-tracked folder so it travels with the project.' } },
+  cwmem:{ name:'Cowork project memory', home:'cwloc', scope:'within',
+    in:'Remembers as you work. One per Cowork project, kept on that computer.',
+    out:'Recalled when you reopen that project.',
+    act:null },
+};
+// stores whose home lives on one machine/side — they can *look* shared but aren't
+const LOCAL_STORE = id => ['macfs','winfs','wslfs','cwloc'].includes(STORES[id].home);
+// a small cut-out glyph per home family: online account vs a file system vs the repo
+// vs one computer. Reads at a glance, so account-blue and Mac-slate never blur together.
+const HOME_GLYPH = { account:'cloud', repo:'doc', macfs:'folder', winfs:'folder', wslfs:'folder', cwloc:'monitor' };
+
+const STORE_SURPRISE = {
+  wslumd:'WSL is a different side from native Windows — its own User CLAUDE.md, even on the same machine.',
+  wslauto:'WSL is a different side from native Windows — its own auto memory, even on the same machine. Machine-local by default; autoMemoryDirectory can move it into the repo so it travels.',
+  winumd:'Native Windows and WSL are different sides — separate User CLAUDE.md on the same machine.',
+  winauto:'Machine-local by default; autoMemoryDirectory can move it into the repo so it travels. Separate from WSL — different side.',
+  macauto:'Machine-local by default; autoMemoryDirectory can move it into the repo so it travels with the project.',
+  repo:'Claude Code on the web reads only this file — no user CLAUDE.md, no auto memory; fresh cloud sandbox per task.',
+  cwmem:'One-off Cowork sessions keep nothing afterward; only project sessions fill this.',
+  chatmem:'Standalone chats and Project chats have disjoint memories — this loads only into standalone chats.',
+  projmem:'Recalled only inside its Project; standalone chats never see it. Only Instructions for Claude spans both.',
+};
+
+// "See for yourself": sibling stores a surprise invites you to compare. Tapping
+// one moves the inspector there and softly pulses its node.
+const STORE_RELATED = {
+  wslumd:['winumd','macumd'], winumd:['wslumd','macumd'], macumd:['winumd','wslumd'],
+  wslauto:['winauto','macauto'], winauto:['wslauto','macauto'], macauto:['winauto','wslauto'],
+  chatmem:['projmem','prefs'], projmem:['chatmem','prefs'],
+  cwmem:['prefs','repo'],
+};
+
+const GROUPS = [
+  { id:'chat', label:'Claude chat',           color:'#4470A0' },
+  { id:'mac',  label:'Claude Code · Mac',     color:'#6E7681' },
+  { id:'win',  label:'Claude Code · Windows', color:'#B06A4F' },
+  { id:'wsl',  label:'Claude Code · WSL',     color:'#54805C' },
+  { id:'web',  label:'Claude Code · web',     color:'#8A8478' },
+  { id:'cw',   label:'Claude Cowork',         color:'#8F5C82' },
+];
+
+const CONTEXTS = [
+  { id:'ch_standalone', short:'Standalone chats', full:'Chats not inside a Project ("standalone" chats)', group:'chat', side:'account', stores:['chatmem','prefs'] },
+  { id:'ch_project',    short:'Project chats',    full:'Chats inside a Project', group:'chat', side:'account', stores:['projmem','prefs'] },
+
+  { id:'mac_app_local', short:'Desktop app',   full:'Claude Desktop app — local sessions (Mac)', group:'mac', side:'macfs', stores:['macumd','macauto','repo'] },
+  { id:'mac_cli',       short:'CLI · terminal',full:'CLI in the terminal (Mac)', group:'mac', side:'macfs', stores:['macumd','macauto','repo'] },
+  { id:'mac_vscode',    short:'VS Code',       full:'VS Code with the Claude Code extension (Mac)', group:'mac', side:'macfs', stores:['macumd','macauto','repo'] },
+
+  { id:'win_app_local',   short:'Desktop app', full:'Claude Desktop app — local sessions (Windows side)', group:'win', side:'winfs', stores:['winumd','winauto','repo'] },
+  { id:'win_cli_native',  short:'CLI · native',full:'CLI in Windows — native', group:'win', side:'winfs', stores:['winumd','winauto','repo'] },
+  { id:'win_vscode_local',short:'VS Code · local', full:'VS Code — local, not WSL (Windows)', group:'win', side:'winfs', stores:['winumd','winauto','repo'] },
+
+  { id:'win_app_rc_wsl',  short:'Desktop → /rc WSL', full:'Desktop app (Windows) remote-controlling a CLI session in WSL (Remote Control, /rc)', group:'wsl', side:'wslfs', stores:['wslumd','wslauto','repo'] },
+  { id:'win_cli_wsl',     short:'CLI · WSL',    full:'CLI in WSL', group:'wsl', side:'wslfs', stores:['wslumd','wslauto','repo'] },
+  { id:'win_vscode_wsl',  short:'VS Code · WSL',full:'VS Code on Windows connected to WSL (the "WSL" extension)', group:'wsl', side:'wslfs', stores:['wslumd','wslauto','repo'] },
+
+  { id:'mac_app_web', short:'Desktop → web · Mac', full:'Desktop app (Mac) → Claude Code on the web sessions', group:'web', side:'repo', stores:['repo'] },
+  { id:'win_app_web', short:'Desktop → web · Win', full:'Desktop app (Windows) → Claude Code on the web sessions', group:'web', side:'repo', stores:['repo'] },
+  { id:'code_web',    short:'Web · claude.ai/code', full:'Claude Code on the web — claude.ai/code (fresh cloud sandbox per task)', group:'web', side:'repo', stores:['repo'] },
+
+  { id:'cw_project',    short:'Project session',    full:'Cowork sessions inside a project', group:'cw', side:'cwloc', stores:['cwmem','repo','prefs'] },
+  { id:'cw_standalone', short:'Standalone session', full:'Cowork one-off sessions ("standalone") — keeps nothing afterward', group:'cw', side:'cwloc', stores:['repo','prefs'] },
+];
+const CTX = Object.fromEntries(CONTEXTS.map(c => [c.id, c]));
+const CTX_SURPRISE = {
+  win_app_rc_wsl:'Remote Control (/rc): the session and its memory stay in WSL (observed), not on the Windows side.',
+  code_web:'Fresh cloud sandbox per task; reads only the repo CLAUDE.md — no user CLAUDE.md, no auto memory.',
+  mac_app_web:'The desktop app is only a launcher here — nothing lands on the Mac; the session runs in the cloud and reads only the repo CLAUDE.md.',
+  win_app_web:'The desktop app is only a launcher here — nothing lands on Windows; the session runs in the cloud and reads only the repo CLAUDE.md.',
+  cw_standalone:'Keeps nothing afterward — but still reads CLAUDE.md and your Instructions.',
+};
+const IMPLIES = { win_app_rc_wsl:'win_cli_wsl' };
+
+/* ============================ selection state ============================ */
+const selected = new Set();
+function isSel(id){ return selected.has(id); }
+
+/* seeded rng for deterministic-ish layout */
+let _seed = 20260714;
+function rnd(){ _seed = (_seed*1664525 + 1013904223) & 0x7fffffff; return _seed / 0x7fffffff; }
+
+/* ============================ force graph ============================ */
+const cv = document.getElementById('c');
+const g = cv.getContext('2d');
+let W = 800, H = 600, DPR = 1;
+let SIM_TOP = 120, SIM_BOT = 210;   // visible-band insets (below top bar / above tray)
+let SIM_R = 0;                      // right inset reserved for the docked inspector (desktop)
+function usableW(){ return W - SIM_R; }
+const reduceMotion = window.matchMedia('(prefers-reduced-motion: reduce)').matches;
+
+const nodes = new Map();   // id -> node
+const edges = new Map();   // "ctx|store" -> edge
+let alpha = 1;             // simulation temperature
+
+// per-node nudges (fraction of W, fraction of band) so same-home nodes fan out
+const ANCHOR_OFFSET = {
+  chatmem:[-0.13,-0.01], projmem:[0.13,-0.01], prefs:[0.00,0.15],
+  ch_standalone:[-0.15,0.11], ch_project:[0.15,0.11],
+  macumd:[0.06,-0.05], macauto:[-0.04,0.06],
+  winumd:[0.06,-0.06], winauto:[-0.04,0.05],
+  wslumd:[0.06,0.05], wslauto:[-0.04,-0.05],
+};
+function bandY(fy){ return SIM_TOP + fy*Math.max(120, H - SIM_TOP - SIM_BOT); }
+function nodeAnchor(n){
+  const base = n.kind==='store'
+    ? (HOMES[STORES[n.id].home] ? HOMES[STORES[n.id].home].anchor : [0.5,0.5])
+    : (HOMES[CTX[n.id].side] ? HOMES[CTX[n.id].side].anchor : [0.5,0.5]);
+  const off = ANCHOR_OFFSET[n.id] || [0,0];
+  const uw = usableW();
+  let fx = base[0] + off[0];
+  if (uw < 640) fx = 0.5 + (fx-0.5)*0.80;   // squeeze horizontally on narrow screens
+  return [fx*uw, bandY(base[1] + off[1])];
+}
+
+function makeNode(id, kind){
+  const home = kind==='store' ? STORES[id].home : CTX[id].side;
+  const n = { id, kind, home, x:0, y:0, vx:0, vy:0 };
+  const [ax,ay] = nodeAnchor(n);
+  const jitter = 46;
+  Object.assign(n, {
+    x: ax + (rnd()-.5)*jitter, y: ay + (rnd()-.5)*jitter,
+    scale: reduceMotion ? 1 : 0.02,
+    alpha: reduceMotion ? 1 : 0,
+    present:true, dying:false,
+  });
+  return n;
+}
+
+function rebuild(warm){
+  // desired present sets
+  const presentCtx = CONTEXTS.filter(c => isSel(c.id)).map(c => c.id);
+  const presentStores = new Set();
+  presentCtx.forEach(id => CTX[id].stores.forEach(s => presentStores.add(s)));
+
+  const want = new Set([...presentCtx, ...presentStores]);
+
+  // add
+  want.forEach(id => {
+    let n = nodes.get(id);
+    if (!n){ n = makeNode(id, presentStores.has(id) ? 'store' : 'ctx'); nodes.set(id, n); }
+    n.present = true; n.dying = false;
+  });
+  // remove (fade out)
+  nodes.forEach((n,id) => { if (!want.has(id)){ n.present=false; n.dying=true; } });
+
+  // edges
+  const wantEdges = new Set();
+  presentCtx.forEach(cid => CTX[cid].stores.forEach(sid => {
+    const key = cid+'|'+sid; wantEdges.add(key);
+    if (!edges.has(key)) edges.set(key, { a:cid, b:sid, alpha: reduceMotion?1:0 });
+  }));
+  edges.forEach((e,key) => { e.want = wantEdges.has(key); });
+
+  alpha = 1;
+  document.getElementById('empty').style.opacity = presentCtx.length ? 0 : 1;
+
+  if (warm){ for (let i=0;i<440;i++) step(1); nodes.forEach(n => { n.scale=1; n.alpha=1; }); edges.forEach(e => { if(e.want) e.alpha=1; }); }
+}
+
+/* --- physics constants --- */
+const K_REP = 9600;      // repulsion
+const SPRING = 0.017;    // edge stiffness (gentle, so the shared hub bridges without collapsing silos)
+const REST = 152;        // edge rest length
+const HOME_G = 0.028;    // store -> home anchor (firm, so silos hold their corners)
+const SIDE_G = 0.022;    // context -> its side anchor
+const CENTER_G = 0.0020; // gentle pull to canvas centre
+const DAMP = 0.86;
+const MAXV = 7;
+
+function storeRadius(n){
+  const deg = liveDegree(n.id);
+  return (22 + Math.min(deg,6)*2.6) * n.scale;
+}
+function nodeRadius(n){ return n.kind==='store' ? storeRadius(n) : 8*n.scale; }
+
+function liveDegree(sid){
+  let d = 0;
+  edges.forEach(e => { if (e.b===sid && e.want) d++; });
+  return d;
+}
+
+function step(dt){
+  const arr = [...nodes.values()].filter(n => !n.dying);
+  const cx = usableW()*0.5, cy = bandY(0.54);
+  // repulsion (O(n^2), n small)
+  for (let i=0;i<arr.length;i++){
+    const a = arr[i];
+    for (let j=i+1;j<arr.length;j++){
+      const b = arr[j];
+      let dx = a.x-b.x, dy = a.y-b.y;
+      let d2 = dx*dx+dy*dy; if (d2 < 0.01) { dx = rnd()-.5; dy = rnd()-.5; d2 = 0.5; }
+      const d = Math.sqrt(d2);
+      const ra = nodeRadius(a)+8, rb = nodeRadius(b)+8;
+      const min = ra+rb;
+      let f = K_REP / d2;
+      if (d < min) f += (min-d)*0.9;       // hard-ish separation so orbs don't overlap
+      const fx = (dx/d)*f, fy = (dy/d)*f;
+      a.vx += fx*dt; a.vy += fy*dt; b.vx -= fx*dt; b.vy -= fy*dt;
+    }
+  }
+  // springs
+  edges.forEach(e => {
+    if (!e.want) return;
+    const a = nodes.get(e.a), b = nodes.get(e.b); if (!a||!b) return;
+    let dx = b.x-a.x, dy = b.y-a.y; const d = Math.hypot(dx,dy)||0.01;
+    const f = (d-REST)*SPRING;
+    const fx=(dx/d)*f, fy=(dy/d)*f;
+    a.vx += fx*dt; a.vy += fy*dt; b.vx -= fx*dt; b.vy -= fy*dt;
+  });
+  // anchors + centre
+  arr.forEach(n => {
+    const [ax,ay] = nodeAnchor(n);
+    const kg = n.kind==='store' ? HOME_G : SIDE_G;
+    n.vx += (ax-n.x)*kg*dt; n.vy += (ay-n.y)*kg*dt;
+    n.vx += (cx-n.x)*CENTER_G*dt; n.vy += (cy-n.y)*CENTER_G*dt;
+  });
+  // integrate
+  arr.forEach(n => {
+    n.vx *= DAMP; n.vy *= DAMP;
+    const sp = Math.hypot(n.vx,n.vy); if (sp>MAXV){ n.vx=n.vx/sp*MAXV; n.vy=n.vy/sp*MAXV; }
+    n.x += n.vx*alpha*dt; n.y += n.vy*alpha*dt;
+    const mx = 78, my = 30;   // wider x margin so labels/plates never clip the edge
+    n.x = Math.max(mx, Math.min(usableW()-mx, n.x));
+    n.y = Math.max(SIM_TOP+my, Math.min(H-SIM_BOT+my*0.5, n.y));
+  });
+}
+
+/* --- rendering --- */
+function homeColor(n){
+  if (n.kind==='store') return HOMES[STORES[n.id].home].color;
+  const grp = GROUPS.find(x => x.id===CTX[n.id].group);
+  return grp ? grp.color : '#8A8478';
+}
+function roundRect(ctx,x,y,w,h,r){
+  ctx.beginPath();
+  ctx.moveTo(x+r,y); ctx.arcTo(x+w,y,x+w,y+h,r); ctx.arcTo(x+w,y+h,x,y+h,r);
+  ctx.arcTo(x,y+h,x,y,r); ctx.arcTo(x,y,x+w,y,r); ctx.closePath();
+}
+function plateLabel(text, x, y, opts){
+  opts = opts||{};
+  const size = opts.size||12, weight = opts.weight||'normal';
+  g.font = weight+' '+size+'px Helvetica, Arial, sans-serif';
+  const lines = Array.isArray(text)? text : [text];
+  let maxw = 0; lines.forEach(l => { maxw = Math.max(maxw, g.measureText(l).width); });
+  const padX = 7, padY = 4, lh = size+3;
+  const bw = maxw+padX*2, bh = lines.length*lh+padY*2 - 3;
+  const bx = x - bw/2, by = y;
+  g.globalAlpha *= (opts.alpha!=null?opts.alpha:1);
+  g.fillStyle = 'rgba(253,251,247,0.90)';
+  roundRect(g, bx, by, bw, bh, 6); g.fill();
+  if (opts.border){ g.strokeStyle = opts.border; g.lineWidth = 1; roundRect(g,bx,by,bw,bh,6); g.stroke(); }
+  g.fillStyle = opts.color||'#3D3A34';
+  g.textAlign='center'; g.textBaseline='top';
+  lines.forEach((l,i) => g.fillText(l, x, by+padY+i*lh));
+  g.globalAlpha /= (opts.alpha!=null?opts.alpha:1);
+  return { w:bw, h:bh };
+}
+
+const STORE_LABEL = {
+  chatmem:['Memory from','chat history'], prefs:['Instructions','for Claude'],
+  projmem:['Project memory'], repo:['Project notes','CLAUDE.md'],
+  macumd:['User CLAUDE.md','· Mac'], winumd:['User CLAUDE.md','· Windows'], wslumd:['User CLAUDE.md','· WSL'],
+  macauto:['Auto memory','· Mac'], winauto:['Auto memory','· Windows'], wslauto:['Auto memory','· WSL'],
+  cwmem:['Cowork','project memory'],
+};
+
+let inSyncSet = new Set();
+let hoverId = null, activeId = null;
+const PULSE_MAX = 34;
+let pulse = { id:null, t:0 };
+function pulseNode(id){ if (reduceMotion) return; pulse = { id, t:PULSE_MAX }; }
+
+function draw(){
+  g.setTransform(DPR,0,0,DPR,0,0);
+  g.clearRect(0,0,W,H);
+
+  // edges
+  edges.forEach(e => {
+    const a = nodes.get(e.a), b = nodes.get(e.b);
+    if (!a||!b || e.alpha<=0.01) return;
+    const col = HOMES[STORES[e.b].home].color;
+    const syncEdge = inSyncSet.has(e.b);
+    g.strokeStyle = hexA(col, e.alpha*(syncEdge?0.55:0.28));
+    g.lineWidth = syncEdge ? 2.1 : 1.2;
+    g.beginPath(); g.moveTo(a.x,a.y); g.lineTo(b.x,b.y); g.stroke();
+  });
+
+  // stores (glow orbs) then contexts (rings) — stores first so rings sit on top
+  const list = [...nodes.values()];
+  list.filter(n=>n.kind==='store').forEach(drawStore);
+  list.filter(n=>n.kind==='ctx').forEach(drawCtx);
+}
+
+function drawHomeGlyph(cx,cy,r,home){
+  const kind = HOME_GLYPH[home]; if (!kind) return;
+  const s = r*0.9;
+  g.fillStyle = 'rgba(253,251,247,0.80)';
+  g.beginPath();
+  if (kind==='cloud'){
+    g.arc(cx - s*0.24, cy + s*0.05, s*0.19, 0, 7);
+    g.arc(cx - s*0.01, cy - s*0.15, s*0.25, 0, 7);
+    g.arc(cx + s*0.24, cy + s*0.03, s*0.18, 0, 7);
+    g.rect(cx - s*0.43, cy + s*0.01, s*0.86, s*0.22);
+    g.fill();
+  } else if (kind==='folder'){
+    g.moveTo(cx - s*0.42, cy - s*0.20);
+    g.lineTo(cx - s*0.10, cy - s*0.20);
+    g.lineTo(cx - s*0.00, cy - s*0.08);
+    g.lineTo(cx + s*0.42, cy - s*0.08);
+    g.lineTo(cx + s*0.42, cy + s*0.28);
+    g.lineTo(cx - s*0.42, cy + s*0.28);
+    g.closePath(); g.fill();
+  } else if (kind==='doc'){
+    g.moveTo(cx - s*0.28, cy - s*0.36);
+    g.lineTo(cx + s*0.10, cy - s*0.36);
+    g.lineTo(cx + s*0.30, cy - s*0.15);
+    g.lineTo(cx + s*0.30, cy + s*0.36);
+    g.lineTo(cx - s*0.28, cy + s*0.36);
+    g.closePath(); g.fill();
+  } else if (kind==='monitor'){
+    g.rect(cx - s*0.40, cy - s*0.30, s*0.80, s*0.46); g.fill();
+    g.beginPath();
+    g.rect(cx - s*0.09, cy + s*0.17, s*0.18, s*0.11);
+    g.rect(cx - s*0.26, cy + s*0.28, s*0.52, s*0.08); g.fill();
+  }
+}
+function drawStore(n){
+  if (n.alpha<=0.01 && !n.present) return;
+  const col = homeColor(n);
+  const r = storeRadius(n);
+  const isActive = activeId===n.id || hoverId===n.id;
+  const sync = inSyncSet.has(n.id);
+  g.save();
+  // soft glow
+  const grad = g.createRadialGradient(n.x,n.y,r*0.2, n.x,n.y,r*2.1);
+  grad.addColorStop(0, hexA(col, 0.42*n.alpha));
+  grad.addColorStop(0.5, hexA(col, 0.16*n.alpha));
+  grad.addColorStop(1, hexA(col, 0));
+  g.fillStyle = grad;
+  g.beginPath(); g.arc(n.x,n.y,r*2.1,0,7); g.fill();
+  // core
+  g.globalAlpha = n.alpha;
+  g.fillStyle = hexA(col, 0.90);
+  g.beginPath(); g.arc(n.x,n.y,r,0,7); g.fill();
+  g.fillStyle = 'rgba(253,251,247,0.18)';
+  g.beginPath(); g.arc(n.x-r*0.30,n.y-r*0.32,r*0.46,0,7); g.fill();
+  if (n.scale>0.6) drawHomeGlyph(n.x, n.y, r, STORES[n.id].home);
+  // in-sync ring emphasis
+  if (sync){ g.strokeStyle = hexA('#54805C',0.9); g.lineWidth=2.4; g.beginPath(); g.arc(n.x,n.y,r+4,0,7); g.stroke(); }
+  if (isActive){ g.strokeStyle = hexA(col,0.95); g.lineWidth=2.4; g.beginPath(); g.arc(n.x,n.y,r+7,0,7); g.stroke(); }
+  if (pulse.id===n.id && pulse.t>0){ const k=pulse.t/PULSE_MAX; g.strokeStyle=hexA(col,0.5*k); g.lineWidth=2; g.beginPath(); g.arc(n.x,n.y,r+7+(1-k)*20,0,7); g.stroke(); }
+  // local-store badge (looks shared but isn't)
+  if (LOCAL_STORE(n.id) && n.scale>0.6){
+    const bx = n.x + r*0.72, by = n.y - r*0.72;
+    g.fillStyle = '#B06A4F'; g.beginPath(); g.arc(bx,by,7,0,7); g.fill();
+    g.fillStyle = '#FDFBF7'; g.font = 'bold 10px Helvetica, Arial'; g.textAlign='center'; g.textBaseline='middle';
+    g.fillText('!', bx, by+0.5);
+  }
+  g.globalAlpha = 1;
+  g.restore();
+  // label under orb
+  if (n.scale>0.5) plateLabel(STORE_LABEL[n.id]||[STORES[n.id].name], n.x, n.y+r+5,
+    { size:11.5, weight:'bold', color:'#3D3A34', border:hexA(col,0.5), alpha:n.alpha });
+}
+
+function drawCtx(n){
+  if (n.alpha<=0.01 && !n.present) return;
+  const col = homeColor(n);
+  const r = 8*n.scale;
+  const isActive = activeId===n.id || hoverId===n.id;
+  const sel = isSel(n.id);
+  g.globalAlpha = n.alpha;
+  // ring
+  g.fillStyle = '#FFFFFF';
+  g.beginPath(); g.arc(n.x,n.y,r+2,0,7); g.fill();
+  g.strokeStyle = col; g.lineWidth = sel?3:2;
+  g.beginPath(); g.arc(n.x,n.y,r,0,7); g.stroke();
+  g.fillStyle = hexA(col, 0.9);
+  g.beginPath(); g.arc(n.x,n.y,r*0.42,0,7); g.fill();
+  if (isActive){ g.strokeStyle = hexA(col,0.7); g.lineWidth=2; g.beginPath(); g.arc(n.x,n.y,r+7,0,7); g.stroke(); }
+  if (pulse.id===n.id && pulse.t>0){ const k=pulse.t/PULSE_MAX; g.strokeStyle=hexA(col,0.55*k); g.lineWidth=2; g.beginPath(); g.arc(n.x,n.y,r+6+(1-k)*16,0,7); g.stroke(); }
+  g.globalAlpha = 1;
+  if (n.scale>0.55) plateLabel(CTX[n.id].short, n.x, n.y+r+7,
+    { size:11, weight:'normal', color:'#57534B', alpha:n.alpha*0.98 });
+}
+
+function hexA(hex,a){
+  const h = hex.replace('#',''); const r=parseInt(h.substr(0,2),16), gg=parseInt(h.substr(2,2),16), b=parseInt(h.substr(4,2),16);
+  return 'rgba('+r+','+gg+','+b+','+Math.max(0,Math.min(1,a))+')';
+}
+
+/* --- animation loop --- */
+function tick(){
+  // scale/alpha tweens
+  nodes.forEach((n,id) => {
+    const ts = n.dying ? 0 : 1;
+    n.scale += (ts-n.scale)*0.16;
+    n.alpha += (ts-n.alpha)*0.16;
+    if (n.dying && n.alpha<0.02){ nodes.delete(id); }
+  });
+  edges.forEach((e,key) => {
+    const ta = e.want ? 1 : 0;
+    e.alpha += (ta-e.alpha)*0.16;
+    if (!e.want && e.alpha<0.02) edges.delete(key);
+  });
+  if (alpha>0.02) step(1);
+  alpha *= 0.985; if (alpha<0.02) alpha = 0.02;
+  if (pulse.t>0) pulse.t--;
+  draw();
+  requestAnimationFrame(tick);
+}
+
+/* ============================ sync readout ============================ */
+function selectedContexts(){ return CONTEXTS.filter(c => isSel(c.id)); }
+
+function computeSync(){
+  const ctxs = selectedContexts();
+  const cover = {};   // storeId -> [context short names]
+  ctxs.forEach(c => c.stores.forEach(s => { (cover[s]=cover[s]||[]).push(c.short+groupTag(c)); }));
+  const inSync = [], separate = [];
+  Object.keys(cover).forEach(s => {
+    (cover[s].length === ctxs.length ? inSync : separate).push({ id:s, who:cover[s] });
+  });
+  return { n:ctxs.length, inSync, separate, cover };
+}
+function groupTag(c){
+  const g = { mac:' (Mac)', win:' (Win)', wsl:' (WSL)', web:' (web)', cw:' (Cowork)', chat:'' }[c.group];
+  return g||'';
+}
+
+function renderSync(){
+  const { n, inSync, separate } = computeSync();
+  inSyncSet = new Set(n>=2 ? inSync.map(x=>x.id) : []);
+  const okNames = document.getElementById('syncOkNames');
+  const noNames = document.getElementById('syncNoNames');
+
+  if (n===0){ okNames.textContent = '— pick a way below'; noNames.textContent = '—'; }
+  else if (n===1){ okNames.textContent = 'add another to compare'; noNames.textContent = '—'; }
+  else {
+    okNames.textContent = inSync.length ? inSync.map(x=>STORES[x.id].name).join(' · ') : 'none across all '+n+' ways';
+    noNames.textContent = separate.length ? (separate.length+' store'+(separate.length>1?'s':'')) : 'nothing';
+  }
+
+  // detail dropdown
+  const d = document.getElementById('syncdetail');
+  if (n===0){ d.innerHTML = '<div class="note">Select the ways you use Claude to see what stays in sync and what is kept separate.</div>'; return; }
+  const srow = (it, kind) => {
+    const st = STORES[it.id]; const col = HOMES[st.home] ? HOMES[st.home].color : WEB_COLOR;
+    let who = '';
+    if (kind==='ok') who = '<span class="swho">— in all '+n+'</span>';
+    else if (kind==='no' && it.who) who = '<span class="swho">— only in: '+it.who.join(' · ')+' — '+it.who.length+' of '+n+'</span>';
+    return '<button class="srow" type="button" data-store="'+it.id+'"><span class="swatch" style="background:'+col+'"></span>'
+      + '<span><span class="sname">'+st.name+'</span> '+who+'</span></button>';
+  };
+  let html = '';
+  if (n===1){
+    html += '<div class="grp"><div class="note">Only one way selected — nothing to sync across yet. Its stores:</div>'
+      + selectedContexts()[0].stores.map(s=>srow({id:s},'plain')).join('') + '</div>';
+  } else {
+    html += '<div class="grp"><h4 class="ok">In sync across your selection</h4>'
+      + (inSync.length ? inSync.map(it=>srow(it,'ok')).join('') : '<div class="note">None — no store is touched by every selected way.</div>') + '</div>';
+    html += '<div class="grp"><h4 class="no">Kept separate</h4>'
+      + (separate.length ? separate.map(it=>srow(it,'no')).join('') : '<div class="note">None.</div>') + '</div>';
+  }
+  const notes = [];
+  if (n>=2 && computeSync().cover.repo) notes.push('CLAUDE.md sync assumes these ways open the same repo/project folder.');
+  notes.push('Tap any store to open its full dossier.');
+  html += '<div class="note">'+notes.join(' ')+'</div>';
+  d.innerHTML = html;
+}
+
+/* ============================ inspector card ============================ */
+function whoTouchesCtx(sid){ return selectedContexts().filter(c => c.stores.includes(sid)); }
+function ctxLink(c){
+  const grp = GROUPS.find(x=>x.id===c.group);
+  return '<button class="clink" type="button" data-ctx="'+c.id+'"><span class="sw" style="background:'+grp.color+'"></span>'+c.short+groupTag(c)+'</button>';
+}
+function storeLink(sid){
+  const col = HOMES[STORES[sid].home].color;
+  return '<button class="clink" type="button" data-store="'+sid+'"><span class="sw" style="background:'+col+'"></span>'+STORES[sid].name+'</button>';
+}
+function storeSyncHTML(sid){
+  const who = whoTouchesCtx(sid); const n = selected.size;
+  if (n===0) return '<div class="csync">No ways selected yet.</div>';
+  if (who.length===0) return '<div class="csync">Nothing in your current selection touches this store.</div>';
+  if (n===1) return '<div class="csync">Touched by your one selected way.<div class="ccaveat">With a single way selected there’s nothing to sync across yet.</div></div>';
+  if (who.length===n) return '<div class="csync ok"><b>In sync across your selection</b> — every selected way touches the same store.</div>';
+  let h = '<div class="csync no"><b>Kept separate</b> — only in: '+who.map(c=>c.short+groupTag(c)).join(', ')+' — '+who.length+' of '+n+'.</div>';
+  if (sid==='repo') h += '<div class="ccaveat">CLAUDE.md counts as in sync only when these ways open the same repo/project folder.</div>';
+  return h;
+}
+function openCard(id, atX, atY){
+  activeId = id;
+  const card = document.getElementById('card');
+  const body = document.getElementById('cardbody');
+  const isStore = !!STORES[id];
+  if (isStore){
+    const s = STORES[id]; const home = HOMES[s.home];
+    const who = whoTouchesCtx(id);
+    const scope = s.scope==='across' ? 'Remembered across projects / repos' : 'Kept within one project / repo';
+    let h = '<div class="ctitle">'+s.name+'</div>'
+      + '<span class="chome"><span class="sw" style="background:'+home.color+'"></span>'+home.label+'</span>'
+      + '<div class="cscopetag">'+scope+'</div>';
+    if (STORE_SURPRISE[id]) h += '<div class="surprise"><span class="bang">!</span><span>'+STORE_SURPRISE[id]+'</span></div>';
+    const rel = (STORE_RELATED[id]||[]).filter(r => STORES[r]);
+    if (rel.length){
+      h += '<div class="csec"><div class="clab">See for yourself</div>'
+        + '<div class="seehint">Open a sibling store to compare — each is its own separate memory.</div>'
+        + '<div class="clinks">'+rel.map(storeLink).join('')+'</div></div>';
+    }
+    h += '<div class="csec"><div class="clab">What gets in</div><div class="cval">'+s.in+'</div></div>'
+      + '<div class="csec"><div class="clab">How it comes back out</div><div class="cval">'+s.out+'</div></div>'
+      + '<div class="csec"><div class="clab">Who in your selection touches it</div>'
+      + (who.length ? '<div class="clinks">'+who.map(ctxLink).join('')+'</div>' : '<div class="cnone">No one in your current selection</div>')+'</div>'
+      + '<div class="csec"><div class="clab">Sync status</div>'+storeSyncHTML(id)+'</div>';
+    if (s.act){
+      h += '<div class="cact"><div class="clab">Act on it</div><div class="cval"><b>'+s.act.label+'</b> — '+s.act.text+'</div></div>';
+    }
+    body.innerHTML = h;
+  } else {
+    const c = CTX[id]; const grp = GROUPS.find(x=>x.id===c.group);
+    let h = '<div class="ctitle">'+c.full+'</div>'
+      + '<span class="chome"><span class="sw" style="background:'+grp.color+'"></span>'+grp.label+'</span>';
+    if (CTX_SURPRISE[id]) h += '<div class="surprise"><span class="bang">!</span><span>'+CTX_SURPRISE[id]+'</span></div>';
+    h += '<div class="csec"><div class="clab">Memory it touches</div>'
+      + (c.stores.length ? '<div class="clinks">'+c.stores.map(storeLink).join('')+'</div>' : '<div class="cnone">No persistent stores</div>')+'</div>';
+    body.innerHTML = h;
+  }
+  card.classList.add('show');
+  if (window.innerWidth > 760){
+    // reserve a right column so the constellation flows left and stays fully visible
+    SIM_R = Math.min(360, Math.round(W*0.30));
+    alpha = Math.max(alpha, 0.55);
+  }
+  positionCard(card, atX, atY);
+}
+function positionCard(card, atX, atY){
+  const cw = card.offsetWidth || 300, ch = card.offsetHeight || 200;
+  let left, top;
+  if (window.innerWidth <= 760){
+    // dock the card just above the tray so the graph stays visible above it
+    const trayH = document.getElementById('tray').offsetHeight || 120;
+    left = 10; top = window.innerHeight - ch - trayH - 10;
+    top = Math.max(66, top);
+  } else {
+    // dock as a fixed right-hand detail pane (Little Snitch-style)
+    const topH = document.getElementById('top').offsetHeight || 100;
+    left = window.innerWidth - cw - 16;
+    top = topH + 10;
+    top = Math.min(top, window.innerHeight - ch - 16);
+  }
+  card.style.left = left+'px'; card.style.top = top+'px';
+}
+function closeCard(){
+  document.getElementById('card').classList.remove('show'); activeId=null; pulse.t=0;
+  if (SIM_R){
+    // hand the reserved right column back to the graph so it spreads into the freed canvas
+    SIM_R = 0;
+    if (reduceMotion){ for (let i=0;i<200;i++) step(1); nodes.forEach(n=>{ if(!n.dying){ n.scale=1; n.alpha=1; } }); }
+    else alpha = Math.max(alpha, 0.85);
+  }
+}
+
+/* ============================ hit testing ============================ */
+function pick(mx,my){
+  let best=null, bestD=Infinity;
+  nodes.forEach(n => {
+    if (n.dying) return;
+    const r = nodeRadius(n) + (n.kind==='store'?6:10);
+    const d = Math.hypot(mx-n.x,my-n.y);
+    if (d < r && d < bestD){ best=n; bestD=d; }
+  });
+  return best;
+}
+function evtPos(e){
+  const rect = cv.getBoundingClientRect();
+  const t = e.touches && e.touches[0] ? e.touches[0] : e;
+  return { x: t.clientX-rect.left, y: t.clientY-rect.top, cx:t.clientX, cy:t.clientY };
+}
+cv.addEventListener('pointermove', e => {
+  const p = evtPos(e); const n = pick(p.x,p.y);
+  hoverId = n ? n.id : null;
+  cv.style.cursor = n ? 'pointer' : 'default';
+});
+cv.addEventListener('pointerdown', e => {
+  const p = evtPos(e); const n = pick(p.x,p.y);
+  if (n){ openCard(n.id, p.cx, p.cy); }
+  else closeCard();
+});
+
+/* ============================ chips / tray ============================ */
+function chipHTML(c, color){
+  return '<button class="chip" type="button" role="switch" aria-pressed="false" data-id="'+c.id+'">'
+    + '<span class="cdot" style="background:'+color+'"></span>'+c.short+'</button>';
+}
+function buildTray(){
+  const wrap = document.getElementById('groups');
+  wrap.innerHTML = GROUPS.map(gr => {
+    const chips = CONTEXTS.filter(c => c.group===gr.id).map(c => chipHTML(c, gr.color)).join('');
+    return '<div class="group"><div class="glabel"><span class="gdot" style="background:'+gr.color+'"></span>'+gr.label+'</div>'
+      + '<div class="chips">'+chips+'</div></div>';
+  }).join('');
+  // flat single-row peek (mobile)
+  const flat = document.getElementById('flatchips');
+  flat.innerHTML = CONTEXTS.map(c => {
+    const gr = GROUPS.find(x=>x.id===c.group);
+    return chipHTML(c, gr.color);
+  }).join('');
+  document.querySelectorAll('.chip').forEach(btn => {
+    btn.addEventListener('click', () => toggle(btn.dataset.id));
+  });
+}
+function syncChips(){
+  document.querySelectorAll('.chip').forEach(btn => {
+    btn.setAttribute('aria-pressed', isSel(btn.dataset.id) ? 'true':'false');
+  });
+  const n = selected.size;
+  document.getElementById('tcount').textContent = n + (n===1?' selected':' selected');
+}
+function toggle(id){
+  if (isSel(id)) selected.delete(id); else selected.add(id);
+  // implication: rc -> cli_wsl (and releasing host releases rc)
+  if (IMPLIES[id] && isSel(id)) selected.add(IMPLIES[id]);
+  for (const [rc,host] of Object.entries(IMPLIES)){
+    if (host===id && !isSel(id)) selected.delete(rc);
+  }
+  afterChange();
+}
+function afterChange(){
+  syncChips(); renderSync(); rebuild(false);
+  if (!selected.size) closeCard();
+}
+
+/* ============================ wiring ============================ */
+document.getElementById('syncbar').addEventListener('click', () => {
+  const b = document.getElementById('syncbar'); b.classList.toggle('open');
+  b.setAttribute('aria-expanded', b.classList.contains('open')?'true':'false');
+});
+document.getElementById('syncbar').addEventListener('keydown', e => {
+  if (e.key==='Enter'||e.key===' '){ e.preventDefault(); document.getElementById('syncbar').click(); }
+});
+document.getElementById('syncdetail').addEventListener('click', e => {
+  const s = e.target.closest('[data-store]'); if (s) crossOpen(s.dataset.store);
+});
+document.querySelector('#card .close').addEventListener('click', closeCard);
+function crossOpen(id){ openCard(id); pulseNode(id); document.getElementById('card').scrollTop = 0; }
+document.getElementById('cardbody').addEventListener('click', e => {
+  const s = e.target.closest('[data-store]'); if (s){ crossOpen(s.dataset.store); return; }
+  const c = e.target.closest('[data-ctx]');   if (c){ crossOpen(c.dataset.ctx); return; }
+});
+document.getElementById('tclear').addEventListener('click', () => { selected.clear(); afterChange(); });
+document.getElementById('tcollapse').addEventListener('click', (e) => {
+  e.stopPropagation();
+  const t = document.getElementById('tray'); const btn = document.getElementById('tcollapse');
+  if (window.innerWidth <= 760){
+    const ex = t.classList.toggle('expanded');
+    btn.textContent = ex ? 'Less ▾' : 'All ▴';
+  } else {
+    const c = t.classList.toggle('collapsed');
+    btn.textContent = c ? 'Show ▴' : 'Hide ▾';
+  }
+  requestResize();
+});
+document.getElementById('trayhead').addEventListener('click', (e) => {
+  if (e.target.closest('button')) return;
+  document.getElementById('tcollapse').click();
+});
+
+/* ============================ sizing ============================ */
+let _lastW = 0, _lastH = 0;
+function resize(){
+  const r = document.getElementById('stage').getBoundingClientRect();
+  W = r.width; H = r.height; DPR = Math.min(window.devicePixelRatio||1, 2);
+  cv.width = Math.round(W*DPR); cv.height = Math.round(H*DPR);
+  cv.style.width = W+'px'; cv.style.height = H+'px';
+  const topH = document.getElementById('top').offsetHeight || 100;
+  const trayH = (document.querySelector('.traycard')||{}).offsetHeight || 120;
+  SIM_TOP = topH + 14;
+  SIM_BOT = trayH + 22;
+  // an open inspector must re-dock and re-reserve for the new width
+  const card = document.getElementById('card');
+  if (card.classList.contains('show')){
+    SIM_R = window.innerWidth > 760 ? Math.min(360, Math.round(W*0.30)) : 0;
+    positionCard(card, 0, 0);
+  } else {
+    SIM_R = 0;
+  }
+  // On a meaningful size change, snap the layout synchronously so the graph is
+  // settled immediately. The screenshot harness boots at a default viewport and
+  // resizes without reloading or waiting, so a lazy re-settle would be captured
+  // mid-reflow. reduce-motion also benefits from an instant settle.
+  if (Math.abs(W-_lastW) > 40 || Math.abs(H-_lastH) > 40){
+    _lastW = W; _lastH = H;
+    if (nodes.size){ for (let i=0;i<260;i++) step(1); nodes.forEach(n=>{ n.scale=n.dying?n.scale:1; n.alpha=n.dying?n.alpha:1; }); }
+  }
+  alpha = Math.max(alpha, 0.5);
+}
+function requestResize(){ resize(); }
+window.addEventListener('resize', requestResize);
+
+/* ============================ boot ============================ */
+function boot(){
+  buildTray();
+  if (window.innerWidth <= 760) document.getElementById('tcollapse').textContent = 'All ▴';
+  resize();
+  const demo = /(?:\?|&)demo\b/.test(location.search);
+  if (demo){
+    ['ch_standalone','ch_project','mac_cli','win_cli_native','win_cli_wsl','code_web','cw_project'].forEach(id => selected.add(id));
+    // honor implication defensively
+    if (isSel('win_app_rc_wsl')) selected.add('win_cli_wsl');
+    // reserve the right pane up-front so the warm layout settles around it (desktop)
+    if (window.innerWidth > 760) SIM_R = Math.min(360, Math.round(W*0.30));
+    syncChips(); renderSync(); rebuild(true);
+    // open inspector on a surprising, "looks shared but isn't" store; park it in a corner
+    requestAnimationFrame(() => {
+      if (window.innerWidth <= 760) openCard('wslumd', 40, H*0.5);
+      else openCard('wslumd', window.innerWidth, 128);
+    });
+  } else {
+    syncChips(); renderSync(); rebuild(false);
+  }
+  requestAnimationFrame(tick);
+  // settle signal for the screenshot harness
+  let f=0; (function ready(){ if (++f>8){ window.__PROTO_READY = true; return; } requestAnimationFrame(ready); })();
+  setTimeout(() => { window.__PROTO_READY = true; }, 1200);
+}
+boot();
+</script>
+</body>
+</html>
