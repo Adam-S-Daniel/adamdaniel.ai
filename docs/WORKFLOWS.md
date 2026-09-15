@@ -777,3 +777,53 @@ The three real-prod loop workflows (`cms-publish-loop-host` / `cms-publish-loop-
 
 1. **Action dependency policy.** Prefer trusted built-ins (`git`, `node`) over a bundled marketplace action when they do the job. `tj-actions/changed-files` was rejected here on supply-chain grounds (CVE-2025-30066, Mar 2025: a stolen `@tj-actions-bot` PAT retroactively repointed *every* version tag; ~9k lines of unverifiable bundled JS into a workflow that holds `CMS_E2E_PAT`). The composite is bash + `node` only, **no transitive `uses:`** — same shape as `await-prod-deploy` / `post-failure-comment`, and clean for the SHA-pin convention. If a marketplace action is genuinely warranted, it MUST be SHA-pinned after the 7-day cooling-off — the policy is AGENTS.md's "Pinning GitHub Actions" section; see also the `github-actions-sha-pinning` skill.
 2. **Single source over byte-identical duplication.** When N workflows need the same logic, factor it into one composite + one data module and lint the *structural wiring*, rather than duplicating the logic into each workflow and lint-asserting byte-identical text. (The `#1101`/#1178 byte-identical `concurrency:` block — now declared on each loop's heavy job rather than the workflow — predates this and is kept as byte-identical duplication; the recursion gate is the pattern to follow for new shared logic.)
+
+## Bootstrap infrastructure is platform-owned (moved from AGENTS.md)
+
+Moved verbatim from AGENTS.md's `## AWS resources (us-east-1)` section, which
+keeps the resource table and the one-line "do not re-vendor / do not drop
+`CREATE_APEX_DNS_RECORDS=true`" rule.
+
+**Bootstrap template is PLATFORM-OWNED (do not re-vendor it).** This repo no longer
+ships its own `infrastructure/bootstrap/template.yaml`; the CloudFormation template is
+the single source of truth in **cms-platform** (`infrastructure/bootstrap/template.yaml`,
+parameterized by `ResourcePrefix` / `ProductionDomainName` / bucket names / `GitHubRepo`).
+`infrastructure/bootstrap/deploy.sh` is a thin wrapper that reads `platform_repo` +
+`platform_ref` from `platform.lock`, checks the platform out at that ref into `.cms-platform/`
+(the same gitignored dot-dir the reusable-workflow callers use — see `deploy-preview.yml`),
+exports adamdaniel.ai's site params (`APEX_DOMAIN=adamdaniel.ai`, etc., which derive
+`RESOURCE_PREFIX=adamdaniel-ai`, the three bucket names, `STACK_NAME=adamdaniel-ai-bootstrap`,
+`PREVIEW_DOMAIN=*.adamdaniel.ai`), and delegates to `.cms-platform/infrastructure/bootstrap/deploy.sh`
+(which deploys the platform template with `CAPABILITY_NAMED_IAM`). **The wrapper exports
+`CREATE_APEX_DNS_RECORDS=true`** — adamdaniel.ai is LIVE at its apex and the
+apex/www A-records are STACK-MANAGED, but the platform template gates them on
+`CreateApexDnsRecords` (default `false`, safe for fresh sites). Without that
+export a redeploy would DELETE the live apex DNS (site offline) — a
+reviewer-caught regression in the template-removal PR (#1922). Do NOT drop it. A bootstrap-infra fix
+(e.g. CloudFront `ErrorCachingMinTTL=0`) is now made **once in cms-platform** and flows here on the
+next `platform_ref` bump — never apply it locally. This mirrors jodidaniel.com, which has no local
+bootstrap template either. (`infrastructure/rum/` is **not** affected — its template is not an exact
+vendored copy of the platform's and is out of scope.)
+
+## `CMS_E2E_PAT` — scope and why (moved from AGENTS.md)
+
+Moved from AGENTS.md's `## GitHub Actions secrets` table, whose `CMS_E2E_PAT`
+row now names only the secret, its source (fine-grained PAT, host repo only)
+and a pointer here.
+
+Used by: `e2e/cms-publish-loop*.spec.js`, `e2e/cms-delete-published.spec.js`, `e2e/cms-delete-published-preview.spec.js` (drive the full Decap → cms PR → auto-merge → deploy → public-URL loop). Token permissions: `Contents: r/w`, `Pull requests: r/w`, `Actions: r`, `Metadata: r`. `Actions: r` is needed by the test helpers that poll workflow run state while waiting for auto-merge + deploy-production to finish; no dispatch is needed (the earlier shim → `delete-via-pr.yml` recovery path was removed once we confirmed Decap's delete UI uses the git data API directly, not `DELETE /contents`).
+
+## Preview host-to-prefix mapping (moved from AGENTS.md)
+
+Moved verbatim from AGENTS.md's `## Architecture` section, which keeps the
+three-line topology diagram and a one-line summary. `README.md`'s "Preview
+Environments" section states the same mapping for a non-agent reader.
+
+Each PR gets its own subdomain under `*.adamdaniel.ai`. A single
+preview CloudFront distribution serves the whole preview bucket; a
+viewer-request CloudFront Function maps `Host: preview-pr${N}...` to
+the S3 object-key prefix `/pr-${N}/`, and a sibling viewer-response
+Function strips the same prefix from `Location` headers so S3's
+trailing-slash redirects (e.g. `/admin` → `/admin/`) don't leak the
+internal key space. Pages on preview and prod share the same
+root-relative URL structure (no `/pr-N/` in any visible URL).

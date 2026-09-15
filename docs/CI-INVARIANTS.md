@@ -53,3 +53,30 @@ Three items land on this site. The full argument for each lives in cms-platform'
 - **A loop's "the chain never fired" line is no longer proof of a trigger problem.** The deploy-lane diagnostic now asks whether the cms PR has actually MERGED before blaming the deploy chain, and reports `pr-awaiting-required-check` / `pr-required-check-red` (naming the check) instead of `no-deploy-fired` when it hasn't. Before the merge lands the `deploy-production` lane is idle for a completely innocent reason. **This repo hit exactly that:** host-loop run **31107474927** (2026-08-06) killed `cms-tags-lifecycle` at *"NO deploy-production run fired for your merge — the chain never fired"* after 908 s with in-flight 0 / queued 0, while the auto-merge was merely pending (908 s is well inside the ~30-min latency); the run's other two specs passed. Runs **30915982319** and **30822288078** are the same class. So when triaging an OLD log carrying that message, re-check whether the PR had merged yet — don't go looking for a broken `deploy-production` trigger.
 
 - **The scheduled-run health audit stopped alerting on runs that never got a runner.** GitHub marks a run `failure` when its jobs were cancelled before a runner was assigned, which is infrastructure noise, not a failure. **This repo had 4 such false alerts on 2026-08-06** (`cms-automerge-nudge` ×2, `cms-media-roundtrip`, `publish-scheduled-posts`); over a 168 h window the audit's alertable count goes **6 → 2**, and the two survivors are the real `cms-publish-loop-host` failures above. A `::notice::` still tallies what was suppressed, so a systemic runner outage stays visible.
+
+## A green `e2e / e2e` is not proof the real e2e lane ran
+
+Moved verbatim from AGENTS.md, which keeps the imperative (watch the real run to
+completion on a mixed PR) and the PR #1711 citation.
+
+- **On a mixed PR — one touching both a code path and an ignored path — treat a
+  green `e2e / e2e` as unverified until you have watched the real run finish.**
+  Two workflows emit that same context: the heavy `e2e-tests.yml` and the
+  instant-green `e2e-stub.yml`, whose positive `paths:` byte-mirrors the real
+  caller's `paths-ignore:` (`README.md`, `AGENTS.md`, `CLAUDE.md`, `docs/**`,
+  `infrastructure/**`, `oauth-proxy/**`, `LICENSE`, `.gitignore`). A mixed PR
+  matches both filters, so **both fire**. Branch protection keys on the context
+  NAME, not on which workflow produced it — so if the stub reports green before
+  the real run's check-run exists, the context can read satisfied and auto-merge
+  can merge on the stub alone.
+- cms-platform's `e2e-required-stub.yml` header claims the opposite ("on a mixed
+  (docs + code) PR BOTH fire and the REAL e2e still gates"). PR #1711 — merged
+  2026-05-26 20:52 under the older multi-context topology — merged on stub greens
+  while the real e2e was still running, and it went red three minutes later. The
+  window is narrower now that the e2e family has collapsed into a single
+  `e2e / e2e`, and the race has not been re-reproduced under that topology — but
+  no fix has shipped either. Re-read the reusable's header before relying on its
+  reassurance; until it is qualified, treat it as unproven.
+- **So: when a mixed PR merges, watch the real run to completion**
+  (`gh run watch <run-id>`) and fix forward on `main` if it goes red. Don't walk
+  away on the merge notification.
