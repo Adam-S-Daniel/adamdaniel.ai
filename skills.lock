@@ -7,7 +7,7 @@
   "sources": [
     {
       "registry": "Adam-S-Daniel/cms-platform",
-      "ref": "93216a8adedb3861c026c8eda1e92be0040e413c",
+      "ref": "3cfac16713852b30f663d1a0ce254fd1bd7900c4",
       "bundles": [
         "cms-platform"
       ],
@@ -32,7 +32,7 @@
     "cms-platform/code-quality": "sha256:d4eaf3d0ed7c910ed8f54791a93640a27c80af6f25630ebd4d0be2f3ed1069f3",
     "cms-platform/consumer-repo-provisioning": "sha256:d3d237093ca22cc15ed0fdcedc8872e31ebe58b17f26670413480441959070cd",
     "cms-platform/editorial-label-audit": "sha256:0c3874fdf6fe48ded41355e082e3abe28ae12ed5d86cf613772c63e0d3cddb36",
-    "cms-platform/github-actions-sha-pinning": "sha256:d399f380431098eceafd62bb15f10e1f3365f7ee4816f462a12f5c2ba16212a7",
+    "cms-platform/github-actions-sha-pinning": "sha256:e447f2bf233d4f216ac80e79235fa1a12f727d32c1829fae0e209bbc4c5c80bf",
     "cms-platform/platform-release-and-bump": "sha256:c8ff2c06a353721b9ec1634b569ecad1d64b4f0aca46659ad9aae4c362d9b68d",
     "cms-platform/post-failure-comment": "sha256:5d5d48f5dad5f2a8965d8bfd0ba15661703052666fcf4dd97581dbc78f463252",
     "cms-platform/preview-environments": "sha256:5813f019692dded322af86f18235a6089c91ae0c0bb63101b3eb56bbe3b1bbec",
