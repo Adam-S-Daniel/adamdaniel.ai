@@ -1,0 +1,107 @@
+# Fires after a post goes live on `main`: detects newly-published posts from
+# the push's before/after diff (or takes one post path on workflow_dispatch,
+# for a backfill or a manual re-run), waits for the production deploy to
+# actually be live, then cross-posts to Mastodon and produces the Substack
+# Markdown as a job-summary section + run artifact — Substack has no API, so
+# that leg is paste-by-hand. Fixtures (the prod-loop `2099-*` canaries and
+# `*-e2e-*` specs) never cross-post; `cross_post.py` would skip them anyway,
+# but excluding their paths here saves the run entirely.
+#
+# Site-local prototype: the next cms-platform release ships this as a
+# reusable + thin caller and this file becomes the caller (cms-platform#442).
+name: Cross-post
+run-name: >-
+  ${{ github.event_name == 'push'
+        && format('push — {0} @{1}', github.ref_name, github.actor)
+   || format('manual — @{0}', github.actor) }}
+
+on:
+  push:
+    branches: [main]
+    paths:
+      - '_posts/**'
+      # prod-loop canaries (test_fixture) — cross_post.py would skip these
+      # anyway; excluding the paths here just saves the run.
+      - '!_posts/2099-*'
+      - '!_posts/*-e2e-*'
+  workflow_dispatch:
+    inputs:
+      post_path:
+        description: 'Path of one _posts/*.md to cross-post (backfill or re-run)'
+        type: string
+        required: true
+      dry_run:
+        description: 'Log what would be posted; post nothing'
+        type: boolean
+        default: true
+      visibility:
+        description: 'Mastodon post visibility'
+        type: choice
+        options: [public, unlisted, direct]
+        default: public
+
+permissions:
+  contents: read
+
+concurrency:
+  group: cross-post
+  cancel-in-progress: false
+
+jobs:
+  cross-post:
+    runs-on: ubuntu-latest
+    timeout-minutes: 40
+    steps:
+      - name: Checkout
+        # fetch-depth: 0 so github.event.before is present for the diff below.
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1
+        with:
+          fetch-depth: 0
+
+      - name: Detect newly published posts
+        id: detect
+        env:
+          BEFORE: ${{ github.event.before }}
+          AFTER: ${{ github.sha }}
+          POST_PATH: ${{ inputs.post_path }}
+        run: |
+          if [ "$GITHUB_EVENT_NAME" = "push" ]; then
+            python3 scripts/cross_post/cross_post.py detect --before "$BEFORE" --after "$AFTER"
+          else
+            python3 scripts/cross_post/cross_post.py detect --post "$POST_PATH"
+          fi
+
+      - name: Await production deploy
+        if: steps.detect.outputs.changed == 'true' && github.event_name == 'push'
+        uses: Adam-S-Daniel/cms-platform/.github/actions/await-prod-deploy@v0.1.108
+        with:
+          prod-url: https://adamdaniel.ai
+
+      - name: Verify the post URLs are live
+        if: steps.detect.outputs.changed == 'true'
+        run: python3 scripts/cross_post/cross_post.py verify-live
+
+      - name: Render status, Substack Markdown, and job summary
+        if: steps.detect.outputs.changed == 'true'
+        run: python3 scripts/cross_post/cross_post.py render
+
+      - name: Upload Substack Markdown
+        if: steps.detect.outputs.changed == 'true'
+        uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a
+        with:
+          name: cross-post-${{ github.run_id }}
+          path: cross-post-out/
+          retention-days: 30
+
+      - name: Post to Mastodon
+        if: steps.detect.outputs.changed == 'true'
+        env:
+          MASTODON_ACCESS_TOKEN: ${{ secrets.MASTODON_ACCESS_TOKEN }}
+          VISIBILITY: ${{ inputs.visibility || 'public' }}
+          DRY_RUN: ${{ inputs.dry_run }}
+        run: |
+          args=(--instance https://hachyderm.io --visibility "$VISIBILITY")
+          if [ "$DRY_RUN" = "true" ]; then
+            args+=(--dry-run)
+          fi
+          python3 scripts/cross_post/cross_post.py post-mastodon "${args[@]}"
