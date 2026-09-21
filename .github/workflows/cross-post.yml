@@ -81,7 +81,7 @@ jobs:
         uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1
         with:
           repository: Adam-S-Daniel/cms-platform
-          ref: v0.1.108
+          ref: v0.1.109
           path: .cms-platform
 
       - name: Await production deploy
