@@ -71,9 +71,22 @@ jobs:
             python3 scripts/cross_post/cross_post.py detect --post "$POST_PATH"
           fi
 
+      - name: Check out platform composites
+        # The composite is invoked by local path below: a remote
+        # `Adam-S-Daniel/cms-platform/.github/actions/...@<tag>` reference is
+        # rejected by this repo's SHA-pinning policy, and a SHA there would fail
+        # the platform pin-consistency guard (every cms-platform ref must equal
+        # platform.lock's platform_ref). Same pattern as the platform's loops.
+        if: steps.detect.outputs.changed == 'true' && github.event_name == 'push'
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1
+        with:
+          repository: Adam-S-Daniel/cms-platform
+          ref: v0.1.108
+          path: .cms-platform
+
       - name: Await production deploy
         if: steps.detect.outputs.changed == 'true' && github.event_name == 'push'
-        uses: Adam-S-Daniel/cms-platform/.github/actions/await-prod-deploy@v0.1.108
+        uses: ./.cms-platform/.github/actions/await-prod-deploy
         with:
           prod-url: https://adamdaniel.ai
 
