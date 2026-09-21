@@ -43,7 +43,6 @@ change path filters.
 | `cms-publish-loop-host.yml` | `schedule` (12:00 UTC daily), `push` (main), `workflow_dispatch` | `paths` (positive, push to main) | `cms-publish-loop-host.yml` itself plus the three `_e2e/canary-{post,page,project}.md` fixtures — narrowed to this loop's OWN canary surfaces only (#1892: it used to also list `admin/**`/`playwright.config.js`/`package*.json`/`_config.yml`, which overlapped `cms-publish-loop-prod.yml`'s push paths and caused co-arrival eviction in the shared `prod-mutating-loop` lane; the gem-delivered `_layouts/{canary,default}.html` entries were later dropped too — `_layouts/` isn't tracked in this repo, so they could never match, PR #2472). Runs post-merge; recursion gated by the shared `recursion-gate` job |
 | `cms-publish-loop-preview.yml` | `workflow_dispatch` (required `pr_number` input) | n/a (dispatch-only) | n/a — preview-env sibling of `cms-publish-loop-host.yml`; drives the canary publish loop against a PR's preview surface. NOT a required check |
 | `cms-publish-loop-prod.yml` | `push` (main), `workflow_dispatch` | `paths` (positive, push to main) | `cms-publish-loop-prod.yml` itself, `admin/**`, `_config.yml` (the gem-delivered `playwright.config.js` / `_layouts/post.html` entries were dropped in PR #2472, and `package.json` / `package-lock.json` on 2026-09-14 with the root npm toolchain — none is tracked here, so none could ever match). Runs **post-merge** (not per-PR): the spec drives a REAL prod mutation, so firing it on every concurrent PR raced the shared canary + the deploy-production queue and flaked. Gated by repo var `PROD_PLAYGROUND_MODE == 'true'` |
-| `cross-post-tests.yml` | `pull_request` types `[opened, synchronize, reopened]`, `workflow_dispatch` | `paths` (positive) | `scripts/cross_post/**`, `.github/workflows/cross-post.yml`, `.github/workflows/cross-post-tests.yml`. NOT a required check |
 | `cross-post.yml` | `push` (main), `workflow_dispatch` | `paths` (positive, push to main) | `_posts/**`, minus the prod-loop `2099-*` canaries and `*-e2e-*` fixtures (`cross_post.py` would skip them anyway; excluding the paths here just saves the run). `workflow_dispatch` ignores `paths` and takes one `post_path` input for a backfill or re-run |
 | `dependabot-auto-merge.yml` | `pull_request` | n/a (job-level `if: github.actor == 'dependabot[bot]'` skips for everyone else) | n/a |
 | `deploy-preview.yml` | `pull_request` types `[opened, synchronize, reopened, closed]` | `paths-ignore` | everything EXCEPT `README.md`, `AGENTS.md`, `CLAUDE.md`, `docs/**`, `e2e/**`, `infrastructure/**`, `oauth-proxy/**` (7 entries) |
@@ -680,51 +679,31 @@ If `gitleaks` isn't on `PATH`, the hook fails with install instructions for macO
 
 ### `cross-post.yml`
 
-**Trigger:** push to `main` (path-filtered to `_posts/**`, minus fixtures), or manual `workflow_dispatch`
+**Trigger:** push to `main` (path-filtered to `_posts/**`, minus the loop fixtures), or manual `workflow_dispatch`
 
-**Jobs:** `cross-post`
+**Jobs:** `cross-post` — a thin caller of the platform's `cross-post.yml` reusable (cms-platform v0.1.109, [`docs/CROSS-POSTING.md`](https://github.com/Adam-S-Daniel/cms-platform/blob/main/docs/CROSS-POSTING.md) there is the full reference). The reusable checks the platform out into `.cms-platform/` at `platform_ref`, detects newly published posts (added with `published: true`, or `published` flipped false → true; `test_fixture` / `e2e-` posts skipped), waits for the production deploy via the `await-prod-deploy` composite (invoked by local path — a consumer cannot reference a cms-platform composite remotely: the repo's SHA-pinning policy rejects a tag ref at job setup and a SHA ref would fail the pin-consistency guard), verifies each post URL serves 200, renders the Substack Markdown into the job summary + the `cross-post-<run_id>` artifact, and posts the Mastodon status with a dedupe scan of the account's recent statuses plus an `Idempotency-Key`.
 
-1. Checkout with `fetch-depth: 0` (needed so `github.event.before` resolves)
-2. **Detect newly published posts** (`id: detect`) — on a push, diffs `github.event.before..github.sha` for new `_posts/*.md`; on `workflow_dispatch`, takes the single `post_path` input (backfill or a manual re-run of one post). Writes `cross-post-out/posts.json` and sets `changed`/`count` outputs. Every step after this one is gated on `steps.detect.outputs.changed == 'true'`
-3. **Check out platform composites** (push only) — checks out `Adam-S-Daniel/cms-platform` at `platform.lock`'s `platform_ref` into `.cms-platform/`, then **Await production deploy** invokes the platform's `await-prod-deploy` composite action by local path (`./.cms-platform/.github/actions/await-prod-deploy`), so the run never cross-posts against a stale pre-merge site. A consumer workflow cannot reference a cms-platform composite remotely: the repo's SHA-pinning policy rejects a tag ref at job setup, and a SHA ref would fail the pin-consistency guard — the platform's own reusables use the same local-path pattern
-4. **Verify the post URLs are live** — `cross_post.py verify-live` polls each detected post's public URL for a 200 before posting anywhere
-5. **Render** — `cross_post.py render` writes per-post `<slug>.status.txt` / `<slug>.substack.md` / `<slug>.meta.json` into `cross-post-out/` and appends a section to the job summary
-6. **Upload the Substack Markdown** as the `cross-post-<run_id>` artifact (30-day retention)
-7. **Post to Mastodon** — `cross_post.py post-mastodon` against `https://hachyderm.io`. `--visibility` comes from `inputs.visibility` (default `public`); `--dry-run` is passed when `inputs.dry_run` is `'true'` (dispatch default: `true`, so a manual run logs-only unless you flip it)
-
-**Fixture exclusion:** the push trigger's `paths` list excludes `_posts/2099-*` (prod-loop canaries, `test_fixture: true`) and `_posts/*-e2e-*` (e2e specs) — `cross_post.py` would skip these anyway by their `test_fixture` flag, but excluding the paths saves the run entirely rather than paying for a detect-and-skip.
+**Site values in this caller:** `prod_url: https://adamdaniel.ai`, `mastodon_instance: https://hachyderm.io` ([@superoutrigger](https://hachyderm.io/@superoutrigger)), `substack: true` (publication [adamdanielai.substack.com](https://adamdanielai.substack.com)).
 
 **Dispatch inputs:**
 
 | Input | Type | Default | Purpose |
 | --- | --- | --- | --- |
-| `post_path` | string | *(required)* | One `_posts/*.md` to cross-post — a backfill of an older post, or re-running a post that failed to post the first time |
-| `dry_run` | boolean | `true` | Log what would be posted to Mastodon without actually posting. Defaults to `true` on manual runs so a dispatch never surprise-posts |
+| `post_path` | string | *(required)* | One `_posts/*.md` to cross-post — a backfill of an older post, or a re-run |
+| `dry_run` | boolean | `true` | Log the would-be Mastodon status; post nothing. A manual run never surprise-posts unless you flip it |
 | `visibility` | choice: `public` / `unlisted` / `direct` | `public` | Mastodon post visibility |
 
-**Substack is paste-by-hand — there's no publish API.** After a run, open the job summary (the `render` step appends a section there) or download the `cross-post-<run_id>` artifact from the run's page, copy the `.substack.md` content, and paste it into a new Substack draft manually.
+**Substack is paste-by-hand — there is no publish API.** After a run, open the job summary or download the `cross-post-<run_id>` artifact, copy the `.substack.md` content, and paste it into a new Substack draft.
 
-**Mastodon dedupe/idempotency:** before posting, `post-mastodon` resolves the account and scans its 40 most recent original statuses for a link to the post URL; a match is reported as `already-posted` and nothing is sent, so a manual re-run or a `main` push that re-detects a post cannot double-post. Each POST also carries an `Idempotency-Key` derived from the post URL. If the dedupe lookup itself fails (non-200), the run prints a warning and posts anyway.
+**Not a required check** — it runs post-merge or on dispatch and never gates a PR.
 
-**Not a required check** — `cross-post.yml` never gates a PR merge; it only runs post-merge (or on manual dispatch) and its failure doesn't block anything.
-
-**Temporary, site-local.** This workflow (and `scripts/cross_post/cross_post.py`) lives in this repo for now. The intent is a cms-platform reusable once the contract stabilizes across sites — see cms-platform#442.
-
-**Secrets needed:** `MASTODON_ACCESS_TOKEN` (optional — when unset, `post-mastodon` prints a `::warning::` and skips the Mastodon leg with exit `0`, so the render/artifact/summary steps still complete). See [`AGENTS.md`](../AGENTS.md#github-actions-secrets) for the secrets table entry.
+**Secrets:** `MASTODON_ACCESS_TOKEN` (optional — unset, the Mastodon leg is skipped with a `::warning::` and the Substack artifact is still produced). See [`AGENTS.md`](../AGENTS.md#github-actions-secrets).
 
 #### Creating the Mastodon app token
 
-On `hachyderm.io`: **Preferences → Development → New application**. Grant it **`write:statuses` only** — no other scope is needed, and the workflow never reads or writes anything else on the account. Copy the generated access token into this repo's **`MASTODON_ACCESS_TOKEN`** Actions secret. Until the secret exists, `cross-post.yml` still runs to completion (detect/verify/render/upload all happen) — only the Mastodon-posting step is skipped, with a `::warning::` in the run log.
+On `hachyderm.io`: **Preferences → Development → New application**. Grant it **`write:statuses` only**. Copy the generated access token into this repo's **`MASTODON_ACCESS_TOKEN`** Actions secret.
 
----
-
-### `cross-post-tests.yml`
-
-**Trigger:** `pull_request` types `[opened, synchronize, reopened]` (paths: `scripts/cross_post/**`, `.github/workflows/cross-post.yml`, `.github/workflows/cross-post-tests.yml`), or manual `workflow_dispatch`
-
-**Jobs:** `test` — installs a pinned `pytest`/`pyyaml` via `pip install --user`, then runs `python3 -m pytest scripts/cross_post -q`. That suite includes `scripts/cross_post/tests/test_workflow_shape.py`, which parses both cross-post workflow files with `yaml.safe_load` and lint-locks their trigger shape, dispatch inputs, `permissions`, `concurrency`, `uses:` pins, and the `MASTODON_ACCESS_TOKEN` secret's single `env:`-only reference.
-
-**Not a required check** — it fires only on PRs that touch the module or the two workflow files, so it is absent on every other PR (a required context that can be absent is the missing-check trap described at the top of this file).
+**History:** prototyped site-local in PRs #3739 / #3740 (`scripts/cross_post/` + its own workflow), smoke-tested by dispatch (run 35617419107), then shipped as the platform reusable in cms-platform v0.1.109 and reverted here to this caller in the v0.1.109 bump — tracking issue #3735, platform issue cms-platform#442.
 
 ---
 

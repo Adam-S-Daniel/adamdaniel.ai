@@ -1,14 +1,23 @@
-# Fires after a post goes live on `main`: detects newly-published posts from
-# the push's before/after diff (or takes one post path on workflow_dispatch,
-# for a backfill or a manual re-run), waits for the production deploy to
-# actually be live, then cross-posts to Mastodon and produces the Substack
-# Markdown as a job-summary section + run artifact — Substack has no API, so
-# that leg is paste-by-hand. Fixtures (the prod-loop `2099-*` canaries and
-# `*-e2e-*` specs) never cross-post; `cross_post.py` would skip them anyway,
-# but excluding their paths here saves the run entirely.
+# Thin caller — copied into a site repo as
+# `.github/workflows/cross-post.yml`. Owns the push / workflow_dispatch
+# triggers, the `paths:` fixture exclusion, and the run-name; delegates the
+# actual detect/verify/render/post work to the platform's reusable workflow.
+# Keep `platform_ref` equal to the `@vX.Y.Z` pin on the `uses:` line.
 #
-# Site-local prototype: the next cms-platform release ships this as a
-# reusable + thin caller and this file becomes the caller (cms-platform#442).
+# Site values (adamdaniel.ai): `prod_url` https://adamdaniel.ai,
+# `mastodon_instance` https://hachyderm.io (@superoutrigger), `substack: true`
+# (the Substack draft is rendered into the job summary + the
+# `cross-post-<run_id>` artifact and pasted by hand — Substack has no API).
+#
+# `secrets: MASTODON_ACCESS_TOKEN` — an app token scoped to `write:statuses`
+# ONLY (see the platform's docs/CROSS-POSTING.md). Optional: with the secret
+# unset, the Mastodon leg is skipped with an `::warning::` rather than failing
+# the run.
+#
+# History: this ran as a site-local prototype (PRs #3739 / #3740, module under
+# scripts/cross_post/) before cms-platform v0.1.109 shipped it as a reusable;
+# the prototype was removed in the bump to that release (cms-platform#442,
+# tracking issue #3735).
 name: Cross-post
 run-name: >-
   ${{ github.event_name == 'push'
@@ -40,81 +49,22 @@ on:
         options: [public, unlisted, direct]
         default: public
 
+# actions:read — the reusable's await-prod-deploy composite queries this
+# commit's deploy-production run; a reusable is capped by its caller's grant.
 permissions:
   contents: read
-
-concurrency:
-  group: cross-post
-  cancel-in-progress: false
+  actions: read
 
 jobs:
   cross-post:
-    runs-on: ubuntu-latest
-    timeout-minutes: 40
-    steps:
-      - name: Checkout
-        # fetch-depth: 0 so github.event.before is present for the diff below.
-        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1
-        with:
-          fetch-depth: 0
-
-      - name: Detect newly published posts
-        id: detect
-        env:
-          BEFORE: ${{ github.event.before }}
-          AFTER: ${{ github.sha }}
-          POST_PATH: ${{ inputs.post_path }}
-        run: |
-          if [ "$GITHUB_EVENT_NAME" = "push" ]; then
-            python3 scripts/cross_post/cross_post.py detect --before "$BEFORE" --after "$AFTER"
-          else
-            python3 scripts/cross_post/cross_post.py detect --post "$POST_PATH"
-          fi
-
-      - name: Check out platform composites
-        # The composite is invoked by local path below: a remote
-        # `Adam-S-Daniel/cms-platform/.github/actions/...@<tag>` reference is
-        # rejected by this repo's SHA-pinning policy, and a SHA there would fail
-        # the platform pin-consistency guard (every cms-platform ref must equal
-        # platform.lock's platform_ref). Same pattern as the platform's loops.
-        if: steps.detect.outputs.changed == 'true' && github.event_name == 'push'
-        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1
-        with:
-          repository: Adam-S-Daniel/cms-platform
-          ref: v0.1.109
-          path: .cms-platform
-
-      - name: Await production deploy
-        if: steps.detect.outputs.changed == 'true' && github.event_name == 'push'
-        uses: ./.cms-platform/.github/actions/await-prod-deploy
-        with:
-          prod-url: https://adamdaniel.ai
-
-      - name: Verify the post URLs are live
-        if: steps.detect.outputs.changed == 'true'
-        run: python3 scripts/cross_post/cross_post.py verify-live
-
-      - name: Render status, Substack Markdown, and job summary
-        if: steps.detect.outputs.changed == 'true'
-        run: python3 scripts/cross_post/cross_post.py render
-
-      - name: Upload Substack Markdown
-        if: steps.detect.outputs.changed == 'true'
-        uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a
-        with:
-          name: cross-post-${{ github.run_id }}
-          path: cross-post-out/
-          retention-days: 30
-
-      - name: Post to Mastodon
-        if: steps.detect.outputs.changed == 'true'
-        env:
-          MASTODON_ACCESS_TOKEN: ${{ secrets.MASTODON_ACCESS_TOKEN }}
-          VISIBILITY: ${{ inputs.visibility || 'public' }}
-          DRY_RUN: ${{ inputs.dry_run }}
-        run: |
-          args=(--instance https://hachyderm.io --visibility "$VISIBILITY")
-          if [ "$DRY_RUN" = "true" ]; then
-            args+=(--dry-run)
-          fi
-          python3 scripts/cross_post/cross_post.py post-mastodon "${args[@]}"
+    uses: Adam-S-Daniel/cms-platform/.github/workflows/cross-post.yml@v0.1.109
+    with:
+      prod_url: https://adamdaniel.ai
+      mastodon_instance: https://hachyderm.io
+      substack: true
+      post_path: ${{ inputs.post_path || '' }}
+      dry_run: ${{ inputs.dry_run || false }}
+      visibility: ${{ inputs.visibility || 'public' }}
+      platform_ref: v0.1.109
+    secrets:
+      MASTODON_ACCESS_TOKEN: ${{ secrets.MASTODON_ACCESS_TOKEN }}
