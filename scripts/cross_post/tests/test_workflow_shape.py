@@ -117,6 +117,11 @@ class TestCrossPostWorkflow:
         for raw_line, value in entries:
             if value.startswith(CMS_PLATFORM_PREFIX):
                 continue
+            if value.startswith("./"):
+                # A local-path composite (e.g. the checked-out platform's
+                # await-prod-deploy) has no `@ref` of its own — it's pinned by
+                # the `actions/checkout` step that placed it on disk instead.
+                continue
             assert "@" in value, f"uses line missing @ref: {value}"
             ref = value.rsplit("@", 1)[-1]
             assert FULL_SHA_RE.match(ref), f"uses ref is not a full 40-char sha: {value}"
@@ -124,16 +129,50 @@ class TestCrossPostWorkflow:
             after_at = raw_line.split("@", 1)[-1]
             assert "#" not in after_at, f"trailing comment on uses line: {raw_line!r}"
 
-    def test_cms_platform_uses_pinned_to_platform_lock_ref(self):
-        platform_ref = _platform_ref()
+    def test_no_remote_cms_platform_composite_reference(self):
+        # A remote `Adam-S-Daniel/cms-platform/.github/actions/...@<ref>` is
+        # rejected at job setup by this repo's SHA-pinning policy when <ref>
+        # is a tag, and a SHA there would fail the platform pin-consistency
+        # guard (every cms-platform ref must equal platform.lock's
+        # platform_ref, which is a tag, not a sha). The composite must be
+        # invoked by local path instead, after checking the platform out.
         entries = _uses_entries(self.lines)
-        cms_platform_entries = [v for _, v in entries if v.startswith(CMS_PLATFORM_PREFIX)]
-        assert cms_platform_entries, "expected at least one Adam-S-Daniel/cms-platform uses:"
-        for value in cms_platform_entries:
-            ref = value.rsplit("@", 1)[-1]
-            assert ref == platform_ref, (
-                f"{value} does not pin platform.lock's platform_ref ({platform_ref})"
-            )
+        remote_composite_entries = [
+            value for _, value in entries if value.startswith(f"{CMS_PLATFORM_PREFIX}.github/actions/")
+        ]
+        assert not remote_composite_entries, (
+            "found remote cms-platform composite reference(s), expected local-path "
+            f"invocation instead: {remote_composite_entries}"
+        )
+
+    def test_platform_checkout_pinned_to_platform_lock_ref(self):
+        platform_ref = _platform_ref()
+        checkout_steps = [
+            step
+            for step in _iter_steps(self.data)
+            if str(step.get("uses", "")).startswith("actions/checkout@")
+            and (step.get("with") or {}).get("repository") == "Adam-S-Daniel/cms-platform"
+        ]
+        assert len(checkout_steps) == 1, (
+            f"expected exactly one actions/checkout step for Adam-S-Daniel/cms-platform, "
+            f"found {len(checkout_steps)}"
+        )
+        with_block = checkout_steps[0]["with"]
+        assert with_block["ref"] == platform_ref, (
+            f"platform checkout ref {with_block.get('ref')!r} does not match "
+            f"platform.lock's platform_ref ({platform_ref})"
+        )
+        assert with_block["path"] == ".cms-platform"
+
+        await_steps = [
+            step
+            for step in _iter_steps(self.data)
+            if "await-prod-deploy" in str(step.get("uses", ""))
+        ]
+        assert len(await_steps) == 1, (
+            f"expected exactly one await-prod-deploy step, found {len(await_steps)}"
+        )
+        assert await_steps[0]["uses"] == "./.cms-platform/.github/actions/await-prod-deploy"
 
     def test_no_inline_expression_interpolation_in_run_blocks(self):
         for step in _iter_steps(self.data):

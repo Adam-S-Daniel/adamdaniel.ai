@@ -686,7 +686,7 @@ If `gitleaks` isn't on `PATH`, the hook fails with install instructions for macO
 
 1. Checkout with `fetch-depth: 0` (needed so `github.event.before` resolves)
 2. **Detect newly published posts** (`id: detect`) — on a push, diffs `github.event.before..github.sha` for new `_posts/*.md`; on `workflow_dispatch`, takes the single `post_path` input (backfill or a manual re-run of one post). Writes `cross-post-out/posts.json` and sets `changed`/`count` outputs. Every step after this one is gated on `steps.detect.outputs.changed == 'true'`
-3. **Await production deploy** (push only) — the platform's `await-prod-deploy` composite action, so the run never cross-posts against a stale pre-merge site
+3. **Check out platform composites** (push only) — checks out `Adam-S-Daniel/cms-platform` at `platform.lock`'s `platform_ref` into `.cms-platform/`, then **Await production deploy** invokes the platform's `await-prod-deploy` composite action by local path (`./.cms-platform/.github/actions/await-prod-deploy`), so the run never cross-posts against a stale pre-merge site. A consumer workflow cannot reference a cms-platform composite remotely: the repo's SHA-pinning policy rejects a tag ref at job setup, and a SHA ref would fail the pin-consistency guard — the platform's own reusables use the same local-path pattern
 4. **Verify the post URLs are live** — `cross_post.py verify-live` polls each detected post's public URL for a 200 before posting anywhere
 5. **Render** — `cross_post.py render` writes per-post `<slug>.status.txt` / `<slug>.substack.md` / `<slug>.meta.json` into `cross-post-out/` and appends a section to the job summary
 6. **Upload the Substack Markdown** as the `cross-post-<run_id>` artifact (30-day retention)
