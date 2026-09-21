@@ -185,6 +185,7 @@ gotchas for the admin e2e lane" for the exact commands.
 | `PRODUCTION_CLOUDFRONT_ID` | bootstrap stack output | deploy-production.yml |
 | `PREVIEW_CLOUDFRONT_ID` | bootstrap stack output | deploy-preview.yml |
 | `CMS_E2E_PAT` | fine-grained PAT, host repo only | the real-network CMS loop specs (`e2e/cms-publish-loop*.spec.js`, `e2e/cms-delete-published.spec.js`, `e2e/cms-delete-published-preview.spec.js`), which drive the full Decap → cms PR → auto-merge → deploy → public-URL loop. Token permissions and why each one is needed: `docs/WORKFLOWS.md` § "`CMS_E2E_PAT` — scope and why" |
+| `MASTODON_ACCESS_TOKEN` | hachyderm.io → Preferences → Development → New application, scope `write:statuses` only | `cross-post.yml`'s `post-mastodon` step. Optional: unset prints a `::warning::` and skips the Mastodon leg (exit 0) rather than failing the run |
 
 ## AWS resources (us-east-1)
 
