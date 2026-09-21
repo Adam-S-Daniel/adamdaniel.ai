@@ -1,9 +1,9 @@
 # Runs the pytest suite under scripts/cross_post/ — including
 # test_workflow_shape.py, which lint-locks this workflow and cross-post.yml
 # themselves — on any PR that touches the module or either workflow file.
-# NOT a required check: cross_post.py's behavior is a sibling workstream's
-# concern, and this lane exists to catch shape drift early, not to gate
-# merges.
+# NOT a required check: it is path-filtered, so it is absent on most PRs,
+# and an absent required context blocks a merge forever (docs/WORKFLOWS.md,
+# "missing-check trap").
 name: Cross-post tests
 run-name: >-
   ${{ github.event_name == 'pull_request'

@@ -2,6 +2,7 @@
 
 import hashlib
 import json
+import urllib.error
 
 import pytest
 
@@ -76,6 +77,17 @@ def test_verify_live_partial_failure():
         sleep=lambda s: None,
     )
     assert failed == ["https://adamdaniel.ai/blog/b/"]
+
+
+# --- urllib_transport -------------------------------------------------
+
+
+def test_urllib_transport_network_failure_returns_http_zero(monkeypatch):
+    def raise_url_error(request, timeout=10):
+        raise urllib.error.URLError("boom")
+
+    monkeypatch.setattr(cross_post.urllib.request, "urlopen", raise_url_error)
+    assert cross_post.urllib_transport("GET", "https://example.com/x", {}, None) == (0, b"")
 
 
 # --- post_mastodon -------------------------------------------------
@@ -159,6 +171,31 @@ def test_post_mastodon_dedupes_when_status_already_posted():
     results = cross_post.post_mastodon([post], instance, "secret-token", transport)
     assert results == [{"slug": post["slug"], "skipped": "already-posted", "existing_url": existing_status_url}]
     assert all(c["method"] != "POST" for c in transport.calls)
+
+
+def test_post_mastodon_dedupe_lookup_failure_warns_and_still_posts(capsys):
+    post = make_post()
+    instance = "https://mastodon.example"
+    transport = FakeTransport(
+        {
+            ("GET", f"{instance}/api/v1/accounts/verify_credentials"): verify_credentials_response(),
+            (
+                "GET",
+                f"{instance}/api/v1/accounts/123/statuses?limit=40&exclude_replies=true&exclude_reblogs=true",
+            ): (503, b"Service Unavailable body text with secrets"),
+            ("POST", f"{instance}/api/v1/statuses"): (
+                201,
+                json.dumps({"url": "https://mastodon.example/@adam/1", "id": "1"}).encode("utf-8"),
+            ),
+        }
+    )
+    results = cross_post.post_mastodon([post], instance, "secret-token", transport)
+    assert any(c["method"] == "POST" for c in transport.calls)
+    assert results == [{"slug": post["slug"], "url": "https://mastodon.example/@adam/1", "id": "1"}]
+
+    captured = capsys.readouterr()
+    assert "::warning::Mastodon dedupe lookup failed (HTTP 503); posting without a duplicate check" in captured.out
+    assert "Service Unavailable body text with secrets" not in captured.out
 
 
 def test_post_mastodon_dry_run_makes_no_post_request():

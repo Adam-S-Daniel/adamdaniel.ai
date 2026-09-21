@@ -79,6 +79,24 @@ def test_describe_post_missing_optional_fields_default_sensibly():
     assert post["featured_image"] == ""
 
 
+def test_describe_post_featured_image_absolute_url_kept_unchanged():
+    text = make_post(
+        ["title: My Title", "featured_image: https://cdn.example.com/x.png"],
+        body="Body text here.\n",
+    )
+    post = cross_post.describe_post("_posts/2026-05-13-my-title.md", text, settings())
+    assert post["featured_image"] == "https://cdn.example.com/x.png"
+
+
+def test_describe_post_featured_image_site_relative_path_is_prefixed():
+    text = make_post(
+        ["title: My Title", "featured_image: /assets/x.png"],
+        body="Body text here.\n",
+    )
+    post = cross_post.describe_post("_posts/2026-05-13-my-title.md", text, settings())
+    assert post["featured_image"] == "https://adamdaniel.ai/assets/x.png"
+
+
 # --- hashtag derivation -------------------------------------------------
 
 

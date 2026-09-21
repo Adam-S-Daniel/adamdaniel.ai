@@ -704,7 +704,7 @@ If `gitleaks` isn't on `PATH`, the hook fails with install instructions for macO
 
 **Substack is paste-by-hand — there's no publish API.** After a run, open the job summary (the `render` step appends a section there) or download the `cross-post-<run_id>` artifact from the run's page, copy the `.substack.md` content, and paste it into a new Substack draft manually.
 
-**Mastodon dedupe/idempotency:** re-running `cross-post.yml` for a post that was already posted (a manual `workflow_dispatch` re-run, or a `main` push whose diff re-detects a post e.g. after a rebase) will post it again — `post-mastodon` has no memory of prior posts across runs. Use `--dry-run` (the dispatch default) to check what would be posted before flipping it off for a deliberate re-post.
+**Mastodon dedupe/idempotency:** before posting, `post-mastodon` resolves the account and scans its 40 most recent original statuses for a link to the post URL; a match is reported as `already-posted` and nothing is sent, so a manual re-run or a `main` push that re-detects a post cannot double-post. Each POST also carries an `Idempotency-Key` derived from the post URL. If the dedupe lookup itself fails (non-200), the run prints a warning and posts anyway.
 
 **Not a required check** — `cross-post.yml` never gates a PR merge; it only runs post-merge (or on manual dispatch) and its failure doesn't block anything.
 
@@ -724,7 +724,7 @@ On `hachyderm.io`: **Preferences → Development → New application**. Grant it
 
 **Jobs:** `test` — installs a pinned `pytest`/`pyyaml` via `pip install --user`, then runs `python3 -m pytest scripts/cross_post -q`. That suite includes `scripts/cross_post/tests/test_workflow_shape.py`, which parses both cross-post workflow files with `yaml.safe_load` and lint-locks their trigger shape, dispatch inputs, `permissions`, `concurrency`, `uses:` pins, and the `MASTODON_ACCESS_TOKEN` secret's single `env:`-only reference.
 
-**Not a required check** — `cross_post.py`'s behavior is a sibling workstream's concern; this lane exists to catch shape drift early on the module/workflow files, not to gate merges.
+**Not a required check** — it fires only on PRs that touch the module or the two workflow files, so it is absent on every other PR (a required context that can be absent is the missing-check trap described at the top of this file).
 
 ---
 

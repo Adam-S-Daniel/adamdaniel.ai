@@ -7,8 +7,8 @@
 # `*-e2e-*` specs) never cross-post; `cross_post.py` would skip them anyway,
 # but excluding their paths here saves the run entirely.
 #
-# This workflow is site-local for now, not a cms-platform reusable — it
-# moves there once the contract stabilizes across sites (cms-platform#442).
+# Site-local prototype: the next cms-platform release ships this as a
+# reusable + thin caller and this file becomes the caller (cms-platform#442).
 name: Cross-post
 run-name: >-
   ${{ github.event_name == 'push'

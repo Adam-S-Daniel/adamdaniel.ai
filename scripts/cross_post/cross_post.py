@@ -240,7 +240,7 @@ def describe_post(path: str, text: str, settings: SiteSettings) -> dict:
     date_str = "" if date in (None, "") else str(date)
     tags = [str(tag) for tag in (meta.get("tags") or [])]
     featured_image = meta.get("featured_image") or ""
-    if featured_image:
+    if featured_image.startswith("/") and not featured_image.startswith("//"):
         featured_image = settings.url.rstrip("/") + featured_image
     return {
         "path": path,
@@ -426,6 +426,8 @@ def urllib_transport(method: str, url: str, headers: dict, data: bytes | None):
             return response.status, response.read()
     except urllib.error.HTTPError as err:
         return err.code, err.read()
+    except (urllib.error.URLError, TimeoutError, OSError):
+        return 0, b""
 
 
 def _resolve_account_id(instance: str, headers: dict, transport) -> str:
@@ -446,6 +448,10 @@ def _find_existing_status(instance: str, headers: dict, transport, account_id: s
     )
     status_code, body = transport("GET", url, headers, None)
     if status_code != 200:
+        print(
+            f"::warning::Mastodon dedupe lookup failed (HTTP {status_code}); "
+            "posting without a duplicate check"
+        )
         return None
     needle = f'href="{post_url_value}"'
     for status in json.loads(body.decode("utf-8")):
