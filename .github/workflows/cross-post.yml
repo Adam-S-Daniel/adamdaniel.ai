@@ -14,7 +14,7 @@
 # `openid profile w_member_social`) + variable `LINKEDIN_TOKEN_MINTED`
 # (YYYY-MM-DD) for the weekly expiry check (tracking issue #3776).
 #
-# `secrets: MASTODON_ACCESS_TOKEN` — an app token scoped to `profile` + `write:statuses`
+# `secrets: MASTODON_ACCESS_TOKEN` — an app token scoped to `profile` + `read:statuses` + `write:statuses`
 # ONLY (see the platform's docs/CROSS-POSTING.md). Optional: with the secret
 # unset, the Mastodon leg is skipped with an `::warning::` rather than failing
 # the run.
@@ -73,7 +73,7 @@ permissions:
 
 jobs:
   cross-post:
-    uses: Adam-S-Daniel/cms-platform/.github/workflows/cross-post.yml@v0.1.110
+    uses: Adam-S-Daniel/cms-platform/.github/workflows/cross-post.yml@v0.1.111
     with:
       prod_url: https://adamdaniel.ai
       mastodon_instance: https://hachyderm.io
@@ -84,7 +84,7 @@ jobs:
       dry_run: ${{ inputs.dry_run || false }}
       visibility: ${{ inputs.visibility || 'public' }}
       targets: ${{ inputs.targets || 'all' }}
-      platform_ref: v0.1.110
+      platform_ref: v0.1.111
     secrets:
       MASTODON_ACCESS_TOKEN: ${{ secrets.MASTODON_ACCESS_TOKEN }}
       LINKEDIN_ACCESS_TOKEN: ${{ secrets.LINKEDIN_ACCESS_TOKEN }}
