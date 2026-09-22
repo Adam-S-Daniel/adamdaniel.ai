@@ -43,7 +43,7 @@ change path filters.
 | `cms-publish-loop-host.yml` | `schedule` (12:00 UTC daily), `push` (main), `workflow_dispatch` | `paths` (positive, push to main) | `cms-publish-loop-host.yml` itself plus the three `_e2e/canary-{post,page,project}.md` fixtures — narrowed to this loop's OWN canary surfaces only (#1892: it used to also list `admin/**`/`playwright.config.js`/`package*.json`/`_config.yml`, which overlapped `cms-publish-loop-prod.yml`'s push paths and caused co-arrival eviction in the shared `prod-mutating-loop` lane; the gem-delivered `_layouts/{canary,default}.html` entries were later dropped too — `_layouts/` isn't tracked in this repo, so they could never match, PR #2472). Runs post-merge; recursion gated by the shared `recursion-gate` job |
 | `cms-publish-loop-preview.yml` | `workflow_dispatch` (required `pr_number` input) | n/a (dispatch-only) | n/a — preview-env sibling of `cms-publish-loop-host.yml`; drives the canary publish loop against a PR's preview surface. NOT a required check |
 | `cms-publish-loop-prod.yml` | `push` (main), `workflow_dispatch` | `paths` (positive, push to main) | `cms-publish-loop-prod.yml` itself, `admin/**`, `_config.yml` (the gem-delivered `playwright.config.js` / `_layouts/post.html` entries were dropped in PR #2472, and `package.json` / `package-lock.json` on 2026-09-14 with the root npm toolchain — none is tracked here, so none could ever match). Runs **post-merge** (not per-PR): the spec drives a REAL prod mutation, so firing it on every concurrent PR raced the shared canary + the deploy-production queue and flaked. Gated by repo var `PROD_PLAYGROUND_MODE == 'true'` |
-| `cross-post.yml` | `push` (main), `workflow_dispatch` | `paths` (positive, push to main) | `_posts/**`, minus the prod-loop `2099-*` canaries and `*-e2e-*` fixtures (`cross_post.py` would skip them anyway; excluding the paths here just saves the run). `workflow_dispatch` ignores `paths` and takes one `post_path` input for a backfill or re-run |
+| `cross-post.yml` | `push` (main), `schedule` (Mondays 06:23 UTC), `workflow_dispatch` | `paths` (positive, push to main) | `_posts/**`, minus the prod-loop `2099-*` canaries and `*-e2e-*` fixtures (`cross_post.py` would skip them anyway; excluding the paths here just saves the run). `workflow_dispatch` ignores `paths` and takes one `post_path` input for a backfill or re-run. The weekly `schedule` run only checks the LinkedIn token's age |
 | `dependabot-auto-merge.yml` | `pull_request` | n/a (job-level `if: github.actor == 'dependabot[bot]'` skips for everyone else) | n/a |
 | `deploy-preview.yml` | `pull_request` types `[opened, synchronize, reopened, closed]` | `paths-ignore` | everything EXCEPT `README.md`, `AGENTS.md`, `CLAUDE.md`, `docs/**`, `e2e/**`, `infrastructure/**`, `oauth-proxy/**` (7 entries) |
 | `deploy-production.yml` | `push` to `main`, `workflow_dispatch` | `paths-ignore` | everything EXCEPT the same 7 as `deploy-preview.yml` PLUS `scripts/**`; `workflow_dispatch` ignores `paths-ignore` |
@@ -679,31 +679,32 @@ If `gitleaks` isn't on `PATH`, the hook fails with install instructions for macO
 
 ### `cross-post.yml`
 
-**Trigger:** push to `main` (path-filtered to `_posts/**`, minus the loop fixtures), or manual `workflow_dispatch`
+**Trigger:** push to `main` (path-filtered to `_posts/**`, minus the loop fixtures), a weekly `schedule` (Mondays 06:23 UTC; LinkedIn token-age check only), or manual `workflow_dispatch`
 
-**Jobs:** `cross-post` — a thin caller of the platform's `cross-post.yml` reusable (cms-platform v0.1.109, [`docs/CROSS-POSTING.md`](https://github.com/Adam-S-Daniel/cms-platform/blob/main/docs/CROSS-POSTING.md) there is the full reference). The reusable checks the platform out into `.cms-platform/` at `platform_ref`, detects newly published posts (added with `published: true`, or `published` flipped false → true; `test_fixture` / `e2e-` posts skipped), waits for the production deploy via the `await-prod-deploy` composite (invoked by local path — a consumer cannot reference a cms-platform composite remotely: the repo's SHA-pinning policy rejects a tag ref at job setup and a SHA ref would fail the pin-consistency guard), verifies each post URL serves 200, renders the Substack Markdown into the job summary + the `cross-post-<run_id>` artifact, and posts the Mastodon status with a dedupe scan of the account's recent statuses plus an `Idempotency-Key`.
+**Jobs:** `cross-post` — a thin caller of the platform's `cross-post.yml` reusable (cms-platform v0.1.110, [`docs/CROSS-POSTING.md`](https://github.com/Adam-S-Daniel/cms-platform/blob/main/docs/CROSS-POSTING.md) there is the full reference). The reusable checks the platform out into `.cms-platform/` at `platform_ref`, detects newly published posts (added with `published: true`, or `published` flipped false → true; `test_fixture` / `e2e-` posts skipped), waits for the production deploy via the `await-prod-deploy` composite (invoked by local path — a consumer cannot reference a cms-platform composite remotely: the repo's SHA-pinning policy rejects a tag ref at job setup and a SHA ref would fail the pin-consistency guard), verifies each post URL serves 200, renders the Substack Markdown into the job summary + the `cross-post-<run_id>` artifact, posts the Mastodon status with a dedupe scan of the account's recent statuses plus an `Idempotency-Key`, and shares the post to Adam's LinkedIn profile as an article card with the featured image as thumbnail. LinkedIn has no dedupe, so that leg is one-shot: it fires only on the publishing push or a dispatch and never retries.
 
-**Site values in this caller:** `prod_url: https://adamdaniel.ai`, `mastodon_instance: https://hachyderm.io` ([@superoutrigger](https://hachyderm.io/@superoutrigger)), `substack: true` (publication [adamdanielai.substack.com](https://adamdanielai.substack.com)).
+**Site values in this caller:** `prod_url: https://adamdaniel.ai`, `mastodon_instance: https://hachyderm.io` ([@superoutrigger](https://hachyderm.io/@superoutrigger)), `linkedin: true` (the profile that owns `LINKEDIN_ACCESS_TOKEN`), `substack: true` (publication [adamdanielai.substack.com](https://adamdanielai.substack.com)).
 
 **Dispatch inputs:**
 
 | Input | Type | Default | Purpose |
 | --- | --- | --- | --- |
 | `post_path` | string | *(required)* | One `_posts/*.md` to cross-post — a backfill of an older post, or a re-run |
-| `dry_run` | boolean | `true` | Log the would-be Mastodon status; post nothing. A manual run never surprise-posts unless you flip it |
-| `visibility` | choice: `public` / `unlisted` / `direct` | `public` | Mastodon post visibility |
+| `dry_run` | boolean | `true` | Log the would-be Mastodon status and LinkedIn post; post nothing. A manual run never surprise-posts unless you flip it |
+| `visibility` | choice: `public` / `unlisted` / `direct` | `public` | Mastodon post visibility (LinkedIn posts are always public) |
+| `targets` | choice: `all` / `mastodon` / `linkedin` / `substack` | `all` | Run one leg only. Re-run a failed leg with its own target so the others are not posted twice; check the LinkedIn profile before re-running `linkedin` |
 
 **Substack is paste-by-hand — there is no publish API.** After a run, open the job summary or download the `cross-post-<run_id>` artifact, copy the `.substack.md` content, and paste it into a new Substack draft.
 
 **Not a required check** — it runs post-merge or on dispatch and never gates a PR.
 
-**Secrets:** `MASTODON_ACCESS_TOKEN` (optional — unset, the Mastodon leg is skipped with a `::warning::` and the Substack artifact is still produced). See [`AGENTS.md`](../AGENTS.md#github-actions-secrets).
+**Secrets and variables:** `MASTODON_ACCESS_TOKEN` and `LINKEDIN_ACCESS_TOKEN` (each optional; unset, that leg is skipped with a `::warning::`), plus the variable `LINKEDIN_TOKEN_MINTED` (the date the 60-day LinkedIn token was minted; the weekly run goes red from day 50, so `scheduled-run-health` files an issue). Activation and rotation steps: the platform's [`docs/CROSS-POSTING.md`](https://github.com/Adam-S-Daniel/cms-platform/blob/main/docs/CROSS-POSTING.md#rotating-the-linkedin-token). See [`AGENTS.md`](../AGENTS.md#github-actions-secrets).
 
 #### Creating the Mastodon app token
 
 On `hachyderm.io`: **Preferences → Development → New application**. Grant it **`profile` and `write:statuses`** — `profile` is what the dedupe step's `verify_credentials` call needs (a `write:statuses`-only token gets a 403 there); it exposes only the account's own identity. Copy the generated access token into this repo's **`MASTODON_ACCESS_TOKEN`** Actions secret.
 
-**History:** prototyped site-local in PRs #3739 / #3740 (`scripts/cross_post/` + its own workflow), smoke-tested by dispatch (run 35617419107), then shipped as the platform reusable in cms-platform v0.1.109 and reverted here to this caller in the v0.1.109 bump — tracking issue #3735, platform issue cms-platform#442.
+**History:** prototyped site-local in PRs #3739 / #3740 (`scripts/cross_post/` + its own workflow), smoke-tested by dispatch (run 35617419107), then shipped as the platform reusable in cms-platform v0.1.109 and reverted here to this caller in the v0.1.109 bump — tracking issue #3735, platform issue cms-platform#442. The LinkedIn leg shipped in cms-platform v0.1.110 (tracking issue #3776), validated here by dry-run dispatches through v0.1.110-rc.2 (runs 35779643480 and 35791214711).
 
 ---
 
