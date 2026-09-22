@@ -9,6 +9,11 @@
 # (the Substack draft is rendered into the job summary + the
 # `cross-post-<run_id>` artifact and pasted by hand — Substack has no API).
 #
+# LinkedIn (`linkedin: true`): shares each new post to Adam's profile as an
+# article card; secret `LINKEDIN_ACCESS_TOKEN` (60-day member token, scopes
+# `openid profile w_member_social`) + variable `LINKEDIN_TOKEN_MINTED`
+# (YYYY-MM-DD) for the weekly expiry check (tracking issue #3776).
+#
 # `secrets: MASTODON_ACCESS_TOKEN` — an app token scoped to `profile` + `write:statuses`
 # ONLY (see the platform's docs/CROSS-POSTING.md). Optional: with the secret
 # unset, the Mastodon leg is skipped with an `::warning::` rather than failing
@@ -22,7 +27,9 @@ name: Cross-post
 run-name: >-
   ${{ github.event_name == 'push'
         && format('push — {0} @{1}', github.ref_name, github.actor)
-   || format('manual — @{0}', github.actor) }}
+   || (github.event_name == 'schedule'
+        && format('scheduled — {0}', github.event.schedule)
+   || format('manual — @{0}', github.actor)) }}
 
 on:
   push:
@@ -33,6 +40,10 @@ on:
       # anyway; excluding the paths here just saves the run.
       - '!_posts/2099-*'
       - '!_posts/*-e2e-*'
+  # Weekly (Mondays): the scheduled run ONLY checks the LinkedIn token's age
+  # from `vars.LINKEDIN_TOKEN_MINTED` (red from day 50 of its 60).
+  schedule:
+    - cron: '23 6 * * 1'
   workflow_dispatch:
     inputs:
       post_path:
@@ -48,6 +59,11 @@ on:
         type: choice
         options: [public, unlisted, direct]
         default: public
+      targets:
+        description: 'Which leg to run (re-run ONE failed leg without double-posting the others)'
+        type: choice
+        options: [all, mastodon, linkedin, substack]
+        default: all
 
 # actions:read — the reusable's await-prod-deploy composite queries this
 # commit's deploy-production run; a reusable is capped by its caller's grant.
@@ -57,14 +73,18 @@ permissions:
 
 jobs:
   cross-post:
-    uses: Adam-S-Daniel/cms-platform/.github/workflows/cross-post.yml@v0.1.109
+    uses: Adam-S-Daniel/cms-platform/.github/workflows/cross-post.yml@v0.1.110
     with:
       prod_url: https://adamdaniel.ai
       mastodon_instance: https://hachyderm.io
+      linkedin: true
+      linkedin_token_minted: ${{ vars.LINKEDIN_TOKEN_MINTED || '' }}
       substack: true
       post_path: ${{ inputs.post_path || '' }}
       dry_run: ${{ inputs.dry_run || false }}
       visibility: ${{ inputs.visibility || 'public' }}
-      platform_ref: v0.1.109
+      targets: ${{ inputs.targets || 'all' }}
+      platform_ref: v0.1.110
     secrets:
       MASTODON_ACCESS_TOKEN: ${{ secrets.MASTODON_ACCESS_TOKEN }}
+      LINKEDIN_ACCESS_TOKEN: ${{ secrets.LINKEDIN_ACCESS_TOKEN }}
