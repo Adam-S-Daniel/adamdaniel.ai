@@ -701,7 +701,7 @@ If `gitleaks` isn't on `PATH`, the hook fails with install instructions for macO
 
 #### Creating the Mastodon app token
 
-On `hachyderm.io`: **Preferences → Development → New application**. Grant it **`write:statuses` only**. Copy the generated access token into this repo's **`MASTODON_ACCESS_TOKEN`** Actions secret.
+On `hachyderm.io`: **Preferences → Development → New application**. Grant it **`profile` and `write:statuses`** — `profile` is what the dedupe step's `verify_credentials` call needs (a `write:statuses`-only token gets a 403 there); it exposes only the account's own identity. Copy the generated access token into this repo's **`MASTODON_ACCESS_TOKEN`** Actions secret.
 
 **History:** prototyped site-local in PRs #3739 / #3740 (`scripts/cross_post/` + its own workflow), smoke-tested by dispatch (run 35617419107), then shipped as the platform reusable in cms-platform v0.1.109 and reverted here to this caller in the v0.1.109 bump — tracking issue #3735, platform issue cms-platform#442.
 

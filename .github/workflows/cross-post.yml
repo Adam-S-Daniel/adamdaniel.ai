@@ -9,7 +9,7 @@
 # (the Substack draft is rendered into the job summary + the
 # `cross-post-<run_id>` artifact and pasted by hand — Substack has no API).
 #
-# `secrets: MASTODON_ACCESS_TOKEN` — an app token scoped to `write:statuses`
+# `secrets: MASTODON_ACCESS_TOKEN` — an app token scoped to `profile` + `write:statuses`
 # ONLY (see the platform's docs/CROSS-POSTING.md). Optional: with the secret
 # unset, the Mastodon leg is skipped with an `::warning::` rather than failing
 # the run.
