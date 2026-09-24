@@ -1,7 +1,7 @@
 GIT
   remote: https://github.com/Adam-S-Daniel/cms-platform
-  revision: f2fa6b5f1e20254d8479d68a8e35c391cfa7ae25
-  tag: v0.1.111
+  revision: 6a4816ef3a443e334dc4269dcff04a8b648d6d89
+  tag: v0.1.112
   glob: theme/*.gemspec
   specs:
     cms-platform-theme (0.1.4)
