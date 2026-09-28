@@ -8,4 +8,4 @@ test_fixture: false
 
 > We can do amazing things with them, but unlocking their full potential requires extraordinary discipline and knowledge.
 
-\- Anthropic, [System Card: Claude Opus 4.8](https://www.anthropic.com/claude-opus-4-8-system-card)
+\- [Simon Willison](https://www.anthropic.com/claude-opus-4-8-system-card)
