@@ -1,5 +1,6 @@
 ---
 title: Quoting Simon Willison on Unlocking Coding Agents’ Potential
+slug: quoting-simon-willison-on-unlocking-coding-agents-potential
 date: 2026-09-28 09:10:00 -0400
 published: true
 test_fixture: false
