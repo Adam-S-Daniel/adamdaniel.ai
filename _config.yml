@@ -17,6 +17,15 @@ cms:
   repository: Adam-S-Daniel/adamdaniel.ai
   oauth_base_url: https://sq8d4876v8.execute-api.us-east-1.amazonaws.com
 
+# Profiles this site cross-posts to (.github/workflows/cross-post.yml). The
+# cms-platform theme renders each as <link rel="me"> in <head> (v0.1.116), which
+# lets hachyderm.io mark https://adamdaniel.ai as verified on the profile.
+cross_post:
+  profiles:
+    mastodon: https://hachyderm.io/@superoutrigger
+    linkedin: https://www.linkedin.com/in/adam-s-daniel
+    substack: https://adamdanielai.substack.com
+
 # Build settings
 markdown: kramdown
 highlighter: rouge
