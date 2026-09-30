@@ -49,7 +49,7 @@ change path filters.
 | `deploy-production.yml` | `push` to `main`, `workflow_dispatch` | `paths-ignore` | everything EXCEPT the same 7 as `deploy-preview.yml` PLUS `scripts/**`; `workflow_dispatch` ignores `paths-ignore` |
 | `dev-hooks-sync.yml` | `schedule` (Mondays 06:00 UTC), `workflow_dispatch` | n/a (cron-only; syncs the pre-commit guard files from the platform) | n/a |
 | `e2e-stub.yml` | `pull_request` | `paths` (positive) — a byte-for-byte mirror of `e2e-tests.yml`'s `paths-ignore` list | `README.md`, `AGENTS.md`, `CLAUDE.md`, `docs/**`, `infrastructure/**`, `oauth-proxy/**`, `LICENSE`, `.gitignore`. Emits a trivial green `e2e` job so the required `e2e / e2e` context is never MISSING on a doc/infra-only PR |
-| `e2e-tests.yml` | `pull_request` targeting `main` | `paths-ignore` | `README.md`, `AGENTS.md`, `CLAUDE.md`, `docs/**`, `infrastructure/**`, `oauth-proxy/**`, `LICENSE`, `.gitignore`. Beyond that filter the lane runs the **WHOLE** suite, fanned out one job per Playwright project inside the platform reusable — there is no diff-aware selection and no sharding on this lane (see "No diff-aware spec SELECTION on this lane" below). The selector still governs the `parity-preview` / `preview-media` lanes |
+| `e2e-tests.yml` | `pull_request` targeting `main` | `paths-ignore` | `README.md`, `AGENTS.md`, `CLAUDE.md`, `docs/**`, `infrastructure/**`, `oauth-proxy/**`, `LICENSE`, `.gitignore`. Beyond that filter the lane runs the **WHOLE** suite, fanned out one job per Playwright project inside the platform reusable (the two admin projects as three `--shard` jobs each, since cms-platform v0.1.120 — 14 jobs) — there is no diff-aware selection on this lane (see "No diff-aware spec SELECTION on this lane" below). The selector still governs the `parity-preview` / `preview-media` lanes |
 | `editorial-label-audit.yml` | `schedule` (13:00 UTC daily), `workflow_dispatch` | n/a (cron-only; scans + self-heals `decap-cms/*` labels via the API) | n/a |
 | `label-non-decap-prs.yml` | `pull_request` (opened, reopened), `push` (main), `workflow_dispatch` | `pull_request`: **none, intentionally** — the tag decision keys off the PR's head ref, not its diff. `push` (main): `paths` positive, the workflow file itself only | Tags any PR NOT created by Decap with `not-decap-created` |
 | `parity-preview.yml` | `pull_request` targeting `main` | **none, intentionally** — required check on the always-run + early-skip pattern; the reusable's selector reports success immediately when no `@parity-preview` spec applies | n/a — runs the `@parity-preview` spec subset (sitemap, console-clean, draft-isolation, image-alt-text, admin-bundle-parity) against the PR's own `preview-pr<N>.adamdaniel.ai` surface |
@@ -61,6 +61,7 @@ change path filters.
 | `secrets-scan.yml` | `pull_request`, `push` to `main`, weekly `schedule` (Sundays 07:00 UTC), `workflow_dispatch` | **none, intentionally** — gitleaks must scan the entire diff / history regardless of file type | n/a |
 | `sweep-stale-cms-prs.yml` | `schedule` (04:00 UTC daily), `workflow_dispatch` (`dry_run`, `threshold_hours` inputs) | n/a (cron-only; sweeps this repo's stale CMS PRs/branches/fixtures via the API) | n/a |
 | `visual-regression.yml` | `pull_request` types `[opened, synchronize, reopened]` | **NO paths filter — fires on every PR.** Content-only-skip is decided INSIDE the platform's reusable workflow (`e2e/visual-regression-salient.js`), not by a caller-level `paths:` (a required-check gate can't be workflow-level path-filtered without recreating the missing-check trap) | n/a at the caller level |
+| `warm-e2e-apt-cache.yml` | `schedule` (02:37 UTC daily), `workflow_dispatch` | n/a (cron-only; re-seeds the apt `.deb` cache the e2e project jobs restore — only a default-branch run can save it, so PR runs never do) | n/a. NOT a required check; a failed run only means the next PRs fetch the Ubuntu packages from the mirror again (cms-platform v0.1.120) |
 
 When you add a new workflow, append it to this table in the same commit, and set `run-name:` per the grammar in [§ Workflow run naming](#workflow-run-naming).
 
@@ -541,10 +542,12 @@ matrix. There is no separate `select` / `unit` / sharded-`e2e` / `parity` /
 caller now (`parity-preview.yml`, covered under "Required status checks" above).
 
 **Inside the reusable: one job per Playwright PROJECT** (cms-platform v0.1.68).
-The reusable fans out a `project` matrix — 10 jobs, each on its own runner,
-each running one project and installing only that project's browser engine —
-behind an aggregating `e2e` gate job. So this repo still surfaces exactly one
-REQUIRED context, `e2e / e2e`, plus 10 informational `e2e / project (<name>)`
+The reusable fans out a `project` matrix — 14 jobs since v0.1.120 (one per
+project, the two admin projects as three `--shard` jobs each), each on its own
+runner and installing only that project's browser engine, from an apt `.deb`
+cache that `warm-e2e-apt-cache.yml` seeds daily — behind an aggregating `e2e`
+gate job. So this repo still surfaces exactly one REQUIRED context, `e2e / e2e`,
+plus 14 informational `e2e / project (<slot>)`
 contexts that no ruleset names. Nothing here needed changing for that, and the
 `main` ruleset was NOT touched.
 
@@ -553,14 +556,16 @@ runs at the SAME worker count (`150%` — 6 on a 4-vCPU runner). An earlier vers
 of this paragraph said the counts "differ per project on purpose" because "a
 4-vCPU runner saturates at ~2 browser workers"; both halves were wrong. That
 saturation was an artifact of measuring 8 projects in ONE job — with one project
-per job, 6 workers beat 2 almost everywhere. `--shard` is deliberately unused (it
-balances by test count, and this suite's per-test durations span 5 ms → 49 s).
+per job, 6 workers beat 2 almost everywhere. Whole-suite `--shard` stays unused (it
+balances by test count, and this suite's per-test durations span 5 ms → 90 s);
+only the two admin projects are sharded, where the tests are of similar weight.
 
 The long pole is `webkit-iphone16` at ~200 s (~40 s install + ~140 s tests): that
 is WebKit's own test speed, not CI shape — it spends 141 s on the same
 `@admin-read` specs `chromium-desktop-3k` finishes in 104 s while ALSO running
-every `@admin-write` round trip. The platform doc prices the only remaining lever
-(sharding within a project) before you try it.
+every `@admin-write` round trip. That paragraph is the v0.1.70 record: by v0.1.119 `chromium-desktop-3k` had grown
+to ~150 s too, and v0.1.120 shards both admin projects three ways (validated gate
+218 s → 158 s median with the apt cache warm).
 The measurements, the rejected alternatives, and how to re-measure live in the
 platform's [`docs/E2E-PARALLELISM.md`](https://github.com/Adam-S-Daniel/cms-platform/blob/main/docs/E2E-PARALLELISM.md).
 **Read that before re-tuning anything about e2e parallelism.** To dial workers
