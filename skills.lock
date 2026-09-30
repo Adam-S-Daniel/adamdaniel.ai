@@ -8,7 +8,7 @@
   "sources": [
     {
       "registry": "Adam-S-Daniel/cms-platform",
-      "ref": "1a31284d0390b994e769e0b2c5b14e2eda01a66d",
+      "ref": "582a716cb3689b2b560fef5c78eda2af088d355b",
       "bundles": [
         "cms-platform"
       ],
@@ -34,7 +34,7 @@
     "cms-platform/consumer-repo-provisioning": "sha256:c4dd947ccdb3683fe748d0ae0929805434557474d59b50bc5fb2e6f4cc568aa4",
     "cms-platform/editorial-label-audit": "sha256:0c3874fdf6fe48ded41355e082e3abe28ae12ed5d86cf613772c63e0d3cddb36",
     "cms-platform/github-actions-sha-pinning": "sha256:e447f2bf233d4f216ac80e79235fa1a12f727d32c1829fae0e209bbc4c5c80bf",
-    "cms-platform/platform-release-and-bump": "sha256:c8ff2c06a353721b9ec1634b569ecad1d64b4f0aca46659ad9aae4c362d9b68d",
+    "cms-platform/platform-release-and-bump": "sha256:5b0cf47fa11184f5cbf4362d9d1942c73a906072871d2f2afcd99d8944dda578",
     "cms-platform/post-failure-comment": "sha256:5d5d48f5dad5f2a8965d8bfd0ba15661703052666fcf4dd97581dbc78f463252",
     "cms-platform/preview-environments": "sha256:5813f019692dded322af86f18235a6089c91ae0c0bb63101b3eb56bbe3b1bbec",
     "cms-platform/sveltia-cms-playwright-demo": "sha256:5b478d7bf5623a30513b118bf3ff478334d810691021a8dfa6fe0122b6bff1e4",
