@@ -9,7 +9,9 @@ excerpt: I planted magic tokens in AGENTS.md files across sixteen repo layouts
 published: false
 test_fixture: false
 ---
-`AGENTS.md` has quietly become the cross-tool standard for agent instructions — [agents.md](https://agents.md) lists twenty-three tools, Codex, Jules, Devin, Cursor, Copilot's coding agent, Aider, goose, opencode, and Zed among them. Claude Code is conspicuously not on that list. It reads `CLAUDE.md`, [says so in its docs](https://code.claude.com/docs/en/memory), and the feature request for native AGENTS.md support ([anthropics/claude-code#6235](https://github.com/anthropics/claude-code/issues/6235), opened August 2025, thousands of 👍) is still open — the changelog through v2.1.206 has zero AGENTS.md entries. I checked byte-by-byte, and then grepped the shipped binary for good measure: the string appears exactly twice, both inside the `/init` prompt.
+> **Update, September 30, 2026:** Claude Code 2.1.277 shipped native AGENTS.md support (see the [changelog](https://github.com/anthropics/claude-code/blob/main/CHANGELOG.md) and [#6235](https://github.com/anthropics/claude-code/issues/6235), now closed). I re-ran the key rows on 2.1.285, and the conclusion below holds — the fallback only fires when a project has no `CLAUDE.md`, so any real `CLAUDE.md`, or a `CLAUDE.local.md`, turns it off. Table rows marked 2.1.285 are new; the rest is the original July write-up.
+
+`AGENTS.md` has quietly become the cross-tool standard for agent instructions — [agents.md](https://agents.md) lists twenty-three tools, Codex, Jules, Devin, Cursor, Copilot's coding agent, Aider, goose, opencode, and Zed among them. Claude Code is conspicuously not on that list. It reads `CLAUDE.md`, [says so in its docs](https://code.claude.com/docs/en/memory), and the feature request for native AGENTS.md support ([anthropics/claude-code#6235](https://github.com/anthropics/claude-code/issues/6235), opened August 2025, thousands of 👍) was still open when I ran this — the changelog through v2.1.206 had zero AGENTS.md entries. I checked byte-by-byte, and then grepped the shipped binary for good measure: the string appears exactly twice, both inside the `/init` prompt.
 
 So if you keep guidance in `AGENTS.md` (I sync a managed one into every repo I own), you need a bridge. There are two candidates:
 
@@ -24,16 +26,18 @@ Each test directory plants a unique token ("The magic word is FLUMMOX-7291") som
 
 Except that's not quite true, and my first run produced a beautiful false positive. In a directory with **only** an `AGENTS.md` — no CLAUDE.md, no bridge — the model answered correctly. Native AGENTS.md support, undocumented? No: headless Claude Code still has its Read and Glob tools, and the model, asked about project instructions it didn't have, simply went and read the file like a sensible agent. The control — rerunning with every file-reading tool disallowed — flipped the answer to NONE.
 
-Agents make lousy lab rats; they cheat. Every result below is from the tools-disabled runs (Claude Code v2.1.206, Agent SDK v0.3.206, Linux).
+Agents make lousy lab rats; they cheat. Every result below is from the tools-disabled runs (Claude Code v2.1.206, Agent SDK v0.3.206, Linux), except the rows marked 2.1.285, which I re-ran on September 30, 2026.
 
 ## Results
 
 | Layout | Guidance visible? |
 |---|---|
-| `CLAUDE.md` = `@AGENTS.md` | ✅ |
-| `CLAUDE.md` → symlink to AGENTS.md | ✅ |
-| Only `AGENTS.md`, no CLAUDE.md | ❌ no native support, no fallback |
-| `CLAUDE.md` without an import, AGENTS.md alongside | ❌ AGENTS.md invisible |
+| `CLAUDE.md` = `@AGENTS.md` | ✅ (re-confirmed on 2.1.285) |
+| `CLAUDE.md` → symlink to AGENTS.md | ✅ (re-confirmed on 2.1.285) |
+| Only `AGENTS.md`, no CLAUDE.md | ❌ on v2.1.206, no native support, no fallback; ✅ on 2.1.285 (native fallback since 2.1.277) |
+| Empty `CLAUDE.md`, AGENTS.md alongside | ✅ on 2.1.285 (an empty file counts as no CLAUDE.md) |
+| Only `CLAUDE.local.md`, AGENTS.md alongside | ❌ on 2.1.285 (fallback off) |
+| `CLAUDE.md` without an import, AGENTS.md alongside | ❌ AGENTS.md invisible (still ❌ on 2.1.285) |
 | `@AGENTS.md` inside a fenced code block | ❌ (documented: imports skip code blocks) |
 | Import chains (CLAUDE.md → AGENTS.md → deeper file) | ✅ up to 4 hops |
 | Subdirectory CLAUDE.md + import, loaded lazily on file access | ✅ |
@@ -56,6 +60,7 @@ The symlink works — on my Linux box. But every place the two approaches differ
 - **Windows.** Git only materializes real symlinks with Developer Mode or admin rights plus `core.symlinks=true`; otherwise the checkout contains a plain text file whose content is the string `AGENTS.md`. Which is not an import, so the bridge silently degrades to exactly the broken state the symlink was meant to prevent. Anthropic's own memory doc recommends the import over the symlink on Windows.
 - **Anything that reads files over the GitHub API** gets a symlink's target *path*, not its content.
 - **Track record.** The Claude Code changelog is a small museum of symlink fixes — sandbox startup failures when `.claude/skills` is a symlink, rules not loading via symlinked paths, symlinked-settings hot-reload bugs. And there's an open bug filed against this exact pattern: with `ln -s AGENTS.md CLAUDE.md`, current versions read the file fine but [refuse to Edit or Write through the symlink](https://github.com/anthropics/claude-code/issues/66559) — so `/init` and any agent-driven memory update break. Imports have no comparable history.
+- **The native fallback doesn't replace the bridge.** It's silent and conditional: a hand-written `CLAUDE.md`, even a one-line one, or a `CLAUDE.local.md` switches it off, and it's a per-user `/config` setting. The import makes loading explicit wherever a `CLAUDE.md` exists.
 - And the contexts where imports genuinely don't help — Explore subagents, `settingSources: []`, claude.ai chat — don't read `CLAUDE.md` **at all**. A symlink is equally invisible there. There is, as far as I can tell, no surface that reads CLAUDE.md but refuses to expand its imports.
 
 So the import bridge stays. What actually needed fixing was operational, not mechanical: my sync tool refuses (correctly) to edit a hand-written CLAUDE.md and only warns in CI logs, my drift dashboard never checked the bridge file at all — and one of my repos, [including the one that builds this site](https://github.com/Adam-S-Daniel/adamdaniel.ai/issues/2545), had a CLAUDE.md that *linked* to AGENTS.md instead of importing it. Months of well-maintained guidance, never loaded.
