@@ -42,7 +42,8 @@ change path filters.
 | `cms-preview-loops.yml` | `workflow_dispatch` | n/a (dispatch-only) | n/a — runs the 3 issue-#999 preview-parity specs (`cms-publish-loop-prod-mutate-preview`, `cms-unpublish-republish-preview`, `cms-tags-lifecycle-preview`) against an open PR's preview env. NOT a required check (no `pull_request` trigger → never a PR status context); the heavy preview round trips stay off the merge path. Sibling of `cms-publish-loop-preview.yml` |
 | `cms-publish-loop-host.yml` | `schedule` (12:00 UTC daily), `push` (main), `workflow_dispatch` | `paths` (positive, push to main) | `cms-publish-loop-host.yml` itself plus the three `_e2e/canary-{post,page,project}.md` fixtures — narrowed to this loop's OWN canary surfaces only (#1892: it used to also list `admin/**`/`playwright.config.js`/`package*.json`/`_config.yml`, which overlapped `cms-publish-loop-prod.yml`'s push paths and caused co-arrival eviction in the shared `prod-mutating-loop` lane; the gem-delivered `_layouts/{canary,default}.html` entries were later dropped too — `_layouts/` isn't tracked in this repo, so they could never match, PR #2472). Runs post-merge; recursion gated by the shared `recursion-gate` job |
 | `cms-publish-loop-preview.yml` | `workflow_dispatch` (required `pr_number` input) | n/a (dispatch-only) | n/a — preview-env sibling of `cms-publish-loop-host.yml`; drives the canary publish loop against a PR's preview surface. NOT a required check |
-| `cms-publish-loop-prod.yml` | `push` (main), `workflow_dispatch` | `paths` (positive, push to main) | `cms-publish-loop-prod.yml` itself, `admin/**`, `package.json`, `package-lock.json`, `_config.yml` (the gem-delivered `playwright.config.js` / `_layouts/post.html` entries were dropped in PR #2472 — untracked here, they could never match). Runs **post-merge** (not per-PR): the spec drives a REAL prod mutation, so firing it on every concurrent PR raced the shared canary + the deploy-production queue and flaked. Gated by repo var `PROD_PLAYGROUND_MODE == 'true'` |
+| `cms-publish-loop-prod.yml` | `push` (main), `workflow_dispatch` | `paths` (positive, push to main) | `cms-publish-loop-prod.yml` itself, `admin/**`, `_config.yml` (the gem-delivered `playwright.config.js` / `_layouts/post.html` entries were dropped in PR #2472, and `package.json` / `package-lock.json` on 2026-09-14 with the root npm toolchain — none is tracked here, so none could ever match). Runs **post-merge** (not per-PR): the spec drives a REAL prod mutation, so firing it on every concurrent PR raced the shared canary + the deploy-production queue and flaked. Gated by repo var `PROD_PLAYGROUND_MODE == 'true'` |
+| `cross-post.yml` | `push` (main), `schedule` (Mondays 06:23 UTC), `workflow_dispatch` | `paths` (positive, push to main) | `_posts/**`, minus the prod-loop `2099-*` canaries and `*-e2e-*` fixtures (`cross_post.py` would skip them anyway; excluding the paths here just saves the run). `workflow_dispatch` ignores `paths` and takes one `post_path` input for a backfill or re-run. The weekly `schedule` run only checks the LinkedIn token's age |
 | `dependabot-auto-merge.yml` | `pull_request` | n/a (job-level `if: github.actor == 'dependabot[bot]'` skips for everyone else) | n/a |
 | `deploy-preview.yml` | `pull_request` types `[opened, synchronize, reopened, closed]` | `paths-ignore` | everything EXCEPT `README.md`, `AGENTS.md`, `CLAUDE.md`, `docs/**`, `e2e/**`, `infrastructure/**`, `oauth-proxy/**` (7 entries) |
 | `deploy-production.yml` | `push` to `main`, `workflow_dispatch` | `paths-ignore` | everything EXCEPT the same 7 as `deploy-preview.yml` PLUS `scripts/**`; `workflow_dispatch` ignores `paths-ignore` |
@@ -477,14 +478,14 @@ check rather than a dedicated one.
 
 **The `github-actions` ecosystem `ignore`s every cms-platform reference the same way (cms-platform#244)** — the `uses:@<tag>` reusable-workflow pins, not just the gem. That ecosystem treats each workflow FILE as its own dependency, so it can only ever move one caller's pin per PR; every such PR necessarily leaves the other pins behind, exactly the skew `check-platform-pin-consistency.js --require-canonical` exists to fail. jodidaniel.com#8–#22 (2026-06-03/04) produced fifteen bump PRs from a single release, two of which Dependabot itself closed as redundant once another had already landed the same ref; adamdaniel.ai#1895–#1898 produced four more with *different* from-versions per file in the same batch (`0.1.0→0.1.6` and `0.1.3→0.1.6`); adamdaniel.ai#1900 was closed outright with "A piecemeal bump to v0.1.6 would now fail the platform-pin-consistency guard." `platform-bump.yml` is now the sole writer of every platform version reference in a consumer — moving every `uses:@<tag>` pin, every `platform_ref:` input, `platform.lock`'s `platform_ref`, and the `Gemfile`/`Gemfile.lock` gem `tag:`/`revision:` in one PR is what lets `--require-canonical` pass on that PR alone. As with the gem ignore above, the scope is deliberately `Adam-S-Daniel/cms-platform/*`, not a bare `*`: the ecosystem stays wired and would pick up a genuine third-party action the moment one is added, even though today it watches nothing — every `uses:` in this repo's `.github/workflows/` is a cms-platform reusable, the same inert-by-design posture #242 left the `bundler` half in (where `jekyll`/`webrick` keep flowing). The same two lints now assert both ignores: `dependabot-theme-gem-ignored.test.js` (this repo's own file) and `scaffold-seeds-dependabot-ignore.test.js` (the template).
 
-There is **no `cooldown`** (the string doesn't appear in the file), **no `groups:` / `update-types:`** grouping, and **no `docker` or `npm` ecosystem**. Earlier revisions of this section described all four; none of them ever existed here. Consequences worth knowing: because there is no `npm` ecosystem (despite a root `package.json` / `package-lock.json`), Dependabot never opens a `package-lock.json` bump PR on this repo; and because there is no `docker` ecosystem and no `.github/ci-runner/` directory at all, the whole CI-runner-image story that used to live in this paragraph is void here — see the CI-flakiness-invariants note on the Playwright image drift guard, which is platform-owned.
+There is **no `cooldown`** (the string doesn't appear in the file), **no `groups:` / `update-types:`** grouping, and **no `docker` or `npm` ecosystem**. Earlier revisions of this section described all four; none of them ever existed here. Consequences worth knowing: because there is no `npm` ecosystem (and, since 2026-09-14, no root `package.json` / `package-lock.json` either — see below), Dependabot never opens a `package-lock.json` bump PR on this repo; and because there is no `docker` ecosystem and no `.github/ci-runner/` directory at all, the whole CI-runner-image story that used to live in this paragraph is void here — see the CI-flakiness-invariants note on the Playwright image drift guard, which is platform-owned.
 
-**The missing `npm` ecosystem is a DECISION, not an oversight — do not "fix" it.** Reviewed 2026-08-10 against the repaired Dependabot pipeline (which now merges bumps unattended), and the answer is no, for two independent reasons:
+**The missing `npm` ecosystem is a DECISION, not an oversight — do not "fix" it.** Reviewed 2026-08-10 against the repaired Dependabot pipeline (which now merges bumps unattended), and the answer is no, for two independent reasons. **On 2026-09-14 the root `package.json` and `package-lock.json` were removed outright** (see *Code quality* in `AGENTS.md`): the two reasons below are what made that safe, and the lockfile's last act was a Dependabot *security* job that could not resolve (`smol-toml` pinned by `markdownlint-cli2`, run 34793815589) against dependencies nothing executed. Kept as the record of why:
 
 - **No CI job here installs the root `package.json`.** Verified: zero `npm` invocations across all of `.github/workflows/` — every reusable's `npm ci` runs in the PLATFORM's `.cms-platform/e2e` against *its* lockfile, never this repo's root one. So a bump would land through the auto-merge pipeline having been exercised by nothing, which is precisely the unverified-unattended-change posture the pipeline repair was meant to avoid. cms-platform's own npm cooldown exists for the opposite case — deps its CI genuinely executes.
 - **It would actively cost prod mutations.** `package.json` and `package-lock.json` are salient paths on `cms-publish-loop-prod.yml`'s `push` trigger, so every merged npm bump would fire a real ~10-minute prod-mutating loop against the live site to validate a linter version CI never ran.
 
-Nothing is forgone by the omission: Dependabot **security** updates are a repo-level toggle and need no `dependabot.yml` entry, so advisory coverage is independent of this file. And the deps are a local-developer toolchain by design — the heavyweight lint toolchain is platform-internal, there is no consumer lint CI (see *Code quality*), and `scripts/lint-staged.sh` skips any linter whose tool is absent. If a future change makes CI actually execute these deps, revisit — that is the fact the decision turns on.
+Nothing was forgone by the omission: Dependabot **security** updates are a repo-level toggle and need no `dependabot.yml` entry, so advisory coverage was independent of this file. And the deps were a local-developer toolchain by design — the heavyweight lint toolchain is platform-internal, there is no consumer lint CI (see *Code quality*), and `scripts/lint-staged.sh` skips any linter whose tool is absent. With no manifest there is now nothing for either half of Dependabot to read; if a root `package.json` ever returns, it should carry only what CI actually executes, and this decision turns on that fact.
 
 **Cooldown is a PLATFORM-side knob, deliberately not a consumer one.** cms-platform's own ecosystems (`github-actions` + its `/e2e` npm harness) carry a graduated `cooldown: {default-days: 7, semver-major-days: 30}` (v0.1.76), mechanising its cooling-off for third-party action SHAs and harness majors; GitHub's own default minimum package age is 3 days, so those are a raise rather than a floor from zero, and cooldown applies to version updates only — a security advisory bypasses it. A consumer intentionally gets **no** cooldown, and the reason is not the one first recorded here ("it would delay release adoption"): release adoption is landed by `platform-bump.yml`, which opens the bump PR itself, so Dependabot is not on that path. The real reason is that **this repo pins zero third-party actions** — every `uses:` in `.github/workflows/` targets `Adam-S-Daniel/cms-platform/.github/workflows/*.yml` — so a `github-actions` cooldown here would have no supply-chain surface to hold. (cms-platform#244 removes even that: the `github-actions` ecosystem now carries an explicit ignore for every cms-platform reference, so there is no cms-platform Dependabot activity left for a cooldown to gate at all.)
 
@@ -676,6 +677,37 @@ If `gitleaks` isn't on `PATH`, the hook fails with install instructions for macO
 
 ---
 
+### `cross-post.yml`
+
+**Trigger:** push to `main` (path-filtered to `_posts/**`, minus the loop fixtures), a weekly `schedule` (Mondays 06:23 UTC; LinkedIn token-age check only), or manual `workflow_dispatch`
+
+**Jobs:** `cross-post` — a thin caller of the platform's `cross-post.yml` reusable (cms-platform v0.1.111, [`docs/CROSS-POSTING.md`](https://github.com/Adam-S-Daniel/cms-platform/blob/main/docs/CROSS-POSTING.md) there is the full reference). The reusable checks the platform out into `.cms-platform/` at `platform_ref`, detects newly published posts (added with `published: true`, or `published` flipped false → true; `test_fixture` / `e2e-` posts skipped), waits for the production deploy via the `await-prod-deploy` composite (invoked by local path — a consumer cannot reference a cms-platform composite remotely: the repo's SHA-pinning policy rejects a tag ref at job setup and a SHA ref would fail the pin-consistency guard), verifies each post URL serves 200, renders the Substack Markdown into the job summary + the `cross-post-<run_id>` artifact, posts the Mastodon status with a dedupe scan of the account's recent statuses plus an `Idempotency-Key`, and shares the post to Adam's LinkedIn profile as an article card with the featured image as thumbnail. LinkedIn has no dedupe, so that leg is one-shot: it fires only on the publishing push or a dispatch and never retries.
+
+**Site values in this caller:** `prod_url: https://adamdaniel.ai`, `mastodon_instance: https://hachyderm.io` ([@superoutrigger](https://hachyderm.io/@superoutrigger)), `linkedin: true` (the profile that owns `LINKEDIN_ACCESS_TOKEN`), `substack: true` (publication [adamdanielai.substack.com](https://adamdanielai.substack.com)).
+
+**Dispatch inputs:**
+
+| Input | Type | Default | Purpose |
+| --- | --- | --- | --- |
+| `post_path` | string | *(required)* | One `_posts/*.md` to cross-post — a backfill of an older post, or a re-run |
+| `dry_run` | boolean | `true` | Log the would-be Mastodon status and LinkedIn post; post nothing. A manual run never surprise-posts unless you flip it |
+| `visibility` | choice: `public` / `unlisted` / `direct` | `public` | Mastodon post visibility (LinkedIn posts are always public) |
+| `targets` | choice: `all` / `mastodon` / `linkedin` / `substack` | `all` | Run one leg only. Re-run a failed leg with its own target so the others are not posted twice; check the LinkedIn profile before re-running `linkedin` |
+
+**Substack is paste-by-hand — there is no publish API.** After a run, open the job summary or download the `cross-post-<run_id>` artifact, copy the `.substack.md` content, and paste it into a new Substack draft.
+
+**Not a required check** — it runs post-merge or on dispatch and never gates a PR.
+
+**Secrets and variables:** `MASTODON_ACCESS_TOKEN` and `LINKEDIN_ACCESS_TOKEN` (each optional; unset, that leg is skipped with a `::warning::`), plus the variable `LINKEDIN_TOKEN_MINTED` (the date the 60-day LinkedIn token was minted; the weekly run goes red from day 50, so `scheduled-run-health` files an issue). Activation and rotation steps: the platform's [`docs/CROSS-POSTING.md`](https://github.com/Adam-S-Daniel/cms-platform/blob/main/docs/CROSS-POSTING.md#rotating-the-linkedin-token). See [`AGENTS.md`](../AGENTS.md#github-actions-secrets).
+
+#### Creating the Mastodon app token
+
+On `hachyderm.io`: **Preferences → Development → New application**. Grant it **`profile`, `read:statuses` and `write:statuses`**. `profile` lets `verify_credentials` read the account's own id. `read:statuses` lets the duplicate check list the account's recent statuses; without it that lookup gets a 403, and since cms-platform v0.1.111 the leg then fails with an `::error::` instead of posting (before, it silently posted without the check, #3738). `write:statuses` posts. Copy the generated access token into this repo's **`MASTODON_ACCESS_TOKEN`** Actions secret.
+
+**History:** prototyped site-local in PRs #3739 / #3740 (`scripts/cross_post/` + its own workflow), smoke-tested by dispatch (run 35617419107), then shipped as the platform reusable in cms-platform v0.1.109 and reverted here to this caller in the v0.1.109 bump — tracking issue #3735, platform issue cms-platform#442. The LinkedIn leg shipped in cms-platform v0.1.110 (tracking issue #3776), validated here by dry-run dispatches through v0.1.110-rc.2 (runs 35779643480 and 35791214711).
+
+---
+
 ## Failure-comment composite action
 
 The `uses: ./.github/actions/...` paths in the examples below are relative to the
@@ -777,3 +809,53 @@ The three real-prod loop workflows (`cms-publish-loop-host` / `cms-publish-loop-
 
 1. **Action dependency policy.** Prefer trusted built-ins (`git`, `node`) over a bundled marketplace action when they do the job. `tj-actions/changed-files` was rejected here on supply-chain grounds (CVE-2025-30066, Mar 2025: a stolen `@tj-actions-bot` PAT retroactively repointed *every* version tag; ~9k lines of unverifiable bundled JS into a workflow that holds `CMS_E2E_PAT`). The composite is bash + `node` only, **no transitive `uses:`** — same shape as `await-prod-deploy` / `post-failure-comment`, and clean for the SHA-pin convention. If a marketplace action is genuinely warranted, it MUST be SHA-pinned after the 7-day cooling-off — the policy is AGENTS.md's "Pinning GitHub Actions" section; see also the `github-actions-sha-pinning` skill.
 2. **Single source over byte-identical duplication.** When N workflows need the same logic, factor it into one composite + one data module and lint the *structural wiring*, rather than duplicating the logic into each workflow and lint-asserting byte-identical text. (The `#1101`/#1178 byte-identical `concurrency:` block — now declared on each loop's heavy job rather than the workflow — predates this and is kept as byte-identical duplication; the recursion gate is the pattern to follow for new shared logic.)
+
+## Bootstrap infrastructure is platform-owned (moved from AGENTS.md)
+
+Moved verbatim from AGENTS.md's `## AWS resources (us-east-1)` section, which
+keeps the resource table and the one-line "do not re-vendor / do not drop
+`CREATE_APEX_DNS_RECORDS=true`" rule.
+
+**Bootstrap template is PLATFORM-OWNED (do not re-vendor it).** This repo no longer
+ships its own `infrastructure/bootstrap/template.yaml`; the CloudFormation template is
+the single source of truth in **cms-platform** (`infrastructure/bootstrap/template.yaml`,
+parameterized by `ResourcePrefix` / `ProductionDomainName` / bucket names / `GitHubRepo`).
+`infrastructure/bootstrap/deploy.sh` is a thin wrapper that reads `platform_repo` +
+`platform_ref` from `platform.lock`, checks the platform out at that ref into `.cms-platform/`
+(the same gitignored dot-dir the reusable-workflow callers use — see `deploy-preview.yml`),
+exports adamdaniel.ai's site params (`APEX_DOMAIN=adamdaniel.ai`, etc., which derive
+`RESOURCE_PREFIX=adamdaniel-ai`, the three bucket names, `STACK_NAME=adamdaniel-ai-bootstrap`,
+`PREVIEW_DOMAIN=*.adamdaniel.ai`), and delegates to `.cms-platform/infrastructure/bootstrap/deploy.sh`
+(which deploys the platform template with `CAPABILITY_NAMED_IAM`). **The wrapper exports
+`CREATE_APEX_DNS_RECORDS=true`** — adamdaniel.ai is LIVE at its apex and the
+apex/www A-records are STACK-MANAGED, but the platform template gates them on
+`CreateApexDnsRecords` (default `false`, safe for fresh sites). Without that
+export a redeploy would DELETE the live apex DNS (site offline) — a
+reviewer-caught regression in the template-removal PR (#1922). Do NOT drop it. A bootstrap-infra fix
+(e.g. CloudFront `ErrorCachingMinTTL=0`) is now made **once in cms-platform** and flows here on the
+next `platform_ref` bump — never apply it locally. This mirrors jodidaniel.com, which has no local
+bootstrap template either. (`infrastructure/rum/` is **not** affected — its template is not an exact
+vendored copy of the platform's and is out of scope.)
+
+## `CMS_E2E_PAT` — scope and why (moved from AGENTS.md)
+
+Moved from AGENTS.md's `## GitHub Actions secrets` table, whose `CMS_E2E_PAT`
+row now names only the secret, its source (fine-grained PAT, host repo only)
+and a pointer here.
+
+Used by: `e2e/cms-publish-loop*.spec.js`, `e2e/cms-delete-published.spec.js`, `e2e/cms-delete-published-preview.spec.js` (drive the full Decap → cms PR → auto-merge → deploy → public-URL loop). Token permissions: `Contents: r/w`, `Pull requests: r/w`, `Actions: r`, `Metadata: r`. `Actions: r` is needed by the test helpers that poll workflow run state while waiting for auto-merge + deploy-production to finish; no dispatch is needed (the earlier shim → `delete-via-pr.yml` recovery path was removed once we confirmed Decap's delete UI uses the git data API directly, not `DELETE /contents`).
+
+## Preview host-to-prefix mapping (moved from AGENTS.md)
+
+Moved verbatim from AGENTS.md's `## Architecture` section, which keeps the
+three-line topology diagram and a one-line summary. `README.md`'s "Preview
+Environments" section states the same mapping for a non-agent reader.
+
+Each PR gets its own subdomain under `*.adamdaniel.ai`. A single
+preview CloudFront distribution serves the whole preview bucket; a
+viewer-request CloudFront Function maps `Host: preview-pr${N}...` to
+the S3 object-key prefix `/pr-${N}/`, and a sibling viewer-response
+Function strips the same prefix from `Location` headers so S3's
+trailing-slash redirects (e.g. `/admin` → `/admin/`) don't leak the
+internal key space. Pages on preview and prod share the same
+root-relative URL structure (no `/pr-N/` in any visible URL).
