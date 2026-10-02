@@ -1,6 +1,6 @@
 {
   "registry": "Adam-S-Daniel/adam-agentskills",
-  "ref": "0432805a494970e0400edd38a1f5afce3dc2081e",
+  "ref": "ca1e5752c73471090a738aed8f5b65268a7423f5",
   "bundles": [
     "adam-anything-anywhere",
     "adam-coding-anywhere"
@@ -8,7 +8,7 @@
   "sources": [
     {
       "registry": "Adam-S-Daniel/cms-platform",
-      "ref": "582a716cb3689b2b560fef5c78eda2af088d355b",
+      "ref": "fffc5db3ac2715edd97a1c15f484d70cd4df255c",
       "bundles": [
         "cms-platform"
       ],
@@ -22,13 +22,13 @@
     "adam-coding-anywhere/disarm-inherited-reach": "sha256:3e355e35d7012c34d475711e8b438bfc5075deb92982b7561e1f9bb40054b893",
     "adam-coding-anywhere/github-actions-repo-settings": "sha256:31f3ec7dc4ed2132c4fd6651cc534f66c744c24e760616488fece8ad54c74aeb",
     "adam-coding-anywhere/review-bash-ci-reliability": "sha256:1e1c2993689cfe79b6f1345de09101ff7d3b4b902a34ae5b458ee86e3f28f8b9",
-    "adam-coding-anywhere/skills-doctor": "sha256:c1c0b66051d4ab89bcb9052294dc80ccfbe5c944560b57f5d8915a7de6937f3d",
+    "adam-coding-anywhere/skills-doctor": "sha256:572ba884709f5131456f7773cf5f5e92d9ee6b93c5f6a7e333663f17f7098f5c",
     "adam-coding-anywhere/vendor-release-impact-issues": "sha256:b7bc6f17c002a05b5c5c517ddf598c717820ef808d5d240a5e8e9d6e68a7c426",
     "adam-coding-anywhere/workflow-path-audit": "sha256:8a7c57bcd890bbab38c42473d8705f0b2521954385f03bf5289e3ec84d3fcdde",
     "cms-platform/admin-config-render": "sha256:6173d9d6abcb4273473d69b1c11390ef2584bf8fd2f6090838d533cf6cf6289c",
     "cms-platform/aws-bootstrap": "sha256:fcdbbcef7120b9f68c393a7fdcad1c35394c0ca172e2c0d0e8b640895f974d1f",
-    "cms-platform/browser-testing": "sha256:23627048547cc9d5d5964247778301ee9b022e81b06f2849a17abd4100a8436f",
-    "cms-platform/ci-watcher-loops": "sha256:22a17973b50816b57aef797a2aaa7dbce11c559b8dc129febeba32652ab7e362",
+    "cms-platform/browser-testing": "sha256:30aef71ffeb1093e6a39869d72308e17b898aa6fb042edb833cb9806ec36d9e1",
+    "cms-platform/ci-watcher-loops": "sha256:e616f73d08207f15dcaf5bcb3830eb380eb90334f35fb04644fddbe50df5d0fe",
     "cms-platform/cms-stuck-pr-triage": "sha256:b4423b31c1dd5821bacd600dab1371c660e0d1b357adf678b79b96824451bc63",
     "cms-platform/code-quality": "sha256:d4eaf3d0ed7c910ed8f54791a93640a27c80af6f25630ebd4d0be2f3ed1069f3",
     "cms-platform/consumer-repo-provisioning": "sha256:c4dd947ccdb3683fe748d0ae0929805434557474d59b50bc5fb2e6f4cc568aa4",
@@ -40,5 +40,5 @@
     "cms-platform/sveltia-cms-playwright-demo": "sha256:5b478d7bf5623a30513b118bf3ff478334d810691021a8dfa6fe0122b6bff1e4",
     "cms-platform/test-canary": "sha256:64ba15f83a5b491596982db7022d665bfc1c849eaeef62252f1cc5b346caba61"
   },
-  "generated_from": "0432805a494970e0400edd38a1f5afce3dc2081e"
+  "generated_from": "ca1e5752c73471090a738aed8f5b65268a7423f5"
 }
