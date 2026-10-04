@@ -7,17 +7,11 @@ test_fixture: false
 ---
 me: what keeps killing processes and claude sessions?
 
-Claude Code: … At 13:02:44 your systemd user manager (user@1000.service) was killed. When it died, systemd tore down your user session… Found the cause: **Codex's auto-review policy let a model self-approve rerunning the suite outside the sandbox after two 137 failures, with no human in the loop.**
+Claude Code: … At 13:02:44 your systemd user manager (user@1000.service) was killed. When it died, systemd tore down your user session… Found the cause: **Codex's auto-review policy let a model self-approve rerunning the suite outside the sandbox after two 137 failures, with no human in the loop.**…
 
-
-Here is the the 
-
-… 	**1	Fleet rule** in _agent-guidance's agents-md/base.md, which syncs to every repo and to both Claude and Codex. It will cover:
+me: be very sure to put this lesson learned wherever it needs to be to prevent recurrence**Fleet rule** in _agent-guidance's agents-md/base.md, which syncs to every repo and to both Claude and Codex. It will cover:
 
 * * Never let a mock reach a signal call.
-
   * Code that signals must refuse a pid of 1 or lower.
-
   * A sandboxed run that dies with 137 and no OOM is a stop sign, not a reason to rerun outside the sandbox.
-
   * Run suites that spawn processes inside a PID namespace.
