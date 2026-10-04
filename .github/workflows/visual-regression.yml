@@ -35,7 +35,8 @@ permissions:
 
 jobs:
   visual-regression:
-    # Pinned to cms-platform v0.1.126 (single-version lockstep). Carries the
+    # Pinned to the same cms-platform release as the other callers
+    # (single-version lockstep; see platform.lock). Carries the
     # always-report + screenshot-path + serve-path fixes — the PR side renders
     # the real built site, so no-change PRs come back ~0 diffs and
     # approve-regression auto-passes. platform_ref MUST match the @<ref> pin.
