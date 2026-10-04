@@ -181,6 +181,33 @@ end
 ok("the last public post is deleted") do |d|
   Dir.glob(File.join(d, "_posts", "*.md")).each { |f| File.delete(f) }
 end
+# Review round 3.
+ok("_posts emptied entirely (directory removed)") { |d| FileUtils.rm_rf(File.join(d, "_posts")) }
+ok("every post future-dated while _config.yml has future: false") do |d|
+  write(d, "_config.yml", File.read(File.join(d, "_config.yml")).sub(/^future: true$/, "future: false"))
+  Dir.glob(File.join(d, "_posts", "*.md")).each { |f| File.delete(f) }
+  post(d, "2099-01-01-later-one.md", { "title" => "Later one" })
+  post(d, "2099-02-01-later-two.md", { "title" => "Later two" })
+end
+ok("front matter with a Ruby object tag (Jekyll's loader rejects it, the build still succeeds)") do |d|
+  post(d, "2026-10-05-a.md", { "x" => "!ruby/object:OpenStruct {}" })
+end
+ok("front matter with a !!binary value") { |d| post(d, "2026-10-05-bin.md", { "blob" => "!!binary aGVsbG8=" }) }
+ok("front matter with an anchor and alias") do |d|
+  write(d, "_posts/2026-10-05-alias.md", "---\ntitle: &t Aliased\nog_title: *t\n---\nBody.\n")
+end
+ok("front matter with a date-typed key") do |d|
+  write(d, "_posts/2026-10-05-datekey.md", "---\ntitle: Date key\n2026-01-01: new year\n---\nBody.\n")
+end
+ok("front matter with a very large integer") do |d|
+  post(d, "2026-10-05-bigint.md", { "big" => "123456789012345678901234567890123456789" })
+end
+ok("front matter with duplicate keys") do |d|
+  write(d, "_posts/2026-10-05-dup.md", "---\ntitle: First\ntitle: Second\n---\nBody.\n")
+end
+ok("a relative canonical_url: /elsewhere/") do |d|
+  post(d, "2026-10-05-relcanon.md", { "canonical_url" => "/elsewhere/" })
+end
 # Review round 2: each of these turned the round-1 verifier red.
 ok("Liquid shown in prose with a pipe (kramdown turns it into a table)") do |d|
   post(d, "2026-10-05-pipe.md", {},
@@ -302,6 +329,24 @@ bad("front matter that is not valid YAML is a FAIL line naming the file",
 end
 ok("collection permalink with :year/:month placeholders (site-wide `permalink:` edited)") do |d|
   write(d, "_config.yml", File.read(File.join(d, "_config.yml")).sub("permalink: /blog/:slug/", "permalink: /blog/:year/:slug/"))
+end
+bad("exclude: [_posts] in _config.yml makes every post vanish",
+    /POSTS NOT READ: _posts\/ holds \d+ post file\(s\) but Jekyll read none of them.*`exclude`.*`include`.*`collections`/) do |d|
+  write(d, "_config.yml", File.read(File.join(d, "_config.yml")).sub(/^exclude:\n/, "exclude:\n  - _posts\n"))
+end
+# The home page excerpts (and links) every recent post, so it is exempt while
+# one of them has a brace in it; drop the one real post that does.
+bad("unresolved Liquid leaking into the home page (no linked post has braces)",
+    /UNRESOLVED LIQUID: _site\/index\.html contains "\{\{ home_leak \}\}"/) do |d|
+  Dir.glob(File.join(d, "_posts", "*gha-bench*")).each { |f| File.delete(f) }
+  write(d, "_includes/home-leak.html", "{% raw %}{{ home_leak }}{% endraw %}\n")
+  f = File.join(d, "index.html")
+  File.write(f, File.read(f).sub("</main>", "{% include home-leak.html %}\n</main>"))
+end
+bad("unresolved Liquid leaking into feed.xml chrome",
+    /UNRESOLVED LIQUID: feed\.xml contains "\{\{ feed_leak \}\}"/) do |d|
+  f = File.join(d, "feed.xml")
+  File.write(f, File.read(f).sub(%r{<title[^>]*>}) { |t| "#{t}{% raw %}{{ feed_leak }}{% endraw %}" })
 end
 bad("a tool whose embedded app is missing is reported once",
     /TOOL EMBED: _tools\/gone\.md embeds \/assets\/tools\/gone\/ but that app is not built/) do |d|

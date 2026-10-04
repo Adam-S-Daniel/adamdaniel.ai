@@ -133,6 +133,22 @@ def check(desc, fail_msg = nil)
   ok
 end
 
+$warnings = []
+# Run one independent unit of work (usually one file). An unexpected exception
+# in the VERIFIER'S OWN processing of content becomes a visible WARN line for
+# that unit, never a crash and never a FAIL: it is a limitation of this
+# script, not a defect in the site. Defects in the build output are reported
+# by `check`, whose own rescue turns them into FAILs.
+def guard(what)
+  yield
+rescue StandardError => e
+  msg = "#{what}: the verifier could not process this (#{e.class}: " \
+        "#{e.message.lines.first.to_s.strip}); its checks were skipped"
+  puts "  WARN #{msg}"
+  $warnings << msg
+  nil
+end
+
 # Raised for conditions whose message is already plain English.
 class CheckError < StandardError; end
 
@@ -186,11 +202,14 @@ def check_front_matter(path)
 
   YAML.safe_load(front, permitted_classes: [Date, Time, Symbol], aliases: true)
 rescue Psych::SyntaxError => e
-  # Only a syntax error is reported: Jekyll's YAML loader is more permissive
-  # than safe_load about tags and classes, so anything else may build fine.
+  # Only a syntax error is reported. Anything else (a disallowed class or tag,
+  # `!!binary`, an alias limit) is a difference between this loader and
+  # Jekyll's, and the build may well succeed, so it is not asserted.
   check("BAD FRONT MATTER: #{rel_path(path)} is not valid YAML: " \
         "#{e.message.lines.first.to_s.strip} — fix the `---` block at the top of the file " \
         "(Jekyll ignores a front matter it cannot read, so the page loses its title and settings)") { false }
+rescue StandardError
+  nil
 end
 
 def noindex_value?(value)
@@ -387,8 +406,13 @@ module SiteModel
     require "jekyll"
     Jekyll.logger.log_level = :error
     Jekyll::PluginManager.require_from_bundler
-    base = Jekyll.configuration("source" => root, "destination" => dest, "quiet" => true)
-    [read_site(base), read_site(base.merge("unpublished" => true))]
+    # `disable_disk_cache` keeps this read from writing `.jekyll-cache/`; it
+    # does not change what is read.
+    base = Jekyll.configuration("source" => root, "destination" => dest, "quiet" => true,
+                                "disable_disk_cache" => true)
+    # The second read admits unpublished and future posts, so a post it lacks
+    # was never read at all.
+    [read_site(base), read_site(base.merge("unpublished" => true, "future" => true))]
   end
 
   def read_site(config)
@@ -456,7 +480,7 @@ check("_config.yml has a site url to build canonical links from (#{SITE_URL.insp
 end
 
 glob(File.join(ROOT, "{_posts,_tools,_tags,_e2e,_projects,pages}", "**", "*.{md,markdown,html}"))
-  .each { |f| check_front_matter(f) }
+  .each { |f| guard(rel_path(f)) { check_front_matter(f) } }
 
 model = published_site = all_site = nil
 check("Jekyll's model of the source tree loads from this site's bundle",
@@ -513,26 +537,54 @@ check("Jekyll reads a home page at /",
   model.any? { |e| e[:kind] == :page && e[:url] == "/" }
 end
 model.each do |entry|
-  next if deferred.call(entry)
+  guard(entry[:src]) do
+    next if deferred.call(entry)
 
-  noun = entry[:kind] == :page ? "PAGE" : entry[:kind].to_s.upcase.sub(/S\z/, "")
-  check("#{entry[:src]} is built at #{entry[:url]}",
-        "MISSING #{noun}: #{entry[:src]} is published but its output #{rel_path(entry[:dest])} " \
-        "(#{entry[:url]}) is not in _site — check the build log") { File.file?(entry[:dest]) }
+    noun = entry[:kind] == :page ? "PAGE" : entry[:kind].to_s.upcase.sub(/S\z/, "")
+    check("#{entry[:src]} is built at #{entry[:url]}",
+          "MISSING #{noun}: #{entry[:src]} is published but its output #{rel_path(entry[:dest])} " \
+          "(#{entry[:url]}) is not in _site — check the build log") { File.file?(entry[:dest]) }
+  end
 end
 if all_site
   published_srcs = model.map { |e| e[:src] }
   owned = CLAIMS.keys + static_dests
-  SiteModel.entries(all_site, SITE).each do |entry|
-    next if published_srcs.include?(entry[:src]) || deferred.call(entry)
-    next if owned.include?(entry[:dest]) # another source (or a static file) writes this file
-    # Generator output Jekyll never "reads": an unpublished document pointed at
-    # one of these URLs is not something this script can attribute.
-    next if rel_path(entry[:dest]).match?(%r{\A_site/(admin|tags)/|\A_site/(feed|sitemap)\.xml\z|\A_site/robots\.txt\z})
+  (guard("unpublished documents") { SiteModel.entries(all_site, SITE) } || []).each do |entry|
+    guard(entry[:src]) do
+      next if published_srcs.include?(entry[:src]) || deferred.call(entry)
+      next if owned.include?(entry[:dest]) # another source (or a static file) writes this file
+      # Generator output Jekyll never "reads": an unpublished document pointed at
+      # one of these URLs is not something this script can attribute.
+      next if rel_path(entry[:dest]).match?(%r{\A_site/(admin|tags)/|\A_site/(feed|sitemap)\.xml\z|\A_site/robots\.txt\z})
 
-    check("#{entry[:src]} is `published: false` and is NOT built at #{entry[:url]}",
-          "UNPUBLISHED BUT BUILT: #{entry[:src]} is `published: false` yet #{rel_path(entry[:dest])} " \
-          "exists — something other than this file is producing it") { !File.exist?(entry[:dest]) }
+      check("#{entry[:src]} is `published: false` and is NOT built at #{entry[:url]}",
+            "UNPUBLISHED BUT BUILT: #{entry[:src]} is `published: false` yet #{rel_path(entry[:dest])} " \
+            "exists — something other than this file is producing it") { !File.exist?(entry[:dest]) }
+    end
+  end
+end
+
+# Posts that silently vanish because of configuration (`exclude:` covering
+# `_posts`, a collections change) are real breakage, but an owner with no
+# publishable posts is not. Jekyll's own reader, with unpublished and future
+# posts admitted, tells the two apart: post-named files on disk (Jekyll's own
+# DATE_FILENAME_MATCHER, minus the entries its EntryFilter always skips) but
+# zero posts read means the files were never read at all.
+if all_site
+  guard("_posts/") do
+    filter = Jekyll::EntryFilter.new(all_site)
+    posts_dir = File.join(ROOT, "_posts")
+    on_disk = glob(File.join(posts_dir, "**", "*")).select do |f|
+      rel = f.delete_prefix("#{posts_dir}/")
+      File.file?(f) && Jekyll::Document::DATE_FILENAME_MATCHER.match?(rel) &&
+        rel.split("/").none? { |part| filter.special?(part) || filter.backup?(part) }
+    end
+    read_count = all_site.posts.docs.size
+    check("Jekyll reads the post files in _posts/ (#{on_disk.size} on disk, #{read_count} read, " \
+          "published or not)",
+          "POSTS NOT READ: _posts/ holds #{on_disk.size} post file(s) but Jekyll read none of them, " \
+          "published or not — every post has vanished from the site. Check `exclude`, `include` " \
+          "and `collections` in _config.yml") { on_disk.empty? || read_count.positive? }
   end
 end
 
@@ -570,37 +622,41 @@ tools_index_links = tags(tools_index, "a").map { |a| norm(site_path(a["href"].to
 # below does not repeat them.
 reported_missing = []
 model.select { |e| e[:kind] == :tools }.each do |tool|
-  url = tool[:url]
-  rel = tool[:src]
-  check("/tools/ lists #{url}",
-        "TOOLS LIST: /tools/ does not link to #{url} (#{rel}) — check tools/index.html and " \
-        "the tool's front matter") { tools_index_links.include?(norm(url)) }
-  embed = tool[:data]["embed_src"].to_s.strip
-  # The tool layout prints it through `relative_url`, which roots a relative path.
-  embed = "/#{embed}" unless embed.empty? || embed.start_with?("/") || embed.match?(%r{\A([a-z][a-z0-9+.-]*:|//)}i)
-  next if embed.empty? || !File.file?(tool[:dest]) || claimants(tool[:dest]).size > 1
+  guard(tool[:src]) do
+    url = tool[:url]
+    rel = tool[:src]
+    check("/tools/ lists #{url}",
+          "TOOLS LIST: /tools/ does not link to #{url} (#{rel}) — check tools/index.html and " \
+          "the tool's front matter") { tools_index_links.include?(norm(url)) }
+    embed = tool[:data]["embed_src"].to_s.strip
+    # The tool layout prints it through `relative_url`, which roots a relative path.
+    embed = "/#{embed}" unless embed.empty? || embed.start_with?("/") || embed.match?(%r{\A([a-z][a-z0-9+.-]*:|//)}i)
+    next if embed.empty? || !File.file?(tool[:dest]) || claimants(tool[:dest]).size > 1
 
-  iframes = tags(read(tool[:dest]), "iframe").map { |i| norm(site_path(i["src"].to_s)) }
-  check("#{url} embeds #{embed} in an iframe",
-        "TOOL EMBED: #{url} (#{rel}) does not render an <iframe> for embed_src #{embed} — " \
-        "check _layouts/tool.html") { iframes.include?(norm(site_path(embed))) }
-  next if embed.match?(%r{\A([a-z][a-z0-9+.-]*:|//)}i) # external app: nothing to look up
+    iframes = tags(read(tool[:dest]), "iframe").map { |i| norm(site_path(i["src"].to_s)) }
+    check("#{url} embeds #{embed} in an iframe",
+          "TOOL EMBED: #{url} (#{rel}) does not render an <iframe> for embed_src #{embed} — " \
+          "check _layouts/tool.html") { iframes.include?(norm(site_path(embed))) }
+    next if embed.match?(%r{\A([a-z][a-z0-9+.-]*:|//)}i) # external app: nothing to look up
 
-  unless check("#{rel}'s embedded app #{embed} is in _site",
-               "TOOL EMBED: #{rel} embeds #{embed} but that app is not built — add the app under " \
-               "assets/tools/ (or fix embed_src)") { !built_file(embed).nil? }
-    reported_missing << norm(embed.sub(/[?#].*\z/m, ""))
+    unless check("#{rel}'s embedded app #{embed} is in _site",
+                 "TOOL EMBED: #{rel} embeds #{embed} but that app is not built — add the app under " \
+                 "assets/tools/ (or fix embed_src)") { !built_file(embed).nil? }
+      reported_missing << norm(embed.sub(/[?#].*\z/m, ""))
+    end
   end
 end
 glob(File.join(ROOT, "_data", "tool_sources", "*.yml")).each do |src|
-  slug = File.basename(src, ".yml")
-  rel = rel_path(src)
-  app = "/assets/tools/#{slug}/"
-  next if reported_missing.include?(norm(app))
+  guard(rel_path(src)) do
+    slug = File.basename(src, ".yml")
+    rel = rel_path(src)
+    app = "/assets/tools/#{slug}/"
+    next if reported_missing.include?(norm(app))
 
-  check("vendored tool #{slug} (#{rel}) is built at #{app}",
-        "VENDORED TOOL: #{rel} declares a vendored app but #{app} is not in _site — " \
-        "re-vendor it or remove the source file") { !built_file(app).nil? }
+    check("vendored tool #{slug} (#{rel}) is built at #{app}",
+          "VENDORED TOOL: #{rel} declares a vendored app but #{app} is not in _site — " \
+          "re-vendor it or remove the source file") { !built_file(app).nil? }
+  end
 end
 
 # --------------------------------------------------------------------------
@@ -616,37 +672,39 @@ def standalone?(entry)
 end
 
 site_pages.each do |file|
-  owners = claimants(file)
-  next if owners.size > 1 || owners.any? { |e| standalone?(e) }
+  guard(rel_path(file)) do
+    owners = claimants(file)
+    next if owners.size > 1 || owners.any? { |e| standalone?(e) }
 
-  owner = owners.first
-  html = read(file)
-  built = rel_path(file)
-  check("#{built}: has a <title> element",
-        "TITLE: #{built} has no <title> element#{source_note(file)} — the layout's {% seo %} " \
-        "tag (or <title>) did not render") { html.match?(/<title\b[^>]*>/i) }
+    owner = owners.first
+    html = read(file)
+    built = rel_path(file)
+    check("#{built}: has a <title> element",
+          "TITLE: #{built} has no <title> element#{source_note(file)} — the layout's {% seo %} " \
+          "tag (or <title>) did not render") { html.match?(/<title\b[^>]*>/i) }
 
-  canonicals = tags(html, "link").select { |l| l["rel"].to_s.downcase.split.include?("canonical") }
-                                 .map { |l| norm(l["href"].to_s) }
-  og = tags(html, "meta").to_h { |m| [m["property"].to_s, m["content"].to_s] }
-  custom = owner && owner[:data]["canonical_url"].to_s.strip
-  expected =
-    if custom && !custom.empty?
-      # jekyll-seo-tag prints `canonical_url:` as given; nothing to predict.
-      [norm(custom), norm("#{SITE_URL}#{custom}")]
-    else
-      [owner && owner[:url], url_path_of(file)].compact
-                                               .map { |p| norm("#{SITE_URL}#{p.sub(%r{/index\.html\z}, '/')}") }
+    canonicals = tags(html, "link").select { |l| l["rel"].to_s.downcase.split.include?("canonical") }
+                                   .map { |l| norm(l["href"].to_s) }
+    og = tags(html, "meta").to_h { |m| [m["property"].to_s, m["content"].to_s] }
+    custom = owner && owner[:data]["canonical_url"].to_s.strip
+    expected =
+      if custom && !custom.empty?
+        # jekyll-seo-tag prints `canonical_url:` as given; nothing to predict.
+        [norm(custom), norm("#{SITE_URL}#{custom}")]
+      else
+        [owner && owner[:url], url_path_of(file)].compact
+                                                 .map { |p| norm("#{SITE_URL}#{p.sub(%r{/index\.html\z}, '/')}") }
+      end
+    check("#{built}: exactly one canonical link, pointing at #{expected.first}",
+          -> { "canonical: expected #{expected.first}, found #{canonicals.inspect} in #{built}#{source_note(file)}" }) do
+      canonicals.size == 1 && expected.include?(canonicals.first)
     end
-  check("#{built}: exactly one canonical link, pointing at #{expected.first}",
-        -> { "canonical: expected #{expected.first}, found #{canonicals.inspect} in #{built}#{source_note(file)}" }) do
-    canonicals.size == 1 && expected.include?(canonicals.first)
-  end
-  check("#{built}: og:title is set and og:url matches the canonical URL",
-        -> { "og: expected og:title to be set and og:url to equal the canonical link " \
-             "#{canonicals.first.inspect}, found og:title=#{og['og:title'].to_s.inspect} " \
-             "og:url=#{og['og:url'].to_s.inspect} in #{built}#{source_note(file)}" }) do
-    !og["og:title"].to_s.strip.empty? && canonicals.size == 1 && norm(og["og:url"].to_s) == canonicals.first
+    check("#{built}: og:title is set and og:url matches the canonical URL",
+          -> { "og: expected og:title to be set and og:url to equal the canonical link " \
+               "#{canonicals.first.inspect}, found og:title=#{og['og:title'].to_s.inspect} " \
+               "og:url=#{og['og:url'].to_s.inspect} in #{built}#{source_note(file)}" }) do
+      !og["og:title"].to_s.strip.empty? && canonicals.size == 1 && norm(og["og:url"].to_s) == canonicals.first
+    end
   end
 end
 
@@ -658,31 +716,35 @@ section "post bodies: a post with prose renders it"
 # is asserted — kramdown always renders such a line as visible text. Empty
 # bodies, image-only posts and custom layouts are not asserted.
 public_posts.each do |post|
-  next unless post[:data]["layout"] == "post" && File.file?(post[:dest]) && claimants(post[:dest]).size == 1
+  guard(post[:src]) do
+    next unless post[:data]["layout"] == "post" && File.file?(post[:dest]) && claimants(post[:dest]).size == 1
 
-  body = post[:body].to_s
-  next unless body.match?(/^[ \t]*[A-Za-z]/)
-  next if body.match?(/[{}]|<!--|<\s*(script|style|template|textarea)\b/i)
+    body = post[:body].to_s
+    next unless body.match?(/^[ \t]*[A-Za-z]/)
+    next if body.match?(/[{}]|<!--|<\s*(script|style|template|textarea)\b/i)
 
-  inner = div_inner(read(post[:dest]), "post-content")
-  next if inner.nil? # a layout without the gem's post-content block: nothing to measure
+    inner = div_inner(read(post[:dest]), "post-content")
+    next if inner.nil? # a layout without the gem's post-content block: nothing to measure
 
-  check("#{post[:url]} renders its body (#{post[:src]})",
-        "POST BODY: #{post[:src]} has text but the post-content block of #{post[:url]} is empty — " \
-        "the post layout dropped `{{ content }}`") { clean_html(inner).match?(/\S/) }
+    check("#{post[:url]} renders its body (#{post[:src]})",
+          "POST BODY: #{post[:src]} has text but the post-content block of #{post[:url]} is empty — " \
+          "the post layout dropped `{{ content }}`") { clean_html(inner).match?(/\S/) }
+  end
 end
 
 blog = model.find { |e| e[:kind] == :page && e[:url] == "/blog/" }
-if blog && File.file?(blog[:dest]) && claimants(blog[:dest]).size == 1
+guard("/blog/") do
+  next unless blog && File.file?(blog[:dest]) && claimants(blog[:dest]).size == 1
+
   # Posts any /blog/ template keeps: explicitly `published: true` and not
   # feed-excluded (a subset of what blog/index.html's filters admit).
   listed = public_posts.select { |p| p[:data]["published"] == true && p[:data]["feed_exclude"] != true }
-  unless listed.empty?
-    hrefs = tags(read(blog[:dest]), "a").map { |a| norm(site_path(a["href"].to_s)) }
-    check("/blog/ links to at least one of the #{listed.size} published posts",
-          "BLOG LIST: /blog/ links to none of the #{listed.size} published posts — the post list " \
-          "in blog/index.html did not render") { listed.any? { |p| hrefs.include?(norm(p[:url])) } }
-  end
+  next if listed.empty?
+
+  hrefs = tags(read(blog[:dest]), "a").map { |a| norm(site_path(a["href"].to_s)) }
+  check("/blog/ links to at least one of the #{listed.size} published posts",
+        "BLOG LIST: /blog/ links to none of the #{listed.size} published posts — the post list " \
+        "in blog/index.html did not render") { listed.any? { |p| hrefs.include?(norm(p[:url])) } }
 end
 
 # --------------------------------------------------------------------------
@@ -703,22 +765,28 @@ end
 link_refs = Hash.new { |h, k| h[k] = [] }
 page_links = Hash.new { |h, k| h[k] = [] }
 site_pages.each do |file|
-  html = read(file)
-  page = url_path_of(file)
-  { "a" => "href", "link" => "href", "script" => "src", "img" => "src",
-    "iframe" => "src", "source" => "src" }.each do |tag, attr|
-    tags(html, tag).each do |t|
-      ref = t[attr].to_s.strip
-      next if ref.empty? || ref.start_with?("#", "//")
+  guard(rel_path(file)) do
+    html = read(file)
+    page = url_path_of(file)
+    { "a" => "href", "link" => "href", "script" => "src", "img" => "src",
+      "iframe" => "src", "source" => "src" }.each do |tag, attr|
+      tags(html, tag).each do |t|
+        # The canonical link is checked in the SEO section; with `canonical_url:`
+        # it may legitimately name a URL this site does not serve.
+        next if tag == "link" && t["rel"].to_s.downcase.split.include?("canonical")
 
-      ref = site_path(ref)
-      next if ref.match?(/\A[a-z][a-z0-9+.-]*:/i) # external or mailto:/tel:/data:
+        ref = t[attr].to_s.strip
+        next if ref.empty? || ref.start_with?("#", "//")
 
-      resolved = resolve_ref(page, ref)
-      next unless resolved
+        ref = site_path(ref)
+        next if ref.match?(/\A[a-z][a-z0-9+.-]*:/i) # external or mailto:/tel:/data:
 
-      link_refs[resolved] << file
-      page_links[file] << norm(resolved)
+        resolved = resolve_ref(page, ref)
+        next unless resolved
+
+        link_refs[resolved] << file
+        page_links[file] << norm(resolved)
+      end
     end
   end
 end
@@ -743,62 +811,101 @@ section "no unresolved Liquid in the built output"
 # text: a pipe becomes a table, `_x_` becomes <em>, `&#123;` decodes). A
 # built page is flagged when it contains `{{` or `{%` outside <pre>/<code>/
 # <textarea> AND no authored text it could have printed contains a brace in
-# any spelling:
+# any spelling. "Could have printed" is, conservatively:
 #   * site data (`_data/**`, `_config.yml`) — rendered everywhere;
+#   * front matter and file paths of EVERY collection document and page —
+#     titles, tags, descriptions and categories show up in tag clouds, nav,
+#     feed chrome and listings that do not link the document;
+#   * the whole file of every document in a collection that is not written
+#     (it has no URL to link, so a listing could print it unlinked);
 #   * its own source: any brace at all for a plain source; for a source that
 #     is itself a Liquid template, a brace that can survive rendering;
-#   * for a plain source (no Liquid of its own), every collection document it
-#     links to; for a template page, a generated page (no source) or a URL
-#     conflict, EVERY collection document and page front matter, since a
-#     template can print any of them.
+#   * the whole file of every collection document the page LINKS to — this
+#     site's listings (home, /blog/, tag archives, /tools/) print a
+#     document's body (its excerpt) only next to a link to it;
+#   * for a page Jekyll did not read (a generator's page) or a URL conflict,
+#     every authored file, since nothing says what it prints.
 # A layout or include that leaks Liquid leaks it into every page that uses it,
-# and plain posts and tool pages almost always qualify, so the leak is caught.
+# so a page with no brace-bearing inputs (a plain post, /404.html, often the
+# home page) catches it.
 #
-# RESIDUAL BLIND SPOT: a leak is missed on every page that is exempt — every
-# template/listing/feed/sitemap page while ANY post, tool, tag or page front
-# matter contains a brace, and every page at all while site data does — so a
-# leak confined to such pages (e.g. a listing-only include) goes unreported.
-authored_files = (published_site ? published_site.collections.values.flat_map { |c| glob(File.join(c.directory, "**", "*")) } : [])
-                 .select { |f| File.file?(f) }
+# RESIDUAL BLIND SPOT: a leak is missed on every exempt page — a listing that
+# links a post whose body contains a brace, every page while some front matter
+# or site data does, and generated tag archives while any authored file does.
+# The other half of the trade-off: if a future template printed a document's
+# BODY without linking it, a brace in that body would turn this red; the
+# listings above are the ones checked to link what they excerpt.
 data_brace = (glob(File.join(ROOT, "_data", "**", "*")) + [File.join(ROOT, "_config.yml")])
              .any? { |f| File.file?(f) && read(f).to_s.match?(BRACE_MARKER) }
+model_by_file = model.to_h { |e| [u8(e[:file]), e] }
+fm_brace = false
+any_authored_brace = false
+if published_site
+  published_site.collections.each_value do |c|
+    glob(File.join(c.directory, "**", "*")).select { |f| File.file?(f) }.each do |f|
+      guard(rel_path(f)) do
+        text = read(f).to_s
+        next unless text.match?(BRACE_MARKER) || rel_path(f).match?(BRACE_MARKER)
+
+        any_authored_brace = true
+        entry = model_by_file[f]
+        front = if !c.write? then text
+                elsif entry then entry_parts(entry)[0]
+                else
+                  m = text.match(FRONT_MATTER)
+                  m ? m[1] : text
+                end
+        fm_brace ||= front.match?(BRACE_MARKER) || rel_path(f).match?(BRACE_MARKER)
+      end
+    end
+  end
+end
+model.select { |e| e[:kind] == :page }.each do |e|
+  guard(e[:src]) do
+    hit = entry_parts(e)[0].match?(BRACE_MARKER) || e[:src].match?(BRACE_MARKER)
+    fm_brace ||= hit
+    any_authored_brace ||= hit
+  end
+end
 doc_brace_by_url = {}
 model.reject { |e| e[:kind] == :page }.each do |e|
-  doc_brace_by_url[norm(e[:url])] = true if read(e[:file]).to_s.match?(BRACE_MARKER)
+  guard(e[:src]) { doc_brace_by_url[norm(e[:url])] = true if read(e[:file]).to_s.match?(BRACE_MARKER) }
 end
-any_authored_brace = authored_files.any? { |f| read(f).to_s.match?(BRACE_MARKER) } ||
-                     model.any? { |e| e[:kind] == :page && entry_parts(e)[0].match?(BRACE_MARKER) }
 
 liquid_exempt = lambda do |file|
-  next true if data_brace
+  next true if data_brace || fm_brace
 
   owners = claimants(file)
-  parts = owners.map { |e| [e, *entry_parts(e)] }
-  template = owners.size != 1 || parts.any? { |_, _, body| liquid_template?(body) }
-  next true if parts.any? do |e, front, body|
-    liquid_template?(body) ? template_brace?(front, body, e[:data]) : "#{front}#{body}".match?(BRACE_MARKER)
-  end
-  next any_authored_brace if template
+  next any_authored_brace if owners.size != 1
+
+  owner = owners.first
+  front, body = entry_parts(owner)
+  next true if liquid_template?(body) ? template_brace?(front, body, owner[:data]) : "#{front}#{body}".match?(BRACE_MARKER)
 
   page_links[file].any? { |url| doc_brace_by_url[url] }
 end
 LIQUID_TOKEN = /\{\{.{0,60}?\}\}|\{%.{0,60}?%\}|\{[{%].{0,40}/m.freeze
+liquid_checked = 0
 site_pages.each do |file|
-  next if liquid_exempt.call(file)
+  guard(rel_path(file)) do
+    next if liquid_exempt.call(file)
 
-  scrubbed = clean_html(read(file)).gsub(%r{<(pre|code|textarea)\b.*?</\1>}mi, "")
-  found = scrubbed[LIQUID_TOKEN]
-  built = rel_path(file)
-  check("#{built} has no unresolved Liquid",
-        -> { "UNRESOLVED LIQUID: #{built} contains #{found.to_s.lines.first.to_s.strip.inspect}" \
-             "#{source_note(file)}, which no authored text on that page contains — a layout or " \
-             "include emitted it without rendering; fix the template that produces it" }) { found.nil? }
+    liquid_checked += 1
+    scrubbed = clean_html(read(file)).gsub(%r{<(pre|code|textarea)\b.*?</\1>}mi, "")
+    found = scrubbed[LIQUID_TOKEN]
+    built = rel_path(file)
+    check("#{built} has no unresolved Liquid",
+          -> { "UNRESOLVED LIQUID: #{built} contains #{found.to_s.lines.first.to_s.strip.inspect}" \
+               "#{source_note(file)}, which no authored text on that page contains — a layout or " \
+               "include emitted it without rendering; fix the template that produces it" }) { found.nil? }
+  end
 end
-# robots.txt prints only site data; the sitemap and the feed print every
-# post's URL/title, so they follow the template rule.
+puts "  (#{liquid_checked} of #{site_pages.size} site pages checked; the rest print authored braces)"
+# robots.txt prints only site data; the sitemap prints URLs (from front
+# matter and file names), so it is exempt only on a front matter brace.
 robots_entry = model.find { |e| e[:url] == "/robots.txt" }
 robots_exempt = data_brace || (robots_entry && template_brace?(*entry_parts(robots_entry), robots_entry[:data]))
-{ "robots.txt" => robots_exempt, "sitemap.xml" => data_brace || any_authored_brace }.each do |name, exempt|
+{ "robots.txt" => robots_exempt, "sitemap.xml" => data_brace || fm_brace }.each do |name, exempt|
   next if exempt
 
   found = read(File.join(SITE, name)).to_s[LIQUID_TOKEN]
@@ -861,7 +968,9 @@ entries.each_with_index do |e, i|
     !id.strip.empty?
   end
 end
-if feed_root && !(data_brace || any_authored_brace)
+# Outside <content>/<summary> the feed prints front matter (titles, tags,
+# categories) and site data only.
+if feed_root && !(data_brace || fm_brace)
   found = feed_chrome_strings(feed_root).join("\n")[LIQUID_TOKEN]
   check("feed.xml has no unresolved Liquid outside post bodies",
         "UNRESOLVED LIQUID: feed.xml contains #{found.to_s.lines.first.to_s.strip.inspect} outside " \
@@ -915,16 +1024,18 @@ end
 # noindex `robots` value alone changes neither (jekyll-sitemap does not read
 # `robots`), so it is not asserted.
 public_posts.each do |post|
-  url = norm("#{SITE_URL}#{post[:url]}")
-  if post[:data]["sitemap"] == false
-    check("sitemap.xml omits #{post[:url]} (`sitemap: false`)",
-          "SITEMAP: post #{post[:url]} (#{post[:src]}) has `sitemap: false` but is listed in " \
-          "sitemap.xml") { !locs.include?(url) }
-  elsif !noindex_value?(post[:data]["robots"])
-    check("sitemap.xml lists public post #{post[:url]}",
-          "SITEMAP: public post #{post[:url]} is missing from sitemap.xml (check its front " \
-          "matter for sitemap: false or a noindex robots value; source: #{post[:src]})") do
-      locs.include?(url)
+  guard(post[:src]) do
+    url = norm("#{SITE_URL}#{post[:url]}")
+    if post[:data]["sitemap"] == false
+      check("sitemap.xml omits #{post[:url]} (`sitemap: false`)",
+            "SITEMAP: post #{post[:url]} (#{post[:src]}) has `sitemap: false` but is listed in " \
+            "sitemap.xml") { !locs.include?(url) }
+    elsif !noindex_value?(post[:data]["robots"])
+      check("sitemap.xml lists public post #{post[:url]}",
+            "SITEMAP: public post #{post[:url]} is missing from sitemap.xml (check its front " \
+            "matter for sitemap: false or a noindex robots value; source: #{post[:src]})") do
+        locs.include?(url)
+      end
     end
   end
 end
@@ -940,31 +1051,35 @@ listing_pages = [File.join(SITE, "index.html"), File.join(SITE, "blog", "index.h
                 glob(File.join(SITE, "tags", "**", "index.html"))
 listing_pages = listing_pages.select { |f| File.file?(f) }.sort
 fixture_posts.each do |post|
-  absolute = norm("#{SITE_URL}#{post[:url]}")
-  relative = norm(post[:url])
-  check("fixture #{post[:src]} is not in sitemap.xml",
-        "FIXTURE LEAK: test fixture #{post[:src]} is listed in sitemap.xml — fixtures must " \
-        "carry `sitemap: false`") { !locs.include?(absolute) }
-  check("fixture #{post[:src]} is not in feed.xml",
-        "FIXTURE LEAK: test fixture #{post[:src]} is listed in feed.xml — fixtures must carry " \
-        "`feed_exclude: true`") { !feed_links.include?(absolute) }
-  listing_pages.each do |file|
-    next if claimants(file).include?(post) # the fixture IS this page (a URL conflict)
+  guard(post[:src]) do
+    absolute = norm("#{SITE_URL}#{post[:url]}")
+    relative = norm(post[:url])
+    check("fixture #{post[:src]} is not in sitemap.xml",
+          "FIXTURE LEAK: test fixture #{post[:src]} is listed in sitemap.xml — fixtures must " \
+          "carry `sitemap: false`") { !locs.include?(absolute) }
+    check("fixture #{post[:src]} is not in feed.xml",
+          "FIXTURE LEAK: test fixture #{post[:src]} is listed in feed.xml — fixtures must carry " \
+          "`feed_exclude: true`") { !feed_links.include?(absolute) }
+    listing_pages.each do |file|
+      next if claimants(file).include?(post) # the fixture IS this page (a URL conflict)
 
-    hrefs = tags(read(file), "a").map { |a| norm(a["href"].to_s) }
-    check("fixture #{post[:src]} is not linked from #{url_path_of(file)}",
-          "FIXTURE LEAK: test fixture #{post[:src]} is linked from #{url_path_of(file)} — " \
-          "listing templates must skip `feed_exclude` posts") do
-      !hrefs.include?(relative) && !hrefs.include?(absolute)
+      hrefs = tags(read(file), "a").map { |a| norm(a["href"].to_s) }
+      check("fixture #{post[:src]} is not linked from #{url_path_of(file)}",
+            "FIXTURE LEAK: test fixture #{post[:src]} is linked from #{url_path_of(file)} — " \
+            "listing templates must skip `feed_exclude` posts") do
+        !hrefs.include?(relative) && !hrefs.include?(absolute)
+      end
     end
   end
 end
 model.select { |e| e[:kind] == :e2e }.each do |canary|
-  next unless File.file?(canary[:dest]) && claimants(canary[:dest]).size == 1
+  guard(canary[:src]) do
+    next unless File.file?(canary[:dest]) && claimants(canary[:dest]).size == 1
 
-  check("#{canary[:src]} canary page is noindex",
-        "CANARY: #{canary[:url]} (#{canary[:src]}) is not noindex — e2e canaries must carry a " \
-        "robots noindex meta") { noindex?(read(canary[:dest])) }
+    check("#{canary[:src]} canary page is noindex",
+          "CANARY: #{canary[:url]} (#{canary[:src]}) is not noindex — e2e canaries must carry a " \
+          "robots noindex meta") { noindex?(read(canary[:dest])) }
+  end
 end
 
 # --------------------------------------------------------------------------
@@ -1054,6 +1169,10 @@ end
 
 # --------------------------------------------------------------------------
 puts
+unless $warnings.empty?
+  puts "#{$warnings.size} warning(s) — the verifier skipped what it could not process (not a failure):"
+  $warnings.each { |w| puts "  - #{w}" }
+end
 if $failures.empty?
   puts "All #{$checks} build-artifact assertions passed."
   exit 0
