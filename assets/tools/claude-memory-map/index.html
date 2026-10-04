@@ -209,7 +209,7 @@
 <label><input type="checkbox" id="code_web"><span class="tick tick-web"></span><span class="lbl">Claude Code on the web (cloud sessions) &mdash; <code>claude.ai/code</code> in any browser <span class="scopenote"></span></span></label>
 </details>
 
-<p class="fine">A Cowork session runs remote or local for its whole life &mdash; you choose at start (the &ldquo;Beta&rdquo; button, or Settings &rarr; Cowork &rarr; &ldquo;Run new tasks in the cloud&rdquo;). Chat and Cowork share one home now, with one place for your projects and artifacts across both; a project tied to a local folder is Cowork-only, desktop-only. A remote session keeps working with your laptop closed, but can reach your local folders and tools only while the desktop app is open and connected &mdash; and remote scheduled tasks, which run with no device online, can&rsquo;t use local folders or local connectors at all. The desktop app remains the full Cowork experience &mdash; there Claude can also use your local files and browser. Remote sessions are rolling out over the next several weeks, Max plan first. Not on the map: Dispatch (the persistent assign-from-anywhere thread) and its memory; Claude Code&rsquo;s nested per-directory CLAUDE.md files, <code>.claude/rules</code>, and subagent memory; managed-policy files; organization instructions (Team/Enterprise &mdash; they apply across Chat, Cowork, and Code and outrank yours).</p>
+<p class="fine">A Cowork session runs remote or local for its whole life &mdash; you choose at start (the &ldquo;Beta&rdquo; button, or Settings &rarr; Cowork &rarr; &ldquo;Run new tasks in the cloud&rdquo;). Chat and Cowork share one home now, with one place for your projects and artifacts across both; a project tied to a local folder is Cowork-only, desktop-only. A remote session keeps working with your laptop closed, but can reach your local folders and tools only while the desktop app is open and connected &mdash; and remote scheduled tasks, which run with no device online, can&rsquo;t use local folders or local connectors at all. The desktop app remains the full Cowork experience &mdash; there Claude can also use your local files and browser. Remote sessions are rolling out over the next several weeks, Max plan first. Not on the map: Dispatch (the persistent assign-from-anywhere thread) and its memory; Claude Code&rsquo;s nested project instruction files, <code>.claude/rules</code>, and subagent memory; managed-policy files; organization instructions (Team/Enterprise &mdash; they apply across Chat, Cowork, and Code and outrank yours).</p>
 <p class="fine">Settings &rarr; Profile also holds your name, what Claude should call you, and what best describes your work &mdash; lightweight context Claude sees account-wide. The colored tick on each row marks the memory home it touches: <span class="tick tick-mac inlinetick"></span>Mac, <span class="tick tick-win inlinetick"></span>Windows, <span class="tick tick-wsl inlinetick"></span>WSL, <span class="tick tick-web inlinetick"></span>cloud, <span class="tick tick-acct inlinetick"></span>your account, <span class="tick tick-cw inlinetick"></span>Cowork.</p>
 <p class="fine" id="cloud-memory-note">Claude Code on the web (cloud sessions) starts in a fresh task sandbox: it does not inherit your laptop&rsquo;s User CLAUDE.md or machine-local auto memory. A configured SessionStart hook, such as <a href="https://github.com/Adam-S-Daniel/_agent-guidance/blob/main/.claude/hooks/fleet-memory.sh">fleet-memory.sh</a>, can create <code>~/.claude/CLAUDE.md</code> before memory assembly, so that same session reads it. This user file lives only in the sandbox and is not synced to your laptop.</p>
 
@@ -272,7 +272,7 @@ const NODES = {
 };
 
 function s4Node(){
-  return `S4["Project notes file — CLAUDE.md\n  (${Q}project instructions${Q})\n  (one per repo,\n  read by whatever opens it)"]`;
+  return `S4["Project notes file — CLAUDE.md\n  (or AGENTS.md when no CLAUDE.md,\n  Claude Code v2.1.277+)\n  (${Q}project instructions${Q})\n  (one per repo,\n  read by whatever opens it)"]`;
 }
 
 function s7Node(remote){
@@ -635,7 +635,7 @@ const STORE_BRIEF = {
   chatmem:'Memory from chat history',
   prefs:'Instructions for Claude',
   projmem:'Project memory',
-  repo:'CLAUDE.md (repo)',
+  repo:'CLAUDE.md (repo; AGENTS.md fallback)',
   macumd:'Mac home — User CLAUDE.md', winumd:'Windows home — User CLAUDE.md', wslumd:'WSL home — User CLAUDE.md',
   macauto:'Mac home — Auto memory', winauto:'Windows home — Auto memory', wslauto:'WSL home — Auto memory',
   cwmem:'Cowork project memory',
@@ -646,7 +646,7 @@ const STORE_FULL = {
   chatmem:'Memory from chat history: chat-history summary (refreshed daily) + saved facts, spanning every standalone chat',
   prefs:'Instructions for Claude (Settings → Profile; “Instructions” in the app): free-text standing instructions kept in mind across chats and Cowork',
   projmem:'Project memory: one per claude.ai Project',
-  repo:'Project notes file — CLAUDE.md, saved in the repo',
+  repo:'Project notes file — CLAUDE.md (or AGENTS.md when no CLAUDE.md, Claude Code v2.1.277+), saved in the repo',
   macumd:'Mac file system (~/.claude) — user CLAUDE.md: your instructions, all projects on this Mac',
   winumd:'Windows file system (' + WINPATH + ') — user CLAUDE.md: your instructions, all projects on this side',
   wslumd:'WSL file system (~/.claude) — user CLAUDE.md: your instructions, all projects on this side',
@@ -661,7 +661,7 @@ const LEGEND_HTML = '<details class="legend"><summary>Legend</summary><dl>'
   + '<dt>Memory from chat history</dt><dd>Claude’s account-level memory: the chat-history summary (refreshed daily) plus your saved facts (“memory edits”), loaded into every standalone chat on any device. Cross-project.</dd>'
   + '<dt>Instructions for Claude</dt><dd>The free-text box in claude.ai Settings (“Instructions” in the app). The Settings page: “Claude will keep these in mind across chats and Cowork within Anthropic’s guidelines.” Docs add: account-wide, “applied to all of your conversations.”</dd>'
   + '<dt>Project memory</dt><dd>A separate memory for each claude.ai Project.</dd>'
-  + '<dt>CLAUDE.md</dt><dd>The project notes file saved with the repo, read at session start by whatever opens it. Claude Code v2.1.277+ defaults to <code>AGENTS.md</code> when no project <code>CLAUDE.md</code> or <code>CLAUDE.local.md</code> exists in the working directory or above; change Project instructions in <code>/config</code>. See the <a href="https://code.claude.com/docs/en/memory#agents-md">instruction-file docs</a>.</dd>'
+  + '<dt>CLAUDE.md (repo; AGENTS.md fallback)</dt><dd>The project notes file saved with the repo, read at session start by whatever opens it. By default, Claude Code v2.1.277+ reads <code>AGENTS.md</code> when no project <code>CLAUDE.md</code> or <code>CLAUDE.local.md</code> exists in the working directory or above. When both files exist, <code>CLAUDE.md</code> takes precedence; the two files are not combined automatically. Project instructions in <code>/config</code> can change this choice. See the <a href="https://code.claude.com/docs/en/memory#agents-md">instruction-file docs</a>. The v2.1.281+ expansion to Amazon Bedrock, Google Vertex AI, Microsoft Foundry, LLM gateways, and sessions with telemetry disabled is documented in the <a href="https://github.com/anthropics/claude-code/blob/main/CHANGELOG.md#21281">Claude Code changelog</a>.</dd>'
   + '<dt>User CLAUDE.md (Mac / Windows / WSL)</dt><dd>In that side’s <code>~/.claude</code> (Windows: <code>' + WINPATH + '</code>): your instructions for every project on that side. Cross-project, but each side keeps its own file.</dd>'
   + '<dt>Auto memory (Mac / Windows / WSL)</dt><dd>Claude’s own notes (auto memory) — one set per project, per side by default. <code>autoMemoryDirectory</code> can relocate them into a repo-tracked folder; <code>permissions.blockReadsOutsideWorkingDirectories</code> blocks repository-chosen memory even inside the repo. At startup, <code>MEMORY.md</code> loads its first 200 lines or 25KB, whichever comes first; topic files load on demand. See the <a href="https://github.com/Adam-S-Daniel/claude-memory-map/blob/main/docs/portable-memory.md">portable-memory guide</a> for limits and caveats.</dd>'
   + '<dt>Cowork project memory</dt><dd>One per Cowork project — Claude carries what it learns into future tasks in that project, and nothing into other projects. Desktop projects keep it on that computer; where it lives for remote sessions isn’t documented yet.</dd>'
@@ -696,7 +696,7 @@ function updateSync(){
     for (const [s, who] of Object.entries(cover))
       (who.length === ctxs.length ? inSync : notSync).push([s, who]);
     if (ctxs.length === 1) notes.push('Only one context selected — nothing to sync across yet.');
-    if (cover.repo) notes.push('CLAUDE.md sync assumes the contexts open the same repo.');
+    if (cover.repo) notes.push('Repo instruction sync assumes the contexts open the same repo.');
     html = '<div class="insync"><b>In sync across your selection:</b>'
       + (inSync.length ? inSync.map(([s]) => item(s)).join('') : ' None') + '</div>'
       + '<div class="notsync"><b>Kept separate:</b>'
