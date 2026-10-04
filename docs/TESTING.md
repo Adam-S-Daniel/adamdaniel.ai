@@ -486,6 +486,7 @@ Every test run captures screenshots (`screenshot: "on"`) and retains video on fa
 - **CI reporter:** HTML report with visual diffs uploaded as artifact
 - **Update baselines:** from the platform harness checkout, `cd .cms-platform/e2e && SITE_ROOT=<this repo> npx playwright test visual-regression.spec.js --update-snapshots` (this repo has no root `node_modules`; Playwright is installed in the harness only)
 - **First run for new projects:** missing baselines cause failure; generate with `--update-snapshots`
+- **Baseline diffs caused by a change the owner directed:** an agent may regenerate and commit the new baselines in the same PR without asking again (the owner authorized this on PR #456, a subheading removal) — only when the diffs are explained by that change, for the projects whose baselines actually changed, and as a separate `chore(visual): update baselines for <change>` commit so the authorization chain stays visible. It does NOT cover refreshing baselines for a flaky-looking diff on an unrelated PR, as a side task, or when the diffs span elements the change should not have touched (that is UI drift: stop and ask).
 
 #### Visual showcase (retired)
 
