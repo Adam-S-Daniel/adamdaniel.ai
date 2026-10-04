@@ -183,9 +183,12 @@ check passed without building anything. It asserts properties of the built
 one does not; canonical and Open Graph tags; internal links resolve; no
 unresolved Liquid; feed, tag feeds and sitemap parse and exclude test
 fixtures; tool pages embed a vendored app that exists; the rendered Decap
-config parses and points at this repo). Every expectation is derived from
-the source tree, never a hardcoded post, and an assertion may fail only on a
-genuinely broken build, never on a legitimate authoring choice. Run it locally
+config parses and points at this repo). Which pages and posts exist, and at
+which URL, is read from Jekyll itself (the verifier loads the site's bundle
+and lets Jekyll read the source tree in-process), never predicted or
+hardcoded; no assertion compares rendered text with source text. An
+assertion may fail only on a genuinely broken build, never on a legitimate
+authoring choice. Run it locally
 with `bundle exec jekyll build && ruby scripts/verify-build-artifacts.rb`.
 
 **The verifier's regression matrix.** `scripts/test-verify-build-artifacts.rb`

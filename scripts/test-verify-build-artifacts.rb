@@ -181,6 +181,49 @@ end
 ok("the last public post is deleted") do |d|
   Dir.glob(File.join(d, "_posts", "*.md")).each { |f| File.delete(f) }
 end
+# Review round 2: each of these turned the round-1 verifier red.
+ok("Liquid shown in prose with a pipe (kramdown turns it into a table)") do |d|
+  post(d, "2026-10-05-pipe.md", {},
+       "Use the filter {% raw %}{{ page.title | escape }}{% endraw %} to escape output.\n")
+end
+ok("Liquid shown in prose with underscore emphasis inside") do |d|
+  post(d, "2026-10-05-emph.md", {}, "Write {% raw %}{{ _foo_ }}{% endraw %} for that.\n")
+end
+ok("entity-escaped braces in prose") do |d|
+  post(d, "2026-10-05-entity.md", {}, "Type &#123;&#123; page.title }} to print the title.\n")
+end
+ok("a lone {{{ shown in prose") do |d|
+  post(d, "2026-10-05-triple.md", {}, "Type {% raw %}{{{% endraw %} to open a tag.\n")
+end
+ok("a published post with test_fixture: true (not a fixture to the gem: filename rule only)") do |d|
+  post(d, "2026-10-05-flagged.md", { "test_fixture" => "true" })
+end
+ok("a published post with slug: e2e-thing (not a fixture to the gem: filename rule only)") do |d|
+  post(d, "2026-10-05-slugged.md", { "slug" => "e2e-thing" })
+end
+ok("root pages whose names start with an excluded entry (docs2.md, docs2/index.html)") do |d|
+  write(d, "docs2.md", "---\nlayout: page\ntitle: Docs two\n---\nExcluded by Jekyll's prefix match.\n")
+  write(d, "docs2/index.html", "---\nlayout: page\ntitle: Docs two index\n---\n<p>Also excluded.</p>\n")
+end
+ok("canonical_url: in front matter (post and page)") do |d|
+  post(d, "2026-10-05-canon.md", { "canonical_url" => "https://example.com/original/" })
+  page(d, "canon.md", { "canonical_url" => "https://example.net/elsewhere/" })
+end
+ok("a post with title: ''") { |d| post(d, "2026-10-05-untitled.md", { "title" => "''" }) }
+ok("a post whose file name is only an emoji after the date") do |d|
+  post(d, "2026-10-05-🎉.md", { "title" => "Party" })
+end
+ok("a post with an empty body") { |d| post(d, "2026-10-05-empty.md", {}, "") }
+ok("a root page with no layout key") do |d|
+  write(d, "nolayout.html", "---\ntitle: No layout\n---\n<!doctype html><html><body><p>bare</p></body></html>\n")
+end
+ok("tool embed_src without a leading slash (relative_url adds it)") do |d|
+  write(d, "assets/tools/rel/index.html", "<!doctype html><title>Rel</title><p>rel</p>\n")
+  tool(d, "rel.md", { "embed_src" => "assets/tools/rel/" })
+end
+ok("front matter closed with `...` (Jekyll accepts it) on a post with an empty body") do |d|
+  write(d, "_posts/2026-10-05-dots.md", "---\ntitle: Dots\nlayout: post\n...\n")
+end
 ok("invalid UTF-8 bytes in a built page do not crash the scan",
    site: ->(d) { File.open(File.join(d, "_site/blog/index.html"), "ab") { |f| f.write("\xFF\xFE".b) } }) do |d|
   post(d, "2026-10-05-bytes.md", {})
@@ -192,14 +235,14 @@ bad("_site/sitemap.xml deleted", /MISSING FILE: _site\/sitemap\.xml was not buil
     site: ->(d) { File.delete(File.join(d, "_site/sitemap.xml")) }) { |_d| }
 bad("a nav target is gone", /NAV LINK: \/tools\/ in the main navigation is not built/,
     site: ->(d) { File.delete(File.join(d, "_site/tools/index.html")) }) { |_d| }
-bad("a test_fixture post hand-added to feed.xml",
-    /FIXTURE LEAK: test fixture _posts\/2026-10-05-fx\.md is listed in feed\.xml/,
+bad("an e2e- fixture post hand-added to feed.xml",
+    /FIXTURE LEAK: test fixture _posts\/2026-10-05-e2e-fx\.md is listed in feed\.xml/,
     site: lambda { |d|
       feed = File.join(d, "_site/feed.xml")
-      entry = '<entry><title>fx</title><id>https://adamdaniel.ai/blog/fx/</id>' \
-              '<link rel="alternate" href="https://adamdaniel.ai/blog/fx/"/></entry>'
+      entry = '<entry><title>fx</title><id>https://adamdaniel.ai/blog/e2e-fx/</id>' \
+              '<link rel="alternate" href="https://adamdaniel.ai/blog/e2e-fx/"/></entry>'
       File.write(feed, File.read(feed).sub("</feed>", "#{entry}</feed>"))
-    }) { |d| post(d, "2026-10-05-fx.md", { "test_fixture" => "true" }) }
+    }) { |d| post(d, "2026-10-05-e2e-fx.md", {}) }
 bad("an empty _site/admin/config.yml", /ADMIN CONFIG: _site\/admin\/config\.yml is missing, empty/,
     site: ->(d) { File.write(File.join(d, "_site/admin/config.yml"), "") }) { |_d| }
 bad("a link to a missing page",
@@ -207,10 +250,34 @@ bad("a link to a missing page",
   post(d, "2026-10-05-lnk.md", {}, "[x](/nowhere/)\n")
 end
 bad("a literal unresolved {{ }} injected through a layout/include",
-    %r{UNRESOLVED LIQUID: _site/index\.html contains \["\{\{site\.nonexistent_thing"\]}) do |d|
+    /UNRESOLVED LIQUID: _site\/blog\/plain-words\/index\.html contains "\{\{ site\.nonexistent_thing \}\}"/) do |d|
+  post(d, "2026-10-05-plain-words.md", {}, "Nothing but plain words here.\n")
   path = File.join(d, "_includes/header.html")
   File.write(path, "{% raw %}{{ site.nonexistent_thing }}{% endraw %}\n#{File.read(path)}")
 end
+bad("a literal unresolved {% %} injected through a tool layout",
+    /UNRESOLVED LIQUID: _site\/tools\/plain-tool\/index\.html contains "\{% oops %\}"/) do |d|
+  tool(d, "plain-tool.md", {}, "A plain tool description.\n")
+  path = File.join(d, "_layouts/tool.html")
+  File.write(path, File.read(path).sub(/^---\n.*?\n---\n/m) { |fm| "#{fm}{% raw %}{% oops %}{% endraw %}\n" })
+end
+bad("the post layout drops the post body",
+    %r{POST BODY: _posts/2026-10-05-body-case\.md has text but the post-content block of /blog/body-case/ is empty}) do |d|
+  post(d, "2026-10-05-body-case.md", {}, "A paragraph of ordinary words.\n")
+  gem_layout = File.join(Gem.loaded_specs.fetch("cms-platform-theme").full_gem_path, "_layouts", "post.html")
+  write(d, "_layouts/post.html", File.read(gem_layout).sub("{{ content }}", ""))
+end
+bad("/blog/ drops its post list",
+    %r{BLOG LIST: /blog/ links to none of the \d+ published posts}) do |d|
+  f = File.join(d, "blog/index.html")
+  File.write(f, File.read(f).sub("{% for post in published_posts %}", "{% for post in published_posts limit: 0 %}"))
+end
+bad("<title> stripped from built HTML",
+    %r{TITLE: _site/tools/index\.html has no <title> element},
+    site: lambda { |d|
+      f = File.join(d, "_site/tools/index.html")
+      File.write(f, File.read(f).sub(%r{<title>.*?</title>}m, ""))
+    }) { |_d| }
 bad("corrupt XML in the feed is a FAIL line, not a backtrace",
     /FEED: _site\/feed\.xml is not a valid Atom feed.*_site\/feed\.xml is not well-formed XML/,
     site: ->(d) { f = File.join(d, "_site/feed.xml"); File.write(f, File.read(f).sub("</feed>", "")) }) { |_d| }
