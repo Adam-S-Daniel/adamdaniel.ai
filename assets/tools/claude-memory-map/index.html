@@ -190,14 +190,14 @@
   <details class="platd"><summary class="plat" data-grp="mac">On your Mac <span class="cnt" data-grp="mac"></span></summary>
     <div class="subgrp">In the Claude Desktop app</div>
       <label class="i2"><input type="checkbox" id="mac_app_local"><span class="tick tick-mac"></span><span class="lbl">Local sessions</span></label>
-      <label class="i2"><input type="checkbox" id="mac_app_web"><span class="tick tick-web"></span><span class="lbl">Claude Code on the web sessions <span class="scopenote"></span></span></label>
+      <label class="i2"><input type="checkbox" id="mac_app_web"><span class="tick tick-web"></span><span class="lbl">Claude Code on the web (cloud sessions) <span class="scopenote"></span></span></label>
     <label class="i1"><input type="checkbox" id="mac_cli"><span class="tick tick-mac"></span><span class="lbl">In the terminal &mdash; the Claude Code CLI (command-line interface)</span></label>
     <label class="i1"><input type="checkbox" id="mac_vscode"><span class="tick tick-mac"></span><span class="lbl">In VS Code with the Claude Code extension</span></label>
   </details>
 <details class="platd"><summary class="plat" data-grp="win">On your Windows computer <span class="cnt" data-grp="win"></span></summary>
     <div class="subgrp">In the Claude Desktop app</div>
       <label class="i2"><input type="checkbox" id="win_app_local"><span class="tick tick-win"></span><span class="lbl">Local sessions (run on the Windows side)</span></label>
-      <label class="i2"><input type="checkbox" id="win_app_web"><span class="tick tick-web"></span><span class="lbl">Claude Code on the web sessions <span class="scopenote"></span></span></label>
+      <label class="i2"><input type="checkbox" id="win_app_web"><span class="tick tick-web"></span><span class="lbl">Claude Code on the web (cloud sessions) <span class="scopenote"></span></span></label>
       <label class="i2"><input type="checkbox" id="win_app_rc_wsl"><span class="tick tick-wsl"></span><span class="lbl">Remote-controlling a CLI session running in WSL <span style="white-space:nowrap">(Remote Control, <code>/rc</code>)</span></span></label>
     <div class="subgrp">In the terminal &mdash; the Claude Code CLI (command-line interface)</div>
       <label class="i2"><input type="checkbox" id="win_cli_native"><span class="tick tick-win"></span><span class="lbl">Native Windows</span></label>
@@ -206,11 +206,12 @@
       <label class="i2"><input type="checkbox" id="win_vscode_wsl"><span class="tick tick-wsl"></span><span class="lbl">Connected to WSL (with the &ldquo;WSL&rdquo; extension, formerly &ldquo;Remote&nbsp;-&nbsp;WSL&rdquo;)</span></label>
       <label class="i2"><input type="checkbox" id="win_vscode_local"><span class="tick tick-win"></span><span class="lbl">Local &mdash; not WSL</span></label>
   </details>
-<label><input type="checkbox" id="code_web"><span class="tick tick-web"></span><span class="lbl">On the web &mdash; <code>claude.ai/code</code> in any browser <span class="scopenote"></span></span></label>
+<label><input type="checkbox" id="code_web"><span class="tick tick-web"></span><span class="lbl">Claude Code on the web (cloud sessions) &mdash; <code>claude.ai/code</code> in any browser <span class="scopenote"></span></span></label>
 </details>
 
 <p class="fine">A Cowork session runs remote or local for its whole life &mdash; you choose at start (the &ldquo;Beta&rdquo; button, or Settings &rarr; Cowork &rarr; &ldquo;Run new tasks in the cloud&rdquo;). Chat and Cowork share one home now, with one place for your projects and artifacts across both; a project tied to a local folder is Cowork-only, desktop-only. A remote session keeps working with your laptop closed, but can reach your local folders and tools only while the desktop app is open and connected &mdash; and remote scheduled tasks, which run with no device online, can&rsquo;t use local folders or local connectors at all. The desktop app remains the full Cowork experience &mdash; there Claude can also use your local files and browser. Remote sessions are rolling out over the next several weeks, Max plan first. Not on the map: Dispatch (the persistent assign-from-anywhere thread) and its memory; Claude Code&rsquo;s nested per-directory CLAUDE.md files, <code>.claude/rules</code>, and subagent memory; managed-policy files; organization instructions (Team/Enterprise &mdash; they apply across Chat, Cowork, and Code and outrank yours).</p>
 <p class="fine">Settings &rarr; Profile also holds your name, what Claude should call you, and what best describes your work &mdash; lightweight context Claude sees account-wide. The colored tick on each row marks the memory home it touches: <span class="tick tick-mac inlinetick"></span>Mac, <span class="tick tick-win inlinetick"></span>Windows, <span class="tick tick-wsl inlinetick"></span>WSL, <span class="tick tick-web inlinetick"></span>cloud, <span class="tick tick-acct inlinetick"></span>your account, <span class="tick tick-cw inlinetick"></span>Cowork.</p>
+<p class="fine" id="cloud-memory-note">Claude Code on the web (cloud sessions) starts in a fresh task sandbox: it does not inherit your laptop&rsquo;s User CLAUDE.md or machine-local auto memory. A configured SessionStart hook, such as <a href="https://github.com/Adam-S-Daniel/_agent-guidance/blob/main/.claude/hooks/fleet-memory.sh">fleet-memory.sh</a>, can create <code>~/.claude/CLAUDE.md</code> before memory assembly, so that same session reads it. This user file lives only in the sandbox and is not synced to your laptop.</p>
 
   </div>
 
@@ -254,7 +255,7 @@ const NODES = {
   K5:  `K5["VS Code with the\nClaude Code extension —\nlocal (not WSL)"]`,
   KW:  `KW["CLI in WSL"]`,
   KV:  `KV["VS Code on Windows,\nconnected to WSL\n(the ${Q}WSL${Q} extension,\nformerly ${Q}Remote - WSL${Q})"]`,
-  C5:  `C5["On the web\n(fresh cloud sandbox per task)"]`,
+  C5:  `C5["Claude Code on the web (cloud sessions)\n(fresh cloud sandbox per task)"]`,
   C6R: `C6R["Session inside a project"]`,
   C7R: `C7R["Session outside a project\n  (no memory carries forward)"]`,
   C6L: `C6L["Session inside a project"]`,
@@ -455,8 +456,8 @@ function compose(sel){
     flows.push('S4 -- "read at session start" --> C5');
     flows.push('C5 -. "can update it by saving changes to the project" .-> S4');
   }
-  if (has('mac_app_web')) flows.push('MAPP -. "opens web sessions (they run in the cloud)" .-> C5');
-  if (has('win_app_web')) flows.push('WAPP -. "opens web sessions (they run in the cloud)" .-> C5');
+  if (has('mac_app_web')) flows.push('MAPP -. "opens Claude Code on the web (cloud sessions)" .-> C5');
+  if (has('win_app_web')) flows.push('WAPP -. "opens Claude Code on the web (cloud sessions)" .-> C5');
   if (has('win_app_rc_wsl'))
     flows.push('WAPP -. "remote-controls it (Remote Control, /rc) · session + memory stay in WSL (observed)" .-> KW');
 
@@ -660,9 +661,9 @@ const LEGEND_HTML = '<details class="legend"><summary>Legend</summary><dl>'
   + '<dt>Memory from chat history</dt><dd>Claude’s account-level memory: the chat-history summary (refreshed daily) plus your saved facts (“memory edits”), loaded into every standalone chat on any device. Cross-project.</dd>'
   + '<dt>Instructions for Claude</dt><dd>The free-text box in claude.ai Settings (“Instructions” in the app). The Settings page: “Claude will keep these in mind across chats and Cowork within Anthropic’s guidelines.” Docs add: account-wide, “applied to all of your conversations.”</dd>'
   + '<dt>Project memory</dt><dd>A separate memory for each claude.ai Project.</dd>'
-  + '<dt>CLAUDE.md</dt><dd>The project notes file saved with the repo, read at session start by whatever opens it.</dd>'
+  + '<dt>CLAUDE.md</dt><dd>The project notes file saved with the repo, read at session start by whatever opens it. Claude Code v2.1.277+ defaults to <code>AGENTS.md</code> when no project <code>CLAUDE.md</code> or <code>CLAUDE.local.md</code> exists in the working directory or above; change Project instructions in <code>/config</code>. See the <a href="https://code.claude.com/docs/en/memory#agents-md">instruction-file docs</a>.</dd>'
   + '<dt>User CLAUDE.md (Mac / Windows / WSL)</dt><dd>In that side’s <code>~/.claude</code> (Windows: <code>' + WINPATH + '</code>): your instructions for every project on that side. Cross-project, but each side keeps its own file.</dd>'
-  + '<dt>Auto memory (Mac / Windows / WSL)</dt><dd>Claude’s own notes (auto memory) in the same folder — one set per project, per side. Relocatable into a repo-tracked folder via the <code>autoMemoryDirectory</code> setting, so it travels with the repo instead of staying machine-local.</dd>'
+  + '<dt>Auto memory (Mac / Windows / WSL)</dt><dd>Claude’s own notes (auto memory) — one set per project, per side by default. <code>autoMemoryDirectory</code> can relocate them into a repo-tracked folder; <code>permissions.blockReadsOutsideWorkingDirectories</code> blocks repository-chosen memory even inside the repo. At startup, <code>MEMORY.md</code> loads its first 200 lines or 25KB, whichever comes first; topic files load on demand. See the <a href="https://github.com/Adam-S-Daniel/claude-memory-map/blob/main/docs/portable-memory.md">portable-memory guide</a> for limits and caveats.</dd>'
   + '<dt>Cowork project memory</dt><dd>One per Cowork project — Claude carries what it learns into future tasks in that project, and nothing into other projects. Desktop projects keep it on that computer; where it lives for remote sessions isn’t documented yet.</dd>'
   + '<dt>Cowork global instructions</dt><dd>Standing instructions at Settings → Cowork, applied to every Cowork session. (Docs only show editing them in the desktop app; where they’re stored isn’t documented.)</dd>'
   + '<dt>Cowork folder instructions</dt><dd>Instructions attached to a local folder on desktop. You write them or Claude does — it can update them mid-session. Remote sessions reach them only while the desktop app is open and connected.</dd>'
@@ -677,7 +678,7 @@ function storeLabel(s){
 function updateSync(){
   const ctxs = SESSIONS.filter(([id]) => $(id).checked).map(([,name,st]) => ({name, st}));
   if ($('code_web').checked || $('mac_app_web').checked || $('win_app_web').checked)
-    ctxs.push({name:'Claude Code on the web', st:['repo']});
+    ctxs.push({name:'Claude Code on the web (cloud sessions)', st:['repo']});
   const scope = $('scope').value;
   if (scope !== 'both')
     ctxs.forEach(c => { c.st = c.st.filter(s => SCOPE_OF[s] === scope); });
