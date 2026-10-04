@@ -1,5 +1,5 @@
 ---
-title: Codex auto-review just allowed Codex to kill all my running processes
+title: Codex auto-review just let Codex kill all my running processes
 slug: codex-auto-review-just-allowed-codex-to-kill-all-my-running-processes
 date: 2026-10-04 17:26:00 -0400
 published: true
@@ -20,4 +20,4 @@ test_fixture: false
 > * ***A sandboxed run that dies with 137 and no OOM is a stop sign, not a reason to rerun outside the sandbox.***
 > * Run suites that spawn processes inside a PID namespace.
 
-Sometime, I will write about that  _agent-guidance system that syncs memories etc. to Claude and Codex. Remind me! ;)
+(Sometime, I will write about that [_agent-guidance](https://github.com/Adam-S-Daniel/_agent-guidance) system that syncs such lessons to Claude and Codex across their different surfaces and all of ny repos. Remind me!)
