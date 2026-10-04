@@ -173,6 +173,37 @@ covers this byte-mirror invariant so the two lists can't drift unnoticed.
 | `visual-regression.yml` | PR | Uses its own `playwright.regression.config.js` and `regression-video.spec.js` only (both platform-delivered via the `.cms-platform/e2e` harness, not vendored here) |
 | `cms-editorial-workflow.yml` | Every PR (no path/branch filter — `validate-content` must always report for the ruleset) | Front-matter validation in-line (no specs invoked) |
 | `publish-scheduled-posts.yml` | Daily cron (14:00 UTC) | Runs the platform-owned `publish_scheduled_posts.py` (invoked via the `publish-scheduled-posts.yml` reusable — not a local file in this repo); no specs |
+| `site-verify.yml` | Every PR to `main` (no path filter; required `site-verify / site-verify`) | Builds the site (`JEKYLL_ENV=production`) and runs [`scripts/verify-build-artifacts.rb`](../scripts/verify-build-artifacts.rb) |
+
+**The post-build verifier.** `scripts/verify-build-artifacts.rb` is the
+site-owned half of the platform's `site-verify` seam: the reusable runs it
+when it exists and no-ops when it does not, so before issue #3970 the required
+check passed without building anything. It asserts properties of the built
+`_site/` (every published page and post builds and every `published: false`
+one does not; canonical and Open Graph tags; internal links resolve; no
+unresolved Liquid; feed, tag feeds and sitemap parse and exclude test
+fixtures; tool pages embed a vendored app that exists; the rendered Decap
+config parses and points at this repo). Which pages and posts exist, and at
+which URL, is read from Jekyll itself (the verifier loads the site's bundle
+and lets Jekyll read the source tree in-process), never predicted or
+hardcoded; no assertion compares rendered text with source text. An
+assertion may fail only on a genuinely broken build, never on a legitimate
+authoring choice. Run it locally
+with `bundle exec jekyll build && ruby scripts/verify-build-artifacts.rb`.
+
+**The verifier's regression matrix.** `scripts/test-verify-build-artifacts.rb`
+applies each ordinary content edit (no tags, future-dated, `published: false`,
+non-ASCII slug and tag, custom permalinks, inline `{% raw %}` Liquid, a
+fenced `${{ }}` first block, `sitemap: false`, noindex, new tools with and
+without `featured:`, the last post unpublished or deleted, ...) to a scratch
+copy, builds it, and requires the verifier to stay green; it also applies
+real defects (missing sitemap, broken link, unresolved Liquid from a layout,
+corrupt feed XML, ...) and requires a plain-English FAIL with no Ruby
+backtrace. No CI lane runs it (the repo vendors no Ruby test runner and
+`site-verify` runs only the verifier), so run it whenever the verifier
+changes: `bundle exec ruby scripts/test-verify-build-artifacts.rb [name-substring]`
+(about a minute, no network). The header of the verifier lists the theme-gem
+couplings a platform bump can trip.
 
 Jekyll plugin and OAuth-proxy unit tests are now owned upstream by
 cms-platform (gem `theme/spec/` + the platform `oauth-proxy/`) and run in the
