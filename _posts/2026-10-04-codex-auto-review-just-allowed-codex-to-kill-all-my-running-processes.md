@@ -8,7 +8,7 @@ test_fixture: false
 ---
 > **me:** what keeps killing processes and claude sessions?
 >
-> **Claude Code:** … At 13:02:44 your systemd user manager (user@1000.service) was killed. When it died, systemd tore down your user session… Found the cause: **\*Codex's auto-review policy let a model self-approve rerunning the suite outside the sandbox after two 137 failures, with no human in the loop.**…*
+> **Claude Code:** … At 13:02:44 your systemd user manager (user@1000.service) was killed. When it died, systemd tore down your user session… Found the cause: **Codex's auto-review policy let a model self-approve rerunning the suite outside the sandbox after two 137 failures, with no human in the loop.**…
 
 (Emphases mine.) I use Claude Code much more than Codex, including on the same type of task it was working on when this happened (developing evals for agent skills) and Claude auto mode has never allowed a destructive action like this on my laptop. In addition to personally reducing my trust in Codex auto-review, I did the following with Claude.
 
