@@ -173,6 +173,20 @@ covers this byte-mirror invariant so the two lists can't drift unnoticed.
 | `visual-regression.yml` | PR | Uses its own `playwright.regression.config.js` and `regression-video.spec.js` only (both platform-delivered via the `.cms-platform/e2e` harness, not vendored here) |
 | `cms-editorial-workflow.yml` | Every PR (no path/branch filter — `validate-content` must always report for the ruleset) | Front-matter validation in-line (no specs invoked) |
 | `publish-scheduled-posts.yml` | Daily cron (14:00 UTC) | Runs the platform-owned `publish_scheduled_posts.py` (invoked via the `publish-scheduled-posts.yml` reusable — not a local file in this repo); no specs |
+| `site-verify.yml` | Every PR to `main` (no path filter; required `site-verify / site-verify`) | Builds the site (`JEKYLL_ENV=production`) and runs [`scripts/verify-build-artifacts.rb`](../scripts/verify-build-artifacts.rb) |
+
+**The post-build verifier.** `scripts/verify-build-artifacts.rb` is the
+site-owned half of the platform's `site-verify` seam: the reusable runs it
+when it exists and no-ops when it does not, so before issue #3970 the required
+check passed without building anything. It asserts properties of the built
+`_site/` (every published page and post builds and every `published: false`
+one does not; canonical and Open Graph tags; internal links resolve; no
+unresolved Liquid; feed, tag feeds and sitemap parse and exclude test
+fixtures; tool pages embed a vendored app that exists; the rendered Decap
+config parses and points at this repo). Every expectation is derived from
+the source tree, never a hardcoded post, so content edits change what is
+expected rather than whether it passes. Run it locally with
+`bundle exec jekyll build && ruby scripts/verify-build-artifacts.rb`.
 
 Jekyll plugin and OAuth-proxy unit tests are now owned upstream by
 cms-platform (gem `theme/spec/` + the platform `oauth-proxy/`) and run in the
