@@ -184,9 +184,23 @@ one does not; canonical and Open Graph tags; internal links resolve; no
 unresolved Liquid; feed, tag feeds and sitemap parse and exclude test
 fixtures; tool pages embed a vendored app that exists; the rendered Decap
 config parses and points at this repo). Every expectation is derived from
-the source tree, never a hardcoded post, so content edits change what is
-expected rather than whether it passes. Run it locally with
-`bundle exec jekyll build && ruby scripts/verify-build-artifacts.rb`.
+the source tree, never a hardcoded post, and an assertion may fail only on a
+genuinely broken build, never on a legitimate authoring choice. Run it locally
+with `bundle exec jekyll build && ruby scripts/verify-build-artifacts.rb`.
+
+**The verifier's regression matrix.** `scripts/test-verify-build-artifacts.rb`
+applies each ordinary content edit (no tags, future-dated, `published: false`,
+non-ASCII slug and tag, custom permalinks, inline `{% raw %}` Liquid, a
+fenced `${{ }}` first block, `sitemap: false`, noindex, new tools with and
+without `featured:`, the last post unpublished or deleted, ...) to a scratch
+copy, builds it, and requires the verifier to stay green; it also applies
+real defects (missing sitemap, broken link, unresolved Liquid from a layout,
+corrupt feed XML, ...) and requires a plain-English FAIL with no Ruby
+backtrace. No CI lane runs it (the repo vendors no Ruby test runner and
+`site-verify` runs only the verifier), so run it whenever the verifier
+changes: `bundle exec ruby scripts/test-verify-build-artifacts.rb [name-substring]`
+(about a minute, no network). The header of the verifier lists the theme-gem
+couplings a platform bump can trip.
 
 Jekyll plugin and OAuth-proxy unit tests are now owned upstream by
 cms-platform (gem `theme/spec/` + the platform `oauth-proxy/`) and run in the
