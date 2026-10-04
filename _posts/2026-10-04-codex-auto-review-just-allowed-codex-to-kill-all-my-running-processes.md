@@ -1,5 +1,5 @@
 ---
-title: Codex auto-review just let Codex kill all my running processes
+title: Codex auto-review let Codex kill all my running processes
 slug: codex-auto-review-just-allowed-codex-to-kill-all-my-running-processes
 date: 2026-10-04 17:26:00 -0400
 featured_image: /assets/images/uploads/img_1309.jpeg
