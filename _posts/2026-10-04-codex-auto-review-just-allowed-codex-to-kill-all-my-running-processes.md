@@ -25,4 +25,4 @@ I use Claude Code much more than Codex, including on the same type of task it wa
 
 Again, emphasis mine.
 
-I may write sometime about that [_agent-guidance](https://github.com/Adam-S-Daniel/_agent-guidance) system that syncs such lessons to Claude and Codex across their different surfaces and all of my repos; remind me.)
+I may write sometime about that [_agent-guidance](https://github.com/Adam-S-Daniel/_agent-guidance) system that syncs such lessons to Claude and Codex across their different surfaces and all of my repos; remind me.
