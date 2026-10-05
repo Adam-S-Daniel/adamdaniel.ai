@@ -1,0 +1,30 @@
+# Line endings (issue #4085): without this file, Windows checkouts with
+# core.autocrlf=true get CRLF working-tree files. That breaks Jekyll's default
+# excerpt separator ("\n\n" never matches "\r\n\r\n", so a local excerpt becomes
+# the whole post) and bash scripts such as infrastructure/bootstrap/deploy.sh
+# under WSL. Text is LF in the index AND the working tree on every platform.
+# No file here needs CRLF (no .bat/.cmd/.ps1 are tracked).
+* text=auto eol=lf
+
+# Binary types: never normalize. (text=auto already detects these; the explicit
+# list guards against a byte sequence that merely looks like text.)
+*.png binary
+*.jpg binary
+*.jpeg binary
+*.gif binary
+*.webp binary
+*.avif binary
+*.ico binary
+*.webm binary
+*.mp4 binary
+*.mov binary
+*.mp3 binary
+*.wav binary
+*.woff binary
+*.woff2 binary
+*.ttf binary
+*.otf binary
+*.eot binary
+*.pdf binary
+*.zip binary
+*.gz binary
