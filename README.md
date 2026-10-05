@@ -270,7 +270,7 @@ Folders grouped by purpose. Anything not listed is incidental.
 
 | Path | Holds |
 | --- | --- |
-| `admin/` | Gem-delivered Decap CMS shell (cms-platform-theme, since v0.1.4) — not present in this repo except the site-owned seam. This repo tracks only `admin/collections.site.yml.example` (the template for the per-site collection list); the real `admin/collections.site.yml`, `index.html`, `config.yml` / `config-local.yml`, `preview-bridge.js`, and the `reviews/` dashboard are all gem-delivered or generated at build time, not tracked here. The cobalt-thermal theme (`custom.css`) that used to ship here was retired in cms-platform PR #81. |
+| `admin/` | Gem-delivered Decap CMS shell (cms-platform-theme, since v0.1.4) — not present in this repo except the site-owned seam. This repo tracks only `admin/collections.site.yml` (the per-site collection list, with its template `admin/collections.site.yml.example`); `index.html`, `config.yml` / `config-local.yml`, `preview-bridge.js`, and the `reviews/` dashboard are all gem-delivered or generated at build time, not tracked here. The cobalt-thermal theme (`custom.css`) that used to ship here was retired in cms-platform PR #81. |
 | `preview.md` + `_layouts/preview.html` | The live-preview shell at `/preview/` that the admin's preview bridge feeds. `_layouts/preview.html` is gem-delivered (see "Appearance" above). |
 
 ### Site framework
