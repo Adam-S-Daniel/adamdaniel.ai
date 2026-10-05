@@ -1019,6 +1019,10 @@ check("sitemap.xml lists no /admin/ or /e2e/ URL",
       "SITEMAP: sitemap.xml lists an /admin/ or /e2e/ URL — those must carry `sitemap: false`") do
   locs.none? { |l| l.start_with?("#{SITE_URL}/admin/", "#{SITE_URL}/e2e/") }
 end
+check("sitemap.xml lists no /assets/tools/ URL",
+      "SITEMAP: sitemap.xml lists a raw /assets/tools/ app page — the indexable page is "       "/tools/<slug>/, so the `assets/tools` defaults scope in _config.yml must set `sitemap: false`") do
+  locs.none? { |l| l.start_with?("#{SITE_URL}/assets/tools/") }
+end
 # Front matter (as Jekyll resolved it) decides what a post's sitemap entry
 # must be: public posts are listed; `sitemap: false` posts must be ABSENT; a
 # noindex `robots` value alone changes neither (jekyll-sitemap does not read

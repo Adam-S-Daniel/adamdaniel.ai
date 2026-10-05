@@ -323,6 +323,13 @@ bad("a public post missing from sitemap.xml",
       f = File.join(d, "_site/sitemap.xml")
       File.write(f, File.read(f).gsub(%r{<url>\s*<loc>[^<]*/blog/p/</loc>.*?</url>}m, ""))
     }) { |d| post(d, "2026-10-05-p.md", {}) }
+bad("a raw /assets/tools/ app page listed in sitemap.xml",
+    %r{SITEMAP: sitemap\.xml lists a raw /assets/tools/ app page},
+    site: lambda { |d|
+      f = File.join(d, "_site/sitemap.xml")
+      File.write(f, File.read(f).sub("</urlset>",
+        "<url><loc>https://adamdaniel.ai/assets/tools/claude-memory-map/</loc></url></urlset>"))
+    }) { |_d| }
 bad("front matter that is not valid YAML is a FAIL line naming the file",
     %r{BAD FRONT MATTER: _posts/2026-10-05-badyaml\.md is not valid YAML}) do |d|
   write(d, "_posts/2026-10-05-badyaml.md", "---\ntitle: Why: this breaks\ntags: [a\n---\nBody\n")

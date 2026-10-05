@@ -66,6 +66,11 @@ does mean the header can drift from the gem — keep it minimal.
    # tool under collections (the CMS render runs at post_write).
    ```
 
+   The raw `/assets/tools/<slug>/` page stays out of `sitemap.xml` on its
+   own: `_config.yml` sets `sitemap: false` for the whole `assets/tools`
+   defaults scope, and `scripts/verify-build-artifacts.rb` fails if one is
+   listed. Nothing to add per tool.
+
 That's it — the index, nav, and CMS pick it up automatically from the
 collection.
 
