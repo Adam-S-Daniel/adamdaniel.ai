@@ -272,6 +272,11 @@ bad("an e2e- fixture post hand-added to feed.xml",
     }) { |d| post(d, "2026-10-05-e2e-fx.md", {}) }
 bad("an empty _site/admin/config.yml", /ADMIN CONFIG: _site\/admin\/config\.yml is missing, empty/,
     site: ->(d) { File.write(File.join(d, "_site/admin/config.yml"), "") }) { |_d| }
+bad("projects output is off but the admin offers Projects again (#4082)",
+    /ADMIN CONFIG: _config\.yml sets `collections\.projects\.output: false` but the rendered admin config still has a `projects` collection/) do |d|
+  cfg = File.join(d, "_config.yml")
+  File.write(cfg, File.read(cfg).sub(/^  base_collections: .*\n/, ""))
+end
 bad("the Tools slug field loses its pattern (#4083)",
     /ADMIN CONFIG: the `slug` field of the Tools collection in admin\/collections\.site\.yml has no `pattern`/) do |d|
   seam = File.join(d, "admin/collections.site.yml")
