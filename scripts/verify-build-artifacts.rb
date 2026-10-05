@@ -1019,6 +1019,10 @@ check("sitemap.xml lists no /admin/ or /e2e/ URL",
       "SITEMAP: sitemap.xml lists an /admin/ or /e2e/ URL — those must carry `sitemap: false`") do
   locs.none? { |l| l.start_with?("#{SITE_URL}/admin/", "#{SITE_URL}/e2e/") }
 end
+check("sitemap.xml lists no /assets/tools/ URL",
+      "SITEMAP: sitemap.xml lists a raw /assets/tools/ app page — the indexable page is "       "/tools/<slug>/, so the `assets/tools` defaults scope in _config.yml must set `sitemap: false`") do
+  locs.none? { |l| l.start_with?("#{SITE_URL}/assets/tools/") }
+end
 # Front matter (as Jekyll resolved it) decides what a post's sitemap entry
 # must be: public posts are listed; `sitemap: false` posts must be ABSENT; a
 # noindex `robots` value alone changes neither (jekyll-sitemap does not read
@@ -1164,6 +1168,23 @@ seam_names.each do |name|
         "ADMIN CONFIG: admin/collections.site.yml declares collection #{name.inspect} but the " \
         "rendered admin config does not have it — the platform's admin renderer did not splice it in") do
     admin_collections.include?(name)
+  end
+end
+
+# The Tools slug becomes /tools/<slug>/ and the filename; Decap accepts any text
+# unless the field carries a `pattern`, so "My Tool!" saved as-is (#4083).
+seam_tools = (seam ? yaml_load(seam, "admin/collections.site.yml") : nil)
+seam_tools = Array(seam_tools).find { |c| c.is_a?(Hash) && c["name"] == "tools" }
+if seam_tools
+  slug_field = Array(seam_tools["fields"]).find { |f| f.is_a?(Hash) && f["name"] == "slug" }
+  slug_regex, slug_message = slug_field && Array(slug_field["pattern"])
+  check("the Tools slug field only accepts lowercase letters, numbers and dashes",
+        "ADMIN CONFIG: the `slug` field of the Tools collection in admin/collections.site.yml has no " \
+        "`pattern` (or one that accepts \"My Tool!\" or rejects \"my-tool\") — editors could save a " \
+        "URL slug that is not a clean /tools/<slug>/ path; add `pattern: ['^[a-z0-9]+(-[a-z0-9]+)*$', " \
+        "'<plain-language message>']`") do
+    re = slug_regex && Regexp.new(slug_regex.to_s)
+    !re.nil? && !slug_message.to_s.strip.empty? && re.match?("my-tool-2") && !re.match?("My Tool!")
   end
 end
 

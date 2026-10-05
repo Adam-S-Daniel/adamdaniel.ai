@@ -272,6 +272,11 @@ bad("an e2e- fixture post hand-added to feed.xml",
     }) { |d| post(d, "2026-10-05-e2e-fx.md", {}) }
 bad("an empty _site/admin/config.yml", /ADMIN CONFIG: _site\/admin\/config\.yml is missing, empty/,
     site: ->(d) { File.write(File.join(d, "_site/admin/config.yml"), "") }) { |_d| }
+bad("the Tools slug field loses its pattern (#4083)",
+    /ADMIN CONFIG: the `slug` field of the Tools collection in admin\/collections\.site\.yml has no `pattern`/) do |d|
+  seam = File.join(d, "admin/collections.site.yml")
+  File.write(seam, File.read(seam).sub(/, pattern: \[.*?\] \}/, " }"))
+end
 bad("a link to a missing page",
     %r{BROKEN LINK: /nowhere/ is not built \(linked from /blog/lnk/ \(source: _posts/2026-10-05-lnk\.md\)}) do |d|
   post(d, "2026-10-05-lnk.md", {}, "[x](/nowhere/)\n")
@@ -323,6 +328,13 @@ bad("a public post missing from sitemap.xml",
       f = File.join(d, "_site/sitemap.xml")
       File.write(f, File.read(f).gsub(%r{<url>\s*<loc>[^<]*/blog/p/</loc>.*?</url>}m, ""))
     }) { |d| post(d, "2026-10-05-p.md", {}) }
+bad("a raw /assets/tools/ app page listed in sitemap.xml",
+    %r{SITEMAP: sitemap\.xml lists a raw /assets/tools/ app page},
+    site: lambda { |d|
+      f = File.join(d, "_site/sitemap.xml")
+      File.write(f, File.read(f).sub("</urlset>",
+        "<url><loc>https://adamdaniel.ai/assets/tools/claude-memory-map/</loc></url></urlset>"))
+    }) { |_d| }
 bad("front matter that is not valid YAML is a FAIL line naming the file",
     %r{BAD FRONT MATTER: _posts/2026-10-05-badyaml\.md is not valid YAML}) do |d|
   write(d, "_posts/2026-10-05-badyaml.md", "---\ntitle: Why: this breaks\ntags: [a\n---\nBody\n")

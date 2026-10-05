@@ -101,6 +101,13 @@ defaults:
       layout: "canary"
       sitemap: false
       robots: "noindex,nofollow"
+  # Vendored tool apps (assets/tools/<slug>/index.html) are bare iframe
+  # documents. The real, indexable page is /tools/<slug>/; keep the raw asset
+  # page out of the sitemap so it cannot compete with it (#4086).
+  - scope:
+      path: "assets/tools"
+    values:
+      sitemap: false
 
 # Plugins
 plugins:
