@@ -5,4 +5,4 @@ date: 2026-10-05 09:40:00 -0400
 published: false
 test_fixture: false
 ---
-This is an exploratory test post on a preview environment. Please delete me.
+This is an exploratory test post on a preview environment. Please delete me. Second sentence added.
