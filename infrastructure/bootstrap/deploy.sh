@@ -39,6 +39,9 @@
 # If a GitHub OIDC provider already exists in this account:
 #   CREATE_OIDC_PROVIDER=false bash infrastructure/bootstrap/deploy.sh
 #
+# To roll the admin CSP back to warn-only (it is enforced by default):
+#   ADMIN_CSP_MODE=report-only bash infrastructure/bootstrap/deploy.sh
+#
 # This script is idempotent — safe to re-run at any time.
 # =============================================================================
 
@@ -115,6 +118,12 @@ export CREATE_OIDC_PROVIDER="${CREATE_OIDC_PROVIDER:-true}"
 # on CreateApexDnsRecords (DEFAULT false, for pre-go-live sites). Force it true so a
 # redeploy never deletes the production apex/www DNS (would take the site offline).
 export CREATE_APEX_DNS_RECORDS="${CREATE_APEX_DNS_RECORDS:-true}"
+# The admin CSP has been ENFORCED since 2026-10-05. The platform deploy.sh defaults
+# ADMIN_CSP_MODE to `report-only`, so without this export a plain redeploy would
+# silently revert the live CSP to warn-only. This wrapper does not source
+# site-params.env, so the default lives here. Roll back with
+# `ADMIN_CSP_MODE=report-only bash infrastructure/bootstrap/deploy.sh`.
+export ADMIN_CSP_MODE="${ADMIN_CSP_MODE:-enforce}"
 # HOSTED_ZONE_ID passes through if the caller exported it; otherwise the
 # platform script auto-detects it from Route53 (same as the old behavior).
 

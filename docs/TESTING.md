@@ -205,6 +205,13 @@ changes: `bundle exec ruby scripts/test-verify-build-artifacts.rb [name-substrin
 (about a minute, no network). The header of the verifier lists the theme-gem
 couplings a platform bump can trip.
 
+**The bootstrap wrapper's test.** `scripts/test-bootstrap-deploy-wrapper.sh` runs
+`infrastructure/bootstrap/deploy.sh` from a scratch copy with stub `aws`/`git` and a stub
+platform `deploy.sh`, and asserts the env it receives: `ADMIN_CSP_MODE` defaults to `enforce`
+(and `report-only` still overrides it) and `CREATE_APEX_DNS_RECORDS=true`. No CI lane runs it, so
+run it whenever the wrapper changes: `bash scripts/test-bootstrap-deploy-wrapper.sh` (no network,
+no AWS call).
+
 Jekyll plugin and OAuth-proxy unit tests are now owned upstream by
 cms-platform (gem `theme/spec/` + the platform `oauth-proxy/`) and run in the
 platform's own CI, not on this consumer.
