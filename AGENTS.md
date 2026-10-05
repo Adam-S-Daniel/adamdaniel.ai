@@ -210,7 +210,12 @@ exports `CREATE_APEX_DNS_RECORDS=true`** — adamdaniel.ai's apex/www A-records 
 STACK-MANAGED but the platform template gates them on `CreateApexDnsRecords`
 (default `false`), so without that export a redeploy would DELETE the live apex
 DNS and take the site offline; a reviewer caught it in the template-removal PR
-(#1922). Do NOT drop it. A bootstrap-infra fix is made **once in cms-platform**
+(#1922). Do NOT drop it. **It also exports `ADMIN_CSP_MODE=enforce`** (default; the admin CSP
+has been enforced since 2026-10-05) — the platform script defaults to `report-only`, so
+without that export a plain redeploy silently reverts the live CSP to warn-only; roll back
+with `ADMIN_CSP_MODE=report-only bash infrastructure/bootstrap/deploy.sh`. (The wrapper does
+not source `site-params.env`, so cms-platform's `docs/ADMIN-AUTH-SECURITY.md` step 4 does not
+apply here.) Regression test: `bash scripts/test-bootstrap-deploy-wrapper.sh`. A bootstrap-infra fix is made **once in cms-platform**
 and flows here on the next `platform_ref` bump — never apply it locally. → read
 `docs/WORKFLOWS.md` § "Bootstrap infrastructure is platform-owned".
 

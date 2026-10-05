@@ -836,7 +836,14 @@ exports adamdaniel.ai's site params (`APEX_DOMAIN=adamdaniel.ai`, etc., which de
 apex/www A-records are STACK-MANAGED, but the platform template gates them on
 `CreateApexDnsRecords` (default `false`, safe for fresh sites). Without that
 export a redeploy would DELETE the live apex DNS (site offline) — a
-reviewer-caught regression in the template-removal PR (#1922). Do NOT drop it. A bootstrap-infra fix
+reviewer-caught regression in the template-removal PR (#1922). Do NOT drop it. **The wrapper also exports
+`ADMIN_CSP_MODE=enforce`** (default, overridable): the admin CSP was switched to enforce on
+2026-10-05 by a redeploy with `ADMIN_CSP_MODE=enforce` passed explicitly, but the platform
+`deploy.sh` defaults it to `report-only`, so a later plain redeploy would have reverted it.
+Roll back with `ADMIN_CSP_MODE=report-only bash infrastructure/bootstrap/deploy.sh`. The wrapper
+does not source `site-params.env` (cms-platform's `docs/ADMIN-AUTH-SECURITY.md` step 4 assumes it does;
+that step does not apply to this site). `scripts/test-bootstrap-deploy-wrapper.sh` pins both
+exports. A bootstrap-infra fix
 (e.g. CloudFront `ErrorCachingMinTTL=0`) is now made **once in cms-platform** and flows here on the
 next `platform_ref` bump — never apply it locally. This mirrors jodidaniel.com, which has no local
 bootstrap template either. (`infrastructure/rum/` is **not** affected — its template is not an exact

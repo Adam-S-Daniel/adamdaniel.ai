@@ -36,6 +36,9 @@ Then add the stack outputs as GitHub Actions secrets (repo → Settings → Secr
 - `AWS_ROLE_ARN` — the IAM role ARN for OIDC auth
 - `PREVIEW_CLOUDFRONT_ID` — the CloudFront distribution ID for preview cache invalidation
 
+The admin CSP is enforced by default; to roll it back to warn-only, redeploy with
+`ADMIN_CSP_MODE=report-only bash infrastructure/bootstrap/deploy.sh`.
+
 After verifying OIDC works, remove the old `AWS_ACCESS_KEY_ID` and
 `AWS_SECRET_ACCESS_KEY` secrets and deactivate the IAM user keys.
 
