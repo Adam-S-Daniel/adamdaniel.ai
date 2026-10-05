@@ -2,6 +2,7 @@
 title: Quoting Anthropic’s Thariq Shihipar
 slug: quoting-anthropic-s-thariq-shihipar
 date: 2026-10-01 11:25:00 -0400
+featured_image: /assets/images/uploads/800x800bb.webp
 published: true
 test_fixture: false
 ---
