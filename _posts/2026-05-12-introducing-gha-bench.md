@@ -4,7 +4,7 @@ slug: introducing-gha-bench
 date: 2026-05-13 08:51:00 -0400
 excerpt: GHA-bench is a benchmark and a set of evals for how well different
   coding agents author and test GitHub Actions using different languages.
-featured_image: /assets/images/uploads/img_9581.png
+featured_image: /assets/images/uploads/img_9581.webp
 published: true
 ---
 [GHA-bench](https://github.com/Adam-S-Daniel/GHA-bench) is a benchmark and a set of evals for how well different coding agents author and test GitHub Actions.
@@ -44,6 +44,7 @@ Adjust the sliders according to your priorities.
       <span class="bws-pct" id="bws-workflow-pct">25.0%</span>
     </div>
   </div>
+  <div class="bws-table-scroll">
   <table class="bws-table">
     <thead>
       <tr>
@@ -57,6 +58,7 @@ Adjust the sliders according to your priorities.
     </thead>
     <tbody id="bws-tbody"></tbody>
   </table>
+  </div>
 </div>
 
 <style>
@@ -76,6 +78,7 @@ Adjust the sliders according to your priorities.
   text-align: right;
   font-variant-numeric: tabular-nums;
 }
+.bws-widget .bws-table-scroll { max-width: 100%; overflow-x: auto; }
 .bws-widget .bws-table {
   width: 100%;
   border-collapse: collapse;
