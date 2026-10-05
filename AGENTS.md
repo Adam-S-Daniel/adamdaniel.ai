@@ -119,7 +119,7 @@ CloudFront Functions maps `Host: preview-pr${N}...` to the S3 key prefix
 (no `/pr-N/` in any visible URL). → `docs/WORKFLOWS.md` § "Preview host-to-prefix
 mapping".
 
-**`admin/` is GEM-DELIVERED (do not re-vendor the machinery).** Since cms-platform v0.1.4 the Decap admin UI and its `config*.base.yml` templates ship inside the `cms-platform-theme` gem (pinned in `Gemfile` / `platform.lock`), whose render hook copies them into `_site/admin/` at build time; this repo tracks only the site-owned seam TEMPLATE `admin/collections.site.yml.example`, and the e2e harness moved to the platform too (`e2e/` is no longer tracked here). Change the admin UI in **cms-platform** and ship a release — the sync path is a gem bump landed by **`platform-bump.yml`**. A re-vendored copy would shadow the gem and silently drift; anything below that references in-repo `admin/config*.yml` or `e2e/cms-*.spec.js` describes the platform-owned source of truth, not files you edit here. → read `docs/CMS-ADMIN.md` § "`admin/` is gem-delivered" first.
+**`admin/` is GEM-DELIVERED (do not re-vendor the machinery).** Since cms-platform v0.1.4 the Decap admin UI and its `config*.base.yml` templates ship inside the `cms-platform-theme` gem (pinned in `Gemfile` / `platform.lock`), whose render hook copies them into `_site/admin/` at build time; this repo tracks only the site-owned seam, `admin/collections.site.yml` (with its template `admin/collections.site.yml.example`), and the e2e harness moved to the platform too (`e2e/` is no longer tracked here). Change the admin UI in **cms-platform** and ship a release — the sync path is a gem bump landed by **`platform-bump.yml`**. A re-vendored copy would shadow the gem and silently drift; anything below that references in-repo `admin/config*.yml` or `e2e/cms-*.spec.js` describes the platform-owned source of truth, not files you edit here. → read `docs/CMS-ADMIN.md` § "`admin/` is gem-delivered" first.
 
 ## Deeper references
 
@@ -164,7 +164,7 @@ bash oauth-proxy/deploy.sh                  # deploy OAuth proxy (delegates to t
 # Tests — from the platform harness checkout, against this site
 export SITE_ROOT="$(git rev-parse --show-toplevel)"
 cd .cms-platform/e2e
-npx playwright test                               # full browser matrix (8 projects)
+npx playwright test                               # full matrix (10 projects: 8 public + 2 admin)
 npx playwright test --project chromium-desktop-1080 # single project (public lane)
 npx playwright test glow-banding.spec.js           # single test file
 ```
