@@ -272,6 +272,11 @@ bad("an e2e- fixture post hand-added to feed.xml",
     }) { |d| post(d, "2026-10-05-e2e-fx.md", {}) }
 bad("an empty _site/admin/config.yml", /ADMIN CONFIG: _site\/admin\/config\.yml is missing, empty/,
     site: ->(d) { File.write(File.join(d, "_site/admin/config.yml"), "") }) { |_d| }
+bad("the Tools slug field loses its pattern (#4083)",
+    /ADMIN CONFIG: the `slug` field of the Tools collection in admin\/collections\.site\.yml has no `pattern`/) do |d|
+  seam = File.join(d, "admin/collections.site.yml")
+  File.write(seam, File.read(seam).sub(/, pattern: \[.*?\] \}/, " }"))
+end
 bad("a link to a missing page",
     %r{BROKEN LINK: /nowhere/ is not built \(linked from /blog/lnk/ \(source: _posts/2026-10-05-lnk\.md\)}) do |d|
   post(d, "2026-10-05-lnk.md", {}, "[x](/nowhere/)\n")
