@@ -667,7 +667,8 @@ puts "  (include branching: scripts/test-favicon-include.rb)"
 favicon_include_passed = system(RbConfig.ruby, File.join(__dir__, "test-favicon-include.rb"))
 check("scripts/test-favicon-include.rb passes (output above)",
       "FAVICON INCLUDE: scripts/test-favicon-include.rb failed — _includes/favicon.html no longer " \
-      "honors `cms.favicon_url` or no longer links the icon set (output above)") { favicon_include_passed == true }
+      "honors `cms.favicon_url` or no longer links the icon set, or assets/favicon.svg is no longer " \
+      "the outlined-path AD monogram (output above)") { favicon_include_passed == true }
 
 # PNG width/height from the IHDR chunk; nil when the bytes are not a PNG.
 def png_size(bytes)

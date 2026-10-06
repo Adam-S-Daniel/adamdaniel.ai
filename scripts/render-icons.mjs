@@ -3,7 +3,7 @@
 //
 //   favicon.ico            16, 32 and 48 px, PNG-in-ICO (the /favicon.ico probe)
 //   apple-touch-icon.png   180 px, full-bleed square (iOS rounds the corners itself
-//                          and paints transparent pixels black)
+//                          and paints transparent pixels black); keeps the glow
 //
 //   node scripts/render-icons.mjs
 //
@@ -22,9 +22,10 @@ const { chromium } = require("playwright-core");
 
 const svg = readFileSync(join(root, "assets", "favicon.svg"), "utf8");
 if (!svg.includes(' rx="14"')) throw new Error('assets/favicon.svg lost its rounded background (rx="14")');
-// The Apple icon is a full-bleed square: iOS rounds it, so the ring would be clipped.
-if (!svg.includes('<rect id="ring"')) throw new Error('assets/favicon.svg lost its ring (<rect id="ring" .../>)');
-const square = svg.replace(' rx="14"', "").replace(/<rect id="ring"[^>]*\/>\s*/, "");
+if (!svg.includes('fill="url(#glow)"')) throw new Error('assets/favicon.svg lost its glow overlay (fill="url(#glow)")');
+// The Apple icon is a full-bleed square: iOS rounds it itself, so drop the tile's and the
+// glow overlay's corner radius (the glow stays).
+const square = svg.replaceAll(' rx="14"', "");
 
 const browser = await chromium.launch({
   executablePath: process.env.CHROME || undefined,

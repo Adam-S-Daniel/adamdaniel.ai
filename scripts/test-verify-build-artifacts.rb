@@ -296,6 +296,11 @@ bad("favicon.svg has `--` inside an XML comment (not well-formed, browsers canno
   f = File.join(d, "assets/favicon.svg")
   File.write(f, File.read(f).sub("<!--", "<!-- tokens --bg-1 and --accent;"))
 end
+bad("favicon.svg draws the letters with <text> (a tab has no Fira Code to draw it)",
+    /FAVICON INCLUDE: scripts\/test-favicon-include\.rb failed/) do |d|
+  f = File.join(d, "assets/favicon.svg")
+  File.write(f, File.read(f).sub(/<path fill="#d8e4ff"[^>]*\/>/, '<text x="32" y="43" fill="#d8e4ff">AD</text>'))
+end
 bad("apple-touch-icon.png is not a 180x180 PNG",
     /FAVICON: _site\/apple-touch-icon\.png is missing or not a 180x180 PNG/,
     site: ->(d) { File.binwrite(File.join(d, "_site/apple-touch-icon.png"), "not a png") }) { |_d| }
