@@ -660,6 +660,78 @@ NAV_SECTIONS.each do |section_href|
 end
 
 # --------------------------------------------------------------------------
+section "favicon: the site's own AD icon set is built and linked from every page"
+# The theme's placeholder favicon.svg is what this site served until the AD mark
+# shadowed it; favicon.ico and apple-touch-icon.png used to 404.
+puts "  (include branching: scripts/test-favicon-include.rb)"
+favicon_include_passed = system(RbConfig.ruby, File.join(__dir__, "test-favicon-include.rb"))
+check("scripts/test-favicon-include.rb passes (output above)",
+      "FAVICON INCLUDE: scripts/test-favicon-include.rb failed — _includes/favicon.html no longer " \
+      "honors `cms.favicon_url` or no longer links the icon set, or assets/favicon.svg is no longer " \
+      "the outlined-path AD monogram (output above)") { favicon_include_passed == true }
+
+# PNG width/height from the IHDR chunk; nil when the bytes are not a PNG.
+def png_size(bytes)
+  return nil unless bytes && bytes.byteslice(0, 8) == "\x89PNG\r\n\x1a\n".b && bytes.byteslice(12, 4) == "IHDR"
+
+  bytes.byteslice(16, 8).unpack("NN")
+end
+
+def site_bytes(rel)
+  path = File.join(SITE, rel)
+  File.file?(path) ? File.binread(path) : nil
+end
+
+check("/apple-touch-icon.png is a 180x180 PNG",
+      "FAVICON: _site/apple-touch-icon.png is missing or not a 180x180 PNG — rerun " \
+      "`node scripts/render-icons.mjs` and commit the result") { png_size(site_bytes("apple-touch-icon.png")) == [180, 180] }
+ico = site_bytes("favicon.ico")
+ico_count = ico && ico.bytesize >= 6 && ico.unpack("vv") == [0, 1] ? ico.unpack("vvv")[2] : 0
+ico_sizes = (0...ico_count).map do |i|
+  w, h, _c, _r, _planes, _bpp, len, off = ico.byteslice(6 + 16 * i, 16).to_s.unpack("CCCCvvVV")
+  w && png_size(ico.byteslice(off, len)) == [w, h] ? w : nil
+end
+check("/favicon.ico is an ICO of PNG images that includes 16 and 32 px (got #{ico_sizes.inspect})",
+      "FAVICON: _site/favicon.ico is missing or is not an ICO of PNG images with 16 and 32 px " \
+      "entries — rerun `node scripts/render-icons.mjs` and commit the result") do
+  ico_sizes.all? && ([16, 32] - ico_sizes).empty?
+end
+favicon_svg = read(File.join(SITE, "assets", "favicon.svg")).to_s
+check("/assets/favicon.svg is the AD monogram in the site's palette, not the theme placeholder",
+      "FAVICON: _site/assets/favicon.svg is not the site's AD monogram (aria-label=\"AD\", " \
+      "#285aff, #d8e4ff) — assets/favicon.svg must shadow the cms-platform theme's placeholder") do
+  favicon_svg.include?('aria-label="AD"') && favicon_svg.include?("#285aff") && favicon_svg.include?("#d8e4ff")
+end
+check("/assets/favicon.svg is well-formed XML (browsers refuse to draw a malformed SVG icon)",
+      "FAVICON: _site/assets/favicon.svg is not well-formed XML — a browser will not decode it as a tab " \
+      "icon (a `--` inside an XML comment is the usual cause)") do
+  doc = REXML::Document.new(favicon_svg)
+  !doc.root.nil? && doc.root.name == "svg"
+end
+favicon_url = config.dig("cms", "favicon_url") if config["cms"].is_a?(Hash)
+[["/", "index.html"], ["/404.html", "404.html"]].each do |label, rel|
+  links = tags(read(File.join(SITE, rel)).to_s, "link")
+  icons = links.select { |l| l["rel"].to_s.split.include?("icon") }.map { |l| l["href"] }
+  check("#{label} <head> links the Apple touch icon",
+        "FAVICON LINK: _site/#{rel} has no <link rel=\"apple-touch-icon\" href=\"/apple-touch-icon.png\"> — " \
+        "check _includes/favicon.html") do
+    links.any? { |l| l["rel"] == "apple-touch-icon" && l["href"] == "/apple-touch-icon.png" }
+  end
+  if favicon_url.to_s.empty?
+    check("#{label} <head> links favicon.ico and the SVG icon",
+          "FAVICON LINK: _site/#{rel} must link /favicon.ico and /assets/favicon.svg as rel=icon " \
+          "(found #{icons.inspect}) — check _includes/favicon.html") do
+      (["/favicon.ico", "/assets/favicon.svg"] - icons).empty?
+    end
+  else
+    check("#{label} <head> links cms.favicon_url as its icon",
+          "FAVICON LINK: _config.yml sets cms.favicon_url but _site/#{rel} links #{icons.inspect}") do
+      icons == [favicon_url]
+    end
+  end
+end
+
+# --------------------------------------------------------------------------
 section "tools: every tool is listed and embeds a vendored app that exists"
 tools_index = read(File.join(SITE, "tools", "index.html")).to_s
 tools_index_links = tags(tools_index, "a").map { |a| norm(site_path(a["href"].to_s)) }
