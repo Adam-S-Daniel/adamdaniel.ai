@@ -646,6 +646,13 @@ model.select { |e| e[:kind] == :tools }.each do |tool|
     end
   end
 end
+# /tools/ must sit in the same column as the header and every other page; the
+# `container--wide` modifier made its heading start left of the site name (#4115).
+check("/tools/ uses the standard content column (no container--wide)",
+      "TOOLS LAYOUT: _site/tools/index.html has an element with class `container--wide` — the Tools " \
+      "heading would not line up with the site header; use the plain `container` in tools/index.html") do
+  tags(tools_index, "div").none? { |d| d["class"].to_s.split.include?("container--wide") }
+end
 glob(File.join(ROOT, "_data", "tool_sources", "*.yml")).each do |src|
   guard(rel_path(src)) do
     slug = File.basename(src, ".yml")
@@ -1185,6 +1192,19 @@ if seam_tools
         "'<plain-language message>']`") do
     re = slug_regex && Regexp.new(slug_regex.to_s)
     !re.nil? && !slug_message.to_s.strip.empty? && re.match?("my-tool-2") && !re.match?("My Tool!")
+  end
+end
+
+# A Tool with no `embed_src` publishes as a title with nothing to open, yet the
+# /tools/ card still says "Open tool" (#4116). Decap only blocks that when the
+# field is `required`.
+if seam_tools
+  embed_field = Array(seam_tools["fields"]).find { |f| f.is_a?(Hash) && f["name"] == "embed_src" }
+  check("the Tools embed_src field is required",
+        "ADMIN CONFIG: the `embed_src` field of the Tools collection in admin/collections.site.yml is " \
+        "not `required: true` — editors could publish a Tool with no embed, which renders as an empty " \
+        "page behind an \"Open tool\" card; set `required: true` and keep a hint saying why") do
+    !embed_field.nil? && embed_field["required"] == true && !embed_field["hint"].to_s.strip.empty?
   end
 end
 
