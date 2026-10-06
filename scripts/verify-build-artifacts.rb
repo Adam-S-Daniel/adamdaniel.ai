@@ -85,6 +85,7 @@
 # FAIL. `scripts/` is excluded from the Jekyll build, so this is never
 # published.
 
+require "json"
 require "yaml"
 require "date"
 require "time"
@@ -1185,6 +1186,40 @@ if seam_tools
         "'<plain-language message>']`") do
     re = slug_regex && Regexp.new(slug_regex.to_s)
     !re.nil? && !slug_message.to_s.strip.empty? && re.match?("my-tool-2") && !re.match?("My Tool!")
+  end
+end
+
+# --------------------------------------------------------------------------
+section "GHA-bench widget: the weight sliders always total 100%"
+# adamdaniel.ai/blog/introducing-gha-bench/ carries an inline widget (class
+# `bws-widget`) whose four range inputs must always sum to 100. Browsers snap an
+# input's value to its `step`, so an unrounded redistribution drifted to 100.5%
+# (issue #4114). The built page's range inputs and inline script go to
+# scripts/check-bws-widget.js, which replays Home/End/odd values with a fake DOM
+# that snaps like a browser. A post without the widget is not asserted, and
+# neither is anything when Node is unavailable (guard() turns that into a WARN).
+BWS_CHECK = File.join(ROOT, "scripts", "check-bws-widget.js")
+public_posts.each do |post|
+  guard(post[:src]) do
+    html = File.file?(post[:dest]) ? read(post[:dest]) : nil
+    next unless html && html.include?("bws-widget")
+
+    inputs = tags(html, "input").select { |i| i["id"].to_s.start_with?("bws-") && i["type"] == "range" }
+    script = html.scan(%r{<script\b[^>]*>(.*?)</script\s*>}mi).flatten.find { |body| body.include?("bws-") }
+    next if inputs.empty? || script.nil?
+
+    unless File.file?(BWS_CHECK)
+      puts "  WARN #{BWS_CHECK} is missing; the widget check was skipped"
+      next
+    end
+    payload = JSON.generate("inputs" => inputs.map { |i| i.slice("id", "min", "max", "step", "value") },
+                            "script" => script)
+    out, status = Open3.capture2e("node", BWS_CHECK, stdin_data: payload)
+    check("#{post[:url]}: the #{inputs.size} weight sliders total exactly 100% after every move",
+          -> { "WIDGET WEIGHTS: #{post[:url]} (#{post[:src]}): " \
+               "#{out.lines.grep(/^FAIL/).first(3).map { |l| l.sub(/^FAIL /, "").strip }.join("; ")}" }) do
+      status.success?
+    end
   end
 end
 

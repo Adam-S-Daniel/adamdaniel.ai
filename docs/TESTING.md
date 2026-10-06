@@ -205,6 +205,20 @@ changes: `bundle exec ruby scripts/test-verify-build-artifacts.rb [name-substrin
 (about a minute, no network). The header of the verifier lists the theme-gem
 couplings a platform bump can trip.
 
+**The GHA-bench widget's checks (#4114, #4084).** The post at
+`/blog/introducing-gha-bench/` carries an inline widget (sliders plus a ranked
+table) that no platform spec covers. Two scripts guard it. `scripts/check-bws-widget.js`
+runs inside the verifier (the "GHA-bench widget" section): it replays Home/End
+and odd values against the built post's inline script in a fake DOM that snaps
+range values to their `step` like a browser, and requires the four weights to
+total exactly 100. `scripts/check-gha-bench-phone.js` is a real-browser check of
+the phone layout (no page scroll, one-line rows, swipe hint, edge fade, pinned
+Model column, Code reachable) and of the same 100% total; it is not a CI lane
+(no Node toolchain here), so run it after touching the widget: serve a built
+`_site` on your own port, then
+`PLAYWRIGHT_MODULE=<harness>/e2e/node_modules/playwright node scripts/check-gha-bench-phone.js http://127.0.0.1:<port>`
+(`BROWSER_ENGINE=webkit` for WebKit).
+
 **The bootstrap wrapper's test.** `scripts/test-bootstrap-deploy-wrapper.sh` runs
 `infrastructure/bootstrap/deploy.sh` from a scratch copy with stub `aws`/`git` and a stub
 platform `deploy.sh`, and asserts the env it receives: `ADMIN_CSP_MODE` defaults to `enforce`
