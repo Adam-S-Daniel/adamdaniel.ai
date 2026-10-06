@@ -85,7 +85,6 @@
 # FAIL. `scripts/` is excluded from the Jekyll build, so this is never
 # published.
 
-require "json"
 require "yaml"
 require "date"
 require "time"
@@ -1199,6 +1198,10 @@ section "GHA-bench widget: the weight sliders always total 100%"
 # that snaps like a browser. A post without the widget is not asserted, and
 # neither is anything when Node is unavailable (guard() turns that into a WARN).
 BWS_CHECK = File.join(ROOT, "scripts", "check-bws-widget.js")
+# Required here, not at the top: a top-level `require "json"` activates Ruby's
+# bundled json before `SiteModel.load` runs `bundler/setup`, and the lockfile's
+# newer json then raises Gem::LoadError (a plain `ruby` run, as in CI).
+require "json"
 public_posts.each do |post|
   guard(post[:src]) do
     html = File.file?(post[:dest]) ? read(post[:dest]) : nil
