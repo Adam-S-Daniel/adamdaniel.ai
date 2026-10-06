@@ -30,7 +30,7 @@ ROOT = File.expand_path("..", __dir__)
 VERIFIER = ENV.fetch("VERIFY_SCRIPT", File.join(ROOT, "scripts", "verify-build-artifacts.rb"))
 COPY = %w[_config.yml _data _includes _layouts _posts _tags _tools _e2e admin assets blog pages
           projects tags tools index.html 404.html robots.txt feed.xml preview.md Gemfile
-          Gemfile.lock platform.lock].freeze
+          Gemfile.lock platform.lock favicon.ico apple-touch-icon.png].freeze
 BUNDLE_ENV = { "BUNDLE_GEMFILE" => File.join(ROOT, "Gemfile"), "JEKYLL_ENV" => "production" }.freeze
 
 CASES = []
@@ -78,6 +78,10 @@ ok("a future-dated post when _config.yml has future: false") do |d|
   post(d, "2099-01-01-from-the-future.md", { "title" => "Future" })
 end
 ok("published: false post") { |d| post(d, "2026-10-05-hidden.md", { "published" => "false" }) }
+ok("cms.favicon_url set: that URL is the one icon, the Apple touch icon stays") do |d|
+  write(d, "_config.yml", File.read(File.join(d, "_config.yml"))
+    .sub(/^cms:\n/, "cms:\n  favicon_url: https://example.com/brand.png\n"))
+end
 ok("a _drafts draft") do |d|
   write(d, "_drafts/a-draft.md", "---\ntitle: Draft\n---\nNot yet.\n")
 end
@@ -277,6 +281,19 @@ bad("the Tools slug field loses its pattern (#4083)",
   seam = File.join(d, "admin/collections.site.yml")
   File.write(seam, File.read(seam).sub(/, pattern: \[.*?\] \}/, " }"))
 end
+bad("the icon include stops linking the Apple touch icon",
+    /FAVICON LINK: _site\/index\.html has no <link rel="apple-touch-icon"/) do |d|
+  f = File.join(d, "_includes/favicon.html")
+  File.write(f, File.read(f).sub(/^<link rel="apple-touch-icon".*\n?/, ""))
+end
+bad("favicon.svg falls back to the theme placeholder",
+    /FAVICON: _site\/assets\/favicon\.svg is not the site's AD monogram/) { |d| File.delete(File.join(d, "assets/favicon.svg")) }
+bad("apple-touch-icon.png is not a 180x180 PNG",
+    /FAVICON: _site\/apple-touch-icon\.png is missing or not a 180x180 PNG/,
+    site: ->(d) { File.binwrite(File.join(d, "_site/apple-touch-icon.png"), "not a png") }) { |_d| }
+bad("favicon.ico lacks the 16 px image",
+    /FAVICON: _site\/favicon\.ico is missing or is not an ICO of PNG images with 16 and 32 px entries/,
+    site: ->(d) { File.binwrite(File.join(d, "_site/favicon.ico"), "\x00\x00\x01\x00\x00\x00".b) }) { |_d| }
 bad("a link to a missing page",
     %r{BROKEN LINK: /nowhere/ is not built \(linked from /blog/lnk/ \(source: _posts/2026-10-05-lnk\.md\)}) do |d|
   post(d, "2026-10-05-lnk.md", {}, "[x](/nowhere/)\n")
@@ -391,6 +408,7 @@ Dir.mktmpdir("verify-matrix-") do |tmp|
   COPY.each { |p| FileUtils.cp_r(File.join(ROOT, p), File.join(base, p)) }
   FileUtils.mkdir_p(File.join(base, "scripts"))
   FileUtils.cp(VERIFIER, File.join(base, "scripts", "verify-build-artifacts.rb"))
+  FileUtils.cp(File.join(ROOT, "scripts", "test-favicon-include.rb"), File.join(base, "scripts"))
 
   CASES.each_with_index do |c, i|
     next if filter && !c[:name].include?(filter)

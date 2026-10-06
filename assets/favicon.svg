@@ -1,0 +1,18 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 64 64" role="img" aria-label="AD">
+  <!-- Adam Daniel's "AD" monogram in the site's Cobalt Thermal palette (the
+       theme's main.css :root): --bg-1 #060d1f tile, --accent #285aff ring,
+       --text-primary #d8e4ff letters, the same pale blue as assets/images/logo.svg.
+       The letters are drawn as strokes, not <text>, because a browser tab has no
+       Helvetica Neue to draw them with and an SVG icon cannot load a font.
+       This file shadows the cms-platform theme's placeholder favicon.svg.
+       favicon.ico and apple-touch-icon.png are rendered from it by
+       scripts/render-icons.mjs, which drops the rounded corners and the ring
+       for the full-bleed Apple icon; rerun it after editing this. -->
+  <rect width="64" height="64" rx="14" fill="#060d1f"/>
+  <rect id="ring" x="1.5" y="1.5" width="61" height="61" rx="12.5" fill="none" stroke="#285aff" stroke-width="3"/>
+  <g fill="none" stroke="#d8e4ff" stroke-width="5.5" stroke-linejoin="bevel" transform="translate(-1 0)">
+    <path d="M9.5 46L20 18L30.5 46"/>
+    <path d="M13.5 37H26.5"/>
+    <path d="M38 18V46H42A14 14 0 0 0 42 18Z" stroke-linejoin="miter"/>
+  </g>
+</svg>
