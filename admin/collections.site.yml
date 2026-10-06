@@ -16,6 +16,6 @@
       - { name: slug, label: URL slug, widget: string, required: true, hint: "Lowercase letters, numbers and dashes only. Becomes /tools/<slug>/.", pattern: ['^[a-z0-9]+(-[a-z0-9]+)*$', "Use lowercase letters, numbers and dashes only, for example my-tool (no spaces, capitals or punctuation)."] }
       - { name: description, label: Description, widget: text, required: false, hint: "One-line summary shown on the Tools index and the page header." }
       - { name: featured, label: Featured, widget: boolean, default: false, hint: "Featured tools sort to the top of the Tools index." }
-      - { name: embed_src, label: Embed source path, widget: string, required: false, hint: "Path to the self-contained app, e.g. /assets/tools/<slug>/ — rendered in an iframe." }
+      - { name: embed_src, label: Embed source path, widget: string, required: true, hint: "Required: a tool with no embed publishes as an empty page. Path to the self-contained app, e.g. /assets/tools/<slug>/ — rendered in an iframe." }
       - { name: source_url, label: Source URL, widget: string, required: false, hint: "Optional link to the source repo." }
       - { name: body, label: Body, widget: markdown, required: false, hint: "Context shown below the embed." }

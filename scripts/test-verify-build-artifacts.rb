@@ -277,6 +277,16 @@ bad("the Tools slug field loses its pattern (#4083)",
   seam = File.join(d, "admin/collections.site.yml")
   File.write(seam, File.read(seam).sub(/, pattern: \[.*?\] \}/, " }"))
 end
+bad("the Tools embed_src field stops being required (#4116)",
+    /ADMIN CONFIG: the `embed_src` field of the Tools collection in admin\/collections\.site\.yml is not `required: true`/) do |d|
+  seam = File.join(d, "admin/collections.site.yml")
+  File.write(seam, File.read(seam).sub(/(name: embed_src,[^}]*?)required: true/, '\1required: false'))
+end
+bad("the Tools index goes back to the wide container (#4115)",
+    %r{TOOLS LAYOUT: _site/tools/index\.html has an element with class `container--wide`}) do |d|
+  f = File.join(d, "tools/index.html")
+  File.write(f, File.read(f).sub('<div class="container">', '<div class="container container--wide">'))
+end
 bad("a link to a missing page",
     %r{BROKEN LINK: /nowhere/ is not built \(linked from /blog/lnk/ \(source: _posts/2026-10-05-lnk\.md\)}) do |d|
   post(d, "2026-10-05-lnk.md", {}, "[x](/nowhere/)\n")
