@@ -98,6 +98,9 @@ ok("tag Café (post tag + _tags entry)") do |d|
   post(d, "2026-10-05-tagged.md", { "tags" => "[Café]" })
   write(d, "_tags/café.md", "---\nname: Café\ndescription: Coffee things\n---\n")
 end
+ok("a tag whose slug starts with blog- (/tags/blog-x/ is not in the Blog section, #4127)") do |d|
+  post(d, "2026-10-05-blog-tagged.md", { "tags" => "[blog-x]" })
+end
 ok("new tag with spaces and capitals") do |d|
   post(d, "2026-10-05-tagged.md", { "tags" => "[Big Data Things, GitHub Actions]" })
 end
@@ -276,6 +279,18 @@ bad("the Tools slug field loses its pattern (#4083)",
     /ADMIN CONFIG: the `slug` field of the Tools collection in admin\/collections\.site\.yml has no `pattern`/) do |d|
   seam = File.join(d, "admin/collections.site.yml")
   File.write(seam, File.read(seam).sub(/, pattern: \[.*?\] \}/, " }"))
+end
+# #4127: the site header override must emit the theme header's aria-current contract.
+bad("the header override drops aria-current (#4127)",
+    %r{NAV CURRENT: the /blog/ link in the main navigation has the wrong aria-current/active state.*/blog/ has aria-current=nil}) do |d|
+  path = File.join(d, "_includes/header.html")
+  File.write(path, File.read(path).gsub(/ aria-current="(page|true)"/, ""))
+end
+bad("the header override's `contains '/blog'` substring match lights Blog on /tags/blog-x/ (#4127)",
+    %r{NAV CURRENT: the /blog/ link .*/tags/blog-x/ has aria-current="true" class="active" \(expected nil, without class "active"\)}) do |d|
+  post(d, "2026-10-05-blog-tagged.md", { "tags" => "[blog-x]" })
+  path = File.join(d, "_includes/header.html")
+  File.write(path, File.read(path).sub("elsif _nav_prefix == _nav_href", "elsif page.url contains '/blog'"))
 end
 bad("a link to a missing page",
     %r{BROKEN LINK: /nowhere/ is not built \(linked from /blog/lnk/ \(source: _posts/2026-10-05-lnk\.md\)}) do |d|
