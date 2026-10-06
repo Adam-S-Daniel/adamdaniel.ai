@@ -8,7 +8,7 @@
   "sources": [
     {
       "registry": "Adam-S-Daniel/cms-platform",
-      "ref": "1e8ee4072ef17bca98a0349b1a206766a97b3a87",
+      "ref": "70f68683ab6278b2773f144d3013e955f2fbf41b",
       "bundles": [
         "cms-platform"
       ],
@@ -27,18 +27,18 @@
     "adam-coding-anywhere/workflow-path-audit": "sha256:8a7c57bcd890bbab38c42473d8705f0b2521954385f03bf5289e3ec84d3fcdde",
     "cms-platform/admin-config-render": "sha256:6173d9d6abcb4273473d69b1c11390ef2584bf8fd2f6090838d533cf6cf6289c",
     "cms-platform/aws-bootstrap": "sha256:c4812b588edf3b500a9b3f227337a12799917140e2fa705f166b5b6c6f771e66",
-    "cms-platform/browser-testing": "sha256:30aef71ffeb1093e6a39869d72308e17b898aa6fb042edb833cb9806ec36d9e1",
-    "cms-platform/ci-watcher-loops": "sha256:f7d199be7fde4e03f63302abd17ca0b7534a584ddc38b7f558f766fc5255b8ed",
-    "cms-platform/cms-stuck-pr-triage": "sha256:b4423b31c1dd5821bacd600dab1371c660e0d1b357adf678b79b96824451bc63",
-    "cms-platform/code-quality": "sha256:02e4cb3343f914c567e9a70b4f213b5c744b2ca8a7c8b0402772c97618d18ee9",
-    "cms-platform/consumer-repo-provisioning": "sha256:bac1f656d0775bbe79e6e80eeabc88e2b07a8ccda1069866200f32218aad254f",
+    "cms-platform/browser-testing": "sha256:a2cbba9ae144f5f37dd93093cc179cdb5f310d5cf62d623a5e69d51797e5f35b",
+    "cms-platform/ci-watcher-loops": "sha256:17e59c97fd6f55217a608f70190fd8ca94cd16e57a308106bc5f4feb6c86f1ef",
+    "cms-platform/cms-stuck-pr-triage": "sha256:52df1e52adba47db4c945bba1becbe24251a4fc691679986339df410f8a514f5",
+    "cms-platform/code-quality": "sha256:18d829538c86db140e4eaaf5162c30874703889b836af10cd36391d1c6b3a3fa",
+    "cms-platform/consumer-repo-provisioning": "sha256:dc74acef91d5072770ba19bbfd7f85ee851b36e6bfbe1222b5a01b3674193331",
     "cms-platform/editorial-label-audit": "sha256:0c3874fdf6fe48ded41355e082e3abe28ae12ed5d86cf613772c63e0d3cddb36",
-    "cms-platform/github-actions-sha-pinning": "sha256:e447f2bf233d4f216ac80e79235fa1a12f727d32c1829fae0e209bbc4c5c80bf",
-    "cms-platform/platform-release-and-bump": "sha256:c73a6238ed1aa7c1e085e71eff8811bf9c824299b3a9c3136088fccf7a89f66f",
+    "cms-platform/github-actions-sha-pinning": "sha256:b005569583970e12b15c95189ef765f8a2fda7516599cdcf06b84191ed9a08bb",
+    "cms-platform/platform-release-and-bump": "sha256:d2715738835e136fa0c4ef626878cf543490d2905cfb131f3c701bde0ef4382d",
     "cms-platform/post-failure-comment": "sha256:5d5d48f5dad5f2a8965d8bfd0ba15661703052666fcf4dd97581dbc78f463252",
     "cms-platform/preview-environments": "sha256:5813f019692dded322af86f18235a6089c91ae0c0bb63101b3eb56bbe3b1bbec",
     "cms-platform/sveltia-cms-playwright-demo": "sha256:5b478d7bf5623a30513b118bf3ff478334d810691021a8dfa6fe0122b6bff1e4",
-    "cms-platform/test-canary": "sha256:64ba15f83a5b491596982db7022d665bfc1c849eaeef62252f1cc5b346caba61"
+    "cms-platform/test-canary": "sha256:de3b6afc478c29fd4ddf17358ab6a540168fc8cd7c99e70cf62358a3d2b7b19f"
   },
   "generated_from": "b0a1b0d0826b18a0ca6e58a8fc4223437a9e593d"
 }
