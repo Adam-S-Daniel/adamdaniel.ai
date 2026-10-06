@@ -38,6 +38,28 @@ async function pctTotal(page) {
   return texts.reduce((sum, t) => sum + parseFloat(t), 0);
 }
 
+// Keyboard focus on the scroll box must be visible. A ring clipped by the box's
+// own mask or overflow draws nothing, so compare a thin band just OUTSIDE the
+// box's top edge (where the ring sits) with and without focus. Animations are
+// frozen so only the ring can differ; two unfocused shots must match first.
+async function checkFocusRing(page) {
+  await page.locator("#bws-workflow").focus();
+  await page.keyboard.press("Tab"); // keyboard modality, so :focus-visible applies
+  const onRegion = await page.evaluate(() => document.activeElement === document.querySelector(".bws-table-scroll"));
+  expect(onRegion, "Tab from the last slider lands on the scroll box");
+  await page.locator(".bws-table-scroll").evaluate((el) => el.scrollIntoView({ block: "start" }));
+  await page.evaluate(() => window.scrollBy(0, -200)); // keep the band inside the viewport
+  const box = await page.locator(".bws-table-scroll").boundingBox();
+  const band = { x: box.x, y: box.y - 5, width: box.width, height: 4 };
+  const shot = () => page.screenshot({ clip: band, animations: "disabled" });
+  const focused = await shot();
+  await page.evaluate(() => document.activeElement.blur());
+  const idle = await shot();
+  const idleAgain = await shot();
+  expect(idle.equals(idleAgain), "control: two unfocused shots of the band are identical");
+  expect(!focused.equals(idle), "the focused scroll box shows a visible focus ring");
+}
+
 async function snapshot(page) {
   return page.evaluate(() => {
     const scroll = document.querySelector(".bws-table-scroll");
@@ -53,8 +75,9 @@ async function snapshot(page) {
       room: scroll.scrollWidth - scroll.clientWidth,
       rowHeight: scroll.querySelector("tbody tr").offsetHeight,
       hintShown: !!hint && getComputedStyle(hint).display !== "none",
-      faded: scroll.classList.contains("bws-fade-right"),
-      mask: getComputedStyle(scroll).maskImage || getComputedStyle(scroll).webkitMaskImage,
+      faded:
+        scroll.parentNode.classList.contains("bws-fade-right") &&
+        getComputedStyle(scroll.parentNode, "::after").content !== "none",
       codeRight: code.right,
       boxRight: box.right,
       boxLeft: box.left,
@@ -79,8 +102,9 @@ async function snapshot(page) {
       expect(s.room > 0, `the table is wider than its box (${s.room}px of sideways room)`);
       expect(s.rowHeight <= 50, `a row is one line tall (${s.rowHeight}px; 131px before #4114, limit 50px)`);
       expect(s.hintShown, "the swipe hint shows");
-      expect(s.faded && s.mask !== "none", "the right edge fades while columns wait off-screen");
+      expect(s.faded, "the right edge fades while columns wait off-screen");
       expect(s.focusable, "the scroll box is keyboard-focusable and labelled as a region");
+      await checkFocusRing(page);
       await page.locator(".bws-table-scroll").evaluate((el) => {
         el.scrollLeft = el.scrollWidth;
         el.dispatchEvent(new Event("scroll"));

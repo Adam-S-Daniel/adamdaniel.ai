@@ -44,7 +44,8 @@ Adjust the sliders according to your priorities.
       <span class="bws-pct" id="bws-workflow-pct">25.0%</span>
     </div>
   </div>
-  <p class="bws-scroll-hint">Swipe the table sideways for more columns &rarr;</p>
+  <p class="bws-scroll-hint" aria-hidden="true">Swipe the table sideways for more columns &rarr;</p>
+  <div class="bws-table-frame">
   <div class="bws-table-scroll" id="bws-scroll" tabindex="0" role="region" aria-label="GHA-bench results; scrolls sideways on narrow screens">
   <table class="bws-table">
     <thead>
@@ -59,6 +60,7 @@ Adjust the sliders according to your priorities.
     </thead>
     <tbody id="bws-tbody"></tbody>
   </table>
+  </div>
   </div>
 </div>
 
@@ -80,10 +82,26 @@ Adjust the sliders according to your priorities.
   font-variant-numeric: tabular-nums;
 }
 .bws-widget .bws-table-scroll { max-width: 100%; overflow-x: auto; scrollbar-width: thin; }
-/* Edge fade while more columns wait off to the right (toggled by the script). */
-.bws-widget .bws-table-scroll.bws-fade-right {
-  -webkit-mask-image: linear-gradient(to right, #000 calc(100% - 2.5em), transparent);
-  mask-image: linear-gradient(to right, #000 calc(100% - 2.5em), transparent);
+/* The frame holds what must not scroll or be clipped by the scroller: the edge
+   fade (an overlay, not a mask: a mask on the focusable scroller also clips its
+   focus ring) and the focus ring itself. */
+.bws-widget .bws-table-frame { position: relative; }
+.bws-widget .bws-table-frame.bws-fade-right::after {
+  content: "";
+  position: absolute;
+  top: 0;
+  right: 0;
+  bottom: 0;
+  width: 2.5em;
+  pointer-events: none;
+  background: linear-gradient(to right, transparent, var(--bg-0, #04060f));
+}
+@supports selector(:has(*)) {
+  .bws-widget .bws-table-scroll:focus-visible { outline: none; }
+  .bws-widget .bws-table-frame:has(.bws-table-scroll:focus-visible) {
+    outline: 2px solid var(--accent, #285aff);
+    outline-offset: 2px;
+  }
 }
 .bws-widget .bws-scroll-hint {
   display: none;
@@ -126,7 +144,7 @@ Adjust the sliders according to your priorities.
   .bws-widget .bws-table td:first-child {
     position: sticky;
     left: 0;
-    background: var(--bg-1, #060d1f);
+    background: var(--bg-0, #04060f);
     box-shadow: 1px 0 var(--border, #1a2a5e);
   }
   .bws-widget .bws-scroll-hint { display: block; }
@@ -278,10 +296,11 @@ Adjust the sliders according to your priorities.
   // Scroll cue: fade the right edge while columns wait off-screen, and drop
   // the "swipe" hint once the reader has found the gesture (or none is needed).
   var scroller = el("scroll");
-  var widget = scroller.parentNode;
+  var frame = scroller.parentNode;
+  var widget = frame.parentNode;
   function updateScrollCue() {
     var room = scroller.scrollWidth - scroller.clientWidth;
-    scroller.classList.toggle("bws-fade-right", room > 1 && scroller.scrollLeft < room - 1);
+    frame.classList.toggle("bws-fade-right", room > 1 && scroller.scrollLeft < room - 1);
     widget.classList.toggle("bws-no-overflow", room <= 1);
     if (scroller.scrollLeft > 8) widget.classList.add("bws-scrolled");
   }
