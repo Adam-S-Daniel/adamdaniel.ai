@@ -614,6 +614,51 @@ nav_links.each do |href|
         "_includes/header.html or restore/publish the page it points to") { !built_file(path).nil? }
 end
 
+# The main nav marks the current section for assistive technology (#4127, the
+# theme header's contract from cms-platform#737): the link to a section index
+# (/blog/, /tools/) carries aria-current="page" on that index and
+# aria-current="true" on a page under it, matched on whole URL segments, and
+# keeps class="active" on both. This site's _includes/header.html overrides the
+# gem's, so a bump that changes the gem header does not reach it unless the
+# override is updated too. A page with no such link in its nav (a standalone
+# layout) says nothing about it and is skipped.
+NAV_SECTIONS = %w[/blog/ /tools/].freeze
+nav_current = lambda do |href, path|
+  if path == href then "page"
+  elsif path.start_with?(href) then "true"
+  end
+end
+NAV_SECTIONS.each do |section_href|
+  guard("nav aria-current #{section_href}") do
+    wrong = []
+    seen = 0
+    site_pages.each do |file|
+      nav = clean_html(read(file).to_s).scan(%r{<nav\b[^>]*>.*?</nav>}mi).join
+      link = tags(nav, "a").find { |a| norm(site_path(a["href"].to_s.strip)) == section_href }
+      next unless link
+
+      seen += 1
+      path = norm(url_path_of(file))
+      want = nav_current.call(section_href, path)
+      got = link["aria-current"]
+      active = link["class"].to_s.split.include?("active")
+      next if got == want && active == !want.nil?
+
+      wrong << "#{path} has aria-current=#{got.inspect} class=#{link['class'].inspect} " \
+               "(expected #{want.inspect}, #{want ? 'with' : 'without'} class \"active\")"
+    end
+    next if seen.zero? # the owner removed this link from every page: nothing to mark
+
+    check("the #{section_href} nav link marks the current section on #{seen} pages",
+          "NAV CURRENT: the #{section_href} link in the main navigation has the wrong " \
+          "aria-current/active state on #{wrong.size} page(s): #{wrong.first(3).join('; ')} — " \
+          "_includes/header.html must emit aria-current=\"page\" on #{section_href} and " \
+          "aria-current=\"true\" under it (whole-segment match), as the theme header does") do
+      wrong.empty?
+    end
+  end
+end
+
 # --------------------------------------------------------------------------
 section "favicon: the site's own AD icon set is built and linked from every page"
 # The theme's placeholder favicon.svg is what this site served until the AD mark
@@ -727,6 +772,23 @@ glob(File.join(ROOT, "_data", "tool_sources", "*.yml")).each do |src|
     check("vendored tool #{slug} (#{rel}) is built at #{app}",
           "VENDORED TOOL: #{rel} declares a vendored app but #{app} is not in _site — " \
           "re-vendor it or remove the source file") { !built_file(app).nil? }
+  end
+end
+
+# --------------------------------------------------------------------------
+section "landmarks: every site page has at most one <main>"
+# The layout wraps each page in `<main id="main-content">`; a page body that
+# opens its own `<main>` nests a second landmark inside it (the home page did).
+# Counts start tags with the same tokenizer as the other HTML checks (comments
+# and script/style bodies removed), so a `<main>` in a code sample, which is
+# escaped to `&lt;main&gt;`, is never counted.
+site_pages.each do |file|
+  guard(rel_path(file)) do
+    mains = tags(read(file), "main").size
+    check("#{rel_path(file)}: at most one <main> element",
+          "LANDMARK: #{rel_path(file)} has #{mains} <main> elements#{source_note(file)} — a page " \
+          "must have one main landmark; the layout already provides it, so use a <div> or " \
+          "<section> in the page body") { mains <= 1 }
   end
 end
 
@@ -1256,6 +1318,44 @@ if seam_tools
         "'<plain-language message>']`") do
     re = slug_regex && Regexp.new(slug_regex.to_s)
     !re.nil? && !slug_message.to_s.strip.empty? && re.match?("my-tool-2") && !re.match?("My Tool!")
+  end
+end
+
+# --------------------------------------------------------------------------
+section "GHA-bench widget: the weight sliders always total 100%"
+# adamdaniel.ai/blog/introducing-gha-bench/ carries an inline widget (class
+# `bws-widget`) whose four range inputs must always sum to 100. Browsers snap an
+# input's value to its `step`, so an unrounded redistribution drifted to 100.5%
+# (issue #4114). The built page's range inputs and inline script go to
+# scripts/check-bws-widget.js, which replays Home/End/odd values with a fake DOM
+# that snaps like a browser. A post without the widget is not asserted, and
+# neither is anything when Node is unavailable (guard() turns that into a WARN).
+BWS_CHECK = File.join(ROOT, "scripts", "check-bws-widget.js")
+# Required here, not at the top: a top-level `require "json"` activates Ruby's
+# bundled json before `SiteModel.load` runs `bundler/setup`, and the lockfile's
+# newer json then raises Gem::LoadError (a plain `ruby` run, as in CI).
+require "json"
+public_posts.each do |post|
+  guard(post[:src]) do
+    html = File.file?(post[:dest]) ? read(post[:dest]) : nil
+    next unless html && html.include?("bws-widget")
+
+    inputs = tags(html, "input").select { |i| i["id"].to_s.start_with?("bws-") && i["type"] == "range" }
+    script = html.scan(%r{<script\b[^>]*>(.*?)</script\s*>}mi).flatten.find { |body| body.include?("bws-") }
+    next if inputs.empty? || script.nil?
+
+    unless File.file?(BWS_CHECK)
+      puts "  WARN #{BWS_CHECK} is missing; the widget check was skipped"
+      next
+    end
+    payload = JSON.generate("inputs" => inputs.map { |i| i.slice("id", "min", "max", "step", "value") },
+                            "script" => script)
+    out, status = Open3.capture2e("node", BWS_CHECK, stdin_data: payload)
+    check("#{post[:url]}: the #{inputs.size} weight sliders total exactly 100% after every move",
+          -> { "WIDGET WEIGHTS: #{post[:url]} (#{post[:src]}): " \
+               "#{out.lines.grep(/^FAIL/).first(3).map { |l| l.sub(/^FAIL /, "").strip }.join("; ")}" }) do
+      status.success?
+    end
   end
 end
 
