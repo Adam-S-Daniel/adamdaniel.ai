@@ -637,6 +637,20 @@ model.select { |e| e[:kind] == :tools }.each do |tool|
     check("#{url} embeds #{embed} in an iframe",
           "TOOL EMBED: #{url} (#{rel}) does not render an <iframe> for embed_src #{embed} — " \
           "check _layouts/tool.html") { iframes.include?(norm(site_path(embed))) }
+    # The vendored app switches to its one-column phone layout below 900px wide; the
+    # stage must be allowed to reach past that, or the diagram is squeezed to ~5px text
+    # and the brief/full toggle disappears (#4117).
+    stage = tags(read(tool[:dest]), "div").find { |d| d["class"].to_s.split.include?("tool-embed") }
+    stage_width = stage.to_h["style"].to_s.split(";").filter_map do |decl|
+      name, value = decl.split(":", 2)
+      value if name.to_s.strip.downcase == "width"
+    end.last.to_s
+    stage_max_px = stage_width.scan(/(\d+(?:\.\d+)?)px/).flatten.map(&:to_f).max.to_f
+    check("#{url} embed stage can be wider than the app's 900px phone layout",
+          "TOOL EMBED: #{url} (#{rel}) wraps its iframe in a `tool-embed` element whose width is " \
+          "#{stage_width.strip.empty? ? 'not set' : "`#{stage_width.strip}`"} — it needs a width cap above " \
+          "900px (for example `min(1400px, 100vw - 3rem)`) in _layouts/tool.html, or the embedded app " \
+          "falls back to its phone layout with ~5px diagram text") { stage_max_px > 900 }
     next if embed.match?(%r{\A([a-z][a-z0-9+.-]*:|//)}i) # external app: nothing to look up
 
     unless check("#{rel}'s embedded app #{embed} is in _site",

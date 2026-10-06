@@ -364,6 +364,16 @@ bad("a tool whose embedded app is missing is reported once",
     /TOOL EMBED: _tools\/gone\.md embeds \/assets\/tools\/gone\/ but that app is not built/) do |d|
   tool(d, "gone.md", { "embed_src" => "/assets/tools/gone/" })
 end
+bad("the tool layout pins the embed stage to the content column (#4117)",
+    %r{TOOL EMBED: /tools/narrow/ \(_tools/narrow\.md\) wraps its iframe in a `tool-embed` element whose width is not set}) do |d|
+  write(d, "assets/tools/narrow/index.html", "<!doctype html><title>Narrow</title><p>narrow</p>\n")
+  tool(d, "narrow.md", { "embed_src" => "/assets/tools/narrow/" })
+  path = File.join(d, "_layouts/tool.html")
+  layout = File.read(path)
+  stripped = layout.sub(/ width: min\(1400px, 100vw - 3rem\);/, "")
+  raise "case setup: the stage width declaration was not found in _layouts/tool.html" if stripped == layout
+  File.write(path, stripped)
+end
 
 # --------------------------------------------------------------------------
 def run(cmd, env: {}, chdir: ROOT)

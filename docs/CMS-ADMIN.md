@@ -69,6 +69,12 @@ First tool: `claude-memory-map` (vendored from
 `github.com/Adam-S-Daniel/claude-memory-map`). Full guide: the
 **embeddable-tool-pages** skill.
 
+**Embed stage width.** `_layouts/tool.html` lets the iframe break out of the 780px
+column (up to 1400px, centered on the viewport). The vendored app drops to its
+one-column phone layout below 900px wide (diagram fit to ~5px text, brief/full
+toggle hidden), so keep the stage wider than that; `scripts/verify-build-artifacts.rb`
+asserts it (#4117).
+
 **Vendored-tool sync + previews.** This is the general contract for ANY tool
 repo that vendors onto `/tools/` (today's only instance: `claude-memory-map`).
 A synced tool's copy at `assets/tools/<slug>/index.html` is

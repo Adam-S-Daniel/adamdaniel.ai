@@ -19,7 +19,14 @@ layout: default
     </header>
 
     {% if page.embed_src %}
-    <div class="tool-embed" style="margin: 1.5rem 0;">
+    {% comment %}
+      The embedded app is a full application, not article text. Its own layout drops to a
+      one-column phone view (diagram squeezed to ~5px text, brief/full toggle hidden) whenever
+      it is narrower than 900px, and the 780px content column only leaves it ~730px. So the
+      stage breaks out of the column and is centered on the viewport, up to 1400px (#4117).
+      scripts/verify-build-artifacts.rb keeps the width above that breakpoint.
+    {% endcomment %}
+    <div class="tool-embed" style="margin: 1.5rem 0; position: relative; left: 50%; width: min(1400px, 100vw - 3rem); transform: translateX(-50%);">
       <iframe
         src="{{ page.embed_src | relative_url }}"
         title="{{ page.title }}"
