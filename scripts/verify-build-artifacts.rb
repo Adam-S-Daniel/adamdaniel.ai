@@ -660,6 +660,23 @@ glob(File.join(ROOT, "_data", "tool_sources", "*.yml")).each do |src|
 end
 
 # --------------------------------------------------------------------------
+section "landmarks: every site page has at most one <main>"
+# The layout wraps each page in `<main id="main-content">`; a page body that
+# opens its own `<main>` nests a second landmark inside it (the home page did).
+# Counts start tags with the same tokenizer as the other HTML checks (comments
+# and script/style bodies removed), so a `<main>` in a code sample, which is
+# escaped to `&lt;main&gt;`, is never counted.
+site_pages.each do |file|
+  guard(rel_path(file)) do
+    mains = tags(read(file), "main").size
+    check("#{rel_path(file)}: at most one <main> element",
+          "LANDMARK: #{rel_path(file)} has #{mains} <main> elements#{source_note(file)} — a page " \
+          "must have one main landmark; the layout already provides it, so use a <div> or " \
+          "<section> in the page body") { mains <= 1 }
+  end
+end
+
+# --------------------------------------------------------------------------
 section "SEO: every site page has a <title>, its own canonical URL and Open Graph tags"
 # A page whose effective layout (front matter or `_config.yml` default, as
 # Jekyll resolved it) is none is standalone HTML the author owns; it is not

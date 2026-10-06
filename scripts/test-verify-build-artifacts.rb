@@ -304,6 +304,13 @@ bad("/blog/ drops its post list",
   f = File.join(d, "blog/index.html")
   File.write(f, File.read(f).sub("{% for post in published_posts %}", "{% for post in published_posts limit: 0 %}"))
 end
+bad("a page body that opens a second <main> inside the layout's <main>",
+    %r{LANDMARK: _site/nested/index\.html has 2 <main> elements}) do |d|
+  page(d, "nested.md", { "permalink" => "/nested/" }, "<main>Nested.</main>\n")
+end
+ok("a <main> shown as code in a page body is not a landmark") do |d|
+  page(d, "main-code.md", {}, "Write `<main>` once per page.\n")
+end
 bad("<title> stripped from built HTML",
     %r{TITLE: _site/tools/index\.html has no <title> element},
     site: lambda { |d|
@@ -353,7 +360,7 @@ bad("unresolved Liquid leaking into the home page (no linked post has braces)",
   Dir.glob(File.join(d, "_posts", "*gha-bench*")).each { |f| File.delete(f) }
   write(d, "_includes/home-leak.html", "{% raw %}{{ home_leak }}{% endraw %}\n")
   f = File.join(d, "index.html")
-  File.write(f, File.read(f).sub("</main>", "{% include home-leak.html %}\n</main>"))
+  File.write(f, File.read(f).sub(/\n<\/div>\n\z/, "\n{% include home-leak.html %}\n</div>\n"))
 end
 bad("unresolved Liquid leaking into feed.xml chrome",
     /UNRESOLVED LIQUID: feed\.xml contains "\{\{ feed_leak \}\}"/) do |d|
