@@ -288,6 +288,11 @@ bad("the icon include stops linking the Apple touch icon",
 end
 bad("favicon.svg falls back to the theme placeholder",
     /FAVICON: _site\/assets\/favicon\.svg is not the site's AD monogram/) { |d| File.delete(File.join(d, "assets/favicon.svg")) }
+bad("favicon.svg has `--` inside an XML comment (not well-formed, browsers cannot decode it)",
+    /FAVICON: _site\/assets\/favicon\.svg is not well-formed XML/) do |d|
+  f = File.join(d, "assets/favicon.svg")
+  File.write(f, File.read(f).sub("<!--", "<!-- tokens --bg-1 and --accent;"))
+end
 bad("apple-touch-icon.png is not a 180x180 PNG",
     /FAVICON: _site\/apple-touch-icon\.png is missing or not a 180x180 PNG/,
     site: ->(d) { File.binwrite(File.join(d, "_site/apple-touch-icon.png"), "not a png") }) { |_d| }

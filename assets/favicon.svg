@@ -1,7 +1,7 @@
 <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 64 64" role="img" aria-label="AD">
   <!-- Adam Daniel's "AD" monogram in the site's Cobalt Thermal palette (the
-       theme's main.css :root): --bg-1 #060d1f tile, --accent #285aff ring,
-       --text-primary #d8e4ff letters, the same pale blue as assets/images/logo.svg.
+       theme's main.css :root tokens): bg-1 #060d1f tile, accent #285aff ring,
+       text-primary #d8e4ff letters, the same pale blue as assets/images/logo.svg.
        The letters are drawn as strokes, not <text>, because a browser tab has no
        Helvetica Neue to draw them with and an SVG icon cannot load a font.
        This file shadows the cms-platform theme's placeholder favicon.svg.

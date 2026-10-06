@@ -656,6 +656,12 @@ check("/assets/favicon.svg is the AD monogram in the site's palette, not the the
       "#285aff, #d8e4ff) — assets/favicon.svg must shadow the cms-platform theme's placeholder") do
   favicon_svg.include?('aria-label="AD"') && favicon_svg.include?("#285aff") && favicon_svg.include?("#d8e4ff")
 end
+check("/assets/favicon.svg is well-formed XML (browsers refuse to draw a malformed SVG icon)",
+      "FAVICON: _site/assets/favicon.svg is not well-formed XML — a browser will not decode it as a tab " \
+      "icon (a `--` inside an XML comment is the usual cause)") do
+  doc = REXML::Document.new(favicon_svg)
+  !doc.root.nil? && doc.root.name == "svg"
+end
 favicon_url = config.dig("cms", "favicon_url") if config["cms"].is_a?(Hash)
 [["/", "index.html"], ["/404.html", "404.html"]].each do |label, rel|
   links = tags(read(File.join(SITE, rel)).to_s, "link")
