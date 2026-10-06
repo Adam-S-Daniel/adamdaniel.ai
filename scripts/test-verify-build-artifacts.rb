@@ -360,6 +360,21 @@ bad("unresolved Liquid leaking into feed.xml chrome",
   f = File.join(d, "feed.xml")
   File.write(f, File.read(f).sub(%r{<title[^>]*>}) { |t| "#{t}{% raw %}{{ feed_leak }}{% endraw %}" })
 end
+GHA_POST = "_posts/2026-05-12-introducing-gha-bench.md"
+ok("the GHA-bench widget with different default slider weights (still 100)") do |d|
+  f = File.join(d, GHA_POST)
+  File.write(f, File.read(f).sub('id="bws-duration" min="0" max="100" step="0.5" value="17.5"',
+                                 'id="bws-duration" min="0" max="100" step="0.5" value="25"')
+                            .sub('id="bws-cost" min="0" max="100" step="0.5" value="17.5"',
+                                 'id="bws-cost" min="0" max="100" step="0.5" value="10"'))
+end
+bad("GHA-bench sliders that stop handing out the rounding remainder total less than 100",
+    /WIDGET WEIGHTS: \/blog\/introducing-gha-bench\/.*total \d+(\.\d+)?, not 100/) do |d|
+  f = File.join(d, GHA_POST)
+  src = File.read(f)
+  raise "the widget no longer hands out the remainder with .slice(0, leftover)" unless src.include?(".slice(0, leftover)")
+  File.write(f, src.sub(".slice(0, leftover)", ".slice(0, 0)"))
+end
 bad("a tool whose embedded app is missing is reported once",
     /TOOL EMBED: _tools\/gone\.md embeds \/assets\/tools\/gone\/ but that app is not built/) do |d|
   tool(d, "gone.md", { "embed_src" => "/assets/tools/gone/" })
@@ -391,6 +406,8 @@ Dir.mktmpdir("verify-matrix-") do |tmp|
   COPY.each { |p| FileUtils.cp_r(File.join(ROOT, p), File.join(base, p)) }
   FileUtils.mkdir_p(File.join(base, "scripts"))
   FileUtils.cp(VERIFIER, File.join(base, "scripts", "verify-build-artifacts.rb"))
+  # Helper the verifier shells out to (the GHA-bench widget's weight check).
+  FileUtils.cp(File.join(ROOT, "scripts", "check-bws-widget.js"), File.join(base, "scripts", "check-bws-widget.js"))
 
   CASES.each_with_index do |c, i|
     next if filter && !c[:name].include?(filter)
