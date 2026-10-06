@@ -614,6 +614,51 @@ nav_links.each do |href|
         "_includes/header.html or restore/publish the page it points to") { !built_file(path).nil? }
 end
 
+# The main nav marks the current section for assistive technology (#4127, the
+# theme header's contract from cms-platform#737): the link to a section index
+# (/blog/, /tools/) carries aria-current="page" on that index and
+# aria-current="true" on a page under it, matched on whole URL segments, and
+# keeps class="active" on both. This site's _includes/header.html overrides the
+# gem's, so a bump that changes the gem header does not reach it unless the
+# override is updated too. A page with no such link in its nav (a standalone
+# layout) says nothing about it and is skipped.
+NAV_SECTIONS = %w[/blog/ /tools/].freeze
+nav_current = lambda do |href, path|
+  if path == href then "page"
+  elsif path.start_with?(href) then "true"
+  end
+end
+NAV_SECTIONS.each do |section_href|
+  guard("nav aria-current #{section_href}") do
+    wrong = []
+    seen = 0
+    site_pages.each do |file|
+      nav = clean_html(read(file).to_s).scan(%r{<nav\b[^>]*>.*?</nav>}mi).join
+      link = tags(nav, "a").find { |a| norm(site_path(a["href"].to_s.strip)) == section_href }
+      next unless link
+
+      seen += 1
+      path = norm(url_path_of(file))
+      want = nav_current.call(section_href, path)
+      got = link["aria-current"]
+      active = link["class"].to_s.split.include?("active")
+      next if got == want && active == !want.nil?
+
+      wrong << "#{path} has aria-current=#{got.inspect} class=#{link['class'].inspect} " \
+               "(expected #{want.inspect}, #{want ? 'with' : 'without'} class \"active\")"
+    end
+    next if seen.zero? # the owner removed this link from every page: nothing to mark
+
+    check("the #{section_href} nav link marks the current section on #{seen} pages",
+          "NAV CURRENT: the #{section_href} link in the main navigation has the wrong " \
+          "aria-current/active state on #{wrong.size} page(s): #{wrong.first(3).join('; ')} — " \
+          "_includes/header.html must emit aria-current=\"page\" on #{section_href} and " \
+          "aria-current=\"true\" under it (whole-segment match), as the theme header does") do
+      wrong.empty?
+    end
+  end
+end
+
 # --------------------------------------------------------------------------
 section "tools: every tool is listed and embeds a vendored app that exists"
 tools_index = read(File.join(SITE, "tools", "index.html")).to_s
