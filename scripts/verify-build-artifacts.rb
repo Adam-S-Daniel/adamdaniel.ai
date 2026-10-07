@@ -7,6 +7,10 @@
 #
 #   bundle exec jekyll build
 #   ruby scripts/verify-build-artifacts.rb
+#   ruby scripts/verify-build-artifacts.rb --artifacts-only
+#
+# The default entrypoint runs the regression matrix; matrix child runs use
+# `--artifacts-only` to prevent recursion.
 #
 # The required `site-verify / site-verify` check runs exactly this, through
 # cms-platform's reusable `site-verify.yml`: it builds the site under
@@ -1407,6 +1411,28 @@ public_posts.each do |post|
 end
 
 # --------------------------------------------------------------------------
+unless ARGV.include?("--artifacts-only")
+  matrix_path = File.join(ROOT, "scripts", "test-verify-build-artifacts.rb")
+  matrix_available = check("REGRESSION MATRIX is present") do
+    raise CheckError, "REGRESSION MATRIX: scripts/test-verify-build-artifacts.rb is missing" unless
+      File.file?(matrix_path)
+
+    true
+  end
+  if matrix_available
+    check("REGRESSION MATRIX passes") do
+      matrix_passed = system({ "JEKYLL_NO_BUNDLER_REQUIRE" => nil }, "bundle", "exec", "ruby",
+                             matrix_path, chdir: ROOT)
+      unless matrix_passed
+        status = $?
+        result = status&.exited? ? "exit status #{status.exitstatus}" : "signal #{status&.termsig}"
+        raise CheckError, "REGRESSION MATRIX: failed with #{result}"
+      end
+      true
+    end
+  end
+end
+
 puts
 unless $warnings.empty?
   puts "#{$warnings.size} warning(s) — the verifier skipped what it could not process (not a failure):"

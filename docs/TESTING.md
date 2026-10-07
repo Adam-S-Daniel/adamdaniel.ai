@@ -173,7 +173,7 @@ covers this byte-mirror invariant so the two lists can't drift unnoticed.
 | `visual-regression.yml` | PR | Uses its own `playwright.regression.config.js` and `regression-video.spec.js` only (both platform-delivered via the `.cms-platform/e2e` harness, not vendored here) |
 | `cms-editorial-workflow.yml` | Every PR (no path/branch filter — `validate-content` must always report for the ruleset) | Front-matter validation in-line (no specs invoked) |
 | `publish-scheduled-posts.yml` | Daily cron (14:00 UTC) | Runs the platform-owned `publish_scheduled_posts.py` (invoked via the `publish-scheduled-posts.yml` reusable — not a local file in this repo); no specs |
-| `site-verify.yml` | Every PR to `main` (no path filter; required `site-verify / site-verify`) | Builds the site (`JEKYLL_ENV=production`) and runs [`scripts/verify-build-artifacts.rb`](../scripts/verify-build-artifacts.rb) |
+| `site-verify.yml` | Every PR to `main` (no path filter; required `site-verify / site-verify`) | Builds the site (`JEKYLL_ENV=production`), runs [`scripts/verify-build-artifacts.rb`](../scripts/verify-build-artifacts.rb), and runs the full regression matrix through that default entrypoint |
 
 **The post-build verifier.** `scripts/verify-build-artifacts.rb` is the
 site-owned half of the platform's `site-verify` seam: the reusable runs it
@@ -188,8 +188,12 @@ which URL, is read from Jekyll itself (the verifier loads the site's bundle
 and lets Jekyll read the source tree in-process), never predicted or
 hardcoded; no assertion compares rendered text with source text. An
 assertion may fail only on a genuinely broken build, never on a legitimate
-authoring choice. Run it locally
-with `bundle exec jekyll build && ruby scripts/verify-build-artifacts.rb`.
+authoring choice. The default verifier entrypoint also runs the regression
+matrix; matrix children pass `--artifacts-only` to avoid recursion. Run it locally
+with `bundle exec jekyll build && bundle exec ruby scripts/verify-build-artifacts.rb`.
+Before spawning the matrix, the verifier clears `JEKYLL_NO_BUNDLER_REQUIRE` from
+the child environment: Jekyll's plugin manager sets that variable in its current
+process, while the matrix needs its fresh Bundler process to load site plugins.
 
 **The verifier's regression matrix.** `scripts/test-verify-build-artifacts.rb`
 applies each ordinary content edit (no tags, future-dated, `published: false`,
@@ -199,15 +203,17 @@ without `featured:`, the last post unpublished or deleted, ...) to a scratch
 copy, builds it, and requires the verifier to stay green; it also applies
 real defects (missing sitemap, broken link, unresolved Liquid from a layout,
 corrupt feed XML, ...) and requires a plain-English FAIL with no Ruby
-backtrace. No CI lane runs it (the repo vendors no Ruby test runner and
-`site-verify` runs only the verifier), so run it whenever the verifier
-changes: `bundle exec ruby scripts/test-verify-build-artifacts.rb [name-substring]`
-(about a minute, no network). The header of the verifier lists the theme-gem
-couplings a platform bump can trip.
+backtrace. The required `site-verify / site-verify` check runs this matrix
+through the default verifier entrypoint; each matrix child uses
+`--artifacts-only`. Run a focused subset locally with
+`bundle exec ruby scripts/test-verify-build-artifacts.rb [name-substring]` (no
+network). The header of the verifier lists the theme-gem couplings a platform
+bump can trip.
 
 The tool embed-stage declaration guard runs in the required
-[`site-verify / site-verify` job](../.github/workflows/site-verify.yml). Its local
-regression cases (`bundle exec ruby scripts/test-verify-build-artifacts.rb '#4117'`)
+[`site-verify / site-verify` job](../.github/workflows/site-verify.yml), whose
+default verifier entrypoint runs the full regression matrix. Its cases
+(`bundle exec ruby scripts/test-verify-build-artifacts.rb '#4117'`)
 cover missing or narrow widths, invalid pixel tokens, centering declarations,
 matching iframe width, whitespace/final-declaration handling, and an author-selected
 custom layout. Priority cases require `!important` to beat later normal

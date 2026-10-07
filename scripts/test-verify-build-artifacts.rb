@@ -7,9 +7,8 @@
 #
 # Needs the site's gems (it runs `bundle exec jekyll build`); no network, no
 # wall clock (dates are far in the past or far in the future), nothing written
-# outside a temp directory. There is no CI lane for it: the repo vendors no
-# Ruby test runner and `site-verify` itself runs only the verifier, so run this
-# whenever the verifier changes (it takes about a minute).
+# outside a temp directory. CI runs this matrix through the verifier's default
+# entrypoint. Each matrix child passes `--artifacts-only` to prevent recursion.
 #
 # Two kinds of case, each applied one at a time to a scratch copy of the site:
 #
@@ -57,18 +56,35 @@ def tool(dir, name, front, body = "Tool body.\n")
   write(dir, "_tools/#{name}", "---\n#{yaml}\n---\n#{body}")
 end
 
-def ok(name, env: {}, site: nil, &edit)
-  CASES << { name: name, kind: :ok, edit: edit, env: env, site: site }
+def ok(name, env: {}, site: nil, verifier_args: ["--artifacts-only"], expect: [], &edit)
+  CASES << { name: name, kind: :ok, edit: edit, env: env, site: site,
+             verifier_args: verifier_args, expect: Array(expect) }
 end
 
 # `expect` is a Regexp (or Array of them) every one of which must match the output.
-def bad(name, expect, site: nil, &edit)
-  CASES << { name: name, kind: :bad, edit: edit, expect: Array(expect), site: site }
+def bad(name, expect, site: nil, verifier_args: ["--artifacts-only"], &edit)
+  CASES << { name: name, kind: :bad, edit: edit, expect: Array(expect), site: site,
+             verifier_args: verifier_args }
 end
 
 # --------------------------------------------------------------------------
 # LEGITIMATE edits — every one must pass.
 ok("baseline: the real tree, untouched") { |_d| }
+ok("site-verify entrypoint runs its regression matrix", verifier_args: [],
+   expect: /REGRESSION_ENTRY_RAN/) do |d|
+  write(d, "scripts/test-verify-build-artifacts.rb", <<~'RUBY')
+    abort "JEKYLL_NO_BUNDLER_REQUIRE leaked into the fresh process" if
+      ENV.key?("JEKYLL_NO_BUNDLER_REQUIRE")
+    puts "REGRESSION_ENTRY_RAN"
+  RUBY
+end
+bad("site-verify entrypoint reports a failing regression matrix",
+    [/REGRESSION_ENTRY_RAN/, /REGRESSION MATRIX:.*17/], verifier_args: []) do |d|
+  write(d, "scripts/test-verify-build-artifacts.rb",
+        "puts 'REGRESSION_ENTRY_RAN'\nexit 17\n")
+end
+bad("site-verify entrypoint fails when its regression matrix is missing",
+    /REGRESSION MATRIX:.*missing/, verifier_args: []) { |_d| }
 ok("a post with no tags") { |d| post(d, "2026-10-05-no-tags.md", {}) }
 ok("a future-dated published post (future: true)") do |d|
   post(d, "2099-01-01-from-the-future.md", { "title" => "Future" })
@@ -539,7 +555,7 @@ def run(cmd, env: {}, chdir: ROOT)
   [out, status]
 end
 
-def build_and_verify(scratch, base, env, site_hook)
+def build_and_verify(scratch, base, env, site_hook, verifier_args)
   FileUtils.rm_rf(scratch)
   FileUtils.cp_r(base, scratch)
   yield scratch
@@ -548,7 +564,8 @@ def build_and_verify(scratch, base, env, site_hook)
   raise "jekyll build failed in the scratch copy:\n#{out}" unless status.success?
 
   site_hook&.call(scratch)
-  run(["ruby", File.join(scratch, "scripts", "verify-build-artifacts.rb")], env: env, chdir: scratch)
+  run(["ruby", File.join(scratch, "scripts", "verify-build-artifacts.rb"), *verifier_args],
+      env: env, chdir: scratch)
 end
 
 filter = ARGV.first
@@ -567,12 +584,15 @@ Dir.mktmpdir("verify-matrix-") do |tmp|
     next if filter && !c[:name].include?(filter)
 
     scratch = File.join(tmp, "case")
-    out, status = build_and_verify(scratch, base, c[:env] || {}, c[:site]) { |d| c[:edit]&.call(d) }
+    out, status = build_and_verify(scratch, base, c[:env] || {}, c[:site], c[:verifier_args]) do |d|
+      c[:edit]&.call(d)
+    end
     backtrace = out.match?(/\.rb:\d+:in [`']/) || out.include?("(RuntimeError)")
     fail_lines = out.lines.grep(/^  FAIL /)
     good =
       if c[:kind] == :ok
-        status.success? && !backtrace && out.include?("build-artifact assertions passed")
+        status.success? && !backtrace && out.include?("build-artifact assertions passed") &&
+          c[:expect].all? { |re| out.match?(re) }
       else
         !status.success? && !backtrace && !fail_lines.empty? &&
           c[:expect].all? { |re| out.match?(re) }
