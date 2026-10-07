@@ -429,14 +429,65 @@ bad("a tool whose embedded app is missing is reported once",
   tool(d, "gone.md", { "embed_src" => "/assets/tools/gone/" })
 end
 bad("the tool layout pins the embed stage to the content column (#4117)",
-    %r{TOOL EMBED: /tools/narrow/ \(_tools/narrow\.md\) wraps its iframe in a `tool-embed` element whose width is not set}) do |d|
+    [%r{TOOL EMBED: /tools/narrow/ \(_tools/narrow\.md\)},
+     /does not preserve the viewport-centered embed stage.*width=nil/]) do |d|
   write(d, "assets/tools/narrow/index.html", "<!doctype html><title>Narrow</title><p>narrow</p>\n")
   tool(d, "narrow.md", { "embed_src" => "/assets/tools/narrow/" })
   path = File.join(d, "_layouts/tool.html")
   layout = File.read(path)
-  stripped = layout.sub(/ width: min\(1400px, 100vw - 3rem\);/, "")
+  stripped = layout.sub(" width: min(1400px, 100vw - 3rem);", "")
   raise "case setup: the stage width declaration was not found in _layouts/tool.html" if stripped == layout
   File.write(path, stripped)
+end
+
+[
+  ["a narrow min() stage with a misleading large pixel value",
+   "width: min(1400px, 100vw - 3rem);", "width: min(780px, 1400px);"],
+  ["a final narrow width overriding the stage width",
+   "width: min(1400px, 100vw - 3rem);", "width: min(1400px, 100vw - 3rem); width: 780px;"],
+  ["an invalid stage width containing a large pixel token",
+   "width: min(1400px, 100vw - 3rem);", "width: var(--missing, 1400pxx);"],
+  ["a stage without its centering transform", "transform: translateX(-50%);", ""],
+  ["a stage without relative positioning", "position: relative;", ""],
+  ["a stage without its horizontal centering offset", "left: 50%;", ""],
+  ["a narrow iframe inside the wide stage", "width:100%;", "width:300px;"]
+].each do |name, original, replacement|
+  bad("#{name} (#4117)",
+      [%r{TOOL EMBED: /tools/claude-memory-map/},
+       /does not preserve the viewport-centered embed stage/]) do |d|
+    path = File.join(d, "_layouts/tool.html")
+    layout = File.read(path)
+    changed = layout.sub(original, replacement)
+    raise "case setup: #{original.inspect} was not found in _layouts/tool.html" if changed == layout
+
+    File.write(path, changed)
+  end
+end
+
+ok("equivalent spacing and final declarations preserve the embed stage (#4117)") do |d|
+  path = File.join(d, "_layouts/tool.html")
+  layout = File.read(path)
+  File.write(path, layout.sub("width: min(1400px, 100vw - 3rem);",
+                             "width: 780px; WIDTH : min(1400px,   100vw - 3rem);")
+                         .sub("position: relative;", "position: static; position : relative ;")
+                         .sub("left: 50%;", "left: 0; left : 50% ;")
+                         .sub("transform: translateX(-50%);",
+                              "transform: none; transform : translateX(-50%) ;")
+                         .sub("width:100%;", "width:300px; width : 100% ;")
+                         .sub("margin: 1.5rem 0;", "margin: 2rem 0;"))
+end
+
+ok("a custom tool layout may choose its own embed stage (#4117)") do |d|
+  write(d, "assets/tools/custom/index.html", "<!doctype html><title>Custom</title><p>Custom</p>\n")
+  write(d, "_layouts/custom-tool.html", <<~HTML)
+    ---
+    layout: default
+    ---
+    <h1>{{ page.title }}</h1>
+    <iframe src="{{ page.embed_src | relative_url }}" title="{{ page.title }}"></iframe>
+    {{ content }}
+  HTML
+  tool(d, "custom.md", { "layout" => "custom-tool", "embed_src" => "/assets/tools/custom/" })
 end
 
 # --------------------------------------------------------------------------

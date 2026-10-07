@@ -205,6 +205,14 @@ changes: `bundle exec ruby scripts/test-verify-build-artifacts.rb [name-substrin
 (about a minute, no network). The header of the verifier lists the theme-gem
 couplings a platform bump can trip.
 
+The tool embed-stage declaration guard runs in the required
+[`site-verify / site-verify` job](../.github/workflows/site-verify.yml). Its local
+regression cases (`bundle exec ruby scripts/test-verify-build-artifacts.rb '#4117'`)
+cover missing or narrow widths, invalid pixel tokens, centering declarations,
+matching iframe width, whitespace/final-declaration handling, and an author-selected
+custom layout. This is a known site-layout contract, not a general CSS evaluator;
+browser checks establish the desktop layout behavior.
+
 **The GHA-bench widget's checks (#4114, #4084).** The post at
 `/blog/introducing-gha-bench/` carries an inline widget (sliders plus a ranked
 table) that no platform spec covers. Two scripts guard it. `scripts/check-bws-widget.js`

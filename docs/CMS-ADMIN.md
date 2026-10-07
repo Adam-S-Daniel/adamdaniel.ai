@@ -69,11 +69,20 @@ First tool: `claude-memory-map` (vendored from
 `github.com/Adam-S-Daniel/claude-memory-map`). Full guide: the
 **embeddable-tool-pages** skill.
 
-**Embed stage width.** `_layouts/tool.html` lets the iframe break out of the 780px
-column (up to 1400px, centered on the viewport). The vendored app drops to its
-one-column phone layout below 900px wide (diagram fit to ~5px text, brief/full
-toggle hidden), so keep the stage wider than that; `scripts/verify-build-artifacts.rb`
-asserts it (#4117).
+**Embed stage width.** [`_layouts/tool.html`](../_layouts/tool.html) lets the iframe
+break out of the 780px column on desktop (up to 1400px, centered on the viewport).
+At a 1440px viewport this gives the vendored app its desktop layout, readable
+diagram text, and the brief/full labels toggle. Narrow viewports still use the
+app's phone layout; phone readability and the full-screen default remain upstream
+work in [claude-memory-map](https://github.com/Adam-S-Daniel/claude-memory-map)
+([issue #4117](https://github.com/Adam-S-Daniel/adamdaniel.ai/issues/4117)).
+[`scripts/verify-build-artifacts.rb`](../scripts/verify-build-artifacts.rb) guards
+the known rendered declaration contract for the site-owned `tool` layout: stage
+`width: min(1400px, 100vw - 3rem)`, `position: relative`, `left: 50%`,
+`transform: translateX(-50%)`, and matching iframe
+`width: 100%`. It checks normalized lexical values and final declarations, not
+general CSS behavior; browser evidence validates the layout itself.
+Custom tool layouts remain free to choose their own embed stage.
 
 **Vendored-tool sync + previews.** This is the general contract for ANY tool
 repo that vendors onto `/tools/` (today's only instance: `claude-memory-map`).

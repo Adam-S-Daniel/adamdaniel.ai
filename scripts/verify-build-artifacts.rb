@@ -319,6 +319,16 @@ def tags(html, name)
   end
 end
 
+# Lexical declarations for the site's known inline tool-layout contract, not a
+# CSS evaluator: these values contain no strings or nested declaration blocks.
+# Repeated properties keep their final declaration; whitespace runs normalize.
+def inline_declarations(style)
+  style.to_s.split(";").to_h do |declaration|
+    name, value = declaration.split(":", 2)
+    [name.to_s.strip.downcase, value.to_s.split.join(" ")]
+  end
+end
+
 def noindex?(html)
   tags(html, "meta").any? do |m|
     m["name"].to_s.downcase == "robots" && noindex_value?(m["content"])
@@ -750,24 +760,33 @@ model.select { |e| e[:kind] == :tools }.each do |tool|
     embed = "/#{embed}" unless embed.empty? || embed.start_with?("/") || embed.match?(%r{\A([a-z][a-z0-9+.-]*:|//)}i)
     next if embed.empty? || !File.file?(tool[:dest]) || claimants(tool[:dest]).size > 1
 
-    iframes = tags(read(tool[:dest]), "iframe").map { |i| norm(site_path(i["src"].to_s)) }
+    html = read(tool[:dest])
+    iframes = tags(html, "iframe").select do |iframe|
+      norm(site_path(iframe["src"].to_s)) == norm(site_path(embed))
+    end
     check("#{url} embeds #{embed} in an iframe",
           "TOOL EMBED: #{url} (#{rel}) does not render an <iframe> for embed_src #{embed} — " \
-          "check _layouts/tool.html") { iframes.include?(norm(site_path(embed))) }
-    # The vendored app switches to its one-column phone layout below 900px wide; the
-    # stage must be allowed to reach past that, or the diagram is squeezed to ~5px text
-    # and the brief/full toggle disappears (#4117).
-    stage = tags(read(tool[:dest]), "div").find { |d| d["class"].to_s.split.include?("tool-embed") }
-    stage_width = stage.to_h["style"].to_s.split(";").filter_map do |decl|
-      name, value = decl.split(":", 2)
-      value if name.to_s.strip.downcase == "width"
-    end.last.to_s
-    stage_max_px = stage_width.scan(/(\d+(?:\.\d+)?)px/).flatten.map(&:to_f).max.to_f
-    check("#{url} embed stage can be wider than the app's 900px phone layout",
-          "TOOL EMBED: #{url} (#{rel}) wraps its iframe in a `tool-embed` element whose width is " \
-          "#{stage_width.strip.empty? ? 'not set' : "`#{stage_width.strip}`"} — it needs a width cap above " \
-          "900px (for example `min(1400px, 100vw - 3rem)`) in _layouts/tool.html, or the embedded app " \
-          "falls back to its phone layout with ~5px diagram text") { stage_max_px > 900 }
+          "check _layouts/tool.html") { !iframes.empty? }
+    if tool[:data]["layout"] == "tool"
+      # Guard this site's viewport-centered desktop stage (#4117), whose behavior is
+      # validated in a browser. Pixel tokens alone cannot establish a CSS width:
+      # min(780px, 1400px), for example, still confines the app to its phone layout.
+      # Author-selected custom layouts remain free to choose their own stage.
+      stage = tags(html, "div").find { |d| d["class"].to_s.split.include?("tool-embed") }
+      declarations = inline_declarations(stage.to_h["style"])
+      contract = { "width" => "min(1400px, 100vw - 3rem)", "position" => "relative",
+                   "left" => "50%", "transform" => "translateX(-50%)" }
+      actual = contract.keys.map { |name| "#{name}=#{declarations[name].inspect}" }.join(", ")
+      iframe_widths = iframes.map { |iframe| inline_declarations(iframe["style"])["width"] }
+      check("#{url} preserves the viewport-centered embed stage and full-width iframe",
+            "TOOL EMBED: #{url} (#{rel}) does not preserve the viewport-centered embed stage " \
+            "(#{actual}; matching iframe widths=#{iframe_widths.inspect}) — restore width: " \
+            "min(1400px, 100vw - 3rem); position: relative; left: 50%; transform: translateX(-50%); " \
+            "and iframe width: 100% in _layouts/tool.html") do
+        contract.all? { |name, value| declarations[name] == value } &&
+          !iframe_widths.empty? && iframe_widths.all? { |width| width == "100%" }
+      end
+    end
     next if embed.match?(%r{\A([a-z][a-z0-9+.-]*:|//)}i) # external app: nothing to look up
 
     unless check("#{rel}'s embedded app #{embed} is in _site",
