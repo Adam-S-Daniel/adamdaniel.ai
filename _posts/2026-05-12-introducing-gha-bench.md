@@ -44,7 +44,9 @@ Adjust the sliders according to your priorities.
       <span class="bws-pct" id="bws-workflow-pct">25.0%</span>
     </div>
   </div>
-  <div class="bws-table-scroll">
+  <p class="bws-scroll-hint" aria-hidden="true">Swipe the table sideways for more columns &rarr;</p>
+  <div class="bws-table-frame">
+  <div class="bws-table-scroll" id="bws-scroll" tabindex="0" role="region" aria-label="GHA-bench results; scrolls sideways on narrow screens">
   <table class="bws-table">
     <thead>
       <tr>
@@ -58,6 +60,7 @@ Adjust the sliders according to your priorities.
     </thead>
     <tbody id="bws-tbody"></tbody>
   </table>
+  </div>
   </div>
 </div>
 
@@ -78,7 +81,34 @@ Adjust the sliders according to your priorities.
   text-align: right;
   font-variant-numeric: tabular-nums;
 }
-.bws-widget .bws-table-scroll { max-width: 100%; overflow-x: auto; }
+.bws-widget .bws-table-scroll { max-width: 100%; overflow-x: auto; scrollbar-width: thin; }
+/* The frame holds what must not scroll or be clipped by the scroller: the edge
+   fade (an overlay, not a mask: a mask on the focusable scroller also clips its
+   focus ring) and the focus ring itself. */
+.bws-widget .bws-table-frame { position: relative; }
+.bws-widget .bws-table-frame.bws-fade-right::after {
+  content: "";
+  position: absolute;
+  top: 0;
+  right: 0;
+  bottom: 0;
+  width: 2.5em;
+  pointer-events: none;
+  background: linear-gradient(to right, transparent, var(--bg-0, #04060f));
+}
+@supports selector(:has(*)) {
+  .bws-widget .bws-table-scroll:focus-visible { outline: none; }
+  .bws-widget .bws-table-frame:has(.bws-table-scroll:focus-visible) {
+    outline: 2px solid var(--accent, #285aff);
+    outline-offset: 2px;
+  }
+}
+.bws-widget .bws-scroll-hint {
+  display: none;
+  margin: 0 0 0.4em;
+  font-size: 0.8125rem;
+  color: var(--text-dim, #8ab0e8);
+}
 .bws-widget .bws-table {
   width: 100%;
   border-collapse: collapse;
@@ -104,6 +134,22 @@ Adjust the sliders according to your priorities.
   .bws-widget .bws-range { grid-area: range; }
   .bws-widget .bws-table th,
   .bws-widget .bws-table td { padding: 0.25em 0.35em; }
+  /* One line per row (a wrapped "opus / 4.7 / 1m / med" made rows 130px tall);
+     the table scrolls sideways inside its box instead, with the Model column
+     pinned and a hint plus an edge fade saying so. */
+  .bws-widget .bws-table { border-collapse: separate; border-spacing: 0; width: auto; min-width: 100%; }
+  .bws-widget .bws-table th,
+  .bws-widget .bws-table td { white-space: nowrap; font-size: 0.875rem; }
+  .bws-widget .bws-table th:first-child,
+  .bws-widget .bws-table td:first-child {
+    position: sticky;
+    left: 0;
+    background: var(--bg-0, #04060f);
+    box-shadow: 1px 0 var(--border, #1a2a5e);
+  }
+  .bws-widget .bws-scroll-hint { display: block; }
+  .bws-widget.bws-scrolled .bws-scroll-hint,
+  .bws-widget.bws-no-overflow .bws-scroll-hint { display: none; }
 }
 </style>
 
@@ -212,31 +258,54 @@ Adjust the sliders according to your priorities.
         "</tr>";
     }
     document.getElementById("bws-tbody").innerHTML = html;
+    updateScrollCue();
   }
 
+  // Weights live on the sliders' own step grid. A range input snaps whatever
+  // is assigned to it to its step, so scaling the other weights to two
+  // decimals let the browser round each one up (Home on every slider left
+  // 33.5 + 33.5 + 33.5 + 0 = 100.5%). Work in whole steps and hand out the
+  // remainder one step at a time, so the total is always exactly 100.
   var adjusting = false;
   function redistribute(changed) {
     if (adjusting) return;
     adjusting = true;
-    var newVal = Math.max(0, Math.min(100, parseFloat(el(changed).value) || 0));
-    el(changed).value = newVal;
+    var step = parseFloat(el(changed).step) || 1;
+    var totalUnits = Math.round(100 / step);
+    var units = Math.max(0, Math.min(totalUnits, Math.round((parseFloat(el(changed).value) || 0) / step)));
     var others = KEYS.filter(function (k) { return k !== changed; });
-    var sumOthers = 0;
-    others.forEach(function (k) { sumOthers += parseFloat(el(k).value) || 0; });
-    var needed = 100 - newVal;
-    if (sumOthers <= 0) {
-      var each = needed / others.length;
-      others.forEach(function (k) { el(k).value = each.toFixed(2); });
-    } else {
-      var scale = needed / sumOthers;
-      others.forEach(function (k) {
-        var v = (parseFloat(el(k).value) || 0) * scale;
-        el(k).value = Math.max(0, v).toFixed(2);
-      });
-    }
+    var needed = totalUnits - units;
+    var current = others.map(function (k) { return (parseFloat(el(k).value) || 0) / step; });
+    var sumOthers = current.reduce(function (a, b) { return a + b; }, 0);
+    var shares = current.map(function (c) {
+      return sumOthers > 0 ? (c * needed) / sumOthers : needed / others.length;
+    });
+    var whole = shares.map(Math.floor);
+    var leftover = needed - whole.reduce(function (a, b) { return a + b; }, 0);
+    shares
+      .map(function (s, i) { return { i: i, frac: s - Math.floor(s) }; })
+      .sort(function (a, b) { return b.frac - a.frac || a.i - b.i; })
+      .slice(0, leftover)
+      .forEach(function (o) { whole[o.i] += 1; });
+    el(changed).value = units * step;
+    others.forEach(function (k, i) { el(k).value = whole[i] * step; });
     adjusting = false;
     render();
   }
+
+  // Scroll cue: fade the right edge while columns wait off-screen, and drop
+  // the "swipe" hint once the reader has found the gesture (or none is needed).
+  var scroller = el("scroll");
+  var frame = scroller.parentNode;
+  var widget = frame.parentNode;
+  function updateScrollCue() {
+    var room = scroller.scrollWidth - scroller.clientWidth;
+    frame.classList.toggle("bws-fade-right", room > 1 && scroller.scrollLeft < room - 1);
+    widget.classList.toggle("bws-no-overflow", room <= 1);
+    if (scroller.scrollLeft > 8) widget.classList.add("bws-scrolled");
+  }
+  scroller.addEventListener("scroll", updateScrollCue, { passive: true });
+  window.addEventListener("resize", updateScrollCue);
 
   KEYS.forEach(function (k) {
     el(k).addEventListener("input", function () { redistribute(k); });

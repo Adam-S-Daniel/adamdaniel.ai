@@ -30,7 +30,7 @@ ROOT = File.expand_path("..", __dir__)
 VERIFIER = ENV.fetch("VERIFY_SCRIPT", File.join(ROOT, "scripts", "verify-build-artifacts.rb"))
 COPY = %w[_config.yml _data _includes _layouts _posts _tags _tools _e2e admin assets blog pages
           projects tags tools index.html 404.html robots.txt feed.xml preview.md Gemfile
-          Gemfile.lock platform.lock].freeze
+          Gemfile.lock platform.lock favicon.ico apple-touch-icon.png].freeze
 BUNDLE_ENV = { "BUNDLE_GEMFILE" => File.join(ROOT, "Gemfile"), "JEKYLL_ENV" => "production" }.freeze
 
 CASES = []
@@ -78,6 +78,10 @@ ok("a future-dated post when _config.yml has future: false") do |d|
   post(d, "2099-01-01-from-the-future.md", { "title" => "Future" })
 end
 ok("published: false post") { |d| post(d, "2026-10-05-hidden.md", { "published" => "false" }) }
+ok("cms.favicon_url set: that URL is the one icon, the Apple touch icon stays") do |d|
+  write(d, "_config.yml", File.read(File.join(d, "_config.yml"))
+    .sub(/^cms:\n/, "cms:\n  favicon_url: https://example.com/brand.png\n"))
+end
 ok("a _drafts draft") do |d|
   write(d, "_drafts/a-draft.md", "---\ntitle: Draft\n---\nNot yet.\n")
 end
@@ -97,6 +101,9 @@ end
 ok("tag Café (post tag + _tags entry)") do |d|
   post(d, "2026-10-05-tagged.md", { "tags" => "[Café]" })
   write(d, "_tags/café.md", "---\nname: Café\ndescription: Coffee things\n---\n")
+end
+ok("a tag whose slug starts with blog- (/tags/blog-x/ is not in the Blog section, #4127)") do |d|
+  post(d, "2026-10-05-blog-tagged.md", { "tags" => "[blog-x]" })
 end
 ok("new tag with spaces and capitals") do |d|
   post(d, "2026-10-05-tagged.md", { "tags" => "[Big Data Things, GitHub Actions]" })
@@ -277,6 +284,41 @@ bad("the Tools slug field loses its pattern (#4083)",
   seam = File.join(d, "admin/collections.site.yml")
   File.write(seam, File.read(seam).sub(/, pattern: \[.*?\] \}/, " }"))
 end
+bad("the icon include stops linking the Apple touch icon",
+    /FAVICON LINK: _site\/index\.html has no <link rel="apple-touch-icon"/) do |d|
+  f = File.join(d, "_includes/favicon.html")
+  File.write(f, File.read(f).sub(/^<link rel="apple-touch-icon".*\n?/, ""))
+end
+bad("favicon.svg falls back to the theme placeholder",
+    /FAVICON: _site\/assets\/favicon\.svg is not the site's AD monogram/) { |d| File.delete(File.join(d, "assets/favicon.svg")) }
+bad("favicon.svg has `--` inside an XML comment (not well-formed, browsers cannot decode it)",
+    /FAVICON: _site\/assets\/favicon\.svg is not well-formed XML/) do |d|
+  f = File.join(d, "assets/favicon.svg")
+  File.write(f, File.read(f).sub("<!--", "<!-- tokens --bg-1 and --accent;"))
+end
+bad("favicon.svg draws the letters with <text> (a tab has no Fira Code to draw it)",
+    /FAVICON INCLUDE: scripts\/test-favicon-include\.rb failed/) do |d|
+  f = File.join(d, "assets/favicon.svg")
+  File.write(f, File.read(f).sub(/<path fill="#d8e4ff"[^>]*\/>/, '<text x="32" y="43" fill="#d8e4ff">AD</text>'))
+end
+bad("apple-touch-icon.png is not a 180x180 PNG",
+    /FAVICON: _site\/apple-touch-icon\.png is missing or not a 180x180 PNG/,
+    site: ->(d) { File.binwrite(File.join(d, "_site/apple-touch-icon.png"), "not a png") }) { |_d| }
+bad("favicon.ico lacks the 16 px image",
+    /FAVICON: _site\/favicon\.ico is missing or is not an ICO of PNG images with 16 and 32 px entries/,
+    site: ->(d) { File.binwrite(File.join(d, "_site/favicon.ico"), "\x00\x00\x01\x00\x00\x00".b) }) { |_d| }
+# #4127: the site header override must emit the theme header's aria-current contract.
+bad("the header override drops aria-current (#4127)",
+    %r{NAV CURRENT: the /blog/ link in the main navigation has the wrong aria-current/active state.*/blog/ has aria-current=nil}) do |d|
+  path = File.join(d, "_includes/header.html")
+  File.write(path, File.read(path).gsub(/ aria-current="(page|true)"/, ""))
+end
+bad("the header override's `contains '/blog'` substring match lights Blog on /tags/blog-x/ (#4127)",
+    %r{NAV CURRENT: the /blog/ link .*/tags/blog-x/ has aria-current="true" class="active" \(expected nil, without class "active"\)}) do |d|
+  post(d, "2026-10-05-blog-tagged.md", { "tags" => "[blog-x]" })
+  path = File.join(d, "_includes/header.html")
+  File.write(path, File.read(path).sub("elsif _nav_prefix == _nav_href", "elsif page.url contains '/blog'"))
+end
 bad("a link to a missing page",
     %r{BROKEN LINK: /nowhere/ is not built \(linked from /blog/lnk/ \(source: _posts/2026-10-05-lnk\.md\)}) do |d|
   post(d, "2026-10-05-lnk.md", {}, "[x](/nowhere/)\n")
@@ -303,6 +345,13 @@ bad("/blog/ drops its post list",
     %r{BLOG LIST: /blog/ links to none of the \d+ published posts}) do |d|
   f = File.join(d, "blog/index.html")
   File.write(f, File.read(f).sub("{% for post in published_posts %}", "{% for post in published_posts limit: 0 %}"))
+end
+bad("a page body that opens a second <main> inside the layout's <main>",
+    %r{LANDMARK: _site/nested/index\.html has 2 <main> elements}) do |d|
+  page(d, "nested.md", { "permalink" => "/nested/" }, "<main>Nested.</main>\n")
+end
+ok("a <main> shown as code in a page body is not a landmark") do |d|
+  page(d, "main-code.md", {}, "Write `<main>` once per page.\n")
 end
 bad("<title> stripped from built HTML",
     %r{TITLE: _site/tools/index\.html has no <title> element},
@@ -353,12 +402,27 @@ bad("unresolved Liquid leaking into the home page (no linked post has braces)",
   Dir.glob(File.join(d, "_posts", "*gha-bench*")).each { |f| File.delete(f) }
   write(d, "_includes/home-leak.html", "{% raw %}{{ home_leak }}{% endraw %}\n")
   f = File.join(d, "index.html")
-  File.write(f, File.read(f).sub("</main>", "{% include home-leak.html %}\n</main>"))
+  File.write(f, File.read(f).sub(/\n<\/div>\n\z/, "\n{% include home-leak.html %}\n</div>\n"))
 end
 bad("unresolved Liquid leaking into feed.xml chrome",
     /UNRESOLVED LIQUID: feed\.xml contains "\{\{ feed_leak \}\}"/) do |d|
   f = File.join(d, "feed.xml")
   File.write(f, File.read(f).sub(%r{<title[^>]*>}) { |t| "#{t}{% raw %}{{ feed_leak }}{% endraw %}" })
+end
+GHA_POST = "_posts/2026-05-12-introducing-gha-bench.md"
+ok("the GHA-bench widget with different default slider weights (still 100)") do |d|
+  f = File.join(d, GHA_POST)
+  File.write(f, File.read(f).sub('id="bws-duration" min="0" max="100" step="0.5" value="17.5"',
+                                 'id="bws-duration" min="0" max="100" step="0.5" value="25"')
+                            .sub('id="bws-cost" min="0" max="100" step="0.5" value="17.5"',
+                                 'id="bws-cost" min="0" max="100" step="0.5" value="10"'))
+end
+bad("GHA-bench sliders that stop handing out the rounding remainder total less than 100",
+    /WIDGET WEIGHTS: \/blog\/introducing-gha-bench\/.*total \d+(\.\d+)?, not 100/) do |d|
+  f = File.join(d, GHA_POST)
+  src = File.read(f)
+  raise "the widget no longer hands out the remainder with .slice(0, leftover)" unless src.include?(".slice(0, leftover)")
+  File.write(f, src.sub(".slice(0, leftover)", ".slice(0, 0)"))
 end
 bad("a tool whose embedded app is missing is reported once",
     /TOOL EMBED: _tools\/gone\.md embeds \/assets\/tools\/gone\/ but that app is not built/) do |d|
@@ -401,6 +465,9 @@ Dir.mktmpdir("verify-matrix-") do |tmp|
   COPY.each { |p| FileUtils.cp_r(File.join(ROOT, p), File.join(base, p)) }
   FileUtils.mkdir_p(File.join(base, "scripts"))
   FileUtils.cp(VERIFIER, File.join(base, "scripts", "verify-build-artifacts.rb"))
+  FileUtils.cp(File.join(ROOT, "scripts", "test-favicon-include.rb"), File.join(base, "scripts"))
+  # Helper the verifier shells out to (the GHA-bench widget's weight check).
+  FileUtils.cp(File.join(ROOT, "scripts", "check-bws-widget.js"), File.join(base, "scripts", "check-bws-widget.js"))
 
   CASES.each_with_index do |c, i|
     next if filter && !c[:name].include?(filter)
