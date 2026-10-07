@@ -23,6 +23,7 @@
 require "fileutils"
 require "open3"
 require "tmpdir"
+require "nokogiri"
 
 ROOT = File.expand_path("..", __dir__)
 # VERIFY_SCRIPT points the matrix at another copy of the verifier (e.g. the previous version).
@@ -38,6 +39,17 @@ def write(dir, path, content)
   full = File.join(dir, path)
   FileUtils.mkdir_p(File.dirname(full))
   File.write(full, content)
+end
+
+def mutate_memory_map_embed(dir)
+  path = File.join(dir, "_site/tools/claude-memory-map/index.html")
+  dom = Nokogiri::HTML5.parse(File.read(path))
+  stage = dom.at_css("div.tool-embed")
+  iframe = stage&.at_css("iframe")
+  raise "case setup: the memory-map stage or iframe was not found" unless stage && iframe
+
+  yield dom, stage, iframe
+  File.write(path, dom.to_html)
 end
 
 def post(dir, name, front, body = "Body text.\n")
@@ -456,6 +468,47 @@ bad("the tool layout pins the embed stage to the content column (#4117)",
     stripped == layout
   File.write(path, stripped)
 end
+
+bad("a matching iframe detached from its embed stage (#4117)",
+    /TOOL EMBED:.*does not preserve the viewport-centered embed stage/,
+    site: lambda { |d|
+      mutate_memory_map_embed(d) { |_dom, stage, iframe| stage.add_next_sibling(iframe.unlink) }
+    }) { |_d| }
+
+bad("a decoy embed stage contains another src while the matching iframe is outside (#4117)",
+    /TOOL EMBED:.*does not preserve the viewport-centered embed stage/,
+    site: lambda { |d|
+      mutate_memory_map_embed(d) do |_dom, stage, iframe|
+        decoy = iframe.dup
+        decoy["src"] = "https://example.com/other-app/"
+        stage.add_child(decoy)
+        stage.add_next_sibling(iframe.unlink)
+      end
+    }) { |_d| }
+
+bad("another matching iframe is outside the guarded embed stage (#4117)",
+    /TOOL EMBED:.*does not preserve the viewport-centered embed stage/,
+    site: lambda { |d|
+      mutate_memory_map_embed(d) { |_dom, stage, iframe| stage.add_next_sibling(iframe.dup) }
+    }) { |_d| }
+
+ok("a matching iframe nested inside its embed stage (#4117)", site: lambda { |d|
+  mutate_memory_map_embed(d) do |dom, stage, iframe|
+    wrapper = Nokogiri::XML::Node.new("div", dom)
+    stage.add_child(wrapper)
+    wrapper.add_child(iframe.unlink)
+  end
+}) { |_d| }
+
+ok("fake detached iframes in comments and script text are ignored (#4117)", site: lambda { |d|
+  mutate_memory_map_embed(d) do |dom, stage, iframe|
+    stage.add_next_sibling(Nokogiri::XML::Comment.new(dom, iframe.to_html))
+    script = Nokogiri::XML::Node.new("script", dom)
+    script["type"] = "application/json"
+    script.content = iframe.to_html.inspect
+    stage.add_next_sibling(script)
+  end
+}) { |_d| }
 
 [
   ["a narrow min() stage with a misleading large pixel value",
