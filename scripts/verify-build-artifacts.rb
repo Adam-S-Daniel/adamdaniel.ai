@@ -811,15 +811,25 @@ model.select { |e| e[:kind] == :tools }.each do |tool|
       actual = declarations.map do |styles|
         contract.keys.map { |name| "#{name}=#{styles[name].inspect}" }.join(", ")
       end.join("; ")
-      iframe_widths = iframes.map { |iframe| inline_declarations(iframe["style"])["width"] }
+      iframe_declarations = iframes.map { |iframe| inline_declarations(iframe["style"]) }
+      iframe_widths = iframe_declarations.map { |styles| styles["width"] }
+      # A physical or logical width cap can override the requested width. This
+      # static contract permits only absent caps or explicit none, not CSS math.
+      cap_properties = %w[max-width max-inline-size]
+      caps = (declarations + iframe_declarations).map do |styles|
+        cap_properties.to_h { |name| [name, styles[name]] }
+      end
       check("#{url} preserves the viewport-centered embed stage and full-width iframe",
         "TOOL EMBED: #{url} (#{rel}) does not preserve the viewport-centered embed stage " \
-        "(#{actual}; matching iframe widths=#{iframe_widths.inspect}) — restore width: " \
+        "(#{actual}; matching iframe widths=#{iframe_widths.inspect}; " \
+        "stage and iframe size caps=#{caps.inspect}) — restore width: " \
         "min(1400px, 100vw - 3rem); position: relative; left: 50%; transform: translateX(-50%); " \
-        "and iframe width: 100% as a direct child of div.tool-embed in _layouts/tool.html") do
+        "and iframe width: 100% as a direct child of div.tool-embed in _layouts/tool.html; " \
+        "max-width and max-inline-size must be absent or none on both elements") do
         stages.all? &&
           declarations.all? { |styles| contract.all? { |name, value| styles[name] == value } } &&
-          !iframe_widths.empty? && iframe_widths.all? { |width| width == "100%" }
+          !iframe_widths.empty? && iframe_widths.all? { |width| width == "100%" } &&
+          caps.all? { |styles| styles.values.all? { |value| value.nil? || value == "none" } }
       end
     end
     next if embed.match?(%r{\A([a-z][a-z0-9+.-]*:|//)}i) # external app: nothing to look up

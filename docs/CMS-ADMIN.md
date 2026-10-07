@@ -81,7 +81,10 @@ the known rendered declaration contract for the site-owned `tool` layout: stage
 `width: min(1400px, 100vw - 3rem)`, `position: relative`, `left: 50%`,
 `transform: translateX(-50%)`, and matching iframe
 `width: 100%` as a direct child of its `div.tool-embed` stage. Intervening wrappers
-can narrow the iframe and are rejected. It normalizes whitespace, honors `!important` over later normal
+can narrow the iframe and are rejected. On both elements, inline `max-width` and
+`max-inline-size` must be absent or effectively `none`; other values are rejected
+because the static contract cannot establish their effect on the desktop width.
+It normalizes whitespace, honors `!important` over later normal
 declarations, and uses the last declaration among equal priorities. Since this is
 a lexical contract rather than a CSS parser, comments, escapes, quotes, and brace
 syntax are rejected; browser evidence validates the layout itself.

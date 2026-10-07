@@ -520,6 +520,39 @@ bad("another matching iframe is outside the guarded embed stage (#4117)",
       }) { |_d| }
 end
 
+%w[stage iframe].each do |element|
+  %w[max-width max-inline-size].each do |property|
+    [
+      ["a narrow #{property}", "#{property}:300px"],
+      ["an important narrow #{property} before normal none",
+       "#{property}:300px !important; #{property}:none"]
+    ].each do |description, styles|
+      bad("embed size cap: #{element} has #{description} (#4117)",
+          /TOOL EMBED:.*does not preserve the viewport-centered embed stage/,
+          site: lambda { |d|
+            mutate_memory_map_embed(d) do |_dom, stage, iframe|
+              node = element == "stage" ? stage : iframe
+              node["style"] = "#{node['style']}; #{styles}"
+            end
+          }) { |_d| }
+    end
+  end
+
+  [
+    ["explicit none", "max-width:none; max-inline-size:none"],
+    ["important none before normal narrow caps",
+     "max-width:none !important; max-inline-size:none !important; " \
+     "max-width:300px; max-inline-size:300px"]
+  ].each do |description, styles|
+    ok("embed size cap: #{element} accepts #{description} (#4117)", site: lambda { |d|
+      mutate_memory_map_embed(d) do |_dom, stage, iframe|
+        node = element == "stage" ? stage : iframe
+        node["style"] = "#{node['style']}; #{styles}"
+      end
+    }) { |_d| }
+  end
+end
+
 ok("fake detached iframes in comments and script text are ignored (#4117)", site: lambda { |d|
   mutate_memory_map_embed(d) do |dom, stage, iframe|
     stage.add_next_sibling(Nokogiri::XML::Comment.new(dom, iframe.to_html))

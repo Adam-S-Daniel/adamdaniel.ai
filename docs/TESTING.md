@@ -222,7 +222,12 @@ Intervening wrappers fail even without inline styles: arbitrary wrapper CSS cann
 established statically, and a wrapper constrained by width, max-width, or a stylesheet
 class can narrow the iframe despite a wide ancestor stage. The regression cases cover
 each constraint and multiple wrapper levels. Fake iframe tags in comments and script text
-do not count. Parser exceptions become assertion failures. Priority cases require
+do not count. Both the stage and matching iframe must have absent inline `max-width`
+and `max-inline-size` declarations or effective values of `none`: any other value is
+rejected because this static contract cannot establish whether CSS math or other
+constraints preserve the desktop width. Diagnostics show the effective caps. Regression
+cases cover narrow caps, explicit `none`, and their priority conflicts on both elements.
+Parser exceptions become assertion failures. Priority cases require
 `!important` to beat later normal
 declarations and the last declaration to win among equal priorities; unsupported
 comments and other syntax outside the lexical contract fail the guard. This is a
