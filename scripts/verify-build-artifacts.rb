@@ -327,6 +327,8 @@ end
 # CSS evaluator: these values contain no strings or nested declaration blocks.
 # Repeated properties follow CSS priority: important beats normal, and the last
 # declaration wins within the same priority. Whitespace runs normalize.
+# For the stage and iframe in this site's horizontal layout, logical inline-size
+# and physical width compete for the same width before resolving that priority.
 def inline_declarations(style)
   source = style.to_s
   # The lexical scan below cannot safely interpret syntax that can mask a
@@ -337,6 +339,7 @@ def inline_declarations(style)
   source.split(";").each_with_object({}) do |declaration, values|
     name, value = declaration.split(":", 2)
     name = name.to_s.strip.downcase
+    name = "width" if name == "inline-size"
     value = value.to_s.split.join(" ")
     important = !!value.sub!(/\s*!\s*important\z/i, "")
     next if priorities[name] && !important

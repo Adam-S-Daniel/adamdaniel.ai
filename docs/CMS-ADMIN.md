@@ -84,10 +84,15 @@ the known rendered declaration contract for the site-owned `tool` layout: stage
 can narrow the iframe and are rejected. On both elements, inline `max-width` and
 `max-inline-size` must be absent or effectively `none`; other values are rejected
 because the static contract cannot establish their effect on the desktop width.
+For the site's horizontal writing mode, inline `inline-size` is equivalent to `width`
+on both elements; the two declarations compete by priority and source order rather
+than being checked separately. A narrow logical width therefore fails the same guard.
 It normalizes whitespace, honors `!important` over later normal
 declarations, and uses the last declaration among equal priorities. Since this is
 a lexical contract rather than a CSS parser, comments, escapes, quotes, and brace
-syntax are rejected; browser evidence validates the layout itself.
+syntax are rejected. This is a horizontal site-layout contract, not a general CSS
+evaluator for arbitrary writing modes or stylesheets; browser evidence validates
+the layout itself.
 Custom tool layouts remain free to choose their own embed stage.
 
 **Vendored-tool sync + previews.** This is the general contract for ANY tool

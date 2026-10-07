@@ -553,6 +553,62 @@ end
   end
 end
 
+%w[stage iframe].each do |element|
+  width = element == "stage" ? "min(1400px, 100vw - 3rem)" : "100%"
+  [
+    [:bad, "appended narrow logical width", nil, "inline-size:300px"],
+    [:ok, "earlier narrow logical width before correct physical width",
+     "inline-size:300px; width:#{width}", nil],
+    [:bad, "important narrow logical width before normal physical width",
+     "inline-size:300px !important; width:#{width}", nil],
+    [:ok, "important correct physical width before normal narrow logical width",
+     "width:#{width} !important; inline-size:300px", nil],
+    [:ok, "last important correct physical width after important narrow logical width",
+     "inline-size:300px !important; width:#{width} !important", nil],
+    [:bad, "last important narrow logical width after important correct physical width",
+     "width:#{width} !important; inline-size:300px !important", nil],
+    [:bad, "last normal narrow physical width after correct logical width",
+     "inline-size:#{width}; width:300px", nil],
+    [:ok, "important correct logical width before normal narrow physical width",
+     "inline-size:#{width} !important; width:300px", nil],
+    [:bad, "mixed-case spaced important narrow logical width before normal logical width",
+     "inline-size:300px ! ImPoRtAnT ; inline-size:#{width}", nil],
+    [:ok, "mixed-case spaced important correct logical width before normal logical width",
+     "inline-size:#{width} ! ImPoRtAnT ; inline-size:300px", nil],
+    [:ok, "last normal correct logical width", "inline-size:300px; inline-size:#{width}", nil],
+    [:bad, "last normal narrow logical width", "inline-size:#{width}; inline-size:300px", nil],
+    [:ok, "last important correct logical width",
+     "inline-size:300px !important; inline-size:#{width} ! ImPoRtAnT", nil],
+    [:bad, "last important narrow logical width",
+     "inline-size:#{width} !important; inline-size:300px ! ImPoRtAnT", nil],
+    [:ok, "equivalent logical alias alone", "INLINE-SIZE : #{width}", nil],
+    [:ok, "appended correct logical alias", nil, "inline-size:#{width}"]
+  ].each do |kind, description, replacement, appended|
+    mutation = lambda do |d|
+      mutate_memory_map_embed(d) do |_dom, stage, iframe|
+        node = element == "stage" ? stage : iframe
+        if replacement
+          # These are lexical tokens in the known inline contract; DOM selection
+          # above determines the element whose rendered styles are changed.
+          retained = node["style"].split(";").reject do |declaration|
+            %w[width inline-size].include?(declaration.split(":", 2).first.to_s.strip.downcase)
+          end
+          node["style"] = "#{retained.join(';')}; #{replacement}"
+        else
+          node["style"] = "#{node['style']}; #{appended}"
+        end
+      end
+    end
+    name = "embed logical width: #{element} #{description} (#4117)"
+    if kind == :ok
+      ok(name, site: mutation) { |_d| }
+    else
+      bad(name, /TOOL EMBED:.*does not preserve the viewport-centered embed stage/,
+          site: mutation) { |_d| }
+    end
+  end
+end
+
 ok("fake detached iframes in comments and script text are ignored (#4117)", site: lambda { |d|
   mutate_memory_map_embed(d) do |dom, stage, iframe|
     stage.add_next_sibling(Nokogiri::XML::Comment.new(dom, iframe.to_html))

@@ -227,11 +227,18 @@ and `max-inline-size` declarations or effective values of `none`: any other valu
 rejected because this static contract cannot establish whether CSS math or other
 constraints preserve the desktop width. Diagnostics show the effective caps. Regression
 cases cover narrow caps, explicit `none`, and their priority conflicts on both elements.
+For this site's horizontal writing mode, inline `width` and `inline-size` compete for
+the same effective width on both elements. The guard normalizes the logical alias
+before resolving priority and declaration order, so an appended narrow `inline-size`
+cannot hide behind a correct physical `width`. The `embed logical width` matrix cases
+cover equivalent aliases, narrow overrides, duplicate logical declarations, mixed-case
+spaced priority suffixes, and physical/logical conflicts in both orders.
 Parser exceptions become assertion failures. Priority cases require
 `!important` to beat later normal
 declarations and the last declaration to win among equal priorities; unsupported
 comments and other syntax outside the lexical contract fail the guard. This is a
-known site-layout contract, not a general CSS evaluator; browser checks establish
+known horizontal site-layout contract, not a general CSS evaluator for arbitrary
+writing modes or stylesheets; browser checks establish
 the desktop layout behavior.
 
 **The GHA-bench widget's checks (#4114, #4084).** The post at
