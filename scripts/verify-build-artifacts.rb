@@ -797,10 +797,14 @@ model.select { |e| e[:kind] == :tools }.each do |tool|
       # validated in a browser. Pixel tokens alone cannot establish a CSS width:
       # min(780px, 1400px), for example, still confines the app to its phone layout.
       # Author-selected custom layouts remain free to choose their own stage.
-      # A detached iframe still has width: 100%, but its containing block is
-      # the narrow content column. Check each matching iframe's actual ancestry,
-      # so an unrelated or wrong-src stage cannot stand in for its container.
-      stages = iframes.map { |iframe| iframe.ancestors("div.tool-embed").first }
+      # A wrapper can narrow the iframe's containing block even inside the stage.
+      # Arbitrary wrapper CSS cannot be established statically, so this layout's
+      # contract requires every matching iframe to be a direct child of its stage.
+      # An unrelated or wrong-src stage cannot stand in for its actual container.
+      stages = iframes.map do |iframe|
+        parent = iframe.parent
+        parent if parent&.name == "div" && parent.classes.include?("tool-embed")
+      end
       declarations = stages.map { |stage| inline_declarations(stage&.[]("style")) }
       contract = { "width" => "min(1400px, 100vw - 3rem)", "position" => "relative",
                    "left" => "50%", "transform" => "translateX(-50%)" }
@@ -812,7 +816,7 @@ model.select { |e| e[:kind] == :tools }.each do |tool|
         "TOOL EMBED: #{url} (#{rel}) does not preserve the viewport-centered embed stage " \
         "(#{actual}; matching iframe widths=#{iframe_widths.inspect}) — restore width: " \
         "min(1400px, 100vw - 3rem); position: relative; left: 50%; transform: translateX(-50%); " \
-        "and iframe width: 100% in _layouts/tool.html") do
+        "and iframe width: 100% as a direct child of div.tool-embed in _layouts/tool.html") do
         stages.all? &&
           declarations.all? { |styles| contract.all? { |name, value| styles[name] == value } } &&
           !iframe_widths.empty? && iframe_widths.all? { |width| width == "100%" }

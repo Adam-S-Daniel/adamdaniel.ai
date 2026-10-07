@@ -216,9 +216,12 @@ default verifier entrypoint runs the full regression matrix. Its cases
 (`bundle exec ruby scripts/test-verify-build-artifacts.rb '#4117'`)
 cover missing or narrow widths, invalid pixel tokens, centering declarations,
 matching iframe width, whitespace/final-declaration handling, and an author-selected
-custom layout. Nokogiri's HTML5 DOM requires every matching iframe to descend from
-its guarded `div.tool-embed`; a detached iframe or a wrong-src decoy stage fails.
-Nested wrappers remain valid, and fake iframe tags in comments and script text
+custom layout. Nokogiri's HTML5 DOM requires every matching iframe to be a direct child
+of its guarded `div.tool-embed`; a detached iframe or a wrong-src decoy stage fails.
+Intervening wrappers fail even without inline styles: arbitrary wrapper CSS cannot be
+established statically, and a wrapper constrained by width, max-width, or a stylesheet
+class can narrow the iframe despite a wide ancestor stage. The regression cases cover
+each constraint and multiple wrapper levels. Fake iframe tags in comments and script text
 do not count. Parser exceptions become assertion failures. Priority cases require
 `!important` to beat later normal
 declarations and the last declaration to win among equal priorities; unsupported

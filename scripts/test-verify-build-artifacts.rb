@@ -492,13 +492,33 @@ bad("another matching iframe is outside the guarded embed stage (#4117)",
       mutate_memory_map_embed(d) { |_dom, stage, iframe| stage.add_next_sibling(iframe.dup) }
     }) { |_d| }
 
-ok("a matching iframe nested inside its embed stage (#4117)", site: lambda { |d|
-  mutate_memory_map_embed(d) do |dom, stage, iframe|
-    wrapper = Nokogiri::XML::Node.new("div", dom)
-    stage.add_child(wrapper)
-    wrapper.add_child(iframe.unlink)
-  end
-}) { |_d| }
+[
+  ["an unstyled iframe wrapper", {}, 1],
+  ["a 300px-wide iframe wrapper", { "style" => "width:300px" }, 1],
+  ["a max-width-constrained iframe wrapper", { "style" => "max-width:300px" }, 1],
+  ["a class-constrained iframe wrapper", { "class" => "narrow-embed" }, 1],
+  ["a multi-level iframe wrapper", { "style" => "width:300px" }, 2]
+].each do |name, attributes, levels|
+  bad("#{name} inside its embed stage (#4117)",
+      /TOOL EMBED:.*does not preserve the viewport-centered embed stage/,
+      site: lambda { |d|
+        mutate_memory_map_embed(d) do |dom, stage, iframe|
+          if attributes["class"]
+            style = Nokogiri::XML::Node.new("style", dom)
+            style.content = ".narrow-embed { width:300px; }"
+            dom.at_css("head").add_child(style)
+          end
+          parent = stage
+          levels.times do
+            wrapper = Nokogiri::XML::Node.new("div", dom)
+            attributes.each { |key, value| wrapper[key] = value }
+            parent.add_child(wrapper)
+            parent = wrapper
+          end
+          parent.add_child(iframe.unlink)
+        end
+      }) { |_d| }
+end
 
 ok("fake detached iframes in comments and script text are ignored (#4117)", site: lambda { |d|
   mutate_memory_map_embed(d) do |dom, stage, iframe|
