@@ -445,6 +445,22 @@ end
    "width: min(1400px, 100vw - 3rem);", "width: min(780px, 1400px);"],
   ["a final narrow width overriding the stage width",
    "width: min(1400px, 100vw - 3rem);", "width: min(1400px, 100vw - 3rem); width: 780px;"],
+  ["an important narrow width overriding a later normal width",
+   "width: min(1400px, 100vw - 3rem);",
+   "width: 780px !important; width: min(1400px, 100vw - 3rem);"],
+  ["a mixed-case spaced important width overriding a later normal width",
+   "width: min(1400px, 100vw - 3rem);",
+   "width: 780px ! ImPoRtAnT ; width: min(1400px, 100vw - 3rem);"],
+  ["a comment hiding an important narrow width from the lexical contract",
+   "width: min(1400px, 100vw - 3rem);",
+   "width: 780px !important /* priority */; width: min(1400px, 100vw - 3rem);"],
+  ["a mixed-case spaced important iframe width overriding a later normal width",
+   "width:100%;", "width: 300px ! ImPoRtAnT ; width:100%;"],
+  ["an important centering offset overriding a later normal offset",
+   "left: 50%;", "left: 0 ! important ; left: 50%;"],
+  ["a later important narrow width overriding an earlier important width",
+   "width: min(1400px, 100vw - 3rem);",
+   "width: min(1400px, 100vw - 3rem) !important; width: 780px ! Important;"],
   ["an invalid stage width containing a large pixel token",
    "width: min(1400px, 100vw - 3rem);", "width: var(--missing, 1400pxx);"],
   ["a stage without its centering transform", "transform: translateX(-50%);", ""],
@@ -475,6 +491,33 @@ ok("equivalent spacing and final declarations preserve the embed stage (#4117)")
                               "transform: none; transform : translateX(-50%) ;")
                          .sub("width:100%;", "width:300px; width : 100% ;")
                          .sub("margin: 1.5rem 0;", "margin: 2rem 0;"))
+end
+
+ok("an important correct width wins over a later normal narrow width (#4117)") do |d|
+  path = File.join(d, "_layouts/tool.html")
+  layout = File.read(path)
+  File.write(path, layout.sub("width: min(1400px, 100vw - 3rem);",
+                             "width: min(1400px, 100vw - 3rem) ! ImPoRtAnT; width: 780px;"))
+end
+
+ok("a later important correct width wins over an earlier important narrow width (#4117)") do |d|
+  path = File.join(d, "_layouts/tool.html")
+  layout = File.read(path)
+  File.write(path, layout.sub("width: min(1400px, 100vw - 3rem);",
+                             "width: 780px !important; width: min(1400px, 100vw - 3rem) !important;"))
+end
+
+ok("important iframe and centering declarations win over later normal declarations (#4117)") do |d|
+  path = File.join(d, "_layouts/tool.html")
+  layout = File.read(path)
+  layout = layout.sub("position: relative;", "position: relative !important; position: static;")
+  layout = layout.sub("left: 50%;", "left: 50% !important; left: 0;")
+  layout = layout.sub("width: min(1400px, 100vw - 3rem);",
+                      "width: min(1400px, 100vw - 3rem) !important; width: 780px;")
+  layout = layout.sub("transform: translateX(-50%);",
+                      "transform: translateX(-50%) !important; transform: none;")
+  layout = layout.sub("width:100%;", "width:100% !important; width:300px;")
+  File.write(path, layout)
 end
 
 ok("a custom tool layout may choose its own embed stage (#4117)") do |d|

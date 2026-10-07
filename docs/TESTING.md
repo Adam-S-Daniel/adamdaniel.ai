@@ -210,8 +210,11 @@ The tool embed-stage declaration guard runs in the required
 regression cases (`bundle exec ruby scripts/test-verify-build-artifacts.rb '#4117'`)
 cover missing or narrow widths, invalid pixel tokens, centering declarations,
 matching iframe width, whitespace/final-declaration handling, and an author-selected
-custom layout. This is a known site-layout contract, not a general CSS evaluator;
-browser checks establish the desktop layout behavior.
+custom layout. Priority cases require `!important` to beat later normal
+declarations and the last declaration to win among equal priorities; unsupported
+comments and other syntax outside the lexical contract fail the guard. This is a
+known site-layout contract, not a general CSS evaluator; browser checks establish
+the desktop layout behavior.
 
 **The GHA-bench widget's checks (#4114, #4084).** The post at
 `/blog/introducing-gha-bench/` carries an inline widget (sliders plus a ranked

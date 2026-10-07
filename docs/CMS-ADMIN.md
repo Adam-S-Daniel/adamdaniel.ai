@@ -80,8 +80,10 @@ work in [claude-memory-map](https://github.com/Adam-S-Daniel/claude-memory-map)
 the known rendered declaration contract for the site-owned `tool` layout: stage
 `width: min(1400px, 100vw - 3rem)`, `position: relative`, `left: 50%`,
 `transform: translateX(-50%)`, and matching iframe
-`width: 100%`. It checks normalized lexical values and final declarations, not
-general CSS behavior; browser evidence validates the layout itself.
+`width: 100%`. It normalizes whitespace, honors `!important` over later normal
+declarations, and uses the last declaration among equal priorities. Since this is
+a lexical contract rather than a CSS parser, comments, escapes, quotes, and brace
+syntax are rejected; browser evidence validates the layout itself.
 Custom tool layouts remain free to choose their own embed stage.
 
 **Vendored-tool sync + previews.** This is the general contract for ANY tool

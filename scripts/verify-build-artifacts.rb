@@ -321,11 +321,24 @@ end
 
 # Lexical declarations for the site's known inline tool-layout contract, not a
 # CSS evaluator: these values contain no strings or nested declaration blocks.
-# Repeated properties keep their final declaration; whitespace runs normalize.
+# Repeated properties follow CSS priority: important beats normal, and the last
+# declaration wins within the same priority. Whitespace runs normalize.
 def inline_declarations(style)
-  style.to_s.split(";").to_h do |declaration|
+  source = style.to_s
+  # The lexical scan below cannot safely interpret syntax that can mask a
+  # declaration boundary or priority suffix, so reject it for this contract.
+  return {} if source.match?(%r{/\*|[\\{}"']})
+
+  priorities = {}
+  source.split(";").each_with_object({}) do |declaration, values|
     name, value = declaration.split(":", 2)
-    [name.to_s.strip.downcase, value.to_s.split.join(" ")]
+    name = name.to_s.strip.downcase
+    value = value.to_s.split.join(" ")
+    important = !!value.sub!(/\s*!\s*important\z/i, "")
+    next if priorities[name] && !important
+
+    values[name] = value
+    priorities[name] = important
   end
 end
 
