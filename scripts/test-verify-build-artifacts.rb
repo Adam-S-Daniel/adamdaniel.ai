@@ -452,7 +452,8 @@ bad("the tool layout pins the embed stage to the content column (#4117)",
   path = File.join(d, "_layouts/tool.html")
   layout = File.read(path)
   stripped = layout.sub(" width: min(1400px, 100vw - 3rem);", "")
-  raise "case setup: the stage width declaration was not found in _layouts/tool.html" if stripped == layout
+  raise "case setup: the stage width declaration was not found in _layouts/tool.html" if \
+    stripped == layout
   File.write(path, stripped)
 end
 
@@ -519,8 +520,11 @@ end
 ok("a later important correct width wins over an earlier important narrow width (#4117)") do |d|
   path = File.join(d, "_layouts/tool.html")
   layout = File.read(path)
-  File.write(path, layout.sub("width: min(1400px, 100vw - 3rem);",
-                             "width: 780px !important; width: min(1400px, 100vw - 3rem) !important;"))
+  File.write(
+    path,
+    layout.sub("width: min(1400px, 100vw - 3rem);",
+               "width: 780px !important; width: min(1400px, 100vw - 3rem) !important;")
+  )
 end
 
 ok("important iframe and centering declarations win over later normal declarations (#4117)") do |d|

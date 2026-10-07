@@ -796,10 +796,10 @@ model.select { |e| e[:kind] == :tools }.each do |tool|
       actual = contract.keys.map { |name| "#{name}=#{declarations[name].inspect}" }.join(", ")
       iframe_widths = iframes.map { |iframe| inline_declarations(iframe["style"])["width"] }
       check("#{url} preserves the viewport-centered embed stage and full-width iframe",
-            "TOOL EMBED: #{url} (#{rel}) does not preserve the viewport-centered embed stage " \
-            "(#{actual}; matching iframe widths=#{iframe_widths.inspect}) — restore width: " \
-            "min(1400px, 100vw - 3rem); position: relative; left: 50%; transform: translateX(-50%); " \
-            "and iframe width: 100% in _layouts/tool.html") do
+        "TOOL EMBED: #{url} (#{rel}) does not preserve the viewport-centered embed stage " \
+        "(#{actual}; matching iframe widths=#{iframe_widths.inspect}) — restore width: " \
+        "min(1400px, 100vw - 3rem); position: relative; left: 50%; transform: translateX(-50%); " \
+        "and iframe width: 100% in _layouts/tool.html") do
         contract.all? { |name, value| declarations[name] == value } &&
           !iframe_widths.empty? && iframe_widths.all? { |width| width == "100%" }
       end
