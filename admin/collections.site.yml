@@ -1,6 +1,8 @@
 # Opt-in per-site collections, spliced into the platform's base collections at
 # build time (see admin/collections.site.yml.example). The platform machinery
-# collections — posts, tags, projects, pages, and the e2e canary — always stay.
+# collections — posts, tags, projects, pages, and the e2e canary — stay unless
+# `cms.base_collections` in _config.yml (a keep-list) leaves one out; it
+# currently leaves out projects while Projects is switched off on the site.
 # Indentation matches the base list (2 spaces for `- name:`).
   - name: tools
     label: Tools

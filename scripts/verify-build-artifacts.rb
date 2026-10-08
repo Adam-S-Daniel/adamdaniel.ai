@@ -1295,6 +1295,17 @@ check("admin config has a collection that edits _posts",
     c.is_a?(Hash) && (c["folder"].to_s.chomp("/") == "_posts" || c["name"] == "posts")
   end
 end
+# Projects switched off on the site (`collections.projects.output: false`) means a
+# published project renders nowhere, so the admin must not offer the collection (#4082).
+projects_cfg = config.dig("collections", "projects")
+if projects_cfg.is_a?(Hash) && projects_cfg["output"] == false
+  check("the admin config hides the projects collection while projects output is off",
+        "ADMIN CONFIG: _config.yml sets `collections.projects.output: false` but the rendered admin " \
+        "config still has a `projects` collection — editors could publish projects that render " \
+        "nowhere; leave `projects` out of `cms.base_collections` in _config.yml") do
+    !admin_collections.include?("projects")
+  end
+end
 seam = read(File.join(ROOT, "admin", "collections.site.yml"))
 seam_names = seam ? element_names(yaml_load(seam, "admin/collections.site.yml")) : []
 seam_names.each do |name|

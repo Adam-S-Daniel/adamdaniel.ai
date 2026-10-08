@@ -16,6 +16,12 @@ theme: cms-platform-theme
 cms:
   repository: Adam-S-Daniel/adamdaniel.ai
   oauth_base_url: https://sq8d4876v8.execute-api.us-east-1.amazonaws.com
+  # Keep-list of the platform's built-in admin collections. Projects is left out
+  # on purpose: the site has Projects switched off (collections.projects.output
+  # is false below, projects/index.html is published: false), so a project an
+  # editor published would render nowhere (#4082). Add `projects` back here when
+  # you switch Projects on. e2e stays: the e2e specs use it.
+  base_collections: [posts, tags, pages, e2e]
 
 # Profiles this site cross-posts to (.github/workflows/cross-post.yml). The
 # cms-platform theme renders each as <link rel="me"> in <head> (v0.1.116), which
