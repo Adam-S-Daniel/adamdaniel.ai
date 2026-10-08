@@ -212,6 +212,6 @@ Files under `assets/` are copied through by Jekyll without any config change.
 
 **Markdown inside the embed.** kramdown defaults (`parse_block_html: false`) deliberately don't parse markdown inside the wrapper `<div>`. Author the embed as pure HTML; if you need prose around the widget, place it before/after the embed block.
 
-**Security note.** No CSP is enforced today, so inline `<script>` and `<style>` work without ceremony. If a CSP is added later, allowlist either the inline payloads (via hashes/nonces) or migrate widgets into `/assets/widgets/` and allowlist that path. The trust model is "authors are committers" — embeds land via the standard editorial-workflow PR review.
+**Security note.** Public pages, `/preview/` included, send only `Content-Security-Policy: frame-ancestors 'self'`, which does not restrict scripts or styles, so inline `<script>` and `<style>` in an embed work without ceremony. `/admin/` is different: its CSP has been enforced since 2026-10-05 (see the `ADMIN_CSP_MODE=enforce` note in `docs/WORKFLOWS.md`), though it still allows `'unsafe-inline'` scripts and styles. If a public-page CSP ever restricts `script-src` or `style-src`, allowlist either the inline payloads (via hashes/nonces) or migrate widgets into `/assets/widgets/` and allowlist that path. The trust model is "authors are committers" — embeds land via the standard editorial-workflow PR review.
 
 End-to-end coverage lives in `e2e/cms-html-embed.spec.js`.

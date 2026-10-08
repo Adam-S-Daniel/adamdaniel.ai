@@ -20,9 +20,11 @@ Skills reach an **ephemeral** session (cloud, CI runner, container) through the
 `skills-bootstrap` SessionStart hook in `.claude/hooks/`, copied verbatim from
 `agentskills` and wired in `.claude/settings.json`. It installs from the
 committed **`skills.lock`**, which pins two registries at immutable commits
-with a per-skill sha256: `Adam-S-Daniel/agentskills` for the `adam` bundle and
-`Adam-S-Daniel/cms-platform` for the `cms-platform` bundle — 23 skills, all
-verified before they land in `~/.claude/skills`. On a durable machine the hook
+with a per-skill sha256: `Adam-S-Daniel/adam-agentskills` for the
+`adam-anything-anywhere` and `adam-coding-anywhere` bundles and
+`Adam-S-Daniel/cms-platform` for the `cms-platform` bundle. Every skill the
+lock lists is verified before it lands in `~/.claude/skills`; the lock, not
+this page, is the count. On a durable machine the hook
 is a deliberate no-op; the marketplace plugin install is authoritative there.
 
 Two things to know when touching this:
