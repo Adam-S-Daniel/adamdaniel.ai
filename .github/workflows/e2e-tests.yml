@@ -35,7 +35,7 @@ permissions:
 
 jobs:
   e2e:
-    uses: Adam-S-Daniel/cms-platform/.github/workflows/e2e-tests.yml@5fe0759d7d62797e057741e0d2e78137b4585c02
+    uses: Adam-S-Daniel/cms-platform/.github/workflows/e2e-tests.yml@9dd9454b7020ca2eab4ffe49689e764e55a0e4cc
     with:
       # The HEAVY lane: target `local` builds + serves THIS site (real
       # `jekyll build` + decap-server) and runs the FULL Playwright matrix,
@@ -56,7 +56,7 @@ jobs:
       # prod-mutate / real-loop specs while the playground is open.
       prod_playground_mode: ${{ vars.PROD_PLAYGROUND_MODE }}
       # Pin to the SAME ref as the `uses:` pin above so the harness matches.
-      platform_ref: 5fe0759d7d62797e057741e0d2e78137b4585c02
+      platform_ref: 9dd9454b7020ca2eab4ffe49689e764e55a0e4cc
     secrets:
       # Optional — drop this line if the site has no PAT. Preview discovery
       # then uses the job GITHUB_TOKEN and real-lane CMS specs self-skip.
