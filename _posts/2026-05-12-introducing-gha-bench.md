@@ -207,6 +207,7 @@ Adjust the sliders according to your priorities.
   ];
 
   var KEYS = ["tests", "workflow", "duration", "cost"];
+  var phoneModels = window.matchMedia("(max-width: 540px)");
 
   function el(id) { return document.getElementById("bws-" + id); }
 
@@ -247,9 +248,10 @@ Adjust the sliders according to your priorities.
     var html = "";
     for (var i = 0; i < scored.length; i++) {
       var r = scored[i].row;
+      var model = phoneModels.matches ? r[1].replace(" ", "-").replace(/ /g, "·") : r[1];
       html +=
         "<tr>" +
-        "<td>" + r[1] + "</td>" +
+        "<td>" + model + "</td>" +
         "<td>" + r[0] + "</td>" +
         "<td>" + r[2] + " (" + r[3] + ")</td>" +
         "<td>" + r[4] + " (" + r[5] + ")</td>" +
@@ -306,6 +308,7 @@ Adjust the sliders according to your priorities.
   }
   scroller.addEventListener("scroll", updateScrollCue, { passive: true });
   window.addEventListener("resize", updateScrollCue);
+  phoneModels.addEventListener("change", render);
 
   KEYS.forEach(function (k) {
     el(k).addEventListener("input", function () { redistribute(k); });

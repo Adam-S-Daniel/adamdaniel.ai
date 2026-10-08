@@ -445,6 +445,14 @@ ok("the GHA-bench widget with different default slider weights (still 100)") do 
                             .sub('id="bws-cost" min="0" max="100" step="0.5" value="17.5"',
                                  'id="bws-cost" min="0" max="100" step="0.5" value="10"'))
 end
+bad("GHA-bench phone Model cells retain the full desktop labels (#4114)",
+    /WIDGET WEIGHTS: \/blog\/introducing-gha-bench\/.*Model column is missing opus-4\.7·1m·med/) do |d|
+  f = File.join(d, GHA_POST)
+  src = File.read(f)
+  cell = '"<td>" + model + "</td>" +'
+  raise "case setup: the responsive Model cell was not found" unless src.include?(cell)
+  File.write(f, src.sub(cell, '"<td>" + r[1] + "</td>" +'))
+end
 bad("GHA-bench sliders that stop handing out the rounding remainder total less than 100",
     /WIDGET WEIGHTS: \/blog\/introducing-gha-bench\/.*total \d+(\.\d+)?, not 100/) do |d|
   f = File.join(d, GHA_POST)
