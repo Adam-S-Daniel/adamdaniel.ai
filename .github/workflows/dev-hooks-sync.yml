@@ -10,9 +10,9 @@ permissions:
   pull-requests: write
 jobs:
   sync:
-    uses: Adam-S-Daniel/cms-platform/.github/workflows/dev-hooks-sync.yml@v0.1.162
+    uses: Adam-S-Daniel/cms-platform/.github/workflows/dev-hooks-sync.yml@9dd9454b7020ca2eab4ffe49689e764e55a0e4cc
     with:
-      platform_ref: v0.1.162
+      platform_ref: 9dd9454b7020ca2eab4ffe49689e764e55a0e4cc
     secrets:
       # So the sync PR triggers this repo's CI: the CMS automation App's private
       # key, with vars.CMS_AUTOMATION_APP_ID set on this repo. The only credential
