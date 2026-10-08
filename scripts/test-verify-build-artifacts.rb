@@ -7,9 +7,8 @@
 #
 # Needs the site's gems (it runs `bundle exec jekyll build`); no network, no
 # wall clock (dates are far in the past or far in the future), nothing written
-# outside a temp directory. There is no CI lane for it: the repo vendors no
-# Ruby test runner and `site-verify` itself runs only the verifier, so run this
-# whenever the verifier changes (it takes about a minute).
+# outside a temp directory. CI runs this matrix through the verifier's default
+# entrypoint. Each matrix child passes `--artifacts-only` to prevent recursion.
 #
 # Two kinds of case, each applied one at a time to a scratch copy of the site:
 #
@@ -24,6 +23,7 @@
 require "fileutils"
 require "open3"
 require "tmpdir"
+require "nokogiri"
 
 ROOT = File.expand_path("..", __dir__)
 # VERIFY_SCRIPT points the matrix at another copy of the verifier (e.g. the previous version).
@@ -39,6 +39,17 @@ def write(dir, path, content)
   full = File.join(dir, path)
   FileUtils.mkdir_p(File.dirname(full))
   File.write(full, content)
+end
+
+def mutate_memory_map_embed(dir)
+  path = File.join(dir, "_site/tools/claude-memory-map/index.html")
+  dom = Nokogiri::HTML5.parse(File.read(path))
+  stage = dom.at_css("div.tool-embed")
+  iframe = stage&.at_css("iframe")
+  raise "case setup: the memory-map stage or iframe was not found" unless stage && iframe
+
+  yield dom, stage, iframe
+  File.write(path, dom.to_html)
 end
 
 def post(dir, name, front, body = "Body text.\n")
@@ -57,18 +68,35 @@ def tool(dir, name, front, body = "Tool body.\n")
   write(dir, "_tools/#{name}", "---\n#{yaml}\n---\n#{body}")
 end
 
-def ok(name, env: {}, site: nil, &edit)
-  CASES << { name: name, kind: :ok, edit: edit, env: env, site: site }
+def ok(name, env: {}, site: nil, verifier_args: ["--artifacts-only"], expect: [], &edit)
+  CASES << { name: name, kind: :ok, edit: edit, env: env, site: site,
+             verifier_args: verifier_args, expect: Array(expect) }
 end
 
 # `expect` is a Regexp (or Array of them) every one of which must match the output.
-def bad(name, expect, site: nil, &edit)
-  CASES << { name: name, kind: :bad, edit: edit, expect: Array(expect), site: site }
+def bad(name, expect, site: nil, verifier_args: ["--artifacts-only"], &edit)
+  CASES << { name: name, kind: :bad, edit: edit, expect: Array(expect), site: site,
+             verifier_args: verifier_args }
 end
 
 # --------------------------------------------------------------------------
 # LEGITIMATE edits — every one must pass.
 ok("baseline: the real tree, untouched") { |_d| }
+ok("site-verify entrypoint runs its regression matrix", verifier_args: [],
+   expect: /REGRESSION_ENTRY_RAN/) do |d|
+  write(d, "scripts/test-verify-build-artifacts.rb", <<~'RUBY')
+    abort "JEKYLL_NO_BUNDLER_REQUIRE leaked into the fresh process" if
+      ENV.key?("JEKYLL_NO_BUNDLER_REQUIRE")
+    puts "REGRESSION_ENTRY_RAN"
+  RUBY
+end
+bad("site-verify entrypoint reports a failing regression matrix",
+    [/REGRESSION_ENTRY_RAN/, /REGRESSION MATRIX:.*17/], verifier_args: []) do |d|
+  write(d, "scripts/test-verify-build-artifacts.rb",
+        "puts 'REGRESSION_ENTRY_RAN'\nexit 17\n")
+end
+bad("site-verify entrypoint fails when its regression matrix is missing",
+    /REGRESSION MATRIX:.*missing/, verifier_args: []) { |_d| }
 ok("a post with no tags") { |d| post(d, "2026-10-05-no-tags.md", {}) }
 ok("a future-dated published post (future: true)") do |d|
   post(d, "2099-01-01-from-the-future.md", { "title" => "Future" })
@@ -428,6 +456,264 @@ bad("a tool whose embedded app is missing is reported once",
     /TOOL EMBED: _tools\/gone\.md embeds \/assets\/tools\/gone\/ but that app is not built/) do |d|
   tool(d, "gone.md", { "embed_src" => "/assets/tools/gone/" })
 end
+bad("the tool layout pins the embed stage to the content column (#4117)",
+    [%r{TOOL EMBED: /tools/narrow/ \(_tools/narrow\.md\)},
+     /does not preserve the viewport-centered embed stage.*width=nil/]) do |d|
+  write(d, "assets/tools/narrow/index.html", "<!doctype html><title>Narrow</title><p>narrow</p>\n")
+  tool(d, "narrow.md", { "embed_src" => "/assets/tools/narrow/" })
+  path = File.join(d, "_layouts/tool.html")
+  layout = File.read(path)
+  stripped = layout.sub(" width: min(1400px, 100vw - 3rem);", "")
+  raise "case setup: the stage width declaration was not found in _layouts/tool.html" if \
+    stripped == layout
+  File.write(path, stripped)
+end
+
+bad("a matching iframe detached from its embed stage (#4117)",
+    /TOOL EMBED:.*does not preserve the viewport-centered embed stage/,
+    site: lambda { |d|
+      mutate_memory_map_embed(d) { |_dom, stage, iframe| stage.add_next_sibling(iframe.unlink) }
+    }) { |_d| }
+
+bad("a decoy embed stage contains another src while the matching iframe is outside (#4117)",
+    /TOOL EMBED:.*does not preserve the viewport-centered embed stage/,
+    site: lambda { |d|
+      mutate_memory_map_embed(d) do |_dom, stage, iframe|
+        decoy = iframe.dup
+        decoy["src"] = "https://example.com/other-app/"
+        stage.add_child(decoy)
+        stage.add_next_sibling(iframe.unlink)
+      end
+    }) { |_d| }
+
+bad("another matching iframe is outside the guarded embed stage (#4117)",
+    /TOOL EMBED:.*does not preserve the viewport-centered embed stage/,
+    site: lambda { |d|
+      mutate_memory_map_embed(d) { |_dom, stage, iframe| stage.add_next_sibling(iframe.dup) }
+    }) { |_d| }
+
+[
+  ["an unstyled iframe wrapper", {}, 1],
+  ["a 300px-wide iframe wrapper", { "style" => "width:300px" }, 1],
+  ["a max-width-constrained iframe wrapper", { "style" => "max-width:300px" }, 1],
+  ["a class-constrained iframe wrapper", { "class" => "narrow-embed" }, 1],
+  ["a multi-level iframe wrapper", { "style" => "width:300px" }, 2]
+].each do |name, attributes, levels|
+  bad("#{name} inside its embed stage (#4117)",
+      /TOOL EMBED:.*does not preserve the viewport-centered embed stage/,
+      site: lambda { |d|
+        mutate_memory_map_embed(d) do |dom, stage, iframe|
+          if attributes["class"]
+            style = Nokogiri::XML::Node.new("style", dom)
+            style.content = ".narrow-embed { width:300px; }"
+            dom.at_css("head").add_child(style)
+          end
+          parent = stage
+          levels.times do
+            wrapper = Nokogiri::XML::Node.new("div", dom)
+            attributes.each { |key, value| wrapper[key] = value }
+            parent.add_child(wrapper)
+            parent = wrapper
+          end
+          parent.add_child(iframe.unlink)
+        end
+      }) { |_d| }
+end
+
+%w[stage iframe].each do |element|
+  %w[max-width max-inline-size].each do |property|
+    [
+      ["a narrow #{property}", "#{property}:300px"],
+      ["an important narrow #{property} before normal none",
+       "#{property}:300px !important; #{property}:none"]
+    ].each do |description, styles|
+      bad("embed size cap: #{element} has #{description} (#4117)",
+          /TOOL EMBED:.*does not preserve the viewport-centered embed stage/,
+          site: lambda { |d|
+            mutate_memory_map_embed(d) do |_dom, stage, iframe|
+              node = element == "stage" ? stage : iframe
+              node["style"] = "#{node['style']}; #{styles}"
+            end
+          }) { |_d| }
+    end
+  end
+
+  [
+    ["explicit none", "max-width:none; max-inline-size:none"],
+    ["important none before normal narrow caps",
+     "max-width:none !important; max-inline-size:none !important; " \
+     "max-width:300px; max-inline-size:300px"]
+  ].each do |description, styles|
+    ok("embed size cap: #{element} accepts #{description} (#4117)", site: lambda { |d|
+      mutate_memory_map_embed(d) do |_dom, stage, iframe|
+        node = element == "stage" ? stage : iframe
+        node["style"] = "#{node['style']}; #{styles}"
+      end
+    }) { |_d| }
+  end
+end
+
+%w[stage iframe].each do |element|
+  width = element == "stage" ? "min(1400px, 100vw - 3rem)" : "100%"
+  [
+    [:bad, "appended narrow logical width", nil, "inline-size:300px"],
+    [:ok, "earlier narrow logical width before correct physical width",
+     "inline-size:300px; width:#{width}", nil],
+    [:bad, "important narrow logical width before normal physical width",
+     "inline-size:300px !important; width:#{width}", nil],
+    [:ok, "important correct physical width before normal narrow logical width",
+     "width:#{width} !important; inline-size:300px", nil],
+    [:ok, "last important correct physical width after important narrow logical width",
+     "inline-size:300px !important; width:#{width} !important", nil],
+    [:bad, "last important narrow logical width after important correct physical width",
+     "width:#{width} !important; inline-size:300px !important", nil],
+    [:bad, "last normal narrow physical width after correct logical width",
+     "inline-size:#{width}; width:300px", nil],
+    [:ok, "important correct logical width before normal narrow physical width",
+     "inline-size:#{width} !important; width:300px", nil],
+    [:bad, "mixed-case spaced important narrow logical width before normal logical width",
+     "inline-size:300px ! ImPoRtAnT ; inline-size:#{width}", nil],
+    [:ok, "mixed-case spaced important correct logical width before normal logical width",
+     "inline-size:#{width} ! ImPoRtAnT ; inline-size:300px", nil],
+    [:ok, "last normal correct logical width", "inline-size:300px; inline-size:#{width}", nil],
+    [:bad, "last normal narrow logical width", "inline-size:#{width}; inline-size:300px", nil],
+    [:ok, "last important correct logical width",
+     "inline-size:300px !important; inline-size:#{width} ! ImPoRtAnT", nil],
+    [:bad, "last important narrow logical width",
+     "inline-size:#{width} !important; inline-size:300px ! ImPoRtAnT", nil],
+    [:ok, "equivalent logical alias alone", "INLINE-SIZE : #{width}", nil],
+    [:ok, "appended correct logical alias", nil, "inline-size:#{width}"]
+  ].each do |kind, description, replacement, appended|
+    mutation = lambda do |d|
+      mutate_memory_map_embed(d) do |_dom, stage, iframe|
+        node = element == "stage" ? stage : iframe
+        if replacement
+          # These are lexical tokens in the known inline contract; DOM selection
+          # above determines the element whose rendered styles are changed.
+          retained = node["style"].split(";").reject do |declaration|
+            %w[width inline-size].include?(declaration.split(":", 2).first.to_s.strip.downcase)
+          end
+          node["style"] = "#{retained.join(';')}; #{replacement}"
+        else
+          node["style"] = "#{node['style']}; #{appended}"
+        end
+      end
+    end
+    name = "embed logical width: #{element} #{description} (#4117)"
+    if kind == :ok
+      ok(name, site: mutation) { |_d| }
+    else
+      bad(name, /TOOL EMBED:.*does not preserve the viewport-centered embed stage/,
+          site: mutation) { |_d| }
+    end
+  end
+end
+
+ok("fake detached iframes in comments and script text are ignored (#4117)", site: lambda { |d|
+  mutate_memory_map_embed(d) do |dom, stage, iframe|
+    stage.add_next_sibling(Nokogiri::XML::Comment.new(dom, iframe.to_html))
+    script = Nokogiri::XML::Node.new("script", dom)
+    script["type"] = "application/json"
+    script.content = iframe.to_html.inspect
+    stage.add_next_sibling(script)
+  end
+}) { |_d| }
+
+[
+  ["a narrow min() stage with a misleading large pixel value",
+   "width: min(1400px, 100vw - 3rem);", "width: min(780px, 1400px);"],
+  ["a final narrow width overriding the stage width",
+   "width: min(1400px, 100vw - 3rem);", "width: min(1400px, 100vw - 3rem); width: 780px;"],
+  ["an important narrow width overriding a later normal width",
+   "width: min(1400px, 100vw - 3rem);",
+   "width: 780px !important; width: min(1400px, 100vw - 3rem);"],
+  ["a mixed-case spaced important width overriding a later normal width",
+   "width: min(1400px, 100vw - 3rem);",
+   "width: 780px ! ImPoRtAnT ; width: min(1400px, 100vw - 3rem);"],
+  ["a comment hiding an important narrow width from the lexical contract",
+   "width: min(1400px, 100vw - 3rem);",
+   "width: 780px !important /* priority */; width: min(1400px, 100vw - 3rem);"],
+  ["a mixed-case spaced important iframe width overriding a later normal width",
+   "width:100%;", "width: 300px ! ImPoRtAnT ; width:100%;"],
+  ["an important centering offset overriding a later normal offset",
+   "left: 50%;", "left: 0 ! important ; left: 50%;"],
+  ["a later important narrow width overriding an earlier important width",
+   "width: min(1400px, 100vw - 3rem);",
+   "width: min(1400px, 100vw - 3rem) !important; width: 780px ! Important;"],
+  ["an invalid stage width containing a large pixel token",
+   "width: min(1400px, 100vw - 3rem);", "width: var(--missing, 1400pxx);"],
+  ["a stage without its centering transform", "transform: translateX(-50%);", ""],
+  ["a stage without relative positioning", "position: relative;", ""],
+  ["a stage without its horizontal centering offset", "left: 50%;", ""],
+  ["a narrow iframe inside the wide stage", "width:100%;", "width:300px;"]
+].each do |name, original, replacement|
+  bad("#{name} (#4117)",
+      [%r{TOOL EMBED: /tools/claude-memory-map/},
+       /does not preserve the viewport-centered embed stage/]) do |d|
+    path = File.join(d, "_layouts/tool.html")
+    layout = File.read(path)
+    changed = layout.sub(original, replacement)
+    raise "case setup: #{original.inspect} was not found in _layouts/tool.html" if changed == layout
+
+    File.write(path, changed)
+  end
+end
+
+ok("equivalent spacing and final declarations preserve the embed stage (#4117)") do |d|
+  path = File.join(d, "_layouts/tool.html")
+  layout = File.read(path)
+  File.write(path, layout.sub("width: min(1400px, 100vw - 3rem);",
+                             "width: 780px; WIDTH : min(1400px,   100vw - 3rem);")
+                         .sub("position: relative;", "position: static; position : relative ;")
+                         .sub("left: 50%;", "left: 0; left : 50% ;")
+                         .sub("transform: translateX(-50%);",
+                              "transform: none; transform : translateX(-50%) ;")
+                         .sub("width:100%;", "width:300px; width : 100% ;")
+                         .sub("margin: 1.5rem 0;", "margin: 2rem 0;"))
+end
+
+ok("an important correct width wins over a later normal narrow width (#4117)") do |d|
+  path = File.join(d, "_layouts/tool.html")
+  layout = File.read(path)
+  File.write(path, layout.sub("width: min(1400px, 100vw - 3rem);",
+                             "width: min(1400px, 100vw - 3rem) ! ImPoRtAnT; width: 780px;"))
+end
+
+ok("a later important correct width wins over an earlier important narrow width (#4117)") do |d|
+  path = File.join(d, "_layouts/tool.html")
+  layout = File.read(path)
+  File.write(
+    path,
+    layout.sub("width: min(1400px, 100vw - 3rem);",
+               "width: 780px !important; width: min(1400px, 100vw - 3rem) !important;")
+  )
+end
+
+ok("important iframe and centering declarations win over later normal declarations (#4117)") do |d|
+  path = File.join(d, "_layouts/tool.html")
+  layout = File.read(path)
+  layout = layout.sub("position: relative;", "position: relative !important; position: static;")
+  layout = layout.sub("left: 50%;", "left: 50% !important; left: 0;")
+  layout = layout.sub("width: min(1400px, 100vw - 3rem);",
+                      "width: min(1400px, 100vw - 3rem) !important; width: 780px;")
+  layout = layout.sub("transform: translateX(-50%);",
+                      "transform: translateX(-50%) !important; transform: none;")
+  layout = layout.sub("width:100%;", "width:100% !important; width:300px;")
+  File.write(path, layout)
+end
+
+ok("a custom tool layout may choose its own embed stage (#4117)") do |d|
+  write(d, "assets/tools/custom/index.html", "<!doctype html><title>Custom</title><p>Custom</p>\n")
+  write(d, "_layouts/custom-tool.html", <<~HTML)
+    ---
+    layout: default
+    ---
+    <h1>{{ page.title }}</h1>
+    <iframe src="{{ page.embed_src | relative_url }}" title="{{ page.title }}"></iframe>
+    {{ content }}
+  HTML
+  tool(d, "custom.md", { "layout" => "custom-tool", "embed_src" => "/assets/tools/custom/" })
+end
 
 # --------------------------------------------------------------------------
 def run(cmd, env: {}, chdir: ROOT)
@@ -435,7 +721,7 @@ def run(cmd, env: {}, chdir: ROOT)
   [out, status]
 end
 
-def build_and_verify(scratch, base, env, site_hook)
+def build_and_verify(scratch, base, env, site_hook, verifier_args)
   FileUtils.rm_rf(scratch)
   FileUtils.cp_r(base, scratch)
   yield scratch
@@ -444,7 +730,8 @@ def build_and_verify(scratch, base, env, site_hook)
   raise "jekyll build failed in the scratch copy:\n#{out}" unless status.success?
 
   site_hook&.call(scratch)
-  run(["ruby", File.join(scratch, "scripts", "verify-build-artifacts.rb")], env: env, chdir: scratch)
+  run(["ruby", File.join(scratch, "scripts", "verify-build-artifacts.rb"), *verifier_args],
+      env: env, chdir: scratch)
 end
 
 filter = ARGV.first
@@ -463,12 +750,15 @@ Dir.mktmpdir("verify-matrix-") do |tmp|
     next if filter && !c[:name].include?(filter)
 
     scratch = File.join(tmp, "case")
-    out, status = build_and_verify(scratch, base, c[:env] || {}, c[:site]) { |d| c[:edit]&.call(d) }
+    out, status = build_and_verify(scratch, base, c[:env] || {}, c[:site], c[:verifier_args]) do |d|
+      c[:edit]&.call(d)
+    end
     backtrace = out.match?(/\.rb:\d+:in [`']/) || out.include?("(RuntimeError)")
     fail_lines = out.lines.grep(/^  FAIL /)
     good =
       if c[:kind] == :ok
-        status.success? && !backtrace && out.include?("build-artifact assertions passed")
+        status.success? && !backtrace && out.include?("build-artifact assertions passed") &&
+          c[:expect].all? { |re| out.match?(re) }
       else
         !status.success? && !backtrace && !fail_lines.empty? &&
           c[:expect].all? { |re| out.match?(re) }

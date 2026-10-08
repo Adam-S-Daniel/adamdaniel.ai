@@ -7,6 +7,10 @@
 #
 #   bundle exec jekyll build
 #   ruby scripts/verify-build-artifacts.rb
+#   ruby scripts/verify-build-artifacts.rb --artifacts-only
+#
+# The default entrypoint runs the regression matrix; matrix child runs use
+# `--artifacts-only` to prevent recursion.
 #
 # The required `site-verify / site-verify` check runs exactly this, through
 # cms-platform's reusable `site-verify.yml`: it builds the site under
@@ -36,9 +40,9 @@
 # * Structured formats go through a real parser: YAML for front matter and
 #   the admin config, REXML for the Atom feeds and the sitemap. A file that
 #   does not parse is a normal FAIL line naming the file and the parser's
-#   message, never a backtrace. Built HTML is scanned lexically (tag +
-#   attribute tokens, comments and script/style bodies removed) because
-#   Ruby's stdlib has no HTML5 parser.
+#   message, never a backtrace. Tool embed ancestry uses Nokogiri's HTML5 DOM;
+#   independent tag/attribute checks scan built HTML lexically (comments and
+#   script/style bodies removed).
 # * No assertion compares rendered text with source text: Markdown rewrites
 #   text (pipes become tables, underscores become <em>, entities decode), so
 #   any such comparison misfires on some legitimate post. See the Liquid
@@ -316,6 +320,32 @@ def tags(html, name)
     attrs.scan(ATTR_PAIR).to_h do |k, v1, v2, v3|
       [k.downcase, html_unescape(v1 || v2 || v3 || "")]
     end
+  end
+end
+
+# Lexical declarations for the site's known inline tool-layout contract, not a
+# CSS evaluator: these values contain no strings or nested declaration blocks.
+# Repeated properties follow CSS priority: important beats normal, and the last
+# declaration wins within the same priority. Whitespace runs normalize.
+# For the stage and iframe in this site's horizontal layout, logical inline-size
+# and physical width compete for the same width before resolving that priority.
+def inline_declarations(style)
+  source = style.to_s
+  # The lexical scan below cannot safely interpret syntax that can mask a
+  # declaration boundary or priority suffix, so reject it for this contract.
+  return {} if source.match?(%r{/\*|[\\{}"']})
+
+  priorities = {}
+  source.split(";").each_with_object({}) do |declaration, values|
+    name, value = declaration.split(":", 2)
+    name = name.to_s.strip.downcase
+    name = "width" if name == "inline-size"
+    value = value.to_s.split.join(" ")
+    important = !!value.sub!(/\s*!\s*important\z/i, "")
+    next if priorities[name] && !important
+
+    values[name] = value
+    priorities[name] = important
   end
 end
 
@@ -750,10 +780,61 @@ model.select { |e| e[:kind] == :tools }.each do |tool|
     embed = "/#{embed}" unless embed.empty? || embed.start_with?("/") || embed.match?(%r{\A([a-z][a-z0-9+.-]*:|//)}i)
     next if embed.empty? || !File.file?(tool[:dest]) || claimants(tool[:dest]).size > 1
 
-    iframes = tags(read(tool[:dest]), "iframe").map { |i| norm(site_path(i["src"].to_s)) }
+    html = read(tool[:dest])
+    dom = nil
+    iframes = []
     check("#{url} embeds #{embed} in an iframe",
           "TOOL EMBED: #{url} (#{rel}) does not render an <iframe> for embed_src #{embed} — " \
-          "check _layouts/tool.html") { iframes.include?(norm(site_path(embed))) }
+          "check _layouts/tool.html") do
+      require "nokogiri"
+      dom = Nokogiri::HTML5.parse(html, parse_noscript_content_as_text: true)
+      iframes = dom.css("iframe").select do |iframe|
+        norm(site_path(iframe["src"].to_s)) == norm(site_path(embed))
+      end
+      !iframes.empty?
+    end
+    next unless dom
+
+    if tool[:data]["layout"] == "tool"
+      # Guard this site's viewport-centered desktop stage (#4117), whose behavior is
+      # validated in a browser. Pixel tokens alone cannot establish a CSS width:
+      # min(780px, 1400px), for example, still confines the app to its phone layout.
+      # Author-selected custom layouts remain free to choose their own stage.
+      # A wrapper can narrow the iframe's containing block even inside the stage.
+      # Arbitrary wrapper CSS cannot be established statically, so this layout's
+      # contract requires every matching iframe to be a direct child of its stage.
+      # An unrelated or wrong-src stage cannot stand in for its actual container.
+      stages = iframes.map do |iframe|
+        parent = iframe.parent
+        parent if parent&.name == "div" && parent.classes.include?("tool-embed")
+      end
+      declarations = stages.map { |stage| inline_declarations(stage&.[]("style")) }
+      contract = { "width" => "min(1400px, 100vw - 3rem)", "position" => "relative",
+                   "left" => "50%", "transform" => "translateX(-50%)" }
+      actual = declarations.map do |styles|
+        contract.keys.map { |name| "#{name}=#{styles[name].inspect}" }.join(", ")
+      end.join("; ")
+      iframe_declarations = iframes.map { |iframe| inline_declarations(iframe["style"]) }
+      iframe_widths = iframe_declarations.map { |styles| styles["width"] }
+      # A physical or logical width cap can override the requested width. This
+      # static contract permits only absent caps or explicit none, not CSS math.
+      cap_properties = %w[max-width max-inline-size]
+      caps = (declarations + iframe_declarations).map do |styles|
+        cap_properties.to_h { |name| [name, styles[name]] }
+      end
+      check("#{url} preserves the viewport-centered embed stage and full-width iframe",
+        "TOOL EMBED: #{url} (#{rel}) does not preserve the viewport-centered embed stage " \
+        "(#{actual}; matching iframe widths=#{iframe_widths.inspect}; " \
+        "stage and iframe size caps=#{caps.inspect}) — restore width: " \
+        "min(1400px, 100vw - 3rem); position: relative; left: 50%; transform: translateX(-50%); " \
+        "and iframe width: 100% as a direct child of div.tool-embed in _layouts/tool.html; " \
+        "max-width and max-inline-size must be absent or none on both elements") do
+        stages.all? &&
+          declarations.all? { |styles| contract.all? { |name, value| styles[name] == value } } &&
+          !iframe_widths.empty? && iframe_widths.all? { |width| width == "100%" } &&
+          caps.all? { |styles| styles.values.all? { |value| value.nil? || value == "none" } }
+      end
+    end
     next if embed.match?(%r{\A([a-z][a-z0-9+.-]*:|//)}i) # external app: nothing to look up
 
     unless check("#{rel}'s embedded app #{embed} is in _site",
@@ -1361,6 +1442,28 @@ public_posts.each do |post|
 end
 
 # --------------------------------------------------------------------------
+unless ARGV.include?("--artifacts-only")
+  matrix_path = File.join(ROOT, "scripts", "test-verify-build-artifacts.rb")
+  matrix_available = check("REGRESSION MATRIX is present") do
+    raise CheckError, "REGRESSION MATRIX: scripts/test-verify-build-artifacts.rb is missing" unless
+      File.file?(matrix_path)
+
+    true
+  end
+  if matrix_available
+    check("REGRESSION MATRIX passes") do
+      matrix_passed = system({ "JEKYLL_NO_BUNDLER_REQUIRE" => nil }, "bundle", "exec", "ruby",
+                             matrix_path, chdir: ROOT)
+      unless matrix_passed
+        status = $?
+        result = status&.exited? ? "exit status #{status.exitstatus}" : "signal #{status&.termsig}"
+        raise CheckError, "REGRESSION MATRIX: failed with #{result}"
+      end
+      true
+    end
+  end
+end
+
 puts
 unless $warnings.empty?
   puts "#{$warnings.size} warning(s) — the verifier skipped what it could not process (not a failure):"
