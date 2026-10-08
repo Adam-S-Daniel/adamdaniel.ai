@@ -40,7 +40,7 @@ concurrency:
 
 jobs:
   nudge:
-    uses: Adam-S-Daniel/cms-platform/.github/workflows/cms-automerge-nudge.yml@v0.1.161
+    uses: Adam-S-Daniel/cms-platform/.github/workflows/cms-automerge-nudge.yml@0ba7e28bbf9e2a25635c4f245ea38d2f9c711587
     with:
       # Required-status-check contexts this site's branch protection
       # enforces — mirror `.github/rulesets/main.json`. One per line.

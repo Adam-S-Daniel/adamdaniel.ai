@@ -9,9 +9,9 @@ permissions:
   issues: write
 jobs:
   editorial:
-    uses: Adam-S-Daniel/cms-platform/.github/workflows/cms-editorial-workflow.yml@v0.1.161
+    uses: Adam-S-Daniel/cms-platform/.github/workflows/cms-editorial-workflow.yml@0ba7e28bbf9e2a25635c4f245ea38d2f9c711587
     with:
       # Pin to the SAME ref as the `uses:` pin above so the module matches.
-      platform_ref: v0.1.161
+      platform_ref: 0ba7e28bbf9e2a25635c4f245ea38d2f9c711587
     secrets:
       CMS_E2E_PAT: ${{ secrets.CMS_E2E_PAT }}
