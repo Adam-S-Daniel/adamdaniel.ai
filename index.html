@@ -46,10 +46,7 @@ title: Home
             <span class="post-reading-time">{{ reading_time }} min read</span>
             {% if post.tags %}
             <div class="post-tags">
-              {% for tag in post.tags limit:3 %}
-              {%- assign tag_slug = tag | slugify -%}
-              <a class="tag-pill" href="{{ '/tags/' | append: tag_slug | append: '/' | relative_url }}">{{ tag }}</a>
-              {% endfor %}
+              {% include tag-pills.html tags=post.tags limit=3 indent="              " %}
             </div>
             {% endif %}
           </div>
