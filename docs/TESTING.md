@@ -173,7 +173,7 @@ covers this byte-mirror invariant so the two lists can't drift unnoticed.
 | `visual-regression.yml` | PR | Uses its own `playwright.regression.config.js` and `regression-video.spec.js` only (both platform-delivered via the `.cms-platform/e2e` harness, not vendored here) |
 | `cms-editorial-workflow.yml` | Every PR (no path/branch filter — `validate-content` must always report for the ruleset) | Front-matter validation in-line (no specs invoked) |
 | `publish-scheduled-posts.yml` | Daily cron (14:00 UTC) | Runs the platform-owned `publish_scheduled_posts.py` (invoked via the `publish-scheduled-posts.yml` reusable — not a local file in this repo); no specs |
-| `site-verify.yml` | Every PR to `main` (no path filter; required `site-verify / site-verify`) | Builds the site (`JEKYLL_ENV=production`) and runs [`scripts/verify-build-artifacts.rb`](../scripts/verify-build-artifacts.rb) |
+| `site-verify.yml` | Every PR to `main` (no path filter; required `site-verify / site-verify`) | Builds the site (`JEKYLL_ENV=production`), runs [`scripts/verify-build-artifacts.rb`](../scripts/verify-build-artifacts.rb), and runs the full regression matrix through that default entrypoint |
 
 **The post-build verifier.** `scripts/verify-build-artifacts.rb` is the
 site-owned half of the platform's `site-verify` seam: the reusable runs it
@@ -188,8 +188,12 @@ which URL, is read from Jekyll itself (the verifier loads the site's bundle
 and lets Jekyll read the source tree in-process), never predicted or
 hardcoded; no assertion compares rendered text with source text. An
 assertion may fail only on a genuinely broken build, never on a legitimate
-authoring choice. Run it locally
-with `bundle exec jekyll build && ruby scripts/verify-build-artifacts.rb`.
+authoring choice. The default verifier entrypoint also runs the regression
+matrix; matrix children pass `--artifacts-only` to avoid recursion. Run it locally
+with `bundle exec jekyll build && bundle exec ruby scripts/verify-build-artifacts.rb`.
+Before spawning the matrix, the verifier clears `JEKYLL_NO_BUNDLER_REQUIRE` from
+the child environment: Jekyll's plugin manager sets that variable in its current
+process, while the matrix needs its fresh Bundler process to load site plugins.
 
 **The verifier's regression matrix.** `scripts/test-verify-build-artifacts.rb`
 applies each ordinary content edit (no tags, future-dated, `published: false`,
@@ -199,11 +203,43 @@ without `featured:`, the last post unpublished or deleted, ...) to a scratch
 copy, builds it, and requires the verifier to stay green; it also applies
 real defects (missing sitemap, broken link, unresolved Liquid from a layout,
 corrupt feed XML, ...) and requires a plain-English FAIL with no Ruby
-backtrace. No CI lane runs it (the repo vendors no Ruby test runner and
-`site-verify` runs only the verifier), so run it whenever the verifier
-changes: `bundle exec ruby scripts/test-verify-build-artifacts.rb [name-substring]`
-(about a minute, no network). The header of the verifier lists the theme-gem
-couplings a platform bump can trip.
+backtrace. The required `site-verify / site-verify` check runs this matrix
+through the default verifier entrypoint; each matrix child uses
+`--artifacts-only`. Run a focused subset locally with
+`bundle exec ruby scripts/test-verify-build-artifacts.rb [name-substring]` (no
+network). The header of the verifier lists the theme-gem couplings a platform
+bump can trip.
+
+The tool embed-stage declaration guard runs in the required
+[`site-verify / site-verify` job](../.github/workflows/site-verify.yml), whose
+default verifier entrypoint runs the full regression matrix. Its cases
+(`bundle exec ruby scripts/test-verify-build-artifacts.rb '#4117'`)
+cover missing or narrow widths, invalid pixel tokens, centering declarations,
+matching iframe width, whitespace/final-declaration handling, and an author-selected
+custom layout. Nokogiri's HTML5 DOM requires every matching iframe to be a direct child
+of its guarded `div.tool-embed`; a detached iframe or a wrong-src decoy stage fails.
+Intervening wrappers fail even without inline styles: arbitrary wrapper CSS cannot be
+established statically, and a wrapper constrained by width, max-width, or a stylesheet
+class can narrow the iframe despite a wide ancestor stage. The regression cases cover
+each constraint and multiple wrapper levels. Fake iframe tags in comments and script text
+do not count. Both the stage and matching iframe must have absent inline `max-width`
+and `max-inline-size` declarations or effective values of `none`: any other value is
+rejected because this static contract cannot establish whether CSS math or other
+constraints preserve the desktop width. Diagnostics show the effective caps. Regression
+cases cover narrow caps, explicit `none`, and their priority conflicts on both elements.
+For this site's horizontal writing mode, inline `width` and `inline-size` compete for
+the same effective width on both elements. The guard normalizes the logical alias
+before resolving priority and declaration order, so an appended narrow `inline-size`
+cannot hide behind a correct physical `width`. The `embed logical width` matrix cases
+cover equivalent aliases, narrow overrides, duplicate logical declarations, mixed-case
+spaced priority suffixes, and physical/logical conflicts in both orders.
+Parser exceptions become assertion failures. Priority cases require
+`!important` to beat later normal
+declarations and the last declaration to win among equal priorities; unsupported
+comments and other syntax outside the lexical contract fail the guard. This is a
+known horizontal site-layout contract, not a general CSS evaluator for arbitrary
+writing modes or stylesheets; browser checks establish
+the desktop layout behavior.
 
 **The GHA-bench widget's checks (#4114, #4084).** The post at
 `/blog/introducing-gha-bench/` carries an inline widget (sliders plus a ranked

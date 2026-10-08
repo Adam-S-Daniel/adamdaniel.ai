@@ -69,6 +69,32 @@ First tool: `claude-memory-map` (vendored from
 `github.com/Adam-S-Daniel/claude-memory-map`). Full guide: the
 **embeddable-tool-pages** skill.
 
+**Embed stage width.** [`_layouts/tool.html`](../_layouts/tool.html) lets the iframe
+break out of the 780px column on desktop (up to 1400px, centered on the viewport).
+At a 1440px viewport this gives the vendored app its desktop layout, readable
+diagram text, and the brief/full labels toggle. Narrow viewports still use the
+app's phone layout; phone readability and the full-screen default remain upstream
+work in [claude-memory-map](https://github.com/Adam-S-Daniel/claude-memory-map)
+([issue #4117](https://github.com/Adam-S-Daniel/adamdaniel.ai/issues/4117)).
+[`scripts/verify-build-artifacts.rb`](../scripts/verify-build-artifacts.rb) guards
+the known rendered declaration contract for the site-owned `tool` layout: stage
+`width: min(1400px, 100vw - 3rem)`, `position: relative`, `left: 50%`,
+`transform: translateX(-50%)`, and matching iframe
+`width: 100%` as a direct child of its `div.tool-embed` stage. Intervening wrappers
+can narrow the iframe and are rejected. On both elements, inline `max-width` and
+`max-inline-size` must be absent or effectively `none`; other values are rejected
+because the static contract cannot establish their effect on the desktop width.
+For the site's horizontal writing mode, inline `inline-size` is equivalent to `width`
+on both elements; the two declarations compete by priority and source order rather
+than being checked separately. A narrow logical width therefore fails the same guard.
+It normalizes whitespace, honors `!important` over later normal
+declarations, and uses the last declaration among equal priorities. Since this is
+a lexical contract rather than a CSS parser, comments, escapes, quotes, and brace
+syntax are rejected. This is a horizontal site-layout contract, not a general CSS
+evaluator for arbitrary writing modes or stylesheets; browser evidence validates
+the layout itself.
+Custom tool layouts remain free to choose their own embed stage.
+
 **Vendored-tool sync + previews.** This is the general contract for ANY tool
 repo that vendors onto `/tools/` (today's only instance: `claude-memory-map`).
 A synced tool's copy at `assets/tools/<slug>/index.html` is
