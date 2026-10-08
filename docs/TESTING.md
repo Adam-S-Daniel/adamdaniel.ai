@@ -243,13 +243,19 @@ the desktop layout behavior.
 
 **The GHA-bench widget's checks (#4114, #4084).** The post at
 `/blog/introducing-gha-bench/` carries an inline widget (sliders plus a ranked
-table) that no platform spec covers. Two scripts guard it. `scripts/check-bws-widget.js`
+table) that no platform spec covers. Two scripts guard it. [scripts/check-bws-widget.js](../scripts/check-bws-widget.js)
 runs inside the verifier (the "GHA-bench widget" section): it replays Home/End
 and odd values against the built post's inline script in a fake DOM that snaps
 range values to their `step` like a browser, and requires the four weights to
-total exactly 100. `scripts/check-gha-bench-phone.js` is a real-browser check of
+total exactly 100. It also checks every Model label on initial desktop and phone
+loads, viewport changes, and phone slider rerenders: phone labels preserve the
+model, context, and effort tokens with compact separators. The required
+[site-verify / site-verify](../.github/workflows/site-verify.yml) lane runs these checks and a regression matrix case
+that restores the original full Model cells and must fail.
+[scripts/check-gha-bench-phone.js](../scripts/check-gha-bench-phone.js) is a real-browser check of
 the phone layout (no page scroll, one-line rows, swipe hint, edge fade, a visible keyboard focus ring, pinned
-Model column, Code reachable) and of the same 100% total; it is not a CI lane
+Model column, Code reachable), compact labels through slider moves and viewport
+changes, and the same 100% total; it is not a CI lane
 (no Node toolchain here), so run it after touching the widget: serve a built
 `_site` on your own port, then
 `PLAYWRIGHT_MODULE=<harness>/e2e/node_modules/playwright node scripts/check-gha-bench-phone.js http://127.0.0.1:<port>`

@@ -12,7 +12,8 @@
 // one line, say that it scrolls sideways (hint + edge fade), keep the Model
 // column pinned and let the reader reach the Code column. The sliders must
 // total exactly 100% after Home/End on every one. At desktop width nothing
-// phone-specific may show.
+// phone-specific may show. Model labels compact every token at phone widths,
+// survive slider rerenders, and restore full desktop labels across resizes.
 "use strict";
 
 const base = (process.argv[2] || "").replace(/\/$/, "");
@@ -32,6 +33,33 @@ function expect(cond, msg) {
 }
 
 const KEYS = ["duration", "cost", "tests", "workflow"];
+const MODEL_LABELS = [
+  ["opus 4.7 1m med", "opus-4.7·1m·med"],
+  ["opus 4.7 200k med", "opus-4.7·200k·med"],
+  ["sonnet 46 1m med", "sonnet-46·1m·med"],
+  ["opus 46 200k", "opus-46·200k"],
+  ["opus 4.7 1m hi", "opus-4.7·1m·hi"],
+  ["sonnet 46 200k", "sonnet-46·200k"],
+  ["opus 4.7 1m xhi", "opus-4.7·1m·xhi"],
+  ["haiku 45 200k", "haiku-45·200k"],
+];
+
+async function checkModels(page, compact, stage) {
+  const labels = await page.locator("#bws-tbody tr td:first-child").allTextContents();
+  const actual = [...new Set(labels)].sort();
+  const expected = MODEL_LABELS.map((pair) => pair[compact ? 1 : 0]).sort();
+  expect(JSON.stringify(actual) === JSON.stringify(expected), `${stage}: all Model labels match`);
+}
+
+async function resizeModels(page, width, compact) {
+  await page.setViewportSize({ width, height: 844 });
+  await page.waitForFunction(
+    (label) => [...document.querySelectorAll("#bws-tbody tr td:first-child")]
+      .some((cell) => cell.textContent === label),
+    MODEL_LABELS[0][compact ? 1 : 0]
+  );
+  await checkModels(page, compact, `resized to ${width}px`);
+}
 
 async function pctTotal(page) {
   const texts = await Promise.all(KEYS.map((k) => page.locator(`#bws-${k}-pct`).textContent()));
@@ -96,6 +124,7 @@ async function snapshot(page) {
       const page = await ctx.newPage();
       await page.goto(`${base}/blog/introducing-gha-bench/`);
       await page.waitForSelector(".bws-table tbody tr");
+      await checkModels(page, true, `initial ${width}px phone`);
       const s = await snapshot(page);
       expect(s.docScroll <= s.docClient, `page does not scroll sideways (${s.docScroll} <= ${s.docClient})`);
       expect(s.overflowX === "auto", "the table sits in an overflow-x: auto box");
@@ -119,13 +148,17 @@ async function snapshot(page) {
         await page.keyboard.press("Home");
         const total = await pctTotal(page);
         expect(total === 100, `Home on ${key}: sliders total ${total}% (want 100)`);
+        await checkModels(page, true, `Home on ${key} keeps compact labels`);
       }
       for (const key of KEYS) {
         await page.locator(`#bws-${key}`).focus();
         await page.keyboard.press("End");
         const total = await pctTotal(page);
         expect(total === 100, `End on ${key}: sliders total ${total}% (want 100)`);
+        await checkModels(page, true, `End on ${key} keeps compact labels`);
       }
+      await resizeModels(page, 541, false);
+      await resizeModels(page, 540, true);
       await ctx.close();
     }
 
@@ -134,11 +167,14 @@ async function snapshot(page) {
     const page = await ctx.newPage();
     await page.goto(`${base}/blog/introducing-gha-bench/`);
     await page.waitForSelector(".bws-table tbody tr");
+    await checkModels(page, false, "initial desktop");
     const d = await snapshot(page);
     expect(d.docScroll <= d.docClient, "page does not scroll sideways");
     expect(d.room <= 0, "the whole table fits, nothing scrolls");
     expect(!d.hintShown && !d.faded, "no hint and no fade when nothing scrolls");
     expect(d.rowHeight <= 50, `a row is one line tall (${d.rowHeight}px)`);
+    await resizeModels(page, 390, true);
+    await resizeModels(page, 1280, false);
     await ctx.close();
   } finally {
     await browser.close();
