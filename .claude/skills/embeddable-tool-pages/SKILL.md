@@ -57,7 +57,8 @@ does mean the header can drift from the gem — keep it minimal.
    `embed_src` is what the layout iframes. Omit it for a non-embed page.
 
 3. **Build and verify** (the static-asset + iframe approach has no CSP issues —
-   no CSP is enforced; inline scripts and CDN deps work):
+   no CSP is enforced on the public `/tools/` pages — the admin CSP covers
+   `/admin/` only; inline scripts and CDN deps work):
 
    ```bash
    bundle exec jekyll build
@@ -117,10 +118,7 @@ the PR preview environment, where the page loads as a real document.
   `visual-regression.yml`) for the full mechanics — a sync PR that
   unexpectedly hits a human review prompt means something outside the tool's
   own asset changed.
-- This skill lives at `.claude/skills/embeddable-tool-pages/` and is the ONLY
-  thing left in that directory — the vendored platform skill set was removed in
-  #3104, and the platform's skills now ship as the federated `cms-platform`
-  bundle in the `agentskills` marketplace, reaching ephemeral sessions through
-  the `skills-bootstrap` SessionStart hook and the committed `skills.lock`.
-  This one is site content, so no registry ships it: it is repo-owned, and the
-  hook leaves it alone.
+- This skill lives at `.claude/skills/embeddable-tool-pages/`. It is site
+  content, so no registry ships it: it is repo-owned, and the
+  `skills-bootstrap` SessionStart hook leaves it alone. (The platform's skills
+  ship separately as the `cms-platform` bundle; see `docs/SKILLS.md`.)
