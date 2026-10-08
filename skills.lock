@@ -8,7 +8,7 @@
   "sources": [
     {
       "registry": "Adam-S-Daniel/cms-platform",
-      "ref": "70f68683ab6278b2773f144d3013e955f2fbf41b",
+      "ref": "dc0b3429e85d7700430bc4164f71b108a6a93cde",
       "bundles": [
         "cms-platform"
       ],
@@ -28,7 +28,7 @@
     "cms-platform/admin-config-render": "sha256:6173d9d6abcb4273473d69b1c11390ef2584bf8fd2f6090838d533cf6cf6289c",
     "cms-platform/aws-bootstrap": "sha256:c4812b588edf3b500a9b3f227337a12799917140e2fa705f166b5b6c6f771e66",
     "cms-platform/browser-testing": "sha256:a2cbba9ae144f5f37dd93093cc179cdb5f310d5cf62d623a5e69d51797e5f35b",
-    "cms-platform/ci-watcher-loops": "sha256:17e59c97fd6f55217a608f70190fd8ca94cd16e57a308106bc5f4feb6c86f1ef",
+    "cms-platform/ci-watcher-loops": "sha256:3e5cfc19cc3c79c7f6daee8b3c93163bae464e981aa2d04de342c65a428107a9",
     "cms-platform/cms-stuck-pr-triage": "sha256:52df1e52adba47db4c945bba1becbe24251a4fc691679986339df410f8a514f5",
     "cms-platform/code-quality": "sha256:18d829538c86db140e4eaaf5162c30874703889b836af10cd36391d1c6b3a3fa",
     "cms-platform/consumer-repo-provisioning": "sha256:dc74acef91d5072770ba19bbfd7f85ee851b36e6bfbe1222b5a01b3674193331",
