@@ -226,6 +226,12 @@ platform `deploy.sh`, and asserts the env it receives: `ADMIN_CSP_MODE` defaults
 run it whenever the wrapper changes: `bash scripts/test-bootstrap-deploy-wrapper.sh` (no network,
 no AWS call).
 
+**The line-ending test.** `scripts/test-gitattributes-eol.sh` checks, in a throwaway `git init`
+repo with `core.autocrlf=true`, that `.gitattributes` keeps text files LF in the working tree
+(issue #4085: CRLF broke Jekyll excerpts and bash scripts on Windows) and binaries untouched, with
+a negative control. No CI lane runs it; run it whenever `.gitattributes` changes:
+`bash scripts/test-gitattributes-eol.sh` (no network).
+
 Jekyll plugin and OAuth-proxy unit tests are now owned upstream by
 cms-platform (gem `theme/spec/` + the platform `oauth-proxy/`) and run in the
 platform's own CI, not on this consumer.
