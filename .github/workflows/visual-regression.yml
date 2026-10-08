@@ -40,9 +40,9 @@ jobs:
     # always-report + screenshot-path + serve-path fixes — the PR side renders
     # the real built site, so no-change PRs come back ~0 diffs and
     # approve-regression auto-passes. platform_ref MUST match the @<ref> pin.
-    uses: Adam-S-Daniel/cms-platform/.github/workflows/visual-regression.yml@v0.1.161
+    uses: Adam-S-Daniel/cms-platform/.github/workflows/visual-regression.yml@0ba7e28bbf9e2a25635c4f245ea38d2f9c711587
     with:
-      platform_ref: v0.1.161
+      platform_ref: 0ba7e28bbf9e2a25635c4f245ea38d2f9c711587
     secrets:
       # Optional — drop any the site doesn't use. The AWS steps no-op when
       # PREVIEW_BUCKET (a repo var) is unset; the CloudFront invalidation
