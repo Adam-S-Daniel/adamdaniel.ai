@@ -102,19 +102,10 @@ public repo.
   force-pushing — the one sanctioned force-push.
 - **Commit with the `…@users.noreply.github.com` identity** on public repos.
 
-## Network allowlists live in `_agent-guidance/docs/reference/`
+## Read before you start
 
-Two egress allowlists, reference copies with a `.CHANGELOG.md` sidecar;
-nothing loads them. Add a changelog entry when you change one.
-
-- `network-allowlist-claude-environments.txt` — in force for the Claude
-  Code cloud environment `My Whitelist`; the dialog at claude.ai/code is
-  authoritative.
-- `network-allowlist-github-runners.txt` — proposed for CI; unenforceable
-  on a standard runner (roadmap #821 closed).
-
-Traps: `*.example.com` does **not** match the apex `example.com`; the "also
-include default list…" checkbox adds ~200 domains.
+- **Settings schema design** (config keys, flags, fields): https://github.com/Adam-S-Daniel/_agent-guidance/blob/main/docs/reference/settings-schema-design.md
+- **Network allowlists** (editing either egress allowlist): https://github.com/Adam-S-Daniel/_agent-guidance/blob/main/docs/reference/network-allowlists.md
 
 ## Automation vs branch protection
 
@@ -309,26 +300,24 @@ name outlives a rename).
 
 ## Pinning GitHub Actions
 
-**Every `uses:` is pinned to a full 40-character commit SHA** — workflows,
-composite actions and reusable-workflow refs alike; never a tag, branch or
-abbreviated SHA.
+**Two forms while repos migrate** ([ADR 0024](https://github.com/Adam-S-Daniel/_agent-guidance/blob/main/docs/decisions/0024-actions-pin-through-lockfiles.md)):
 
-- **A pin carries NO trailing version comment.** Nothing maintains it, so it
-  lies (2026-08-20, GHA-bench#52). Resolve one with
-  `git ls-remote <url> | grep <sha>`.
+- **Lockfile, the target:** `.github/workflows/actions.lock` covers every
+  workflow; each `uses:` on its most exact tag, by hand; local actions
+  `$/<path>`. Then `gh actions-lock --no-narrow`. Repos where actionlint
+  meets `$/`, or with `./` refs into a runtime checkout (`cms-platform`),
+  stay legacy.
+- **Legacy:** full 40-character SHA, no trailing version comment.
+- **Cross-repo reusable workflows take a full SHA in both forms**; no lockfile
+  covers them.
+- **The runner runs whatever commit the lockfile names**, even off-tag:
+  require `Adam-S-Daniel/verify-actions-lock` (fails on any pin finding) and
+  the Require lockfile policy. Review `actions.lock` as pins.
 - **Wait 7 days after a third-party release**, else pin the previous.
-- **Dereference annotated tags.** `gh api .../git/ref/tags/<tag>` with
-  `.object.type == "tag"` gives the tag object's SHA, which fails at runtime;
-  use `git ls-remote <url> 'refs/tags/<tag>^{}'`.
-- **The one carve-out: a ref into this account's own `cms-platform` stays on
-  its release tag** (`…@v0.1.88`), reusable workflow and composite action
-  alike, because `check-platform-pin-consistency.js` asserts each equals
-  `platform.lock`'s `platform_ref`.
-- `./local/path` and `docker://` refs have nothing to pin.
+- **Dereference annotated tags:** `git ls-remote <url> 'refs/tags/<tag>^{}'`.
+- **The one carve-out:** `cms-platform` refs stay on its release tag.
 
-`sha_pinning_required: true` (`repo-settings`' `fleet.yml`; `cms-platform`'s
-`repo-settings.yml`) governs actions only, so a tag in a *third-party*
-reusable-workflow ref is for review to catch.
+`sha_pinning_required: true` stays on; a locked tag satisfies it.
 
 ## A test that can signal can kill every session
 
