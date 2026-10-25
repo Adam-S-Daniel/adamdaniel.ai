@@ -46,7 +46,7 @@ the CMS/site-machinery skills (`browser-testing`, `admin-config-render`,
 `ci-watcher-loops`, `cms-stuck-pr-triage`, `editorial-label-audit`,
 `post-failure-comment`, `platform-release-and-bump`, `code-quality`,
 `preview-environments`, `aws-bootstrap`, `cms-platform-secrets`,
-`github-actions-sha-pinning`, `sveltia-cms-playwright-demo`, `test-canary`)
+`github-actions-sha-pinning`, `test-canary`)
 are the `cms-platform` bundle; the general-purpose ones (`finding-unknowns`,
 `writing-adrs`, `skills-doctor`, …) are `adam`. The one that MOVED is
 **`workflow-path-audit`**, cited under "Workflow path-filtering
