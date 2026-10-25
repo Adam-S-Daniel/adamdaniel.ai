@@ -36,8 +36,15 @@
 # Usage:
 #   bash infrastructure/bootstrap/deploy.sh
 #
-# If a GitHub OIDC provider already exists in this account:
-#   CREATE_OIDC_PROVIDER=false bash infrastructure/bootstrap/deploy.sh
+# The `adamdaniel-ai-bootstrap` stack owns this account's GitHub OIDC provider.
+# Keep CREATE_OIDC_PROVIDER at its default (`true`) on every redeploy, even when
+# the provider already exists. Setting it to `false` here requests removal of the
+# stack-owned GitHubOIDCProvider and changes to the IAM role trust. The destructive-change
+# guard blocks that change set. Use false only for a stack that does not own the provider
+# and reuses one owned elsewhere (for example, jodidaniel.com).
+#
+# To roll the admin CSP back to warn-only (it is enforced by default):
+#   ADMIN_CSP_MODE=report-only bash infrastructure/bootstrap/deploy.sh
 #
 # This script is idempotent — safe to re-run at any time.
 # =============================================================================
@@ -110,11 +117,18 @@ export GITHUB_ORG="${GITHUB_ORG:-Adam-S-Daniel}"
 export GITHUB_REPO="${GITHUB_REPO:-adamdaniel.ai}"
 export APEX_DOMAIN="${APEX_DOMAIN:-adamdaniel.ai}"
 export AWS_REGION="${AWS_REGION:-us-east-1}"
+# This stack owns its provider, so preserve it on every redeploy.
 export CREATE_OIDC_PROVIDER="${CREATE_OIDC_PROVIDER:-true}"
 # adamdaniel.ai is LIVE at its apex — the platform template gates apex/www A-records
 # on CreateApexDnsRecords (DEFAULT false, for pre-go-live sites). Force it true so a
 # redeploy never deletes the production apex/www DNS (would take the site offline).
 export CREATE_APEX_DNS_RECORDS="${CREATE_APEX_DNS_RECORDS:-true}"
+# The admin CSP has been ENFORCED since 2026-10-05. The platform deploy.sh defaults
+# ADMIN_CSP_MODE to `report-only`, so without this export a plain redeploy would
+# silently revert the live CSP to warn-only. This wrapper does not source
+# site-params.env, so the default lives here. Roll back with
+# `ADMIN_CSP_MODE=report-only bash infrastructure/bootstrap/deploy.sh`.
+export ADMIN_CSP_MODE="${ADMIN_CSP_MODE:-enforce}"
 # HOSTED_ZONE_ID passes through if the caller exported it; otherwise the
 # platform script auto-detects it from Route53 (same as the old behavior).
 

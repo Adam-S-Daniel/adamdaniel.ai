@@ -57,7 +57,8 @@ does mean the header can drift from the gem — keep it minimal.
    `embed_src` is what the layout iframes. Omit it for a non-embed page.
 
 3. **Build and verify** (the static-asset + iframe approach has no CSP issues —
-   no CSP is enforced; inline scripts and CDN deps work):
+   no CSP is enforced on the public `/tools/` pages — the admin CSP covers
+   `/admin/` only; inline scripts and CDN deps work):
 
    ```bash
    bundle exec jekyll build
@@ -66,12 +67,17 @@ does mean the header can drift from the gem — keep it minimal.
    # tool under collections (the CMS render runs at post_write).
    ```
 
+   The raw `/assets/tools/<slug>/` page stays out of `sitemap.xml` on its
+   own: `_config.yml` sets `sitemap: false` for the whole `assets/tools`
+   defaults scope, and `scripts/verify-build-artifacts.rb` fails if one is
+   listed. Nothing to add per tool.
+
 That's it — the index, nav, and CMS pick it up automatically from the
 collection.
 
 ## Embed a tool in a blog post
 
-Use the standard HTML-embed seam (see *Embedding HTML / Widgets* in AGENTS.md):
+Use the standard HTML-embed seam (see *Embedding HTML / Widgets* in `docs/CMS-ADMIN.md`):
 an `<iframe>` to the same asset, inside the sentinel block, and link the
 permanent `/tools/<slug>/` page so readers can open it full-screen.
 
@@ -98,7 +104,7 @@ the PR preview environment, where the page loads as a real document.
   source repo's workflows sync it (PR w/ auto-merge) and mirror source-repo PRs
   into `tool-preview/*` draft PRs for previews. Don't hand-edit the asset or
   its `_data/tool_sources/` record here — see "Vendored-tool sync + previews"
-  in AGENTS.md. A tool synced this way needs the same two workflows in *its*
+  in `docs/CMS-ADMIN.md`. A tool synced this way needs the same two workflows in *its*
   repo (copy `site-{sync,preview}.yml` + `scripts/sync-to-site.sh` from
   claude-memory-map and change the slug/paths).
 - A `tool-sync/*` PR is expected to auto-pass `visual-regression`'s
@@ -108,10 +114,11 @@ the PR preview environment, where the page loads as a real document.
   (cms-platform#146). This covers **updates to an existing tool only**: a
   brand-new tool's PR necessarily adds `_tools/<slug>.md`, which IS salient,
   so first-time additions get the full regression run + new-page manual
-  review. See AGENTS.md's "Visual-regression gotchas" (under
+  review. See "Visual-regression gotchas" in `docs/WORKFLOWS.md` (under
   `visual-regression.yml`) for the full mechanics — a sync PR that
   unexpectedly hits a human review prompt means something outside the tool's
   own asset changed.
-- This skill lives at `.claude/skills/embeddable-tool-pages/` — the one
-  site-owned skill in the repo (the old `.agents/skills/` mirror and the
-  vendored platform skill set were removed in the #2007-P7 thin-ification).
+- This skill lives at `.claude/skills/embeddable-tool-pages/`. It is site
+  content, so no registry ships it: it is repo-owned, and the
+  `skills-bootstrap` SessionStart hook leaves it alone. (The platform's skills
+  ship separately as the `cms-platform` bundle; see `docs/SKILLS.md`.)

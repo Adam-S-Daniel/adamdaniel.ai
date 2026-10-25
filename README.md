@@ -26,15 +26,24 @@ for `adamdaniel.ai`.
 ```bash
 # Deploy the bootstrap CloudFormation stack
 bash infrastructure/bootstrap/deploy.sh
-
-# If a GitHub OIDC provider already exists in this account:
-CREATE_OIDC_PROVIDER=false bash infrastructure/bootstrap/deploy.sh
 ```
+
+The `adamdaniel-ai-bootstrap` stack owns this account's GitHub OIDC provider.
+Keep `CREATE_OIDC_PROVIDER` at its default (`true`) on every redeploy, even when
+the provider already exists. Setting it to `false` here requests removal of the
+stack-owned `GitHubOIDCProvider` and changes to the IAM role trust. The
+destructive-change guard blocks that change set. Use `false` only for a stack that does not own
+the provider and reuses one owned elsewhere, as in [jodidaniel.com's bootstrap
+script](https://github.com/jodidaniel/jodidaniel.com/blob/main/infrastructure/bootstrap/deploy.sh).
+See the [bootstrap deploy wrapper](infrastructure/bootstrap/deploy.sh).
 
 Then add the stack outputs as GitHub Actions secrets (repo → Settings → Secrets → Actions):
 
 - `AWS_ROLE_ARN` — the IAM role ARN for OIDC auth
 - `PREVIEW_CLOUDFRONT_ID` — the CloudFront distribution ID for preview cache invalidation
+
+The admin CSP is enforced by default; to roll it back to warn-only, redeploy with
+`ADMIN_CSP_MODE=report-only bash infrastructure/bootstrap/deploy.sh`.
 
 After verifying OIDC works, remove the old `AWS_ACCESS_KEY_ID` and
 `AWS_SECRET_ACCESS_KEY` secrets and deactivate the IAM user keys.
@@ -131,7 +140,6 @@ Cost: roughly **$0.10/month** at this site's traffic. Full setup, sampling, rete
 | `e2e-tests.yml` | PR (no push trigger) | Runs Playwright as one CI job per Playwright project (10 jobs) behind an aggregating `e2e` gate job — `e2e / e2e` is the single required check; each project job installs only its own browser engine via the bounded, retried `install-playwright-browsers` composite, never a raw `npx playwright install`. Runs the full suite every call — no diff-aware spec selection or sharding on this lane (`e2e/select-specs.js` is used only by `parity-preview.yml` / `preview-media.yml`, not here). Per-test screenshot-video assembly is local-only (`DISABLE_PER_TEST_VIDEOS=1` in CI; there is no `finalize` job). Concurrency cancels superseded PR runs. |
 | `secrets-scan.yml` | PR + push to main + weekly cron | Runs [gitleaks](https://github.com/gitleaks/gitleaks) on the PR diff (or full history on push/cron). Allowlist for known test fixtures lives in `.gitleaks.toml`. |
 | `dependabot-auto-merge.yml` | PR opened/updated by `dependabot[bot]` | Verifies the diff only touches dependency-manifest paths, then enables GitHub native auto-merge (`--squash`). Branch protection holds the merge until e2e + visual-regression checks pass. Configured by `.github/dependabot.yml`. |
-| `dependabot-comment-sync.yml` | PR opened/updated by `dependabot[bot]` touching workflows | Pushes a follow-up commit refreshing every drifted `# vX.Y.Z (YYYY-MM-DD)` action-pin comment to match the new SHA's actual tag and tag-commit date. Requires the `CMS_PLATFORM_PAT` repo secret (fine-grained PAT with `workflows: write`); self-skips with a notice when unset. |
 
 ### Path-based skip rules (don't burn CI on docs/CI-only changes)
 
@@ -143,7 +151,6 @@ Most workflows declare path filters on their triggers so diffs which can't possi
 | `visual-regression.yml` | none — fires on every PR | The caller has no `paths:`/`paths-ignore:` filter at all; content-only-skip is decided INSIDE the platform's reusable workflow (`e2e/visual-regression-salient.js`), not by a caller-level path filter — a required-check gate can't be workflow-level path-filtered without recreating the missing-check trap. **CMS-managed content is intentionally treated as non-salient by that internal check** (`_posts/**`, `_tags/**`, `_projects/**`, `pages/**`, `_e2e/**`, `assets/images/uploads/**`) — content-only PRs (the kind every CMS Save produces) guarantee pixel diffs by design, so the regression video adds runner time without signal. Mixed PRs that also touch a template path still run the heavy build. |
 | `e2e-tests.yml` | `paths-ignore` (PR only — it has no `push` trigger) | Coarse-skip for docs-only / unrelated-CI-only diffs; `e2e-stub.yml` mirrors this list to keep the required `e2e / e2e` context present. Past that filter the lane runs the WHOLE suite, fanned out one job per Playwright project — there is no fine-grained runtime cut. `e2e/select-specs.js` is not invoked here at all; it survives as the selector for the `parity-preview` lane (and remains useful locally — see the dev-loop commands above). |
 | `cms-publish-loop-host.yml`, `cms-publish-loop-prod.yml` | `paths` (positive, push to `main` only) | Workflow-level path filter on their `push` trigger — neither has a `pull_request` trigger at all (they run post-merge, not per-PR); these are not in the required-status-checks list, so workflow-level filtering is safe (no missing-check trap). The schedule/dispatch triggers always fire regardless of paths. |
-| `dependabot-comment-sync.yml` | `paths` (positive) on its `pull_request_target` arm only (`.github/workflows/**`) | Its `pull_request_target` arm is filtered to `.github/workflows/**`; its separate `push` arm (added to suppress GitHub Actions' phantom zero-job `push` runs) has NO paths filter at all — it fires on every push to every branch and no-ops immediately in the reusable's first step for any non-Dependabot event. (`skills-sync.yml` runs on schedule/dispatch only and is a no-op here — no local skills mirror.) |
 
 `deploy-preview.yml` DOES use a `paths-ignore` list, like the others (7 entries — see the `AGENTS.md` "Salient paths per workflow" table) — it is not literally unfiltered. The list is deliberately short/narrow, though, because its `closed`-action teardown step needs to run regardless of what changed in the PR; a longer ignore list would also skip teardown on a docs-only PR close, leaking the per-PR S3 prefix. The build cost is moderate (~2-3 min) and the safety win of always tearing down outweighs the savings of a broader ignore list.
 
@@ -175,10 +182,11 @@ Required secrets:
 ## Local Development
 
 ```bash
-# One-shot setup: installs everything needed to run the full test stack
-# locally on Debian/Ubuntu/WSL2 — apt packages (libnspr4, libnss3, ffmpeg,
-# ruby-full, python3), Bundler + Gemfile gems, npm deps, and Playwright
-# browser binaries. Idempotent.
+# One-shot setup: installs the apt packages and Bundler + Gemfile gems the
+# site build needs, and — when cms-platform is checked out at platform.lock's
+# platform_ref into .cms-platform/ — the Playwright harness's npm deps and
+# browser binaries THERE. This repo vendors no Node toolchain of its own
+# (no root package.json since 2026-09-14). Idempotent.
 bash scripts/setup-test-environment.sh
 
 # Build and serve
@@ -187,14 +195,16 @@ bundle exec jekyll serve --livereload
 # Site:        http://localhost:4000
 # CMS admin:   http://localhost:4000/admin/index-local.html  (uses config-local.yml)
 
-# Run e2e tests (full matrix)
+# Run e2e tests (full matrix) — from the platform harness, against this site
+export SITE_ROOT="$(git rev-parse --show-toplevel)"
+cd .cms-platform/e2e
 npx playwright test
 
 # Run only the specs that the current diff can affect
-node e2e/select-specs.js | jq -r '.files[]?' | xargs npx playwright test
+node select-specs.js | jq -r '.files[]?' | xargs npx playwright test
 
 # Decap admin smoke test (boots decap-server + a static fileserver)
-npx playwright test e2e/cms-smoke.spec.js --project chromium-desktop-3k
+npx playwright test cms-smoke.spec.js --project chromium-desktop-3k
 
 ```
 
@@ -269,7 +279,7 @@ Folders grouped by purpose. Anything not listed is incidental.
 
 | Path | Holds |
 | --- | --- |
-| `admin/` | Gem-delivered Decap CMS shell (cms-platform-theme, since v0.1.4) — not present in this repo except the site-owned seam. This repo tracks only `admin/collections.site.yml.example` (the template for the per-site collection list); the real `admin/collections.site.yml`, `index.html`, `config.yml` / `config-local.yml`, `preview-bridge.js`, and the `reviews/` dashboard are all gem-delivered or generated at build time, not tracked here. The cobalt-thermal theme (`custom.css`) that used to ship here was retired in cms-platform PR #81. |
+| `admin/` | Gem-delivered Decap CMS shell (cms-platform-theme, since v0.1.4) — not present in this repo except the site-owned seam. This repo tracks only `admin/collections.site.yml` (the per-site collection list, with its template `admin/collections.site.yml.example`); `index.html`, `config.yml` / `config-local.yml`, `preview-bridge.js`, and the `reviews/` dashboard are all gem-delivered or generated at build time, not tracked here. The cobalt-thermal theme (`custom.css`) that used to ship here was retired in cms-platform PR #81. |
 | `preview.md` + `_layouts/preview.html` | The live-preview shell at `/preview/` that the admin's preview bridge feeds. `_layouts/preview.html` is gem-delivered (see "Appearance" above). |
 
 ### Site framework
@@ -293,7 +303,7 @@ Folders grouped by purpose. Anything not listed is incidental.
 | `infrastructure/bootstrap/` | One-time AWS setup (CloudFormation templates, deploy scripts). |
 | `oauth-proxy/` | Delegating `deploy.sh` for the GitHub OAuth proxy (Lambda + API Gateway). The Lambda + template are owned upstream by cms-platform; the wrapper deploys them at `platform_ref`. |
 | `.github/workflows/` | CI/CD — 31 workflow files today; see [`AGENTS.md` § Salient paths per workflow](AGENTS.md#salient-paths-per-workflow) for the full, current per-workflow table rather than duplicating a second (and quickly stale) list here. |
-| `scripts/` | Build-time helpers (`setup-test-environment.sh`, `write-commit-json.sh`, `generate-showcase.js`, etc.). |
+| `scripts/` | Build-time helpers (`setup-test-environment.sh`, `write-commit-json.sh`, `live-admin-smoke.js`) plus the platform-delivered pre-commit guards (`secrets-scan.sh`, `lint-staged.sh`, `setup-hooks.sh`). |
 | `docs/` | Long-form documentation: [`CONTENT_GUIDE.md`](docs/CONTENT_GUIDE.md), [`TESTING.md`](docs/TESTING.md). |
 
 ## Branching Strategy (visual)

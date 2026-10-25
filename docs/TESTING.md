@@ -173,6 +173,100 @@ covers this byte-mirror invariant so the two lists can't drift unnoticed.
 | `visual-regression.yml` | PR | Uses its own `playwright.regression.config.js` and `regression-video.spec.js` only (both platform-delivered via the `.cms-platform/e2e` harness, not vendored here) |
 | `cms-editorial-workflow.yml` | Every PR (no path/branch filter — `validate-content` must always report for the ruleset) | Front-matter validation in-line (no specs invoked) |
 | `publish-scheduled-posts.yml` | Daily cron (14:00 UTC) | Runs the platform-owned `publish_scheduled_posts.py` (invoked via the `publish-scheduled-posts.yml` reusable — not a local file in this repo); no specs |
+| `site-verify.yml` | Every PR to `main` (no path filter; required `site-verify / site-verify`) | Builds the site (`JEKYLL_ENV=production`), runs [`scripts/verify-build-artifacts.rb`](../scripts/verify-build-artifacts.rb), and runs the full regression matrix through that default entrypoint |
+
+**The post-build verifier.** `scripts/verify-build-artifacts.rb` is the
+site-owned half of the platform's `site-verify` seam: the reusable runs it
+when it exists and no-ops when it does not, so before issue #3970 the required
+check passed without building anything. It asserts properties of the built
+`_site/` (every published page and post builds and every `published: false`
+one does not; canonical and Open Graph tags; internal links resolve; no
+unresolved Liquid; feed, tag feeds and sitemap parse and exclude test
+fixtures; tool pages embed a vendored app that exists; the rendered Decap
+config parses and points at this repo). Which pages and posts exist, and at
+which URL, is read from Jekyll itself (the verifier loads the site's bundle
+and lets Jekyll read the source tree in-process), never predicted or
+hardcoded; no assertion compares rendered text with source text. An
+assertion may fail only on a genuinely broken build, never on a legitimate
+authoring choice. The default verifier entrypoint also runs the regression
+matrix; matrix children pass `--artifacts-only` to avoid recursion. Run it locally
+with `bundle exec jekyll build && bundle exec ruby scripts/verify-build-artifacts.rb`.
+Before spawning the matrix, the verifier clears `JEKYLL_NO_BUNDLER_REQUIRE` from
+the child environment: Jekyll's plugin manager sets that variable in its current
+process, while the matrix needs its fresh Bundler process to load site plugins.
+
+**The verifier's regression matrix.** `scripts/test-verify-build-artifacts.rb`
+applies each ordinary content edit (no tags, future-dated, `published: false`,
+non-ASCII slug and tag, custom permalinks, inline `{% raw %}` Liquid, a
+fenced `${{ }}` first block, `sitemap: false`, noindex, new tools with and
+without `featured:`, the last post unpublished or deleted, ...) to a scratch
+copy, builds it, and requires the verifier to stay green; it also applies
+real defects (missing sitemap, broken link, unresolved Liquid from a layout,
+corrupt feed XML, ...) and requires a plain-English FAIL with no Ruby
+backtrace. The required `site-verify / site-verify` check runs this matrix
+through the default verifier entrypoint; each matrix child uses
+`--artifacts-only`. Run a focused subset locally with
+`bundle exec ruby scripts/test-verify-build-artifacts.rb [name-substring]` (no
+network). The header of the verifier lists the theme-gem couplings a platform
+bump can trip.
+
+The tool embed-stage declaration guard runs in the required
+[`site-verify / site-verify` job](../.github/workflows/site-verify.yml), whose
+default verifier entrypoint runs the full regression matrix. Its cases
+(`bundle exec ruby scripts/test-verify-build-artifacts.rb '#4117'`)
+cover missing or narrow widths, invalid pixel tokens, centering declarations,
+matching iframe width, whitespace/final-declaration handling, and an author-selected
+custom layout. Nokogiri's HTML5 DOM requires every matching iframe to be a direct child
+of its guarded `div.tool-embed`; a detached iframe or a wrong-src decoy stage fails.
+Intervening wrappers fail even without inline styles: arbitrary wrapper CSS cannot be
+established statically, and a wrapper constrained by width, max-width, or a stylesheet
+class can narrow the iframe despite a wide ancestor stage. The regression cases cover
+each constraint and multiple wrapper levels. Fake iframe tags in comments and script text
+do not count. Both the stage and matching iframe must have absent inline `max-width`
+and `max-inline-size` declarations or effective values of `none`: any other value is
+rejected because this static contract cannot establish whether CSS math or other
+constraints preserve the desktop width. Diagnostics show the effective caps. Regression
+cases cover narrow caps, explicit `none`, and their priority conflicts on both elements.
+For this site's horizontal writing mode, inline `width` and `inline-size` compete for
+the same effective width on both elements. The guard normalizes the logical alias
+before resolving priority and declaration order, so an appended narrow `inline-size`
+cannot hide behind a correct physical `width`. The `embed logical width` matrix cases
+cover equivalent aliases, narrow overrides, duplicate logical declarations, mixed-case
+spaced priority suffixes, and physical/logical conflicts in both orders.
+Parser exceptions become assertion failures. Priority cases require
+`!important` to beat later normal
+declarations and the last declaration to win among equal priorities; unsupported
+comments and other syntax outside the lexical contract fail the guard. This is a
+known horizontal site-layout contract, not a general CSS evaluator for arbitrary
+writing modes or stylesheets; browser checks establish
+the desktop layout behavior.
+
+**The GHA-bench widget's checks (#4114, #4084).** The post at
+`/blog/introducing-gha-bench/` carries an inline widget (sliders plus a ranked
+table) that no platform spec covers. Two scripts guard it. [scripts/check-bws-widget.js](../scripts/check-bws-widget.js)
+runs inside the verifier (the "GHA-bench widget" section): it replays Home/End
+and odd values against the built post's inline script in a fake DOM that snaps
+range values to their `step` like a browser, and requires the four weights to
+total exactly 100. It also checks every Model label on initial desktop and phone
+loads, viewport changes, and phone slider rerenders: phone labels preserve the
+model, context, and effort tokens with compact separators. The required
+[site-verify / site-verify](../.github/workflows/site-verify.yml) lane runs these checks and a regression matrix case
+that restores the original full Model cells and must fail.
+[scripts/check-gha-bench-phone.js](../scripts/check-gha-bench-phone.js) is a real-browser check of
+the phone layout (no page scroll, one-line rows, swipe hint, edge fade, a visible keyboard focus ring, pinned
+Model column, Code reachable), compact labels through slider moves and viewport
+changes, and the same 100% total; it is not a CI lane
+(no Node toolchain here), so run it after touching the widget: serve a built
+`_site` on your own port, then
+`PLAYWRIGHT_MODULE=<harness>/e2e/node_modules/playwright node scripts/check-gha-bench-phone.js http://127.0.0.1:<port>`
+(`BROWSER_ENGINE=webkit` for WebKit).
+
+**The bootstrap wrapper's test.** `scripts/test-bootstrap-deploy-wrapper.sh` runs
+`infrastructure/bootstrap/deploy.sh` from a scratch copy with stub `aws`/`git` and a stub
+platform `deploy.sh`, and asserts the env it receives: `ADMIN_CSP_MODE` defaults to `enforce`
+(and `report-only` still overrides it) and `CREATE_APEX_DNS_RECORDS=true`. No CI lane runs it, so
+run it whenever the wrapper changes: `bash scripts/test-bootstrap-deploy-wrapper.sh` (no network,
+no AWS call).
 
 Jekyll plugin and OAuth-proxy unit tests are now owned upstream by
 cms-platform (gem `theme/spec/` + the platform `oauth-proxy/`) and run in the
@@ -262,9 +356,10 @@ theme. There is no theme to drift, and the editor's WYSIWYG surface is
 is still covered by `cms-smoke.spec.js` and `cms-editorial-workflow.spec.js`
 (field render + load / save / delete round-trips).
 
-`scripts/generate-showcase.js` produces a side-by-side video of every
-snapshot when the `*-snapshots-before/` directory exists, used for PR
-review.
+The former `scripts/generate-showcase.js` (a before/after showcase video of
+the snapshots, for PR review) was removed on 2026-09-14 together with the
+root npm toolchain; the snapshot directories it read left this repo with the
+harness, so it had nothing to render.
 
 ### G. CDN routing (no browser, just function exec)
 
@@ -483,17 +578,59 @@ Every test run captures screenshots (`screenshot: "on"`) and retains video on fa
 
 - **Threshold:** 1% pixel diff allowed (`maxDiffPixelRatio: 0.01`)
 - **CI reporter:** HTML report with visual diffs uploaded as artifact
-- **Update baselines:** `npx playwright test e2e/visual-regression.spec.js --update-snapshots`
+- **Update baselines:** from the platform harness checkout, `cd .cms-platform/e2e && SITE_ROOT=<this repo> npx playwright test visual-regression.spec.js --update-snapshots` (this repo has no root `node_modules`; Playwright is installed in the harness only)
 - **First run for new projects:** missing baselines cause failure; generate with `--update-snapshots`
+- **Baseline diffs caused by a change the owner directed:** an agent may regenerate and commit the new baselines in the same PR without asking again (the owner authorized this on PR #456, a subheading removal) — only when the diffs are explained by that change, for the projects whose baselines actually changed, and as a separate `chore(visual): update baselines for <change>` commit so the authorization chain stays visible. It does NOT cover refreshing baselines for a flaky-looking diff on an unrelated PR, as a side task, or when the diffs span elements the change should not have touched (that is UI drift: stop and ask).
 
-#### Visual showcase
+#### Visual showcase (retired)
 
-After any change that could affect visual output, regenerate the showcase video and commit it alongside the change:
+The before/after showcase video (`scripts/generate-showcase.js` →
+`recordings/visual-regression-showcase.webm`) was retired on 2026-09-14 with
+the root npm toolchain. The `recordings/` directory keeps the glow-banding
+peak screenshots and videos as historical artefacts; nothing regenerates it.
 
-```bash
-cp -r e2e/visual-regression.spec.js-snapshots{,-before}   # save old baselines
-npx playwright test e2e/visual-regression.spec.js --update-snapshots
-node scripts/generate-showcase.js                           # produces before/after video
-```
+## Test-Driven Design and the UI-test boundary (moved from AGENTS.md)
 
-`scripts/generate-showcase.js` displays each snapshot as a before/after side-by-side pair (3.5s per slide) and records the session as `recordings/visual-regression-showcase.webm`. If no `-before` directory exists (first run), it shows current baselines only. The `-before` directory is auto-cleaned after the video is written.
+Moved verbatim from AGENTS.md's `## Test-Driven Design` section, which now keeps
+only the red-green rule, the one-line "never bypass the UI" imperative, and the
+harness-hygiene carve-out in summary form. The full argument — which specs are
+covered, what counts as a back door, and why the setup/cleanup carve-out does not
+weaken the rule — lives here.
+
+- **Never bypass the UI in a UI test.** If a spec exists to validate that an editor's click does what we expect — driving Decap admin, the deploy-status pill, the publish-via-auto-merge shim from the editor's POV — the test MUST go through the actual UI. Calling the underlying API programmatically (e.g. `page.evaluate(fetch(...))` against the GitHub API, hitting the shim's `__callMerge` directly, peeking at workflow runs / PR state instead of waiting for the user-visible signal) defeats the test's purpose and lets a broken UI silently regress. If the UI is broken, the test surfacing that breakage IS the point — fix the UI, don't paper over it. The publish-via-auto-merge-browser.spec.js route-mocked unit test exists for the shim's internal contract; the real-network specs (`cms-publish-loop*`, `cms-delete-published`) cover the Decap-UI-driven chain end-to-end and must keep doing so.
+- **No back doors in the spec body — with an explicit harness-hygiene carve-out for setup/cleanup.** "Never bypass the UI" governs the *behaviour under test*: the spec's own forward (and, where applicable, backward) leg MUST drive the real Decap UI through Save → Status:Ready / `cms/ready` → auto-merge → deploy, never a programmatic API substitute. **Setup and post-test cleanup, however, MAY use the GitHub API for fixture LIFECYCLE** — reading a fixture's state from `main`, seeding/removing a fixture through a labelled fixture PR (`cms-fixture-pr.js`'s `seedFixtureViaPr`/`removeFixtureViaPr`), or an existence-only delete in `afterAll`. That is *harness hygiene* (resetting/reaping test state between runs), not the behaviour the spec validates, so it does not "skip the chain the test exists to validate" — the chain is still exercised by the spec body's UI-driven legs. The important invariant is that the **primary** leg stays UI-driven; only the safety-net is API. Per #1771 step 4 the prod-loop `afterAll` is now an existence-only **delete** (remove the uniquely-named ephemeral post if it is still on `main`) rather than a content-restore — there is no shared baseline to restore, so there is nothing for an API write to corrupt. (Where a spec *also* drives a backward leg through the UI — e.g. the toggle-only `cms-unpublish-republish` specs — that is still good practice for the extra coverage; it is no longer a hard requirement of this rule.) The route-mocked `publish-via-auto-merge-browser.spec.js` is still allowed to use the shim's programmatic `__callMerge` because that spec's entire reason for existing is the shim's internal contract, not the editor's experience.
+
+## Sandboxed-shell gotchas for the admin e2e lane (moved from AGENTS.md)
+
+Moved verbatim from AGENTS.md's `## Key commands` section, which keeps the
+harness-checkout instructions and the routine command block. CI hits none of
+these three (it has the egress proxy's CA and a working Jekyll — CI installs
+browsers per job, not from a prebaked image, which is why the CDN allowlist
+above matters for CI too).
+
+**Running the admin (`@admin-read` / `@admin-write`) e2e lane in a sandboxed / Claude-Code-web session.** Three gotchas bite in that order; CI hits none of them (it has the egress proxy's CA and a working Jekyll — CI installs browsers per job, not from a prebaked image, which is why the CDN allowlist below matters for CI too):
+
+1. **Decap never mounts — only the static "PENDING" banner, no Login button.** The `/admin` shells load the Decap bundle from `https://unpkg.com/decap-cms@…`; the sandbox's egress TLS proxy presents a CA that Playwright's bundled Chromium/WebKit don't trust, so the `<script src>` dies with `net::ERR_CERT_AUTHORITY_INVALID` (`curl` works — it trusts the system CA bundle; the browser doesn't). **Fix:** run with a throwaway config that sets `use.ignoreHTTPSErrors: true`, written INTO the harness checkout — `.cms-platform/` is gitignored as a whole, and the harness is the only place `@playwright/test` is installed now (CI has no such proxy, and the flag doesn't change the rendered DOM / aria tree):
+
+   ```js
+   // .cms-platform/e2e/playwright.localcert.config.js  (sandbox-only; gitignored)
+   const base = require("./playwright.config.js");
+   module.exports = { ...base, use: { ...base.use, ignoreHTTPSErrors: true } };
+   ```
+
+   then, from `.cms-platform/e2e` with `SITE_ROOT` exported: `npx playwright test <spec> --config=playwright.localcert.config.js`.
+2. **`bundle exec jekyll` → "command not found: jekyll" (rbenv shim not rehashed).** Don't fight it: build once with the full-path binary (`"$(rbenv which jekyll 2>/dev/null || echo /opt/rbenv/versions/*/bin/jekyll)" build`) and start the two servers **manually** — `.cms-platform/e2e/node_modules/.bin/serve _site -l 4000 --no-clipboard` + `.cms-platform/e2e/node_modules/.bin/decap-server` (both are harness devDependencies; the repo root has no `node_modules`). Playwright's `webServer.reuseExistingServer` (true off-CI) then sees ports 4000/8081 already up and skips its own failing `bundle exec jekyll build` command.
+3. **WebKit launch fails with missing `.so`s** (`libflite…`, `libwebpdemux…`). Once, from `.cms-platform/e2e`: `npx playwright install-deps webkit` (needs apt/root).
+
+## Code quality: lint toolchain, line width, pre-commit hook (moved from AGENTS.md)
+
+Moved verbatim from AGENTS.md's `## Code quality` section, which keeps each rule
+in one-line form plus the "parse structured formats with a real parser" rule
+(deliberately still inline there, because it governs any script written in this
+repo, not just the lint toolchain).
+
+**There is no lint toolchain in this repo, by decision (2026-09-14).** The root `package.json` — eslint, prettier, stylelint, markdownlint-cli2, and a second `@playwright/test` beside the harness's — its lockfile, and the matching config files were removed. Nothing in CI ever installed them: every reusable's `npm ci` runs in the platform's `.cms-platform/e2e` against *its* lockfile, so the root lockfile was exercised by nothing, Dependabot security jobs against it could not resolve (the last, `smol-toml` pinned by `markdownlint-cli2`, is run 34793815589), and `npx playwright` at the repo root resolved a different `@playwright/test` than the harness config it was handed. The heavyweight lint toolchain stays **platform-internal**; this thin consumer has almost nothing left for it to lint (no `e2e/`, `admin/*.css`, `assets/css/`, `*.py`, `*.rb`, `pyproject.toml`, or `tests/`). If a lint is ever wanted here again, the platform's **code-quality** skill is the reference, and a manifest should carry only that tool — never a copy of what the harness already installs.
+
+**Line width — 100 columns, house-wide.** The formatters that reflow code (all platform-side now; `.editorconfig` here carries only the hint) target 100: Prettier (`printWidth: 100`, on top of the otherwise-standard config), Ruff (`line-length = 100`), and RuboCop (`Layout/LineLength: Max: 100`). `.editorconfig` carries `max_line_length = 100` as the editor hint. The 80-column default wrapped Playwright method chains onto 3-4 lines each and inflated the JS line count far past what the dedup pass removed; 100 keeps statements on one line without sprawling. **Markdown and YAML opt out** (`max_line_length = off`; yamllint `line-length: disable`; markdownlint `MD013: false`) — prose, long URLs/tables, and workflow `${{ }}` expressions run longer by nature, and rewrapping them is pure churn. CSS has no line-length rule. When adding a new code language, set its formatter's width to 100 too.
+
+**Local — pre-commit hook.** `scripts/lint-staged.sh` (platform-delivered by `dev-hooks-sync.yml`, wired into `.githooks/pre-commit` and `.gitconfig-fragment`) lints only the **staged** files of each language, and **skips any linter whose tool is absent** — which, with no root `node_modules`, is every npm-based one here, so the hook is effectively inert on this repo and never blocks a commit. Bypass one commit with `SKIP_LINT_STAGED=1`.

@@ -2,6 +2,13 @@
 
 Reference for the Decap CMS content model (collections, fields, the automated-test-fixture convention) and the live-preview machinery (the `/preview/` page, the admin dashboard affordances, mobile responsiveness, and the HTML-embed widget seam). Read this when adding/changing a collection field, touching anything under the (gem-delivered) `admin/` UI behavior, or debugging why a preview/post link/mobile layout doesn't work as expected.
 
+## `admin/` is gem-delivered — do not re-vendor (moved from AGENTS.md)
+
+Moved verbatim from AGENTS.md's `## Architecture` section, which keeps the
+one-line ownership rule and a pointer here.
+
+**`admin/` is GEM-DELIVERED (do not re-vendor the machinery).** As of cms-platform v0.1.4 the Decap admin UI + its `config*.base.yml` templates ship inside the `cms-platform-theme` gem (pinned in `Gemfile` / `platform.lock`); the gem's Decap render hook copies that machinery into `_site/admin/` and renders `_site/admin/config.yml` at build time. This repo therefore tracks **only the site-owned seam** `admin/collections.site.yml` (plus its template `admin/collections.site.yml.example`), which supplies the per-site collection list the render hook splices into the platform's base collections; the `admin/*.js` / `admin/*.base.yml` / `admin/index*.html` machinery is **no longer vendored here** (the full e2e harness moved to the platform too — `e2e/` is no longer tracked in this repo). To change the admin UI, edit it in **cms-platform** and ship a release; the sync path is a gem bump (`Gemfile` tag + `platform.lock`) landed by **`platform-bump.yml`** — Dependabot's `bundler` ecosystem `ignore`s this gem (cms-platform#242). Do NOT copy admin machinery back into this repo — a re-vendored copy would shadow the gem and silently drift. Anything below that references in-repo `admin/config*.yml` or `e2e/cms-*.spec.js` describes the platform-owned source of truth, not files you edit here.
+
 ## Content model
 
 | Collection | Folder | Type | Key fields |
@@ -61,6 +68,32 @@ Embed the same asset in a post via the *Embedding HTML / Widgets* seam below.
 First tool: `claude-memory-map` (vendored from
 `github.com/Adam-S-Daniel/claude-memory-map`). Full guide: the
 **embeddable-tool-pages** skill.
+
+**Embed stage width.** [`_layouts/tool.html`](../_layouts/tool.html) lets the iframe
+break out of the 780px column on desktop (up to 1400px, centered on the viewport).
+At a 1440px viewport this gives the vendored app its desktop layout, readable
+diagram text, and the brief/full labels toggle. Narrow viewports still use the
+app's phone layout; phone readability and the full-screen default remain upstream
+work in [claude-memory-map](https://github.com/Adam-S-Daniel/claude-memory-map)
+([issue #4117](https://github.com/Adam-S-Daniel/adamdaniel.ai/issues/4117)).
+[`scripts/verify-build-artifacts.rb`](../scripts/verify-build-artifacts.rb) guards
+the known rendered declaration contract for the site-owned `tool` layout: stage
+`width: min(1400px, 100vw - 3rem)`, `position: relative`, `left: 50%`,
+`transform: translateX(-50%)`, and matching iframe
+`width: 100%` as a direct child of its `div.tool-embed` stage. Intervening wrappers
+can narrow the iframe and are rejected. On both elements, inline `max-width` and
+`max-inline-size` must be absent or effectively `none`; other values are rejected
+because the static contract cannot establish their effect on the desktop width.
+For the site's horizontal writing mode, inline `inline-size` is equivalent to `width`
+on both elements; the two declarations compete by priority and source order rather
+than being checked separately. A narrow logical width therefore fails the same guard.
+It normalizes whitespace, honors `!important` over later normal
+declarations, and uses the last declaration among equal priorities. Since this is
+a lexical contract rather than a CSS parser, comments, escapes, quotes, and brace
+syntax are rejected. This is a horizontal site-layout contract, not a general CSS
+evaluator for arbitrary writing modes or stylesheets; browser evidence validates
+the layout itself.
+Custom tool layouts remain free to choose their own embed stage.
 
 **Vendored-tool sync + previews.** This is the general contract for ANY tool
 repo that vendors onto `/tools/` (today's only instance: `claude-memory-map`).
@@ -126,6 +159,7 @@ Two admin affordances live alongside the preview, both loaded (deferred) from al
 
 - **`admin/live-url-banner.js`** — the "View page on site:" banner above the entry form. A past change (#184) deleted it, leaving the editor with no link to the post; issue #1042 restored it. It renders one anchor (`data-testid="cms-live-url-banner-link"`) at the live URL `window.LiveURL.compute()` derives, or a placeholder when unpublished / no slug. **Preview-aware origin:** a post edited through Decap's editorial workflow lives on a `cms/<col>/<file-slug>` PR branch and is NOT on production until that PR merges, so linking the prod URL 404s for the whole draft lifecycle. When the open entry has an open editorial-workflow PR the banner swaps the host to that PR's preview env (`preview-pr<N>.adamdaniel.ai`), exactly the URL `posts-list-enhance.js` surfaces in the list; with no open PR it stays at the current origin. The open-PR map is read from `posts-list-enhance.js`'s shared sessionStorage cache when warm, else one `pulls?state=open` REST call (operator's Decap token, same auth as `deploy-status-pill.js`); no token / API error degrades to the current origin. `cms-live-url-banner-link` is in `native-preview-href.js`'s `EXCLUDE_IDS` so the native-anchor hide can't swallow it (the banner is in the form pane, not the toolbar, so it wouldn't match anyway — the exclusion is the original pre-#184 contract, kept defensively).
 - **`admin/posts-list-enhance.js`** — turns Decap's bare Posts list into a dashboard (issue #1042). It **augments in place** — it never replaces Decap's `<a href="#/collections/posts/entries/…">` cards, so every existing e2e selector keeps resolving — adding per-row status / published-link / last-edited columns plus, per state: **"view published changes"** (the merged PR's GitHub `/files` diff — shown only when the post is actually live on `main`), **"preview draft ↗"** (the open editorial-workflow PR's `preview-pr<N>.adamdaniel.ai/blog/<slug>/` env), and **"view draft changes"** (that open PR's `/files` diff). "view published changes" renders before "preview draft" when both are present; an unpublished draft (no merged PR on `main`) shows neither published-changes nor a `published ↗` link. Remote data — last-edited **and the PR that last commit was merged in** (`history` + `associatedPullRequests` in one batched GitHub GraphQL query), the production deployment, and open editorial PRs — is fetched in **three calls total regardless of post count**, cached in sessionStorage, and refreshed both on a ↻ button and whenever the user returns to the list from an entry. Auth reuses the operator's Decap token at `localStorage["decap-cms-user"].token` (same pattern as `deploy-status-pill.js`); with no token / on any API error it degrades to the local-only columns. It also CSS-hides only the "E2E Canary" Quick-add menu item (the `_e2e` collection is `create: true` and test-locked, so it can't be dropped from config; the `#/collections/e2e/new` route is untouched and `canary-content.test.js` stays green). See the **Automated-test fixtures** note under *Content model* for the default-hide behaviour.
+- **The Posts-list "published ↗" link is derived from the post's FILENAME, never its front-matter `slug:`.** `urlSlug()` in the platform's `posts-list-enhance.js` strips the `YYYY-MM-DD-` prefix and runs the rest through the shared Jekyll-style `slugify` (so punctuation in a hand-committed filename no longer 404s the link, #1815). But `permalink: /blog/:slug/` honors the front-matter `slug:`, so a post whose `slug:` differs from its filename lives at one URL while the list link points at another (404). The editor banner (`live-url-derive.js`) reads the `slug` field, so it can be right while the list link is wrong. Fix the content, not the script (it has no front-matter access): make filename slug, `slug:` and the intended live URL agree, usually by renaming the `_posts/` file (PR #1643 renamed the introducing-GHA-bench post). Before changing anything for a "link points to X instead of Y" report, confirm which URL should be live (`curl` prod) — PR #1642 moved the live URL the wrong way by misreading it.
 
 ### Mobile / responsive admin
 
@@ -178,6 +212,6 @@ Files under `assets/` are copied through by Jekyll without any config change.
 
 **Markdown inside the embed.** kramdown defaults (`parse_block_html: false`) deliberately don't parse markdown inside the wrapper `<div>`. Author the embed as pure HTML; if you need prose around the widget, place it before/after the embed block.
 
-**Security note.** No CSP is enforced today, so inline `<script>` and `<style>` work without ceremony. If a CSP is added later, allowlist either the inline payloads (via hashes/nonces) or migrate widgets into `/assets/widgets/` and allowlist that path. The trust model is "authors are committers" — embeds land via the standard editorial-workflow PR review.
+**Security note.** Public pages, `/preview/` included, send only `Content-Security-Policy: frame-ancestors 'self'`, which does not restrict scripts or styles, so inline `<script>` and `<style>` in an embed work without ceremony. `/admin/` is different: its CSP has been enforced since 2026-10-05 (see the `ADMIN_CSP_MODE=enforce` note in `docs/WORKFLOWS.md`), though it still allows `'unsafe-inline'` scripts and styles. If a public-page CSP ever restricts `script-src` or `style-src`, allowlist either the inline payloads (via hashes/nonces) or migrate widgets into `/assets/widgets/` and allowlist that path. The trust model is "authors are committers" — embeds land via the standard editorial-workflow PR review.
 
 End-to-end coverage lives in `e2e/cms-html-embed.spec.js`.

@@ -33,4 +33,7 @@ admin/commit.json
 admin/config.yml
 admin/config-local.yml
 .cms-platform/
-
+# Real OAuth client id/secret + stack params sourced by oauth-proxy/deploy.sh.
+# deploy.sh already calls this file "(gitignored)" — it wasn't. Never commit it;
+# it has never been in history and must stay that way.
+infrastructure/site-params.env
