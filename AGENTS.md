@@ -41,8 +41,11 @@ The hook writes the same block to `~/.codex/AGENTS.md` whenever `~/.codex`
 exists — Codex's global **user** instructions, outside its 32 KiB
 `project_doc_max_bytes` project-doc budget. Register it once per machine with
 `scripts/register-codex-hook.sh` from an `_agent-guidance` checkout, then
-trust it in `/hooks`. `codex debug prompt-input` shows exactly what a session
-loaded; no `fleet-guidance:` line there means DEGRADED.
+trust it in `/hooks`. `codex debug prompt-input` renders instructions loaded
+from disk by its own diagnostic process; it does not run SessionStart hooks
+or inspect an existing session or daemon. Verify delivery in the launched
+session's initial instructions and verdict; see the
+[2026-10-04 evidence](https://github.com/Adam-S-Daniel/_agent-guidance/blob/main/docs/evidence/codex-trust-and-daemon-0160.md#prompt-debugging-source-read-2026-10-04-cli-01600-rust-v01600).
 
 For Codex Cloud, use **Manual** environment setup with persistent
 `CODEX_HOME=/opt/codex`. Preserve the repository's dependency setup and run
@@ -62,9 +65,12 @@ session that lost the guidance must not also lose these.
 - **Branch protection is real.** Fleet repos are PR-only on their default
   branch; a direct push is rejected (GH013), even from the repo's own
   workflows. Never design a bot that pushes to a protected default branch.
-- **Every `uses:` is pinned to a full 40-character commit SHA, with no
-  trailing version comment.** The one carve-out is a ref into this account's
-  own `cms-platform`, which stays on its release tag.
+- **Every `uses:` is pinned: an exact tag locked in
+  `.github/workflows/actions.lock` and checked by a required
+  `gh actions-lock --verify` failing on any pin finding, or a full
+  40-character commit SHA with no trailing version comment.** Cross-repo
+  reusable workflows take a full SHA either way. The one carve-out is a ref
+  into this account's own `cms-platform`, which stays on its release tag.
 - **Never commit secrets or `.env` files, and never print personal data to a
   CI log** — logs, artifacts and git history on a public repo are public.
 - **A successful `git push` does not mean your commit exists.** A refused
@@ -209,8 +215,8 @@ into `.cms-platform/`, exports this site's params and delegates. **The wrapper
 exports `CREATE_APEX_DNS_RECORDS=true`** — adamdaniel.ai's apex/www A-records are
 STACK-MANAGED but the platform template gates them on `CreateApexDnsRecords`
 (default `false`), so without that export a redeploy would DELETE the live apex
-DNS and take the site offline; a reviewer caught it in the template-removal PR
-(#1922). Do NOT drop it. **It also exports `ADMIN_CSP_MODE=enforce`** (default; the admin CSP
+DNS and take the site offline; do NOT drop it (incident record: `docs/WORKFLOWS.md`, "Bootstrap infrastructure is
+platform-owned"). **It also exports `ADMIN_CSP_MODE=enforce`** (default; the admin CSP
 has been enforced since 2026-10-05) — the platform script defaults to `report-only`, so
 without that export a plain redeploy silently reverts the live CSP to warn-only; roll back
 with `ADMIN_CSP_MODE=report-only bash infrastructure/bootstrap/deploy.sh`. (The wrapper does
@@ -233,7 +239,7 @@ Real-user monitoring is via Amazon CloudWatch RUM, deployed as a sibling CloudFo
 
 ## Code quality
 
-**There is no lint toolchain in this repo, by decision (2026-09-14).** The root `package.json` (eslint, prettier, stylelint, markdownlint-cli2, and a second `@playwright/test` beside the harness's), its lockfile and the matching configs were removed: every reusable's `npm ci` runs in the platform's `.cms-platform/e2e` against *its* lockfile, so nothing in CI ever installed the root one — its Dependabot security jobs could not resolve (the last, `smol-toml` pinned by `markdownlint-cli2`, is run 34793815589) and root `npx playwright` resolved a different `@playwright/test` than the harness config it was handed. Don't re-add one; the platform's **code-quality** skill is the reference if a lint is ever wanted here again.
+**There is no lint toolchain in this repo, by decision (2026-09-14).** The root `package.json` (eslint, prettier, stylelint, markdownlint-cli2, and a second `@playwright/test` beside the harness's), its lockfile and the matching configs were removed: every reusable's `npm ci` runs in the platform's `.cms-platform/e2e` against *its* lockfile, so nothing in CI ever installed the root one — its Dependabot security jobs could not resolve (the last, `smol-toml` pinned by `markdownlint-cli2`, is recorded in `docs/WORKFLOWS.md`) and root `npx playwright` resolved a different `@playwright/test` than the harness config it was handed. Don't re-add one; the platform's **code-quality** skill is the reference if a lint is ever wanted here again.
 
 **Line width — 100 columns, house-wide.** The formatters that reflow code are all platform-side now — Prettier (`printWidth: 100`), Ruff (`line-length = 100`), RuboCop (`Layout/LineLength: Max: 100`) — and `.editorconfig` here carries `max_line_length = 100` as the editor hint. **Markdown and YAML opt out** (prose, long URLs/tables and workflow `${{ }}` expressions run longer by nature). When adding a new code language, set its formatter's width to 100 too.
 
@@ -291,7 +297,7 @@ the federated **`cms-platform` bundle** in the `agentskills` marketplace. (The
 gem is NOT the skills channel — it ships the `/admin` machinery.) Ephemeral
 sessions get skills from the committed **`skills.lock`** via the
 `skills-bootstrap` SessionStart hook in `.claude/hooks/` — two registries pinned
-at immutable commits with a per-skill sha256, 23 skills; on a durable machine the
+at immutable commits with a per-skill sha256; on a durable machine the
 hook is a deliberate no-op.
 
 - **`skills.lock` pins commits, not branches, so it does not self-update.**
@@ -314,10 +320,10 @@ it maps every "see also the **X** skill" pointer here to the bundle that ships i
   Two workflows emit that context: the heavy `e2e-tests.yml` and the
   instant-green `e2e-stub.yml`, whose positive `paths:` byte-mirrors the real
   caller's `paths-ignore:`, so a mixed PR fires **both**. Branch protection keys
-  on the context NAME, not on which workflow produced it — PR #1711 (merged
-  2026-05-26 20:52, older multi-context topology) merged on stub greens while the
-  real e2e was still running and went red three minutes later. Not re-reproduced
-  under today's single-context topology; no fix has shipped either.
+  on the context NAME, not on which workflow produced it — PR #1711
+  (older multi-context topology) merged on stub greens while the real e2e was
+  still running and then went red; details in `docs/CI-INVARIANTS.md`. Not
+  re-reproduced under today's single-context topology; no fix has shipped either.
 - **So: when a mixed PR merges, watch the real run to completion**
   (`gh run watch <run-id>`) and fix forward on `main` if it goes red — don't walk
   away on the merge notification. → `docs/CI-INVARIANTS.md` § "A green
