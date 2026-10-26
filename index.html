@@ -6,13 +6,9 @@ title: Home
   <section class="hero" aria-label="Introduction">
     <h1 class="hero-name">Adam Daniel</h1>
     <p class="hero-role">Freelance AI Engineer</p>
-    <div class="hero-links">
-      <a class="hero-link" href="{{ '/blog/' | relative_url }}">Blog</a>
-      {% comment %} Disabled — uncomment to restore the Projects hero link.
-      <a class="hero-link" href="{{ '/projects/' | relative_url }}">Projects</a>
-      {% endcomment %}
-      <a class="hero-link" href="https://www.linkedin.com/in/adam-s-daniel" target="_blank" rel="noopener noreferrer" aria-label="Adam Daniel on LinkedIn">LinkedIn</a>
-    </div>
+    {% comment %} Projects hero link is disabled; to restore it, add it to
+    _includes/hero-links.html after Blog. {% endcomment %}
+    {% include hero-links.html %}
   </section>
 
   {%- comment -%} Exclude e2e test-fixture canaries so a loop spec briefly
