@@ -30,7 +30,7 @@ cross_post:
 # LinkedIn come from cross_post.profiles above. The HN link (your
 # news.ycombinator.com/submitted page) renders only once this is set.
 hero:
-  hacker_news_id: ""
+  hacker_news_id: adamdaniel
 
 # Build settings
 markdown: kramdown
