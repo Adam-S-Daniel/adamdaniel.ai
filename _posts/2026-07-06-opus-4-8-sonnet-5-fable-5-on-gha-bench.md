@@ -9,7 +9,7 @@ excerpt: GHA-bench now covers three new Anthropic models. Opus 4.8 is still the
 featured_image: /assets/images/uploads/img_9581-vignette.webp
 published: true
 ---
-[GHA-bench](https://github.com/Adam-S-Daniel/GHA-bench) — my benchmark for how well coding agents author and test GitHub Actions — has picked up **three new Anthropic models** since [the original post](/blog/introducing-gha-bench/): **Opus 4.8**, **Sonnet 5**, and **Fable 5**, the first of the new Claude 5 family and a tier that sits above Opus. The short version: Opus 4.8 at its highest efforts is still the best I've measured at this task, Fable 5 gets close to that quality in half the wall-clock — for a premium price — and Sonnet 5 stretches from "cheapest usable" to "genuine contender" depending on how much effort you buy.
+[GHA-bench](https://github.com/Adam-S-Daniel/GHA-bench) — my benchmark for how well coding agents author and test GitHub Actions — has picked up **three new Anthropic models** since [the original post]({% post_url 2026-05-12-introducing-gha-bench %}): **Opus 4.8**, **Sonnet 5**, and **Fable 5**, the first of the new Claude 5 family and a tier that sits above Opus. The short version: Opus 4.8 at its highest efforts is still the best I've measured at this task, Fable 5 gets close to that quality in half the wall-clock — for a premium price — and Sonnet 5 stretches from "cheapest usable" to "genuine contender" depending on how much effort you buy.
 
 The data is three full sweeps, graded by the same panel of judges (Google Gemini and Claude Haiku) on test comprehensiveness and code quality, and pooled with the earlier Opus-4.7-era baselines onto one shared grading curve:
 
