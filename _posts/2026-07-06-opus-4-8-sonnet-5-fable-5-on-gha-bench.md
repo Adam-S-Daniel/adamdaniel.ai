@@ -6,10 +6,10 @@ excerpt: GHA-bench now covers three new Anthropic models. Opus 4.8 is still the
   quality leader, Fable 5 buys near-top quality at a premium, and Sonnet 5
   stretches from bargain to contender depending on effort. Explore the tradeoffs
   with the interactive table.
-featured_image: /assets/images/uploads/img_9581.png
+featured_image: /assets/images/uploads/img_9581-vignette.webp
 published: true
 ---
-[GHA-bench](https://github.com/Adam-S-Daniel/GHA-bench) — my benchmark for how well coding agents author and test GitHub Actions — has picked up **three new Anthropic models** since [the original post](/introducing-gha-bench): **Opus 4.8**, **Sonnet 5**, and **Fable 5**, the first of the new Claude 5 family and a tier that sits above Opus. The short version: Opus 4.8 at its highest efforts is still the best I've measured at this task, Fable 5 gets close to that quality in half the wall-clock — for a premium price — and Sonnet 5 stretches from "cheapest usable" to "genuine contender" depending on how much effort you buy.
+[GHA-bench](https://github.com/Adam-S-Daniel/GHA-bench) — my benchmark for how well coding agents author and test GitHub Actions — has picked up **three new Anthropic models** since [the original post](/blog/introducing-gha-bench/): **Opus 4.8**, **Sonnet 5**, and **Fable 5**, the first of the new Claude 5 family and a tier that sits above Opus. The short version: Opus 4.8 at its highest efforts is still the best I've measured at this task, Fable 5 gets close to that quality in half the wall-clock — for a premium price — and Sonnet 5 stretches from "cheapest usable" to "genuine contender" depending on how much effort you buy.
 
 The data is three full sweeps, graded by the same panel of judges (Google Gemini and Claude Haiku) on test comprehensiveness and code quality, and pooled with the earlier Opus-4.7-era baselines onto one shared grading curve:
 
@@ -276,6 +276,8 @@ There's no single answer — so weight it yourself. Pick a preset (**Balanced**,
 
   var KEYS = ["tests", "workflow", "duration", "cost"];
 
+  var phoneModels = window.matchMedia("(max-width: 540px)");
+
   function el(id) { return document.getElementById("bws-" + id); }
 
   function readWeights() {
@@ -315,11 +317,12 @@ There's no single answer — so weight it yourself. Pick a preset (**Balanced**,
     var html = "";
     for (var i = 0; i < scored.length; i++) {
       var r = scored[i].row;
+      var model = phoneModels.matches ? r[1].replace(" ", "-").replace(/ /g, "·") : r[1];
       var maxd = r[10] || "";
       var cens = maxd.charAt(0) === "≥";
       html +=
         "<tr>" +
-        "<td>" + r[1] + "</td>" +
+        "<td>" + model + "</td>" +
         "<td>" + r[0] + "</td>" +
         "<td title=\"Slowest run: " + maxd + (cens ? " (hit the timeout cap)" : "") + "\">" +
           r[2] + " (" + r[3] + ")" + (cens ? "<sup>†</sup>" : "") + "</td>" +
@@ -331,29 +334,38 @@ There's no single answer — so weight it yourself. Pick a preset (**Balanced**,
     document.getElementById("bws-tbody").innerHTML = html;
   }
 
+  // Weights live on the sliders' own step grid. A range input snaps whatever
+  // is assigned to it to its step, so scaling the other weights to two
+  // decimals let the browser round each one up (Home on every slider left
+  // 33.5 + 33.5 + 33.5 + 0 = 100.5%). Work in whole steps and hand out the
+  // remainder one step at a time, so the total is always exactly 100.
   var adjusting = false;
   function redistribute(changed) {
     if (adjusting) return;
     adjusting = true;
-    var newVal = Math.max(0, Math.min(100, parseFloat(el(changed).value) || 0));
-    el(changed).value = newVal;
+    var step = parseFloat(el(changed).step) || 1;
+    var totalUnits = Math.round(100 / step);
+    var units = Math.max(0, Math.min(totalUnits, Math.round((parseFloat(el(changed).value) || 0) / step)));
     var others = KEYS.filter(function (k) { return k !== changed; });
-    var sumOthers = 0;
-    others.forEach(function (k) { sumOthers += parseFloat(el(k).value) || 0; });
-    var needed = 100 - newVal;
-    if (sumOthers <= 0) {
-      var each = needed / others.length;
-      others.forEach(function (k) { el(k).value = each.toFixed(2); });
-    } else {
-      var scale = needed / sumOthers;
-      others.forEach(function (k) {
-        var v = (parseFloat(el(k).value) || 0) * scale;
-        el(k).value = Math.max(0, v).toFixed(2);
-      });
-    }
+    var needed = totalUnits - units;
+    var current = others.map(function (k) { return (parseFloat(el(k).value) || 0) / step; });
+    var sumOthers = current.reduce(function (a, b) { return a + b; }, 0);
+    var shares = current.map(function (c) {
+      return sumOthers > 0 ? (c * needed) / sumOthers : needed / others.length;
+    });
+    var whole = shares.map(Math.floor);
+    var leftover = needed - whole.reduce(function (a, b) { return a + b; }, 0);
+    shares
+      .map(function (s, i) { return { i: i, frac: s - Math.floor(s) }; })
+      .sort(function (a, b) { return b.frac - a.frac || a.i - b.i; })
+      .slice(0, leftover)
+      .forEach(function (o) { whole[o.i] += 1; });
+    el(changed).value = units * step;
+    others.forEach(function (k, i) { el(k).value = whole[i] * step; });
     adjusting = false;
     render();
   }
+  phoneModels.addEventListener("change", render);
 
   function clearActivePreset() {
     var btns = document.querySelectorAll(".bws-preset");

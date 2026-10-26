@@ -82,6 +82,9 @@ function checkWidget(initialPhone) {
       if (!elements.has(id)) elements.set(id, genericElement());
       return elements.get(id);
     },
+    // Preset buttons (.bws-preset) are looked up by class; the probes only
+    // drive the sliders, so an empty list is enough.
+    querySelectorAll: () => [],
   };
   const phoneListeners = [];
   const phone = {
@@ -122,30 +125,48 @@ function checkWidget(initialPhone) {
     return Math.round(parts.reduce((a, b) => a + b, 0) * 1000) / 1000;
   }
 
-  const modelLabels = [
-    ["opus 4.7 1m med", "opus-4.7·1m·med"],
-    ["opus 4.7 200k med", "opus-4.7·200k·med"],
-    ["sonnet 46 1m med", "sonnet-46·1m·med"],
-    ["opus 46 200k", "opus-46·200k"],
-    ["opus 4.7 1m hi", "opus-4.7·1m·hi"],
-    ["sonnet 46 200k", "sonnet-46·200k"],
-    ["opus 4.7 1m xhi", "opus-4.7·1m·xhi"],
-    ["haiku 45 200k", "haiku-45·200k"],
-  ];
+  // The Model labels are read from the widget's own desktop render, so every
+  // post that embeds the widget is checked against its own rows. A phone
+  // label is the desktop label with its first space turned into "-" and the
+  // rest into "·" ("opus 4.7 1m med" -> "opus-4.7·1m·med").
+  const compactLabel = (full) => full.replace(" ", "-").replace(/ /g, "·");
+  const modelCells = (html) =>
+    [...html.matchAll(/<tr><td>([^<]*)<\/td>/g)].map((m) => m[1]);
+  let modelLabels = null;
+  const pendingPhoneChecks = [];
+  function verifyModels(stage, html, phoneMatches) {
+    for (const [full, compact] of modelLabels) {
+      const label = phoneMatches ? compact : full;
+      const other = phoneMatches ? full : compact;
+      if (!html.includes(`<td>${label}</td>`)) {
+        fail(`${stage}: the Model column is missing ${label}`);
+      }
+      if (other !== label && html.includes(`<td>${other}</td>`)) {
+        fail(`${stage}: the Model column still shows ${other}`);
+      }
+    }
+  }
   function checkModels(stage) {
     labelChecks += 1;
     // Compare runtime output cells directly; never inspect JavaScript code shape.
     const html = document.getElementById("bws-tbody").innerHTML;
-    for (const [full, compact] of modelLabels) {
-      const label = phone.matches ? compact : full;
-      const other = phone.matches ? full : compact;
-      if (!html.includes(`<td>${label}</td>`)) {
-        fail(`${stage}: the Model column is missing ${label}`);
+    if (modelLabels === null) {
+      if (phone.matches) {
+        pendingPhoneChecks.push([stage, html]);
+        return;
       }
-      if (html.includes(`<td>${other}</td>`)) {
-        fail(`${stage}: the Model column still shows ${other}`);
+      const cells = [...new Set(modelCells(html))];
+      if (cells.length === 0) {
+        fail(`${stage}: the desktop render has no Model cells`);
+        modelLabels = [];
+      } else {
+        modelLabels = cells.map((full) => [full, compactLabel(full)]);
+      }
+      for (const [pendingStage, pendingHtml] of pendingPhoneChecks.splice(0)) {
+        verifyModels(pendingStage, pendingHtml, true);
       }
     }
+    verifyModels(stage, html, phone.matches);
   }
   function setPhone(matches) {
     phone.matches = matches;
