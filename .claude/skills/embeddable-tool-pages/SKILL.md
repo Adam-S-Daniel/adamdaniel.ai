@@ -56,9 +56,8 @@ does mean the header can drift from the gem — keep it minimal.
 
    `embed_src` is what the layout iframes. Omit it for a non-embed page.
 
-3. **Build and verify** (the static-asset + iframe approach has no CSP issues —
-   no CSP is enforced on the public `/tools/` pages — the admin CSP covers
-   `/admin/` only; inline scripts and CDN deps work):
+3. **Build and verify** (no CSP is enforced on public `/tools/` pages — the
+   admin CSP covers `/admin/` only — so inline scripts and CDN deps work):
 
    ```bash
    bundle exec jekyll build

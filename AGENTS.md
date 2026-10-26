@@ -106,7 +106,7 @@ Personal website and blog for Adam Daniel (Freelance AI Engineer). Jekyll static
 
 - **Red-green TDD.** Write a failing test first, then make it pass, then refactor. Always follow this cycle.
 - **Never bypass the UI in a UI test.** A spec that exists to validate what an editor's click does — Decap admin, the deploy-status pill, the publish-via-auto-merge shim from the editor's POV — MUST go through the real UI; calling the underlying API instead (`page.evaluate(fetch(...))` against the GitHub API, the shim's `__callMerge`, peeking at workflow runs / PR state rather than waiting for the user-visible signal) defeats the test's purpose and lets a broken UI silently regress. The real-network specs (`cms-publish-loop*`, `cms-delete-published`) cover the Decap-UI-driven chain end-to-end and must keep doing so; route-mocked `publish-via-auto-merge-browser.spec.js` is the one carve-out, because the shim's internal contract is its whole reason for existing.
-- **No back doors in the spec body — setup/cleanup MAY use the GitHub API for fixture LIFECYCLE.** The spec's own forward (and, where applicable, backward) leg must drive the real Decap chain — Save → Status:Ready / `cms/ready` → auto-merge → deploy — but seeding or reaping a fixture (`cms-fixture-pr.js`'s `seedFixtureViaPr` / `removeFixtureViaPr`, and the existence-only `afterAll` delete that #1771 step 4 put in place of a content-restore) is harness hygiene, not the behaviour under test. → read `docs/TESTING.md` § "Test-Driven Design and the UI-test boundary" before adding an API call to a spec.
+- **No back doors in the spec body — setup/cleanup MAY use the GitHub API for fixture LIFECYCLE.** The spec's own forward (and, where applicable, backward) leg must drive the real Decap chain — Save → Status:Ready / `cms/ready` → auto-merge → deploy — but seeding or reaping a fixture (`cms-fixture-pr.js`'s `seedFixtureViaPr` / `removeFixtureViaPr`, and the existence-only `afterAll` delete of an ephemeral post) is harness hygiene, not the behaviour under test. → read `docs/TESTING.md` § "Test-Driven Design and the UI-test boundary" before adding an API call to a spec.
 
 ## Architecture
 
@@ -235,7 +235,7 @@ The `/preview/` WYSIWYG surface, the posts-list dashboard (live-url banner, publ
 
 ## Analytics
 
-Real-user monitoring is via Amazon CloudWatch RUM, deployed as a sibling CloudFormation stack `adamdaniel-ai-rum` (see `infrastructure/rum/`). The Jekyll snippet in `_includes/analytics/cloudwatch-rum.html` is a no-op unless **both** `JEKYLL_ENV=production` AND `site.analytics.cloudwatch_rum.app_monitor_id` are set, so local `jekyll serve` and PR previews stay silent. Identity-pool / app-monitor IDs are non-sensitive (visible in the rendered page source) so they live in `_config.yml`, not GitHub secrets. End-to-end test: `e2e/analytics-cloudwatch-rum.test.js`. Full deploy + tuning notes: [`ANALYTICS_SETUP.md`](ANALYTICS_SETUP.md).
+Real-user monitoring is via Amazon CloudWatch RUM, deployed as a sibling CloudFormation stack `adamdaniel-ai-rum` (see `infrastructure/rum/`). The Jekyll snippet in `_includes/analytics/cloudwatch-rum.html` is a no-op unless **both** `JEKYLL_ENV=production` AND `site.analytics.cloudwatch_rum.app_monitor_id` are set, so local `jekyll serve` and PR previews stay silent. Identity-pool / app-monitor IDs are non-sensitive (visible in the rendered page source) so they live in `_config.yml`, not GitHub secrets. The automated check is platform-owned: cms-platform's `e2e/analytics-rum-client-vendored.test.js` hashes the vendored RUM client and runs the include's loader; nothing in this repo's tree tests it. Full deploy + tuning notes: [`ANALYTICS_SETUP.md`](ANALYTICS_SETUP.md).
 
 ## Code quality
 
@@ -277,9 +277,9 @@ The three real-prod loop workflows can re-trigger themselves (their own canary-m
 
 When a real-prod loop spec mutates a persistent fixture in place, a required check and a harness `afterAll` safety net both need to agree on the fixture's canonical state — get the loop-aware exemption or the byte-preserving derivation wrong and you either deadlock the loop or silently corrupt `main`. → read `docs/CI-INVARIANTS.md` before changing a required check that asserts a `main`-state invariant or a harness baseline-restore safety net.
 
-## CI-flakiness invariants (#1723) — read before touching the prod loops / deploy waits
+## CI-flakiness invariants — read before touching the prod loops / deploy waits
 
-Six root-caused, lint-locked flakiness classes from the 2026-05 CI audit — future-dated fixture builds, test-fixture leakage into public listings/crawls, the queue-aware deploy-lane wait, and more — each with a standing "do NOT undo this" guard. → read `docs/CI-INVARIANTS.md` before touching a prod loop, a deploy wait, or a public-content crawl exclusion; see also the **ci-watcher-loops** skill.
+Six lint-locked flakiness classes — future-dated fixture builds, test-fixture leakage into public listings/crawls, the queue-aware deploy-lane wait, and more — each with a standing "do NOT undo this" guard (the audit behind them, #1723, is written up in `docs/CI-INVARIANTS.md`). → read `docs/CI-INVARIANTS.md` before touching a prod loop, a deploy wait, or a public-content crawl exclusion; see also the **ci-watcher-loops** skill.
 
 ## Preview environment flow
 
@@ -290,11 +290,11 @@ Six root-caused, lint-locked flakiness classes from the 2026-05 CI audit — fut
 
 ## Skills
 
-**This consumer vendors no platform skills — do NOT re-vendor them.** Until
-issue #3104 it mirrored 15 of them byte-for-byte under `.claude/skills/`;
-cms-platform v0.1.83 deleted that transport and now publishes its `skills/` as
-the federated **`cms-platform` bundle** in the `agentskills` marketplace. (The
-gem is NOT the skills channel — it ships the `/admin` machinery.) Ephemeral
+**This consumer vendors no platform skills — do NOT re-vendor them.**
+cms-platform publishes its `skills/` as the federated **`cms-platform` bundle**
+in the `agentskills` marketplace (why the byte-for-byte mirror under
+`.claude/skills/` is gone: `docs/SKILLS.md`). (The gem is NOT the skills
+channel — it ships the `/admin` machinery.) Ephemeral
 sessions get skills from the committed **`skills.lock`** via the
 `skills-bootstrap` SessionStart hook in `.claude/hooks/` — two registries pinned
 at immutable commits with a per-skill sha256; on a durable machine the
@@ -320,10 +320,9 @@ it maps every "see also the **X** skill" pointer here to the bundle that ships i
   Two workflows emit that context: the heavy `e2e-tests.yml` and the
   instant-green `e2e-stub.yml`, whose positive `paths:` byte-mirrors the real
   caller's `paths-ignore:`, so a mixed PR fires **both**. Branch protection keys
-  on the context NAME, not on which workflow produced it — PR #1711
-  (older multi-context topology) merged on stub greens while the real e2e was
-  still running and then went red; details in `docs/CI-INVARIANTS.md`. Not
-  re-reproduced under today's single-context topology; no fix has shipped either.
+  on the context NAME, not on which workflow produced it, so the stub can
+  satisfy the context before the real run's check-run exists (the merge this
+  once let through, PR #1711, is recorded in `docs/CI-INVARIANTS.md`).
 - **So: when a mixed PR merges, watch the real run to completion**
   (`gh run watch <run-id>`) and fix forward on `main` if it goes red — don't walk
   away on the merge notification. → `docs/CI-INVARIANTS.md` § "A green
