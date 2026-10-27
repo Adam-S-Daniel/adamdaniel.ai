@@ -36,8 +36,12 @@
 # Usage:
 #   bash infrastructure/bootstrap/deploy.sh
 #
-# If a GitHub OIDC provider already exists in this account:
-#   CREATE_OIDC_PROVIDER=false bash infrastructure/bootstrap/deploy.sh
+# The `adamdaniel-ai-bootstrap` stack owns this account's GitHub OIDC provider.
+# Keep CREATE_OIDC_PROVIDER at its default (`true`) on every redeploy, even when
+# the provider already exists. Setting it to `false` here requests removal of the
+# stack-owned GitHubOIDCProvider and changes to the IAM role trust. The destructive-change
+# guard blocks that change set. Use false only for a stack that does not own the provider
+# and reuses one owned elsewhere (for example, jodidaniel.com).
 #
 # To roll the admin CSP back to warn-only (it is enforced by default):
 #   ADMIN_CSP_MODE=report-only bash infrastructure/bootstrap/deploy.sh
@@ -113,6 +117,7 @@ export GITHUB_ORG="${GITHUB_ORG:-Adam-S-Daniel}"
 export GITHUB_REPO="${GITHUB_REPO:-adamdaniel.ai}"
 export APEX_DOMAIN="${APEX_DOMAIN:-adamdaniel.ai}"
 export AWS_REGION="${AWS_REGION:-us-east-1}"
+# This stack owns its provider, so preserve it on every redeploy.
 export CREATE_OIDC_PROVIDER="${CREATE_OIDC_PROVIDER:-true}"
 # adamdaniel.ai is LIVE at its apex — the platform template gates apex/www A-records
 # on CreateApexDnsRecords (DEFAULT false, for pre-go-live sites). Force it true so a

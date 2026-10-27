@@ -32,6 +32,12 @@ cross_post:
     linkedin: https://www.linkedin.com/in/adam-s-daniel
     substack: https://adamdanielai.substack.com
 
+# Homepage hero links (_includes/hero-links.html). Mastodon, Substack and
+# LinkedIn come from cross_post.profiles above. The HN link (your
+# news.ycombinator.com/submitted page) renders only once this is set.
+hero:
+  hacker_news_id: adamdaniel
+
 # Build settings
 markdown: kramdown
 highlighter: rouge

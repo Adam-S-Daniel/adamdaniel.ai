@@ -7,6 +7,10 @@
 #
 #   bundle exec jekyll build
 #   ruby scripts/verify-build-artifacts.rb
+#   ruby scripts/verify-build-artifacts.rb --artifacts-only
+#
+# The default entrypoint runs the regression matrix; matrix child runs use
+# `--artifacts-only` to prevent recursion.
 #
 # The required `site-verify / site-verify` check runs exactly this, through
 # cms-platform's reusable `site-verify.yml`: it builds the site under
@@ -36,9 +40,9 @@
 # * Structured formats go through a real parser: YAML for front matter and
 #   the admin config, REXML for the Atom feeds and the sitemap. A file that
 #   does not parse is a normal FAIL line naming the file and the parser's
-#   message, never a backtrace. Built HTML is scanned lexically (tag +
-#   attribute tokens, comments and script/style bodies removed) because
-#   Ruby's stdlib has no HTML5 parser.
+#   message, never a backtrace. Tool embed ancestry uses Nokogiri's HTML5 DOM;
+#   independent tag/attribute checks scan built HTML lexically (comments and
+#   script/style bodies removed).
 # * No assertion compares rendered text with source text: Markdown rewrites
 #   text (pipes become tables, underscores become <em>, entities decode), so
 #   any such comparison misfires on some legitimate post. See the Liquid
@@ -316,6 +320,32 @@ def tags(html, name)
     attrs.scan(ATTR_PAIR).to_h do |k, v1, v2, v3|
       [k.downcase, html_unescape(v1 || v2 || v3 || "")]
     end
+  end
+end
+
+# Lexical declarations for the site's known inline tool-layout contract, not a
+# CSS evaluator: these values contain no strings or nested declaration blocks.
+# Repeated properties follow CSS priority: important beats normal, and the last
+# declaration wins within the same priority. Whitespace runs normalize.
+# For the stage and iframe in this site's horizontal layout, logical inline-size
+# and physical width compete for the same width before resolving that priority.
+def inline_declarations(style)
+  source = style.to_s
+  # The lexical scan below cannot safely interpret syntax that can mask a
+  # declaration boundary or priority suffix, so reject it for this contract.
+  return {} if source.match?(%r{/\*|[\\{}"']})
+
+  priorities = {}
+  source.split(";").each_with_object({}) do |declaration, values|
+    name, value = declaration.split(":", 2)
+    name = name.to_s.strip.downcase
+    name = "width" if name == "inline-size"
+    value = value.to_s.split.join(" ")
+    important = !!value.sub!(/\s*!\s*important\z/i, "")
+    next if priorities[name] && !important
+
+    values[name] = value
+    priorities[name] = important
   end
 end
 
@@ -614,6 +644,123 @@ nav_links.each do |href|
         "_includes/header.html or restore/publish the page it points to") { !built_file(path).nil? }
 end
 
+# The main nav marks the current section for assistive technology (#4127, the
+# theme header's contract from cms-platform#737): the link to a section index
+# (/blog/, /tools/) carries aria-current="page" on that index and
+# aria-current="true" on a page under it, matched on whole URL segments, and
+# keeps class="active" on both. This site's _includes/header.html overrides the
+# gem's, so a bump that changes the gem header does not reach it unless the
+# override is updated too. A page with no such link in its nav (a standalone
+# layout) says nothing about it and is skipped.
+NAV_SECTIONS = %w[/blog/ /tools/].freeze
+nav_current = lambda do |href, path|
+  if path == href then "page"
+  elsif path.start_with?(href) then "true"
+  end
+end
+NAV_SECTIONS.each do |section_href|
+  guard("nav aria-current #{section_href}") do
+    wrong = []
+    seen = 0
+    site_pages.each do |file|
+      nav = clean_html(read(file).to_s).scan(%r{<nav\b[^>]*>.*?</nav>}mi).join
+      link = tags(nav, "a").find { |a| norm(site_path(a["href"].to_s.strip)) == section_href }
+      next unless link
+
+      seen += 1
+      path = norm(url_path_of(file))
+      want = nav_current.call(section_href, path)
+      got = link["aria-current"]
+      active = link["class"].to_s.split.include?("active")
+      next if got == want && active == !want.nil?
+
+      wrong << "#{path} has aria-current=#{got.inspect} class=#{link['class'].inspect} " \
+               "(expected #{want.inspect}, #{want ? 'with' : 'without'} class \"active\")"
+    end
+    next if seen.zero? # the owner removed this link from every page: nothing to mark
+
+    check("the #{section_href} nav link marks the current section on #{seen} pages",
+          "NAV CURRENT: the #{section_href} link in the main navigation has the wrong " \
+          "aria-current/active state on #{wrong.size} page(s): #{wrong.first(3).join('; ')} — " \
+          "_includes/header.html must emit aria-current=\"page\" on #{section_href} and " \
+          "aria-current=\"true\" under it (whole-segment match), as the theme header does") do
+      wrong.empty?
+    end
+  end
+end
+
+# --------------------------------------------------------------------------
+section "favicon: the site's own AD icon set is built and linked from every page"
+# The theme's placeholder favicon.svg is what this site served until the AD mark
+# shadowed it; favicon.ico and apple-touch-icon.png used to 404.
+puts "  (include branching: scripts/test-favicon-include.rb)"
+favicon_include_passed = system(RbConfig.ruby, File.join(__dir__, "test-favicon-include.rb"))
+check("scripts/test-favicon-include.rb passes (output above)",
+      "FAVICON INCLUDE: scripts/test-favicon-include.rb failed — _includes/favicon.html no longer " \
+      "honors `cms.favicon_url` or no longer links the icon set, or assets/favicon.svg is no longer " \
+      "the outlined-path AD monogram (output above)") { favicon_include_passed == true }
+
+# PNG width/height from the IHDR chunk; nil when the bytes are not a PNG.
+def png_size(bytes)
+  return nil unless bytes && bytes.byteslice(0, 8) == "\x89PNG\r\n\x1a\n".b && bytes.byteslice(12, 4) == "IHDR"
+
+  bytes.byteslice(16, 8).unpack("NN")
+end
+
+def site_bytes(rel)
+  path = File.join(SITE, rel)
+  File.file?(path) ? File.binread(path) : nil
+end
+
+check("/apple-touch-icon.png is a 180x180 PNG",
+      "FAVICON: _site/apple-touch-icon.png is missing or not a 180x180 PNG — rerun " \
+      "`node scripts/render-icons.mjs` and commit the result") { png_size(site_bytes("apple-touch-icon.png")) == [180, 180] }
+ico = site_bytes("favicon.ico")
+ico_count = ico && ico.bytesize >= 6 && ico.unpack("vv") == [0, 1] ? ico.unpack("vvv")[2] : 0
+ico_sizes = (0...ico_count).map do |i|
+  w, h, _c, _r, _planes, _bpp, len, off = ico.byteslice(6 + 16 * i, 16).to_s.unpack("CCCCvvVV")
+  w && png_size(ico.byteslice(off, len)) == [w, h] ? w : nil
+end
+check("/favicon.ico is an ICO of PNG images that includes 16 and 32 px (got #{ico_sizes.inspect})",
+      "FAVICON: _site/favicon.ico is missing or is not an ICO of PNG images with 16 and 32 px " \
+      "entries — rerun `node scripts/render-icons.mjs` and commit the result") do
+  ico_sizes.all? && ([16, 32] - ico_sizes).empty?
+end
+favicon_svg = read(File.join(SITE, "assets", "favicon.svg")).to_s
+check("/assets/favicon.svg is the AD monogram in the site's palette, not the theme placeholder",
+      "FAVICON: _site/assets/favicon.svg is not the site's AD monogram (aria-label=\"AD\", " \
+      "#285aff, #d8e4ff) — assets/favicon.svg must shadow the cms-platform theme's placeholder") do
+  favicon_svg.include?('aria-label="AD"') && favicon_svg.include?("#285aff") && favicon_svg.include?("#d8e4ff")
+end
+check("/assets/favicon.svg is well-formed XML (browsers refuse to draw a malformed SVG icon)",
+      "FAVICON: _site/assets/favicon.svg is not well-formed XML — a browser will not decode it as a tab " \
+      "icon (a `--` inside an XML comment is the usual cause)") do
+  doc = REXML::Document.new(favicon_svg)
+  !doc.root.nil? && doc.root.name == "svg"
+end
+favicon_url = config.dig("cms", "favicon_url") if config["cms"].is_a?(Hash)
+[["/", "index.html"], ["/404.html", "404.html"]].each do |label, rel|
+  links = tags(read(File.join(SITE, rel)).to_s, "link")
+  icons = links.select { |l| l["rel"].to_s.split.include?("icon") }.map { |l| l["href"] }
+  check("#{label} <head> links the Apple touch icon",
+        "FAVICON LINK: _site/#{rel} has no <link rel=\"apple-touch-icon\" href=\"/apple-touch-icon.png\"> — " \
+        "check _includes/favicon.html") do
+    links.any? { |l| l["rel"] == "apple-touch-icon" && l["href"] == "/apple-touch-icon.png" }
+  end
+  if favicon_url.to_s.empty?
+    check("#{label} <head> links favicon.ico and the SVG icon",
+          "FAVICON LINK: _site/#{rel} must link /favicon.ico and /assets/favicon.svg as rel=icon " \
+          "(found #{icons.inspect}) — check _includes/favicon.html") do
+      (["/favicon.ico", "/assets/favicon.svg"] - icons).empty?
+    end
+  else
+    check("#{label} <head> links cms.favicon_url as its icon",
+          "FAVICON LINK: _config.yml sets cms.favicon_url but _site/#{rel} links #{icons.inspect}") do
+      icons == [favicon_url]
+    end
+  end
+end
+
 # --------------------------------------------------------------------------
 section "tools: every tool is listed and embeds a vendored app that exists"
 tools_index = read(File.join(SITE, "tools", "index.html")).to_s
@@ -633,10 +780,61 @@ model.select { |e| e[:kind] == :tools }.each do |tool|
     embed = "/#{embed}" unless embed.empty? || embed.start_with?("/") || embed.match?(%r{\A([a-z][a-z0-9+.-]*:|//)}i)
     next if embed.empty? || !File.file?(tool[:dest]) || claimants(tool[:dest]).size > 1
 
-    iframes = tags(read(tool[:dest]), "iframe").map { |i| norm(site_path(i["src"].to_s)) }
+    html = read(tool[:dest])
+    dom = nil
+    iframes = []
     check("#{url} embeds #{embed} in an iframe",
           "TOOL EMBED: #{url} (#{rel}) does not render an <iframe> for embed_src #{embed} — " \
-          "check _layouts/tool.html") { iframes.include?(norm(site_path(embed))) }
+          "check _layouts/tool.html") do
+      require "nokogiri"
+      dom = Nokogiri::HTML5.parse(html, parse_noscript_content_as_text: true)
+      iframes = dom.css("iframe").select do |iframe|
+        norm(site_path(iframe["src"].to_s)) == norm(site_path(embed))
+      end
+      !iframes.empty?
+    end
+    next unless dom
+
+    if tool[:data]["layout"] == "tool"
+      # Guard this site's viewport-centered desktop stage (#4117), whose behavior is
+      # validated in a browser. Pixel tokens alone cannot establish a CSS width:
+      # min(780px, 1400px), for example, still confines the app to its phone layout.
+      # Author-selected custom layouts remain free to choose their own stage.
+      # A wrapper can narrow the iframe's containing block even inside the stage.
+      # Arbitrary wrapper CSS cannot be established statically, so this layout's
+      # contract requires every matching iframe to be a direct child of its stage.
+      # An unrelated or wrong-src stage cannot stand in for its actual container.
+      stages = iframes.map do |iframe|
+        parent = iframe.parent
+        parent if parent&.name == "div" && parent.classes.include?("tool-embed")
+      end
+      declarations = stages.map { |stage| inline_declarations(stage&.[]("style")) }
+      contract = { "width" => "min(1400px, 100vw - 3rem)", "position" => "relative",
+                   "left" => "50%", "transform" => "translateX(-50%)" }
+      actual = declarations.map do |styles|
+        contract.keys.map { |name| "#{name}=#{styles[name].inspect}" }.join(", ")
+      end.join("; ")
+      iframe_declarations = iframes.map { |iframe| inline_declarations(iframe["style"]) }
+      iframe_widths = iframe_declarations.map { |styles| styles["width"] }
+      # A physical or logical width cap can override the requested width. This
+      # static contract permits only absent caps or explicit none, not CSS math.
+      cap_properties = %w[max-width max-inline-size]
+      caps = (declarations + iframe_declarations).map do |styles|
+        cap_properties.to_h { |name| [name, styles[name]] }
+      end
+      check("#{url} preserves the viewport-centered embed stage and full-width iframe",
+        "TOOL EMBED: #{url} (#{rel}) does not preserve the viewport-centered embed stage " \
+        "(#{actual}; matching iframe widths=#{iframe_widths.inspect}; " \
+        "stage and iframe size caps=#{caps.inspect}) — restore width: " \
+        "min(1400px, 100vw - 3rem); position: relative; left: 50%; transform: translateX(-50%); " \
+        "and iframe width: 100% as a direct child of div.tool-embed in _layouts/tool.html; " \
+        "max-width and max-inline-size must be absent or none on both elements") do
+        stages.all? &&
+          declarations.all? { |styles| contract.all? { |name, value| styles[name] == value } } &&
+          !iframe_widths.empty? && iframe_widths.all? { |width| width == "100%" } &&
+          caps.all? { |styles| styles.values.all? { |value| value.nil? || value == "none" } }
+      end
+    end
     next if embed.match?(%r{\A([a-z][a-z0-9+.-]*:|//)}i) # external app: nothing to look up
 
     unless check("#{rel}'s embedded app #{embed} is in _site",
@@ -656,6 +854,23 @@ glob(File.join(ROOT, "_data", "tool_sources", "*.yml")).each do |src|
     check("vendored tool #{slug} (#{rel}) is built at #{app}",
           "VENDORED TOOL: #{rel} declares a vendored app but #{app} is not in _site — " \
           "re-vendor it or remove the source file") { !built_file(app).nil? }
+  end
+end
+
+# --------------------------------------------------------------------------
+section "landmarks: every site page has at most one <main>"
+# The layout wraps each page in `<main id="main-content">`; a page body that
+# opens its own `<main>` nests a second landmark inside it (the home page did).
+# Counts start tags with the same tokenizer as the other HTML checks (comments
+# and script/style bodies removed), so a `<main>` in a code sample, which is
+# escaped to `&lt;main&gt;`, is never counted.
+site_pages.each do |file|
+  guard(rel_path(file)) do
+    mains = tags(read(file), "main").size
+    check("#{rel_path(file)}: at most one <main> element",
+          "LANDMARK: #{rel_path(file)} has #{mains} <main> elements#{source_note(file)} — a page " \
+          "must have one main landmark; the layout already provides it, so use a <div> or " \
+          "<section> in the page body") { mains <= 1 }
   end
 end
 
@@ -1200,6 +1415,66 @@ if seam_tools
 end
 
 # --------------------------------------------------------------------------
+section "GHA-bench widget: the weight sliders always total 100%"
+# adamdaniel.ai/blog/introducing-gha-bench/ carries an inline widget (class
+# `bws-widget`) whose four range inputs must always sum to 100. Browsers snap an
+# input's value to its `step`, so an unrounded redistribution drifted to 100.5%
+# (issue #4114). The built page's range inputs and inline script go to
+# scripts/check-bws-widget.js, which replays Home/End/odd values with a fake DOM
+# that snaps like a browser. A post without the widget is not asserted, and
+# neither is anything when Node is unavailable (guard() turns that into a WARN).
+BWS_CHECK = File.join(ROOT, "scripts", "check-bws-widget.js")
+# Required here, not at the top: a top-level `require "json"` activates Ruby's
+# bundled json before `SiteModel.load` runs `bundler/setup`, and the lockfile's
+# newer json then raises Gem::LoadError (a plain `ruby` run, as in CI).
+require "json"
+public_posts.each do |post|
+  guard(post[:src]) do
+    html = File.file?(post[:dest]) ? read(post[:dest]) : nil
+    next unless html && html.include?("bws-widget")
+
+    inputs = tags(html, "input").select { |i| i["id"].to_s.start_with?("bws-") && i["type"] == "range" }
+    script = html.scan(%r{<script\b[^>]*>(.*?)</script\s*>}mi).flatten.find { |body| body.include?("bws-") }
+    next if inputs.empty? || script.nil?
+
+    unless File.file?(BWS_CHECK)
+      puts "  WARN #{BWS_CHECK} is missing; the widget check was skipped"
+      next
+    end
+    payload = JSON.generate("inputs" => inputs.map { |i| i.slice("id", "min", "max", "step", "value") },
+                            "script" => script)
+    out, status = Open3.capture2e("node", BWS_CHECK, stdin_data: payload)
+    check("#{post[:url]}: the #{inputs.size} weight sliders total exactly 100% after every move",
+          -> { "WIDGET WEIGHTS: #{post[:url]} (#{post[:src]}): " \
+               "#{out.lines.grep(/^FAIL/).first(3).map { |l| l.sub(/^FAIL /, "").strip }.join("; ")}" }) do
+      status.success?
+    end
+  end
+end
+
+# --------------------------------------------------------------------------
+unless ARGV.include?("--artifacts-only")
+  matrix_path = File.join(ROOT, "scripts", "test-verify-build-artifacts.rb")
+  matrix_available = check("REGRESSION MATRIX is present") do
+    raise CheckError, "REGRESSION MATRIX: scripts/test-verify-build-artifacts.rb is missing" unless
+      File.file?(matrix_path)
+
+    true
+  end
+  if matrix_available
+    check("REGRESSION MATRIX passes") do
+      matrix_passed = system({ "JEKYLL_NO_BUNDLER_REQUIRE" => nil }, "bundle", "exec", "ruby",
+                             matrix_path, chdir: ROOT)
+      unless matrix_passed
+        status = $?
+        result = status&.exited? ? "exit status #{status.exitstatus}" : "signal #{status&.termsig}"
+        raise CheckError, "REGRESSION MATRIX: failed with #{result}"
+      end
+      true
+    end
+  end
+end
+
 puts
 unless $warnings.empty?
   puts "#{$warnings.size} warning(s) — the verifier skipped what it could not process (not a failure):"

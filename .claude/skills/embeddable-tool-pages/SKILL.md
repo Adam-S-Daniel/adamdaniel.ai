@@ -1,6 +1,6 @@
 ---
 name: embeddable-tool-pages
-description: Add a self-contained interactive tool to the site's Tools section, or embed one in a blog post. Use when asked to "add a tool", "add a tools page", "publish an explorable/calculator/widget as a page", "embed an interactive HTML app", or "add a new top-level site section". Covers the `tools` Jekyll collection, the static-asset + iframe embed pattern, the Decap CMS wiring (admin/collections.site.yml), the local nav override, and embedding the same tool in a post. Trigger on mentions of "tools section", "tool page", "embed", "explorable", or "iframe widget".
+description: Add a self-contained interactive tool to the site's Tools section, or embed one in a blog post. Use when asked to publish a self-contained interactive HTML app (an explorable, calculator or widget) as a Tools page, to embed one in a post, or to add a new top-level site section. Not for embedding third-party media such as a video. Covers the `tools` Jekyll collection, the static-asset + iframe embed pattern, the Decap CMS wiring (admin/collections.site.yml), the local nav override, and embedding the same tool in a post.
 ---
 
 # Embeddable tool pages
@@ -16,8 +16,9 @@ page with the header, footer, and a clean `/tools/<slug>/` URL.
 
 ## How the Tools section is wired
 
-Five pieces, all already in place. To add a *new* tool you usually only touch
-the last two (asset + collection entry).
+Five pieces, all already in place; a *new* tool edits none of them. It adds
+two files of its own, the static asset and its `_tools/<slug>.md` entry (steps
+below).
 
 | Piece | File | Role |
 | --- | --- | --- |
@@ -56,8 +57,8 @@ does mean the header can drift from the gem — keep it minimal.
 
    `embed_src` is what the layout iframes. Omit it for a non-embed page.
 
-3. **Build and verify** (the static-asset + iframe approach has no CSP issues —
-   no CSP is enforced; inline scripts and CDN deps work):
+3. **Build and verify** (no CSP is enforced on public `/tools/` pages — the
+   admin CSP covers `/admin/` only — so inline scripts and CDN deps work):
 
    ```bash
    bundle exec jekyll build
@@ -98,7 +99,7 @@ the PR preview environment, where the page loads as a real document.
 
 - New `_tools/*.md` entries render at build; no Decap UI delete spec exists for
   the collection, so the `create:`/`delete:` flags in `admin/collections.site.yml`
-  are informational (both `true`, per the standing rule).
+  are informational (both are `true` in `admin/collections.site.yml`).
 - `assets/tools/claude-memory-map/index.html` is **automation-managed**: the
   source repo's workflows sync it (PR w/ auto-merge) and mirror source-repo PRs
   into `tool-preview/*` draft PRs for previews. Don't hand-edit the asset or
@@ -117,10 +118,7 @@ the PR preview environment, where the page loads as a real document.
   `visual-regression.yml`) for the full mechanics — a sync PR that
   unexpectedly hits a human review prompt means something outside the tool's
   own asset changed.
-- This skill lives at `.claude/skills/embeddable-tool-pages/` and is the ONLY
-  thing left in that directory — the vendored platform skill set was removed in
-  #3104, and the platform's skills now ship as the federated `cms-platform`
-  bundle in the `agentskills` marketplace, reaching ephemeral sessions through
-  the `skills-bootstrap` SessionStart hook and the committed `skills.lock`.
-  This one is site content, so no registry ships it: it is repo-owned, and the
-  hook leaves it alone.
+- This skill lives at `.claude/skills/embeddable-tool-pages/`. It is site
+  content, so no registry ships it: it is repo-owned, and the
+  `skills-bootstrap` SessionStart hook leaves it alone. (The platform's skills
+  ship separately as the `cms-platform` bundle; see `docs/SKILLS.md`.)

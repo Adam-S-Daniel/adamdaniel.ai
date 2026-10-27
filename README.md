@@ -26,10 +26,16 @@ for `adamdaniel.ai`.
 ```bash
 # Deploy the bootstrap CloudFormation stack
 bash infrastructure/bootstrap/deploy.sh
-
-# If a GitHub OIDC provider already exists in this account:
-CREATE_OIDC_PROVIDER=false bash infrastructure/bootstrap/deploy.sh
 ```
+
+The `adamdaniel-ai-bootstrap` stack owns this account's GitHub OIDC provider.
+Keep `CREATE_OIDC_PROVIDER` at its default (`true`) on every redeploy, even when
+the provider already exists. Setting it to `false` here requests removal of the
+stack-owned `GitHubOIDCProvider` and changes to the IAM role trust. The
+destructive-change guard blocks that change set. Use `false` only for a stack that does not own
+the provider and reuses one owned elsewhere, as in [jodidaniel.com's bootstrap
+script](https://github.com/jodidaniel/jodidaniel.com/blob/main/infrastructure/bootstrap/deploy.sh).
+See the [bootstrap deploy wrapper](infrastructure/bootstrap/deploy.sh).
 
 Then add the stack outputs as GitHub Actions secrets (repo → Settings → Secrets → Actions):
 
