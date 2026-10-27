@@ -312,7 +312,7 @@ hook is a deliberate no-op.
 
 → read `docs/SKILLS.md` before adding a skill pointer or regenerating the lock;
 it maps every "see also the **X** skill" pointer here to the bundle that ships it
-(including `workflow-path-audit`, which moved to `adam`).
+(including `workflow-path-audit`, which ships in the `adam` bundle).
 
 ## A green `e2e / e2e` is not proof the real e2e lane ran
 
