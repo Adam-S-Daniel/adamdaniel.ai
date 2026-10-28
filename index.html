@@ -2,17 +2,13 @@
 layout: default
 title: Home
 ---
-<main style="padding:0; flex:1;">
+<div style="padding:0; flex:1;">
   <section class="hero" aria-label="Introduction">
     <h1 class="hero-name">Adam Daniel</h1>
     <p class="hero-role">Freelance AI Engineer</p>
-    <div class="hero-links">
-      <a class="hero-link" href="{{ '/blog/' | relative_url }}">Blog</a>
-      {% comment %} Disabled — uncomment to restore the Projects hero link.
-      <a class="hero-link" href="{{ '/projects/' | relative_url }}">Projects</a>
-      {% endcomment %}
-      <a class="hero-link" href="https://www.linkedin.com/in/adam-s-daniel" target="_blank" rel="noopener noreferrer" aria-label="Adam Daniel on LinkedIn">LinkedIn</a>
-    </div>
+    {% comment %} Projects hero link is disabled; to restore it, add it to
+    _includes/hero-links.html after Blog. {% endcomment %}
+    {% include hero-links.html %}
   </section>
 
   {%- comment -%} Exclude e2e test-fixture canaries so a loop spec briefly
@@ -46,10 +42,7 @@ title: Home
             <span class="post-reading-time">{{ reading_time }} min read</span>
             {% if post.tags %}
             <div class="post-tags">
-              {% for tag in post.tags limit:3 %}
-              {%- assign tag_slug = tag | slugify -%}
-              <a class="tag-pill" href="{{ '/tags/' | append: tag_slug | append: '/' | relative_url }}">{{ tag }}</a>
-              {% endfor %}
+              {% include tag-pills.html tags=post.tags limit=3 indent="              " %}
             </div>
             {% endif %}
           </div>
@@ -117,4 +110,4 @@ title: Home
   </section>
   {% endif %}
   {% endcomment %}
-</main>
+</div>

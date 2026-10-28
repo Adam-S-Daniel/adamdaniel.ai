@@ -1,0 +1,23 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 64 64" role="img" aria-label="AD">
+  <!-- Adam Daniel's "AD" monogram in the site's Cobalt Thermal palette (the theme's
+       main.css :root tokens): near-black #04060f tile, a #285aff glow rising from
+       below center, text-primary #d8e4ff letters (the same pale blue as
+       assets/images/logo.svg). The letters are outlined paths, not <text>, because a
+       browser tab has no Fira Code to draw them with and an SVG icon cannot load a
+       font. They are Fira Code SemiBold 600 at size 30, letter-spacing -1, baseline
+       y=43, centered on x=32, outlined from scripts/fonts/FiraCode-SemiBold.ttf (Fira
+       Code 6.2, SIL OFL 1.1) by scripts/build-favicon.mjs; edit that script, not the
+       path. This file shadows the cms-platform theme's placeholder favicon.svg.
+       favicon.ico and apple-touch-icon.png are rendered from it by
+       scripts/render-icons.mjs, which drops the rounded corners for the full-bleed
+       Apple icon and keeps the glow; rerun it after regenerating this. -->
+  <defs>
+    <radialGradient id="glow" cx="50%" cy="55%" r="60%">
+      <stop offset="0" stop-color="#285aff" stop-opacity="0.55"/>
+      <stop offset="1" stop-color="#285aff" stop-opacity="0"/>
+    </radialGradient>
+  </defs>
+  <rect width="64" height="64" rx="14" fill="#04060f"/>
+  <rect width="64" height="64" rx="14" fill="url(#glow)"/>
+  <path fill="#d8e4ff" d="M28.54 43L27.22 38.12L20.22 38.12L18.89 43L14.54 43L21.20 21.72L26.37 21.72L33.02 43L28.54 43M23.71 24.88L20.97 34.97L26.43 34.97L23.71 24.88M49.45 32.26Q49.45 35.54 48.58 37.64Q47.72 39.74 46.28 40.91Q44.83 42.08 43.04 42.54Q41.25 43 39.38 43L33.94 43L33.94 21.72L39.02 21.72Q41 21.72 42.86 22.15Q44.72 22.57 46.21 23.69Q47.69 24.82 48.57 26.88Q49.45 28.95 49.45 32.26M45.05 32.26Q45.05 29.89 44.61 28.43Q44.17 26.97 43.42 26.19Q42.66 25.42 41.71 25.14Q40.75 24.86 39.72 24.86L38.15 24.86L38.15 39.88L39.74 39.88Q41.18 39.88 42.38 39.25Q43.58 38.62 44.32 36.96Q45.05 35.31 45.05 32.26"/>
+</svg>

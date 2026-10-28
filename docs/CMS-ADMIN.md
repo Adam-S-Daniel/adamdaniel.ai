@@ -15,7 +15,7 @@ one-line ownership rule and a pointer here.
 | --- | --- | --- | --- |
 | Posts | `_posts/` | folder | title, date, tags, excerpt, featured_image, published, publish_date, test_fixture (hidden) |
 | Tags | `_tags/` | folder | name, description. The `_tags/` directory currently exists but is empty (only `.gitkeep` — no curated tag files checked in today); the Decap collection is still configured. |
-| Projects | `_projects/` | folder | title, technology, url_link, featured, images (gallery). The `_projects/` directory currently does not exist on disk at all in this repo checkout; the Decap collection still defines `_projects/` as a folder collection, so creating an entry (or the directory) works — only the on-disk directory is currently absent. |
+| Projects | `_projects/` | folder, **hidden in the admin while Projects is off**: `cms.base_collections` in `_config.yml` omits `projects` because `collections.projects.output: false` means entries render nowhere; add `projects` back to that list when you enable Projects (#4082). Fields: title, technology, url_link, featured, images (gallery). The `_projects/` directory currently does not exist on disk at all in this repo checkout; the Decap collection still defines `_projects/` as a folder collection, so creating an entry (or the directory) works — only the on-disk directory is currently absent. |
 | Tools | `_tools/` | folder | title, slug, description, featured, embed_src, source_url, body — self-contained interactive tools shown at `/tools/` and `/tools/<slug>/`. Site-owned collection (declared in `_config.yml` + `admin/collections.site.yml`, not the platform base). See **Tools section** below. |
 | Pages | `pages/` | folder | title, body, permalink, published (was `files:` until PR #33) |
 | E2E Canaries | `_e2e/` | folder | system collection used by `e2e/cms-publish-loop*.spec.js` and `e2e/cms-delete-published.spec.js`; URLs at `/e2e/canary-{post,page,project}/`. Excluded from feeds, sitemap, and listings; rendered with `noindex,nofollow`. The publish-loop tests drive admin actions against these stable, unadvertised entries and assert the result on the public site. Between runs the body is reset to a baseline so the URLs always show innocuous content. `create: true, delete: true`: both flags exist so the UI-driven delete spec can drive the full CRUD lifecycle without back doors — `create: true` lets the test seed its throw-away `canary-delete-<runId>.md` fixture via the editor's "+ New E2E Canary" button instead of `seedFixtureViaPr`; `delete: true` is what makes the "Delete published entry" menuitem render. The `[E2E TEST FIXTURES — DO NOT EDIT]` collection label is the convention-only guardrail against accidental editor-driven mutation. |
@@ -69,6 +69,32 @@ Embed the same asset in a post via the *Embedding HTML / Widgets* seam below.
 First tool: `claude-memory-map` (vendored from
 `github.com/Adam-S-Daniel/claude-memory-map`). Full guide: the
 **embeddable-tool-pages** skill.
+
+**Embed stage width.** [`_layouts/tool.html`](../_layouts/tool.html) lets the iframe
+break out of the 780px column on desktop (up to 1400px, centered on the viewport).
+At a 1440px viewport this gives the vendored app its desktop layout, readable
+diagram text, and the brief/full labels toggle. Narrow viewports still use the
+app's phone layout; phone readability and the full-screen default remain upstream
+work in [claude-memory-map](https://github.com/Adam-S-Daniel/claude-memory-map)
+([issue #4117](https://github.com/Adam-S-Daniel/adamdaniel.ai/issues/4117)).
+[`scripts/verify-build-artifacts.rb`](../scripts/verify-build-artifacts.rb) guards
+the known rendered declaration contract for the site-owned `tool` layout: stage
+`width: min(1400px, 100vw - 3rem)`, `position: relative`, `left: 50%`,
+`transform: translateX(-50%)`, and matching iframe
+`width: 100%` as a direct child of its `div.tool-embed` stage. Intervening wrappers
+can narrow the iframe and are rejected. On both elements, inline `max-width` and
+`max-inline-size` must be absent or effectively `none`; other values are rejected
+because the static contract cannot establish their effect on the desktop width.
+For the site's horizontal writing mode, inline `inline-size` is equivalent to `width`
+on both elements; the two declarations compete by priority and source order rather
+than being checked separately. A narrow logical width therefore fails the same guard.
+It normalizes whitespace, honors `!important` over later normal
+declarations, and uses the last declaration among equal priorities. Since this is
+a lexical contract rather than a CSS parser, comments, escapes, quotes, and brace
+syntax are rejected. This is a horizontal site-layout contract, not a general CSS
+evaluator for arbitrary writing modes or stylesheets; browser evidence validates
+the layout itself.
+Custom tool layouts remain free to choose their own embed stage.
 
 **Vendored-tool sync + previews.** This is the general contract for ANY tool
 repo that vendors onto `/tools/` (today's only instance: `claude-memory-map`).
@@ -187,6 +213,6 @@ Files under `assets/` are copied through by Jekyll without any config change.
 
 **Markdown inside the embed.** kramdown defaults (`parse_block_html: false`) deliberately don't parse markdown inside the wrapper `<div>`. Author the embed as pure HTML; if you need prose around the widget, place it before/after the embed block.
 
-**Security note.** No CSP is enforced today, so inline `<script>` and `<style>` work without ceremony. If a CSP is added later, allowlist either the inline payloads (via hashes/nonces) or migrate widgets into `/assets/widgets/` and allowlist that path. The trust model is "authors are committers" — embeds land via the standard editorial-workflow PR review.
+**Security note.** Public pages, `/preview/` included, send only `Content-Security-Policy: frame-ancestors 'self'`, which does not restrict scripts or styles, so inline `<script>` and `<style>` in an embed work without ceremony. `/admin/` is different: its CSP has been enforced since 2026-10-05 (see the `ADMIN_CSP_MODE=enforce` note in `docs/WORKFLOWS.md`), though it still allows `'unsafe-inline'` scripts and styles. If a public-page CSP ever restricts `script-src` or `style-src`, allowlist either the inline payloads (via hashes/nonces) or migrate widgets into `/assets/widgets/` and allowlist that path. The trust model is "authors are committers" — embeds land via the standard editorial-workflow PR review.
 
 End-to-end coverage lives in `e2e/cms-html-embed.spec.js`.
