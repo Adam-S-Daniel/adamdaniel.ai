@@ -22,11 +22,11 @@ permissions:
 
 jobs:
   parity:
-    uses: Adam-S-Daniel/cms-platform/.github/workflows/parity-preview.yml@52589b1bac8b0572eeb94e7b53fea29ea9d2afb2
+    uses: Adam-S-Daniel/cms-platform/.github/workflows/parity-preview.yml@dcfbf21b4308bcfc0e579f057558e755f7e15bcf
     with:
       pr_number: ${{ github.event.pull_request.number }}
       base_ref: ${{ github.base_ref }}
       apex: adamdaniel.ai
-      platform_ref: 52589b1bac8b0572eeb94e7b53fea29ea9d2afb2
+      platform_ref: dcfbf21b4308bcfc0e579f057558e755f7e15bcf
     secrets:
       CMS_E2E_PAT: ${{ secrets.CMS_E2E_PAT }}
