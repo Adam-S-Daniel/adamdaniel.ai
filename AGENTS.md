@@ -99,10 +99,6 @@ session that lost the guidance must not also lose these.
 
 Personal website and blog for Adam Daniel (Freelance AI Engineer). Jekyll static site with Decap CMS, AWS OAuth proxy, and PR preview environments.
 
-## Scope & Boundaries
-
-- **Stay within the requested scope.** Only act on the explicitly requested scope (e.g. user-level vs repo-level placement). When in doubt about scope, confirm before proceeding.
-
 ## Test-Driven Design
 
 - **Red-green TDD.** Write a failing test first, then make it pass, then refactor. Always follow this cycle.
@@ -147,7 +143,7 @@ Progressive-disclosure docs — read the relevant one before working in that are
 
 **Check out the platform e2e harness before running any Playwright command
 locally.** This repo vendors no Node toolchain — the root `package.json` was
-removed on 2026-09-14 (see "Code quality"). The harness, and the `decap-server` /
+removed (see "Code quality"). The harness, and the `decap-server` /
 `serve` / `@playwright/test` it needs, live in cms-platform: check
 `Adam-S-Daniel/cms-platform` out at `platform.lock`'s `platform_ref` into
 `.cms-platform/` (as the CI reusables do), `npm ci` in `.cms-platform/e2e`, and
@@ -218,7 +214,7 @@ STACK-MANAGED but the platform template gates them on `CreateApexDnsRecords`
 (default `false`), so without that export a redeploy would DELETE the live apex
 DNS and take the site offline; do NOT drop it (incident record: `docs/WORKFLOWS.md`, "Bootstrap infrastructure is
 platform-owned"). **It also exports `ADMIN_CSP_MODE=enforce`** (default; the admin CSP
-has been enforced since 2026-10-05) — the platform script defaults to `report-only`, so
+is enforced) — the platform script defaults to `report-only`, so
 without that export a plain redeploy silently reverts the live CSP to warn-only; roll back
 with `ADMIN_CSP_MODE=report-only bash infrastructure/bootstrap/deploy.sh`. (The wrapper does
 not source `site-params.env`, so cms-platform's `docs/ADMIN-AUTH-SECURITY.md` step 4 does not
@@ -240,7 +236,7 @@ Real-user monitoring is via Amazon CloudWatch RUM, deployed as a sibling CloudFo
 
 ## Code quality
 
-**There is no lint toolchain in this repo, by decision (2026-09-14).** The root `package.json` (eslint, prettier, stylelint, markdownlint-cli2, and a second `@playwright/test` beside the harness's), its lockfile and the matching configs were removed: every reusable's `npm ci` runs in the platform's `.cms-platform/e2e` against *its* lockfile, so nothing in CI ever installed the root one — its Dependabot security jobs could not resolve (the last, `smol-toml` pinned by `markdownlint-cli2`, is recorded in `docs/WORKFLOWS.md`) and root `npx playwright` resolved a different `@playwright/test` than the harness config it was handed. Don't re-add one; the platform's **code-quality** skill is the reference if a lint is ever wanted here again.
+**There is no lint toolchain in this repo, by decision.** The root `package.json` (eslint, prettier, stylelint, markdownlint-cli2, and a second `@playwright/test` beside the harness's), its lockfile and the matching configs were removed: every reusable's `npm ci` runs in the platform's `.cms-platform/e2e` against *its* lockfile, so nothing in CI ever installed the root one — its Dependabot security jobs could not resolve (the last case is recorded in `docs/WORKFLOWS.md`) and root `npx playwright` resolved a different `@playwright/test` than the harness config it was handed. Don't re-add one; the platform's **code-quality** skill is the reference if a lint is ever wanted here again.
 
 **Line width — 100 columns, house-wide.** The formatters that reflow code are all platform-side now — Prettier (`printWidth: 100`), Ruff (`line-length = 100`), RuboCop (`Layout/LineLength: Max: 100`) — and `.editorconfig` here carries `max_line_length = 100` as the editor hint. **Markdown and YAML opt out** (prose, long URLs/tables and workflow `${{ }}` expressions run longer by nature). When adding a new code language, set its formatter's width to 100 too.
 
