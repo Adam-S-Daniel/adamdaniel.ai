@@ -57,7 +57,8 @@ Wiring (site-owned, not platform base):
 - **Nav** — `_includes/header.html` is a **local override** of the gem header
   (Jekyll prefers site `_includes`/`_layouts` over the theme gem's) that adds
   the Tools link. Re-sync it with the gem header on a platform bump.
-- **CMS** — `admin/collections.site.yml` adds the **Tools** collection to Decap;
+- **CMS** — `admin/collections.site.yml` adds the **Tools** collection to Decap
+  (`embed_src` is `required: true`: a Tool without an embed is an empty page, #4116);
   the gem's `decap_config_hook.rb` splices it into the generated
   `admin/config.yml` at the `# __SITE_COLLECTIONS__` marker at `post_write`.
 
