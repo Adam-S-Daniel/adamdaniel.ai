@@ -107,17 +107,11 @@ the PR preview environment, where the page loads as a real document.
   in `docs/CMS-ADMIN.md`. A tool synced this way needs the same two workflows in *its*
   repo (copy `site-{sync,preview}.yml` + `scripts/sync-to-site.sh` from
   claude-memory-map and change the slug/paths).
-- A `tool-sync/*` PR is expected to auto-pass `visual-regression`'s
-  `approve-regression` gate with no human reviewer — a deliberate
-  `NON_SALIENT_OVERRIDES` carve-out for `assets/tools/**` +
-  `_data/tool_sources/**` in the platform's `visual-regression-salient.js`
-  (cms-platform#146). This covers **updates to an existing tool only**: a
-  brand-new tool's PR necessarily adds `_tools/<slug>.md`, which IS salient,
-  so first-time additions get the full regression run + new-page manual
-  review. See "Visual-regression gotchas" in `docs/WORKFLOWS.md` (under
-  `visual-regression.yml`) for the full mechanics — a sync PR that
-  unexpectedly hits a human review prompt means something outside the tool's
-  own asset changed.
+- A `tool-sync/*` PR for an existing tool auto-passes `visual-regression`'s
+  `approve-regression` gate with no human reviewer; a brand-new tool's PR gets
+  the full run. A sync PR that unexpectedly asks for human review means
+  something outside the tool's own asset changed. Mechanics: "Visual-regression
+  gotchas" in `docs/WORKFLOWS.md`.
 - This skill lives at `.claude/skills/embeddable-tool-pages/`. It is site
   content, so no registry ships it: it is repo-owned, and the
   `skills-bootstrap` SessionStart hook leaves it alone. (The platform's skills
