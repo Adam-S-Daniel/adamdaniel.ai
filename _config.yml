@@ -5,6 +5,19 @@ baseurl: ""
 author:
   name: Adam Daniel
   email: adam@adamdaniel.ai
+  url: "https://adamdaniel.ai/"
+
+# jekyll-seo-tag: emits the homepage JSON-LD as a Person with `sameAs` set to
+# these profiles, which is how search and AI answer engines tie them to one
+# identity. Keep in step with cross_post.profiles and hero below.
+social:
+  name: Adam Daniel
+  links:
+    - https://www.linkedin.com/in/adam-s-daniel
+    - https://hachyderm.io/@superoutrigger
+    - https://adamdanielai.substack.com
+    - https://github.com/Adam-S-Daniel
+    - https://news.ycombinator.com/user?id=adamdaniel
 
 # Theme. Layouts/includes/assets are vendored in by the cms-platform theme
 # gem (pinned in the Gemfile + platform.lock). Local files under _layouts /
@@ -97,6 +110,10 @@ defaults:
       type: "tools"
     values:
       layout: "tool"
+      # jekyll-seo-tag otherwise types a collection document as BlogPosting;
+      # a tool page is an interactive app, not an article.
+      seo:
+        type: WebApplication
   - scope:
       path: ""
       type: "tags"

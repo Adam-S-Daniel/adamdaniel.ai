@@ -84,11 +84,14 @@
 #   9. The gem's `post` layout wraps the post body in `<div class="post-content">`
 #      (asserted non-empty only for posts on that layout whose body is plain
 #      prose, see "post bodies").
+#  10. The home page's JSON-LD `sameAs` list comes from jekyll-seo-tag reading
+#      `_config.yml` `social.links`; asserted only when that list is non-empty.
 #
 # Output: one `ok`/`FAIL` line per assertion, then a count. Exit 1 on any
 # FAIL. `scripts/` is excluded from the Jekyll build, so this is never
 # published.
 
+require "json"
 require "yaml"
 require "date"
 require "time"
@@ -926,6 +929,23 @@ site_pages.each do |file|
                "#{canonicals.first.inspect}, found og:title=#{og['og:title'].to_s.inspect} " \
                "og:url=#{og['og:url'].to_s.inspect} in #{built}#{source_note(file)}" }) do
       !og["og:title"].to_s.strip.empty? && canonicals.size == 1 && norm(og["og:url"].to_s) == canonicals.first
+    end
+  end
+end
+
+# The home page's JSON-LD (jekyll-seo-tag, from `social.links`) must carry them as `sameAs`.
+# Removing the links is a legitimate authoring choice, so nothing is asserted without them.
+social_links = config.dig("social", "links") if config["social"].is_a?(Hash)
+if social_links.is_a?(Array) && !social_links.empty?
+  guard("_site/index.html JSON-LD") do
+    ld_json = %r{<script\b[^>]*type=["']application/ld\+json["'][^>]*>(.*?)</script>}mi
+    found = nil
+    check("_site/index.html: JSON-LD sameAs equals social.links",
+          -> { "SAMEAS: expected _site/index.html JSON-LD sameAs #{social_links.inspect} " \
+               "(_config.yml social.links), found #{found.inspect}" }) do
+      docs = home_html.scan(ld_json).map { |(body)| JSON.parse(body) }
+      found = docs.grep(Hash).filter_map { |d| d["sameAs"] }.first
+      found == social_links
     end
   end
 end
