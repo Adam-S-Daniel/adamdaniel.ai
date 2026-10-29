@@ -1,6 +1,6 @@
 {
   "registry": "Adam-S-Daniel/adam-agentskills",
-  "ref": "f26af1311cc08771faedbb6a964995fa9a354c46",
+  "ref": "466d22eb6166c5a085c1d9ec5b0d47ff85be97e8",
   "bundles": [
     "adam-anything-anywhere",
     "adam-coding-anywhere"
@@ -8,7 +8,7 @@
   "sources": [
     {
       "registry": "Adam-S-Daniel/cms-platform",
-      "ref": "9bb7a0977fd0b25a48e055bf33d3b81340aa20f1",
+      "ref": "9fa1f70f5272b9696f2c506470157b9042fab66b",
       "bundles": [
         "cms-platform"
       ],
@@ -22,23 +22,23 @@
     "adam-coding-anywhere/debug-github-workflows": "sha256:7f6795529d048ae54534e929989abb52c2d11e7f7e4a55964fdabd7d49d9c260",
     "adam-coding-anywhere/disarm-inherited-reach": "sha256:3e355e35d7012c34d475711e8b438bfc5075deb92982b7561e1f9bb40054b893",
     "adam-coding-anywhere/github-actions-repo-settings": "sha256:6b634b528b046a12a6f289cd6cfa2d019c96bcc498f625494ece9a1d375d1ffa",
-    "adam-coding-anywhere/review-bash-ci-reliability": "sha256:df5ec0ca21602933fec981af7bbd6d8d668a9bb4f463cde44677843d5dc1e880",
+    "adam-coding-anywhere/review-bash-ci-reliability": "sha256:fc025b6ccc11282445b6ce1a465b1e80e2fbcbca3cbb66fc9ee1cdfce04dfe2c",
     "adam-coding-anywhere/skills-doctor": "sha256:b0cdd12ecd4757208ad2070535dbfe74d127f47e2ed7815245fada910aa12d5a",
     "adam-coding-anywhere/vendor-release-impact-issues": "sha256:b7bc6f17c002a05b5c5c517ddf598c717820ef808d5d240a5e8e9d6e68a7c426",
     "adam-coding-anywhere/workflow-path-audit": "sha256:8a7c57bcd890bbab38c42473d8705f0b2521954385f03bf5289e3ec84d3fcdde",
-    "cms-platform/admin-config-render": "sha256:09ecc3a2f63f8c918cc69c02c28e02794509bd2c08a115e86eb91d70d6d78c53",
-    "cms-platform/aws-bootstrap": "sha256:04b4a2ae55559829392548fbc785c15955d77e31adde8f6071db463bd789198c",
-    "cms-platform/browser-testing": "sha256:6502d1d6b0adea7ee342caa05487200f00ec7926c17f096217c6472c62ffd4c8",
-    "cms-platform/ci-watcher-loops": "sha256:a77b1d8fbcca4ec2dc9ca2a0d5cd15146dd386dd3c0c04a4a76dbdb9b01809bd",
-    "cms-platform/cms-stuck-pr-triage": "sha256:52df1e52adba47db4c945bba1becbe24251a4fc691679986339df410f8a514f5",
-    "cms-platform/code-quality": "sha256:885f4eda985c8773fa7e9409a907d3f7e2b02fbf43acecfa5b79a917aef7b1f4",
-    "cms-platform/consumer-repo-provisioning": "sha256:ff20886ea11a7b982091b4ce2681cdf15a0ad1b12597682e488bba60f93c82fe",
-    "cms-platform/editorial-label-audit": "sha256:6c67e215d0287f539bb4b7e5096e1b3e435b06bb3f342378f0e1757f6170fa72",
-    "cms-platform/github-actions-sha-pinning": "sha256:580959346c92312455f71166107d83ddfdc0bc0e8b3939daf8391ee7aff0fc92",
-    "cms-platform/platform-release-and-bump": "sha256:c00d381bb895fa8ac766b8f62e2a215ee464bbdeb4a41f6f2890ba7be5ba7511",
-    "cms-platform/post-failure-comment": "sha256:1e75b6249af83d40931355ab05f82b96238a4fb1926b839d4e5e08e839048c9e",
-    "cms-platform/preview-environments": "sha256:f545900d5fa7a1ddd6096c7440b3be579980ab215f0c2e2540baeac9ed27d45f",
-    "cms-platform/test-canary": "sha256:de3b6afc478c29fd4ddf17358ab6a540168fc8cd7c99e70cf62358a3d2b7b19f"
+    "cms-platform/admin-config-render": "sha256:8177391c8a60a175e59fb8061ad8eb8638774ac731efe4239382c1cbef8cad5d",
+    "cms-platform/aws-bootstrap": "sha256:0e47fa91bcdea907935828d32457b4e2940e2d64a6fd1a0dc97ff539d6bbef7e",
+    "cms-platform/browser-testing": "sha256:0f3ccf1cf082989fdff74576d04453e91f5f9869f458633092ec56c9a5e4db8d",
+    "cms-platform/ci-watcher-loops": "sha256:74f41e45207e092bc5533e49f67b43a9accc8444abe6191f0fdf6f2a35dc0b33",
+    "cms-platform/cms-stuck-pr-triage": "sha256:cf987a60e341f8efc658a52e26946bc981a2fb683f4f5b1448f3c624e33e67b0",
+    "cms-platform/code-quality": "sha256:00feb6dc9faaa857e7e949484405c9540a8ff51b0c7e034fc866c9d7be5ae33b",
+    "cms-platform/consumer-repo-provisioning": "sha256:20f3c3341dcf8296df88b5dd45381f7ba745f1178fec2b8a7f3d23a12b8c6e54",
+    "cms-platform/editorial-label-audit": "sha256:82971d4f8ae9a2c336a951e715c1ef72b916a40309434b44c810afd924aa8ed0",
+    "cms-platform/github-actions-sha-pinning": "sha256:1d0a2afa85eda1cc1cc793c8e38bc07f529a63068c9b62be35d17a8ee9048fa3",
+    "cms-platform/platform-release-and-bump": "sha256:a389dea13d7ae9c0c1cda81ff3c0105a9f81f0cad44e99bf445f2fc730824ad7",
+    "cms-platform/post-failure-comment": "sha256:bc13a5201ca698c6e8b7a0dbe6f2525c97330ed273bd3b5d6d1aa16f556bd3a9",
+    "cms-platform/preview-environments": "sha256:fcac14b6c503d1149845b3f8a91f59cbff58fe9193892f0b71d1afd016c841e8",
+    "cms-platform/test-canary": "sha256:01f8e865ec9033b44672f2dcbb201d75b8be1f044f308976706144e251e00709"
   },
-  "generated_from": "f26af1311cc08771faedbb6a964995fa9a354c46"
+  "generated_from": "466d22eb6166c5a085c1d9ec5b0d47ff85be97e8"
 }
