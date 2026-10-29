@@ -414,6 +414,16 @@ bad("a wrong canonical",
       f = File.join(d, "_site/blog/index.html")
       File.write(f, File.read(f).gsub(%r{(<link rel="canonical" href=")[^"]*}, '\1https://adamdaniel.ai/elsewhere/'))
     }) { |_d| }
+ok("social.links removed from _config.yml") do |d|
+  cfg = File.join(d, "_config.yml")
+  File.write(cfg, File.read(cfg, encoding: "UTF-8").sub(/^social:\n(?:[ \t]+.*\n|[ \t]*\n)*/, ""))
+end
+bad("the home page JSON-LD loses its sameAs list",
+    %r{SAMEAS: expected _site/index\.html JSON-LD sameAs \[.*linkedin\.com/in/adam-s-daniel.*\] \(_config\.yml social\.links\), found nil},
+    site: lambda { |d|
+      f = File.join(d, "_site/index.html")
+      File.write(f, File.read(f, encoding: "UTF-8").sub(/,?\s*"sameAs":\s*\[[^\]]*\]/, ""))
+    }) { |_d| }
 bad("a public post missing from sitemap.xml",
     /SITEMAP: public post \/blog\/p\/ is missing from sitemap\.xml \(check its front matter for sitemap: false or a noindex robots value/,
     site: lambda { |d|
