@@ -32,4 +32,4 @@ permissions:
 
 jobs:
   warm:
-    uses: Adam-S-Daniel/cms-platform/.github/workflows/warm-e2e-apt-cache.yml@v0.1.166
+    uses: Adam-S-Daniel/cms-platform/.github/workflows/warm-e2e-apt-cache.yml@5fdff7cb5ca3b3b035517d5c069f1a3ba4ac7795

@@ -22,4 +22,4 @@ permissions:
 
 jobs:
   sweep:
-    uses: Adam-S-Daniel/cms-platform/.github/workflows/cleanup-stale-fixture-branches.yml@v0.1.166
+    uses: Adam-S-Daniel/cms-platform/.github/workflows/cleanup-stale-fixture-branches.yml@5fdff7cb5ca3b3b035517d5c069f1a3ba4ac7795
