@@ -2,7 +2,6 @@
 title: Codex auto-review let Codex kill all my running processes
 slug: codex-auto-review-just-allowed-codex-to-kill-all-my-running-processes
 date: 2026-10-04 17:26:00 -0400
-excerpt: Codex's auto-review let a model approve rerunning a test suite outside the sandbox — and that killed every process on my laptop. Here's what I changed.
 featured_image: /assets/images/uploads/img_1309.jpeg
 published: true
 test_fixture: false

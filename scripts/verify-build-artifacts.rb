@@ -91,7 +91,6 @@
 # FAIL. `scripts/` is excluded from the Jekyll build, so this is never
 # published.
 
-require "json"
 require "yaml"
 require "date"
 require "time"
@@ -934,6 +933,8 @@ site_pages.each do |file|
 end
 
 # The home page's JSON-LD (jekyll-seo-tag, from `social.links`) must carry them as `sameAs`.
+# Not at the top of the file: see the note on the later `require "json"`.
+require "json"
 # Removing the links is a legitimate authoring choice, so nothing is asserted without them.
 social_links = config.dig("social", "links") if config["social"].is_a?(Hash)
 if social_links.is_a?(Array) && !social_links.empty?
