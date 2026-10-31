@@ -47,15 +47,28 @@
 # UPLOAD (cloud only, optional)
 # -----------------------------
 # A cloud container's state dies with it, so when the session is remote
-# (CLAUDE_CODE_REMOTE=true or CLAUDE_CODE_REMOTE_SESSION_ID set) AND both
-# USAGE_WRITER_APP_CLIENT_ID and USAGE_WRITER_APP_PEM (the PEM text, or that text
-# base64-encoded) are set,
-# the same line (without `uploaded`) is appended to
-# events/<YYYY-MM>/cloud-guidance.jsonl on branch persistent/usage-events of
-# Adam-S-Daniel/adam-agentskills-private, through the contents API, with an
-# installation token minted from that GitHub App and scoped to that one repo
-# with contents: write. A 409 or 422 on the write (someone else appended
-# first) re-reads the file and retries once. The JWT and token reach curl
+# (CLAUDE_CODE_REMOTE=true or CLAUDE_CODE_REMOTE_SESSION_ID set) the same line
+# (without `uploaded`) is appended to events/<YYYY-MM>/cloud-guidance.jsonl on
+# branch persistent/usage-events of Adam-S-Daniel/adam-agentskills-private,
+# through the contents API. A 409 or 422 on the write (someone else appended
+# first) re-reads the file and retries once. Two credentials, in order:
+#
+# 1. The session's own. A hosted session's agent proxy REPLACES any
+#    Authorization header sent to api.github.com with the session's GitHub
+#    credential, which reaches only the repos attached to the session, and it
+#    refuses /app/* paths outright (measured 2026-10-31: "Bearer garbage" got
+#    200 on the private repo; an App JWT got 401 "could not be decoded"). It
+#    also refuses writes through the contents API (403 "Write access to this
+#    GitHub API path is not permitted through this proxy") while allowing a
+#    git push. So the hook first asks GET /repos/<repo> with no Authorization
+#    header, and when the answer is 200 with permissions.push true (the
+#    private repo is attached) it appends with git instead: a depth-1 clone of
+#    the branch into a private temp dir, one commit, one push, and on a
+#    rejected push one fresh clone and retry.
+# 2. A GitHub App, where no proxy rewrites the header: when
+#    USAGE_WRITER_APP_CLIENT_ID and USAGE_WRITER_APP_PEM (the PEM text, or that
+#    text base64-encoded) are set, an installation token minted from that App,
+#    scoped to that one repo with contents: write. The JWT and token reach curl
 # through `--config -` on stdin, never argv; the PEM is written to a 0600 file
 # in a private temp dir for openssl and removed. No token, PEM or response
 # body is ever printed. Every call has a 10-second cap, inside a 15-second
@@ -72,7 +85,9 @@
 #
 # Test seams: GUIDANCE_RECORD_NOW (an ISO 8601 UTC time, e.g.
 # 2026-10-31T12:00:00Z) replaces the clock; GUIDANCE_RECORD_API (default
-# https://api.github.com) replaces the API base URL.
+# https://api.github.com) replaces the API base URL; GUIDANCE_RECORD_GIT
+# (default https://github.com/Adam-S-Daniel/adam-agentskills-private) replaces
+# the git remote.
 
 exec 1>/dev/null 2>/dev/null
 
@@ -200,7 +215,8 @@ def remaining():
 
 
 def api(work, method, url, bearer, body=None):
-    """(status, parsed JSON or None). The bearer reaches curl on stdin only."""
+    """(status, parsed JSON or None). The bearer, if any, reaches curl on stdin
+    only; None sends no Authorization header."""
     cap = min(10.0, remaining())
     if cap < 1:
         return 0, None
@@ -214,10 +230,13 @@ def api(work, method, url, bearer, body=None):
         args += ["--data-binary", "@" + data]
     args.append(url)
     config = (
-        'header = "Authorization: Bearer %s"\n'
+        ('header = "Authorization: Bearer %s"\n' % bearer if bearer else "") +
         'header = "Accept: application/vnd.github+json"\n'
         'header = "X-GitHub-Api-Version: 2022-11-28"\n'
-        'header = "User-Agent: guidance-load-record"\n' % bearer)
+        'header = "User-Agent: guidance-load-record"\n' +
+        # The hosted proxy refuses a body without this (415, measured
+        # 2026-10-31); GitHub itself does not need it.
+        ('header = "Content-Type: application/json"\n' if body is not None else ""))
     try:
         done = subprocess.run(args, input=config, capture_output=True, text=True, timeout=cap + 1)
         status = int(done.stdout.strip() or 0)
@@ -254,60 +273,113 @@ def app_jwt(work, client_id, pem, at):
         os.unlink(key)
 
 
-def upload(line, when):
+def append(work, base, token, line, when):
+    path = "events/%s/cloud-guidance.jsonl" % when.strftime("%Y-%m")
+    url = "%s/repos/%s/contents/%s" % (base, REPO, path)
+    for _attempt in range(2):
+        status, doc = api(work, "GET", "%s?ref=%s" % (url, BRANCH), token)
+        if status == 200 and isinstance(doc, dict) and doc.get("encoding") == "base64" \
+                and isinstance(doc.get("sha"), str):
+            try:
+                old = base64.b64decode(doc.get("content") or "")
+            except ValueError:
+                return False
+            sha = doc["sha"]
+        elif status == 404:
+            old, sha = b"", None
+        else:
+            return False
+        if old and not old.endswith(b"\n"):
+            old += b"\n"
+        body = {"message": "guidance-load event", "branch": BRANCH,
+                "content": base64.b64encode(old + line.encode("utf-8") + b"\n").decode("ascii")}
+        if sha:
+            body["sha"] = sha
+        status, _doc = api(work, "PUT", url, token, body)
+        if status in (200, 201):
+            return True
+        if status not in (409, 422):
+            return False
+    return False
+
+
+def git(args, cwd=None):
+    cap = min(10.0, remaining())
+    if cap < 1:
+        return False
+    env = dict(os.environ, GIT_TERMINAL_PROMPT="0")
+    try:
+        return subprocess.run(["git"] + args, cwd=cwd, env=env, capture_output=True,
+                              timeout=cap).returncode == 0
+    except (OSError, subprocess.SubprocessError):
+        return False
+
+
+def git_append(work, line, when):
+    remote = os.environ.get("GUIDANCE_RECORD_GIT") or "https://github.com/%s" % REPO
+    rel = os.path.join("events", when.strftime("%Y-%m"), "cloud-guidance.jsonl")
+    who = []
+    if subprocess.run(["git", "config", "user.email"], capture_output=True).returncode != 0:
+        who = ["-c", "user.name=guidance-load-record",
+               "-c", "user.email=guidance-load-record@users.noreply.github.com"]
+    for attempt in range(2):
+        tree = os.path.join(work, "clone%d" % attempt)
+        if not git(["clone", "-q", "--depth", "1", "--single-branch", "--branch", BRANCH, remote, tree]):
+            return False
+        target = os.path.join(tree, rel)
+        os.makedirs(os.path.dirname(target), exist_ok=True)
+        old = b""
+        if os.path.exists(target):
+            with open(target, "rb") as handle:
+                old = handle.read()
+        if old and not old.endswith(b"\n"):
+            old += b"\n"
+        with open(target, "wb") as handle:
+            handle.write(old + line.encode("utf-8") + b"\n")
+        if not (git(["add", rel], tree) and git(who + ["commit", "-q", "-m", "guidance-load event"], tree)):
+            return False
+        if git(["push", "-q", "origin", "HEAD:refs/heads/" + BRANCH], tree):
+            return True
+    return False
+
+
+def app_token(work, base, when):
     client_id = os.environ.get("USAGE_WRITER_APP_CLIENT_ID", "")
     pem = os.environ.get("USAGE_WRITER_APP_PEM", "")
+    if not client_id or not pem or shutil.which("openssl") is None:
+        return None
     if "-----BEGIN" not in pem:
         # An environment-variable field may not hold a multi-line value, so
         # the key may also be given base64-encoded.
         try:
             pem = base64.b64decode("".join(pem.split()), validate=True).decode("ascii")
         except ValueError:
-            pem = ""
+            return None
+    jwt = app_jwt(work, client_id, pem, int(when.timestamp()))
+    if not jwt:
+        return None
+    status, doc = api(work, "GET", "%s/repos/%s/installation" % (base, REPO), jwt)
+    inst = doc.get("id") if status == 200 and isinstance(doc, dict) else None
+    if not isinstance(inst, int):
+        return None
+    status, doc = api(work, "POST", "%s/app/installations/%d/access_tokens" % (base, inst), jwt,
+                      {"repositories": [REPO.split("/", 1)[1]], "permissions": {"contents": "write"}})
+    token = doc.get("token") if status == 201 and isinstance(doc, dict) else None
+    return token if isinstance(token, str) and token else None
+
+
+def upload(line, when):
     base = (os.environ.get("GUIDANCE_RECORD_API") or "https://api.github.com").rstrip("/")
-    if shutil.which("curl") is None or shutil.which("openssl") is None:
+    if shutil.which("curl") is None:
         return False
     work = tempfile.mkdtemp(prefix="guidance-record.")
     try:
-        token = app_jwt(work, client_id, pem, int(when.timestamp()))
-        if not token:
-            return False
-        status, doc = api(work, "GET", "%s/repos/%s/installation" % (base, REPO), token)
-        inst = doc.get("id") if status == 200 and isinstance(doc, dict) else None
-        if not isinstance(inst, int):
-            return False
-        status, doc = api(work, "POST", "%s/app/installations/%d/access_tokens" % (base, inst), token,
-                          {"repositories": [REPO.split("/", 1)[1]], "permissions": {"contents": "write"}})
-        token = doc.get("token") if status == 201 and isinstance(doc, dict) else None
-        if not isinstance(token, str) or not token:
-            return False
-        path = "events/%s/cloud-guidance.jsonl" % when.strftime("%Y-%m")
-        url = "%s/repos/%s/contents/%s" % (base, REPO, path)
-        for _attempt in range(2):
-            status, doc = api(work, "GET", "%s?ref=%s" % (url, BRANCH), token)
-            if status == 200 and isinstance(doc, dict) and doc.get("encoding") == "base64" \
-                    and isinstance(doc.get("sha"), str):
-                try:
-                    old = base64.b64decode(doc.get("content") or "")
-                except ValueError:
-                    return False
-                sha = doc["sha"]
-            elif status == 404:
-                old, sha = b"", None
-            else:
-                return False
-            if old and not old.endswith(b"\n"):
-                old += b"\n"
-            body = {"message": "guidance-load event", "branch": BRANCH,
-                    "content": base64.b64encode(old + line.encode("utf-8") + b"\n").decode("ascii")}
-            if sha:
-                body["sha"] = sha
-            status, _doc = api(work, "PUT", url, token, body)
-            if status in (200, 201):
-                return True
-            if status not in (409, 422):
-                return False
-        return False
+        status, doc = api(work, "GET", "%s/repos/%s" % (base, REPO), None)
+        perms = doc.get("permissions") if status == 200 and isinstance(doc, dict) else None
+        if isinstance(perms, dict) and perms.get("push") is True:
+            return shutil.which("git") is not None and git_append(work, line, when)
+        token = app_token(work, base, when)
+        return append(work, base, token, line, when) if token else False
     except Exception:
         return False
     finally:
@@ -367,7 +439,7 @@ def main():
     }
     line = json.dumps(record, separators=(",", ":"))
     uploaded = None
-    if remote and os.environ.get("USAGE_WRITER_APP_CLIENT_ID") and os.environ.get("USAGE_WRITER_APP_PEM"):
+    if remote:
         uploaded = upload(line, when)
     record["uploaded"] = uploaded
     fd = os.open(os.path.join(states, "sessions.jsonl"), os.O_WRONLY | os.O_CREAT | os.O_APPEND, 0o600)
