@@ -1,0 +1,7 @@
+# Provenance of the vendored copy at assets/tools/skills-evals/.
+# Maintained by the source repo's site-sync/site-preview workflows
+# (github.com/Adam-S-Daniel/skills-evals) — don't hand-edit.
+repo: Adam-S-Daniel/skills-evals
+ref: preview
+commit: 0000000000000000000000000000000000000000
+source_committed_at: 2026-10-31T17:45:00-04:00
