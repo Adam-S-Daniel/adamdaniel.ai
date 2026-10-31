@@ -21,10 +21,10 @@ permissions:
 
 jobs:
   preview-loops:
-    uses: Adam-S-Daniel/cms-platform/.github/workflows/cms-preview-loops.yml@v0.1.168
+    uses: Adam-S-Daniel/cms-platform/.github/workflows/cms-preview-loops.yml@c83855c0399c990a8a9c4eafe97f018167c2794d
     with:
       pr_number: ${{ inputs.pr_number }}
       apex: adamdaniel.ai
-      platform_ref: v0.1.168
+      platform_ref: c83855c0399c990a8a9c4eafe97f018167c2794d
     secrets:
       CMS_E2E_PAT: ${{ secrets.CMS_E2E_PAT }}

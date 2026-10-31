@@ -31,4 +31,4 @@ jobs:
   # The job name is the first half of the published context —
   # `site-verify / site-verify` — so it must stay `site-verify`.
   site-verify:
-    uses: Adam-S-Daniel/cms-platform/.github/workflows/site-verify.yml@v0.1.168
+    uses: Adam-S-Daniel/cms-platform/.github/workflows/site-verify.yml@c83855c0399c990a8a9c4eafe97f018167c2794d
