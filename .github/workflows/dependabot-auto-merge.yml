@@ -19,6 +19,6 @@ permissions:
 
 jobs:
   auto-merge:
-    uses: Adam-S-Daniel/cms-platform/.github/workflows/dependabot-auto-merge.yml@v0.1.167
+    uses: Adam-S-Daniel/cms-platform/.github/workflows/dependabot-auto-merge.yml@fe2290a1c4e009c5dadc146dd86edafe0f0a27e2
     with:
-      platform_ref: v0.1.167
+      platform_ref: fe2290a1c4e009c5dadc146dd86edafe0f0a27e2

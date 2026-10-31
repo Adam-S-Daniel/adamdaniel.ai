@@ -25,10 +25,10 @@ permissions:
 
 jobs:
   rearm:
-    uses: Adam-S-Daniel/cms-platform/.github/workflows/dependabot-rearm-sweep.yml@v0.1.167
+    uses: Adam-S-Daniel/cms-platform/.github/workflows/dependabot-rearm-sweep.yml@fe2290a1c4e009c5dadc146dd86edafe0f0a27e2
     with:
       dry_run: ${{ github.event_name == 'workflow_dispatch' && fromJSON(inputs.dry_run) || false }}
-      platform_ref: v0.1.167
+      platform_ref: fe2290a1c4e009c5dadc146dd86edafe0f0a27e2
     secrets:
       # Optional. The CMS automation App's private key (with
       # vars.CMS_AUTOMATION_APP_ID set on this repo). Without it a BEHIND

@@ -23,4 +23,4 @@ permissions:
 
 jobs:
   probe:
-    uses: Adam-S-Daniel/cms-platform/.github/workflows/oauth-proxy-build.yml@v0.1.167
+    uses: Adam-S-Daniel/cms-platform/.github/workflows/oauth-proxy-build.yml@fe2290a1c4e009c5dadc146dd86edafe0f0a27e2
