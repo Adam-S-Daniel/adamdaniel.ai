@@ -242,6 +242,8 @@ Every workflow that triggers on `pull_request` or `push` must filter on its sali
 
 - **Validate workflow / composite-action YAML before committing.** Quote `description` and other string values that contain special characters, and parse the file with the [`yaml`](https://www.npmjs.com/package/yaml) library or `yamllint` before committing — never eyeball it. (Complements the parser rule under Code quality, which governs how tests/scripts *read* these files at runtime.)
 
+- **No `actions.lock` in this repo — do not add one** ([ADR 0024](https://github.com/Adam-S-Daniel/_agent-guidance/blob/main/docs/decisions/0024-actions-pin-through-lockfiles.md)). The floor rule above names the lockfile form, but cms-platform and both its consumers stay on full SHAs: actionlint and `gh actions-lock --verify` both reject the platform's local-action refs, and every workflow here calls into the platform. The `github-actions-sha-pinning` skill has the detail.
+
 ## Workflows
 
 Every workflow's trigger, jobs, required-secrets, and the full `main` branch-protection required-status-check topology — deploy-production/preview, the CMS editorial workflow (and the persistent "adding labels" dialog it can trigger), visual-regression, the real-network publish-loop family, sweep-stale-cms-prs, auto-resolve-newline-conflict, dependabot-auto-merge, e2e-tests, secrets-scan, plus branch hygiene and how to read a PR diff after a squash-merge. → read `docs/WORKFLOWS.md` before adding a workflow, changing branch protection, or triaging a stuck/failing CI run; see also the **cms-stuck-pr-triage**, **editorial-label-audit**, **post-failure-comment**, and **platform-release-and-bump** skills.
