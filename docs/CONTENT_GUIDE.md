@@ -35,8 +35,8 @@ guided tour:
 ### Required
 
 - **Title** — the headline. Used for the `<h1>`, browser tab, and social
-  cards. The URL slug is auto-generated from this if you leave the URL
-  Slug field blank.
+  cards. The first time you save, the URL Slug is filled in from it, so
+  editing the title later does not change the post's address.
 - **Date** — defaults to "now". Don't change it unless you're backdating
   a post on purpose; the URL contains the date.
 - **Body** — the article itself, in Markdown. Toggle between *rich text*
@@ -45,10 +45,12 @@ guided tour:
 
 ### Optional but recommended
 
-- **URL Slug** — leave blank to auto-generate from the title. Only set it
-  manually if you need a specific URL or you're replacing an existing
-  published post (in which case the slug must match the old one to avoid
-  breaking inbound links).
+- **URL Slug** — the post's address. Leave it blank and it is filled in from
+  the title the first time you save; after that it stays put even if you
+  change the title. Only type one yourself if you need a specific URL or
+  you're replacing an existing published post (in which case it must match
+  the old one to avoid breaking inbound links). Changing it later moves the
+  post to a new address, and old links stop working.
 - **Excerpt** — one or two sentences shown in listings, RSS, and social
   share cards. Aim for ≤ 160 characters.
 - **Tags** — type a tag and press Enter; repeat for additional tags. New
@@ -287,8 +289,11 @@ GitHub OAuth entirely and writes directly to your working tree:
 # Terminal 1 — Jekyll dev server (so /admin/ has somewhere to load from)
 bundle exec jekyll serve --livereload
 
-# Terminal 2 — Decap proxy that turns Save into a real file write
-npx decap-server
+# Terminal 2 — Decap proxy that turns Save into a real file write. This
+# repo has no root package.json, so `--yes` lets npx fetch it on demand
+# (or use .cms-platform/e2e/node_modules/.bin/decap-server once the
+# platform harness is installed — see AGENTS.md "Key commands").
+npx --yes decap-server
 ```
 
 Open <http://localhost:4000/admin/index-local.html>, click **Login**

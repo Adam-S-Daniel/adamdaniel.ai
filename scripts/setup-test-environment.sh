@@ -4,9 +4,16 @@
 # full test stack locally on a Debian/Ubuntu machine (or WSL2).
 #
 # What "running the tests locally" means here:
-#   - npx playwright test                (e2e + browser specs)
-#   - bundle exec jekyll build            (used by playwright.config.js's webServer)
-#   - npx playwright test e2e/cms-smoke   (Decap admin → save → delete)
+#   - bundle exec jekyll build            (the site build the harness serves)
+#   - cd .cms-platform/e2e && SITE_ROOT=<this repo> npx playwright test …
+#     (the Playwright harness is platform-owned and runs from that checkout;
+#     this repo vendors no Node toolchain — no root package.json since
+#     2026-09-14 — so nothing here runs `npm` at the repo root)
+#
+# This script does NOT check out .cms-platform/. Do that first, at the
+# platform_ref pinned in platform.lock, and section 7 below installs the
+# harness's npm deps + Playwright browsers there; without the checkout it
+# prints how and skips that section.
 #
 # The script is idempotent: running it a second time skips anything that's
 # already present. Sudo is invoked only for system packages — npm and bundle
@@ -80,48 +87,65 @@ bundle config set --local path 'vendor/bundle' >/dev/null
 bundle install --quiet --jobs 4 --retry 2
 ok "Gemfile installed (vendor/bundle/)"
 
-# ── 7. Node deps + Playwright browsers ────────────────────────────────────
-note "Installing npm dependencies…"
-npm install --no-audit --no-fund --silent
-ok "node_modules/ ready"
+# ── 7. Playwright harness deps + browsers (in the platform checkout) ──────
+# The harness and everything it needs (@playwright/test, decap-server, serve)
+# live in cms-platform's e2e/, checked out into .cms-platform/ — the same
+# dot-dir the CI reusables use. Install its deps and browsers THERE; the
+# repo root has no package.json to install.
+HARNESS="$REPO_ROOT/.cms-platform/e2e"
+if [ -f "$HARNESS/package.json" ]; then
+  note "Installing harness npm dependencies in .cms-platform/e2e…"
+  (cd "$HARNESS" && npm ci --no-audit --no-fund --silent)
+  ok ".cms-platform/e2e/node_modules/ ready"
 
-# `playwright install-deps` knows the full apt set for all three browsers
-# (libgtk-4, libwebpdemux, libgraphene, libenchant-2 — too many to hand
-# list and they shift between Playwright versions). Run BEFORE the browser
-# download so the post-download host-validation step doesn't print a long
-# scary "missing libraries" warning. Sudo, since it shells out to
-# apt-get install.
-note "Installing Playwright apt deps for all three browsers…"
-sudo DEBIAN_FRONTEND=noninteractive npx --yes playwright install-deps
+  # `playwright install-deps` knows the full apt set for all three browsers
+  # (libgtk-4, libwebpdemux, libgraphene, libenchant-2 — too many to hand
+  # list and they shift between Playwright versions). Run BEFORE the browser
+  # download so the post-download host-validation step doesn't print a long
+  # scary "missing libraries" warning. Sudo, since it shells out to
+  # apt-get install. Both run from the harness so the pinned Playwright
+  # there is the one that installs.
+  note "Installing Playwright apt deps for all three browsers…"
+  (cd "$HARNESS" && sudo DEBIAN_FRONTEND=noninteractive npx playwright install-deps)
 
-note "Downloading Playwright browser binaries (chromium, firefox, webkit)…"
-npx --yes playwright install chromium firefox webkit
-ok "Playwright browsers + system deps installed"
+  note "Downloading Playwright browser binaries (chromium, firefox, webkit)…"
+  (cd "$HARNESS" && npx playwright install chromium firefox webkit)
+  ok "Playwright browsers + system deps installed"
 
-# ── 8. Final smoke: confirm Chromium can launch ───────────────────────────
-note "Smoke-testing Playwright's chromium launch…"
-node -e "
-  const { chromium } = require('playwright');
-  (async () => {
-    const browser = await chromium.launch();
-    const page = await browser.newPage();
-    await page.goto('about:blank');
-    await browser.close();
-    console.log('chromium launch ok');
-  })().catch(e => { console.error(e); process.exit(1); });
-"
+  # ── 8. Final smoke: confirm Chromium can launch ─────────────────────────
+  note "Smoke-testing Playwright's chromium launch…"
+  (cd "$HARNESS" && node -e "
+    const { chromium } = require('playwright');
+    (async () => {
+      const browser = await chromium.launch();
+      const page = await browser.newPage();
+      await page.goto('about:blank');
+      await browser.close();
+      console.log('chromium launch ok');
+    })().catch(e => { console.error(e); process.exit(1); });
+  ")
+else
+  warn "No platform checkout at .cms-platform/ — skipping the Playwright harness."
+  warn "To run the e2e suite locally, check the platform out at platform.lock's"
+  warn "platform_ref and re-run this script:"
+  warn '  ref=$(sed -n "s/^platform_ref: *//p" platform.lock)'
+  warn '  git clone --depth 1 --branch "$ref" https://github.com/Adam-S-Daniel/cms-platform .cms-platform'
+fi
 
 cat <<'EOF'
 
 ────────────────────────────────────────────────────────────────────────
 [setup] All prerequisites installed.
 
-Run the test stack:
+Run the test stack (Playwright runs from the platform harness, against
+this site):
 
+  export SITE_ROOT="$(git rev-parse --show-toplevel)"
+  cd .cms-platform/e2e
   npx playwright test                            # full e2e matrix
   npx playwright test --project chromium-desktop-1080 # single-browser run
-  npx playwright test e2e/cms-smoke.spec.js      # Decap admin save/delete
-  bundle exec jekyll build                       # site build
+  npx playwright test cms-smoke.spec.js          # Decap admin save/delete
+  bundle exec jekyll build                       # site build (repo root)
 
 Notes:
   - The bundler `path` is set to `vendor/bundle/` so gems live alongside

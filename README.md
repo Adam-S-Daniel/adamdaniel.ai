@@ -26,15 +26,24 @@ for `adamdaniel.ai`.
 ```bash
 # Deploy the bootstrap CloudFormation stack
 bash infrastructure/bootstrap/deploy.sh
-
-# If a GitHub OIDC provider already exists in this account:
-CREATE_OIDC_PROVIDER=false bash infrastructure/bootstrap/deploy.sh
 ```
+
+The `adamdaniel-ai-bootstrap` stack owns this account's GitHub OIDC provider.
+Keep `CREATE_OIDC_PROVIDER` at its default (`true`) on every redeploy, even when
+the provider already exists. Setting it to `false` here requests removal of the
+stack-owned `GitHubOIDCProvider` and changes to the IAM role trust. The
+destructive-change guard blocks that change set. Use `false` only for a stack that does not own
+the provider and reuses one owned elsewhere, as in [jodidaniel.com's bootstrap
+script](https://github.com/jodidaniel/jodidaniel.com/blob/main/infrastructure/bootstrap/deploy.sh).
+See the [bootstrap deploy wrapper](infrastructure/bootstrap/deploy.sh).
 
 Then add the stack outputs as GitHub Actions secrets (repo → Settings → Secrets → Actions):
 
 - `AWS_ROLE_ARN` — the IAM role ARN for OIDC auth
 - `PREVIEW_CLOUDFRONT_ID` — the CloudFront distribution ID for preview cache invalidation
+
+The admin CSP is enforced by default; to roll it back to warn-only, redeploy with
+`ADMIN_CSP_MODE=report-only bash infrastructure/bootstrap/deploy.sh`.
 
 After verifying OIDC works, remove the old `AWS_ACCESS_KEY_ID` and
 `AWS_SECRET_ACCESS_KEY` secrets and deactivate the IAM user keys.
@@ -173,10 +182,11 @@ Required secrets:
 ## Local Development
 
 ```bash
-# One-shot setup: installs everything needed to run the full test stack
-# locally on Debian/Ubuntu/WSL2 — apt packages (libnspr4, libnss3, ffmpeg,
-# ruby-full, python3), Bundler + Gemfile gems, npm deps, and Playwright
-# browser binaries. Idempotent.
+# One-shot setup: installs the apt packages and Bundler + Gemfile gems the
+# site build needs, and — when cms-platform is checked out at platform.lock's
+# platform_ref into .cms-platform/ — the Playwright harness's npm deps and
+# browser binaries THERE. This repo vendors no Node toolchain of its own
+# (no root package.json since 2026-09-14). Idempotent.
 bash scripts/setup-test-environment.sh
 
 # Build and serve
@@ -185,14 +195,16 @@ bundle exec jekyll serve --livereload
 # Site:        http://localhost:4000
 # CMS admin:   http://localhost:4000/admin/index-local.html  (uses config-local.yml)
 
-# Run e2e tests (full matrix)
+# Run e2e tests (full matrix) — from the platform harness, against this site
+export SITE_ROOT="$(git rev-parse --show-toplevel)"
+cd .cms-platform/e2e
 npx playwright test
 
 # Run only the specs that the current diff can affect
-node e2e/select-specs.js | jq -r '.files[]?' | xargs npx playwright test
+node select-specs.js | jq -r '.files[]?' | xargs npx playwright test
 
 # Decap admin smoke test (boots decap-server + a static fileserver)
-npx playwright test e2e/cms-smoke.spec.js --project chromium-desktop-3k
+npx playwright test cms-smoke.spec.js --project chromium-desktop-3k
 
 ```
 
@@ -267,7 +279,7 @@ Folders grouped by purpose. Anything not listed is incidental.
 
 | Path | Holds |
 | --- | --- |
-| `admin/` | Gem-delivered Decap CMS shell (cms-platform-theme, since v0.1.4) — not present in this repo except the site-owned seam. This repo tracks only `admin/collections.site.yml.example` (the template for the per-site collection list); the real `admin/collections.site.yml`, `index.html`, `config.yml` / `config-local.yml`, `preview-bridge.js`, and the `reviews/` dashboard are all gem-delivered or generated at build time, not tracked here. The cobalt-thermal theme (`custom.css`) that used to ship here was retired in cms-platform PR #81. |
+| `admin/` | Gem-delivered Decap CMS shell (cms-platform-theme, since v0.1.4) — not present in this repo except the site-owned seam. This repo tracks only `admin/collections.site.yml` (the per-site collection list, with its template `admin/collections.site.yml.example`); `index.html`, `config.yml` / `config-local.yml`, `preview-bridge.js`, and the `reviews/` dashboard are all gem-delivered or generated at build time, not tracked here. The cobalt-thermal theme (`custom.css`) that used to ship here was retired in cms-platform PR #81. |
 | `preview.md` + `_layouts/preview.html` | The live-preview shell at `/preview/` that the admin's preview bridge feeds. `_layouts/preview.html` is gem-delivered (see "Appearance" above). |
 
 ### Site framework
@@ -291,7 +303,7 @@ Folders grouped by purpose. Anything not listed is incidental.
 | `infrastructure/bootstrap/` | One-time AWS setup (CloudFormation templates, deploy scripts). |
 | `oauth-proxy/` | Delegating `deploy.sh` for the GitHub OAuth proxy (Lambda + API Gateway). The Lambda + template are owned upstream by cms-platform; the wrapper deploys them at `platform_ref`. |
 | `.github/workflows/` | CI/CD — 31 workflow files today; see [`AGENTS.md` § Salient paths per workflow](AGENTS.md#salient-paths-per-workflow) for the full, current per-workflow table rather than duplicating a second (and quickly stale) list here. |
-| `scripts/` | Build-time helpers (`setup-test-environment.sh`, `write-commit-json.sh`, `generate-showcase.js`, etc.). |
+| `scripts/` | Build-time helpers (`setup-test-environment.sh`, `write-commit-json.sh`, `live-admin-smoke.js`) plus the platform-delivered pre-commit guards (`secrets-scan.sh`, `lint-staged.sh`, `setup-hooks.sh`). |
 | `docs/` | Long-form documentation: [`CONTENT_GUIDE.md`](docs/CONTENT_GUIDE.md), [`TESTING.md`](docs/TESTING.md). |
 
 ## Branching Strategy (visual)

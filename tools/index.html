@@ -4,7 +4,7 @@ title: Tools
 description: Tools you can play with right here.
 permalink: /tools/
 ---
-<div class="container container--wide">
+<div class="container">
   <div class="page-header">
     <h1>Tools</h1>
     <p class="subtitle">Play with them right here.</p>
@@ -13,7 +13,8 @@ permalink: /tools/
   {% if site.tools.size > 0 %}
   <div class="projects-grid">
     {% assign featured = site.tools | where: "featured", true %}
-    {% assign rest = site.tools | where: "featured", false %}
+    {%- comment -%} Not featured = `featured: false` OR no `featured:` key at all, so a hand-authored tool is still listed. {%- endcomment -%}
+    {% assign rest = site.tools | where_exp: "t", "t.featured != true" %}
     {% assign ordered_tools = featured | concat: rest %}
     {% for tool in ordered_tools %}
     <article class="project-card">
