@@ -26,15 +26,24 @@ for `adamdaniel.ai`.
 ```bash
 # Deploy the bootstrap CloudFormation stack
 bash infrastructure/bootstrap/deploy.sh
-
-# If a GitHub OIDC provider already exists in this account:
-CREATE_OIDC_PROVIDER=false bash infrastructure/bootstrap/deploy.sh
 ```
+
+The `adamdaniel-ai-bootstrap` stack owns this account's GitHub OIDC provider.
+Keep `CREATE_OIDC_PROVIDER` at its default (`true`) on every redeploy, even when
+the provider already exists. Setting it to `false` here requests removal of the
+stack-owned `GitHubOIDCProvider` and changes to the IAM role trust. The
+destructive-change guard blocks that change set. Use `false` only for a stack that does not own
+the provider and reuses one owned elsewhere, as in [jodidaniel.com's bootstrap
+script](https://github.com/jodidaniel/jodidaniel.com/blob/main/infrastructure/bootstrap/deploy.sh).
+See the [bootstrap deploy wrapper](infrastructure/bootstrap/deploy.sh).
 
 Then add the stack outputs as GitHub Actions secrets (repo → Settings → Secrets → Actions):
 
 - `AWS_ROLE_ARN` — the IAM role ARN for OIDC auth
 - `PREVIEW_CLOUDFRONT_ID` — the CloudFront distribution ID for preview cache invalidation
+
+The admin CSP is enforced by default; to roll it back to warn-only, redeploy with
+`ADMIN_CSP_MODE=report-only bash infrastructure/bootstrap/deploy.sh`.
 
 After verifying OIDC works, remove the old `AWS_ACCESS_KEY_ID` and
 `AWS_SECRET_ACCESS_KEY` secrets and deactivate the IAM user keys.
@@ -270,7 +279,7 @@ Folders grouped by purpose. Anything not listed is incidental.
 
 | Path | Holds |
 | --- | --- |
-| `admin/` | Gem-delivered Decap CMS shell (cms-platform-theme, since v0.1.4) — not present in this repo except the site-owned seam. This repo tracks only `admin/collections.site.yml.example` (the template for the per-site collection list); the real `admin/collections.site.yml`, `index.html`, `config.yml` / `config-local.yml`, `preview-bridge.js`, and the `reviews/` dashboard are all gem-delivered or generated at build time, not tracked here. The cobalt-thermal theme (`custom.css`) that used to ship here was retired in cms-platform PR #81. |
+| `admin/` | Gem-delivered Decap CMS shell (cms-platform-theme, since v0.1.4) — not present in this repo except the site-owned seam. This repo tracks only `admin/collections.site.yml` (the per-site collection list, with its template `admin/collections.site.yml.example`); `index.html`, `config.yml` / `config-local.yml`, `preview-bridge.js`, and the `reviews/` dashboard are all gem-delivered or generated at build time, not tracked here. The cobalt-thermal theme (`custom.css`) that used to ship here was retired in cms-platform PR #81. |
 | `preview.md` + `_layouts/preview.html` | The live-preview shell at `/preview/` that the admin's preview bridge feeds. `_layouts/preview.html` is gem-delivered (see "Appearance" above). |
 
 ### Site framework

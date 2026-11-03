@@ -49,7 +49,7 @@ change path filters.
 | `deploy-production.yml` | `push` to `main`, `workflow_dispatch` | `paths-ignore` | everything EXCEPT the same 7 as `deploy-preview.yml` PLUS `scripts/**`; `workflow_dispatch` ignores `paths-ignore` |
 | `dev-hooks-sync.yml` | `schedule` (Mondays 06:00 UTC), `workflow_dispatch` | n/a (cron-only; syncs the pre-commit guard files from the platform) | n/a |
 | `e2e-stub.yml` | `pull_request` | `paths` (positive) — a byte-for-byte mirror of `e2e-tests.yml`'s `paths-ignore` list | `README.md`, `AGENTS.md`, `CLAUDE.md`, `docs/**`, `infrastructure/**`, `oauth-proxy/**`, `LICENSE`, `.gitignore`. Emits a trivial green `e2e` job so the required `e2e / e2e` context is never MISSING on a doc/infra-only PR |
-| `e2e-tests.yml` | `pull_request` targeting `main` | `paths-ignore` | `README.md`, `AGENTS.md`, `CLAUDE.md`, `docs/**`, `infrastructure/**`, `oauth-proxy/**`, `LICENSE`, `.gitignore`. Beyond that filter the lane runs the **WHOLE** suite, fanned out one job per Playwright project inside the platform reusable — there is no diff-aware selection and no sharding on this lane (see "No diff-aware spec SELECTION on this lane" below). The selector still governs the `parity-preview` / `preview-media` lanes |
+| `e2e-tests.yml` | `pull_request` targeting `main` | `paths-ignore` | `README.md`, `AGENTS.md`, `CLAUDE.md`, `docs/**`, `infrastructure/**`, `oauth-proxy/**`, `LICENSE`, `.gitignore`. Beyond that filter the lane runs the **WHOLE** suite, fanned out one job per Playwright project inside the platform reusable (the two admin projects as three `--shard` jobs each, since cms-platform v0.1.120 — 14 jobs) — there is no diff-aware selection on this lane (see "No diff-aware spec SELECTION on this lane" below). The selector still governs the `parity-preview` / `preview-media` lanes |
 | `editorial-label-audit.yml` | `schedule` (13:00 UTC daily), `workflow_dispatch` | n/a (cron-only; scans + self-heals `decap-cms/*` labels via the API) | n/a |
 | `label-non-decap-prs.yml` | `pull_request` (opened, reopened), `push` (main), `workflow_dispatch` | `pull_request`: **none, intentionally** — the tag decision keys off the PR's head ref, not its diff. `push` (main): `paths` positive, the workflow file itself only | Tags any PR NOT created by Decap with `not-decap-created` |
 | `parity-preview.yml` | `pull_request` targeting `main` | **none, intentionally** — required check on the always-run + early-skip pattern; the reusable's selector reports success immediately when no `@parity-preview` spec applies | n/a — runs the `@parity-preview` spec subset (sitemap, console-clean, draft-isolation, image-alt-text, admin-bundle-parity) against the PR's own `preview-pr<N>.adamdaniel.ai` surface |
@@ -59,8 +59,10 @@ change path filters.
 | `publish-scheduled-posts.yml` | `schedule` (14:00 UTC daily), `workflow_dispatch` | n/a (cron-only) | n/a |
 | `regression-review-reaper.yml` | `pull_request` types `[synchronize, closed]` | n/a (event-driven; rejects orphaned `regression-review` pending deployments via the API) | n/a |
 | `secrets-scan.yml` | `pull_request`, `push` to `main`, weekly `schedule` (Sundays 07:00 UTC), `workflow_dispatch` | **none, intentionally** — gitleaks must scan the entire diff / history regardless of file type | n/a |
+| [`site-verify.yml`](../.github/workflows/site-verify.yml) | `pull_request` types `[opened, synchronize, reopened]` targeting `main` | **none, intentionally** — required `site-verify / site-verify` context, verified against the live ruleset | The platform reusable builds the site and runs the default `scripts/verify-build-artifacts.rb` entrypoint, which runs the full regression matrix; matrix children use `--artifacts-only` to avoid recursion. The verifier checks the whole built site, so every source path is salient |
 | `sweep-stale-cms-prs.yml` | `schedule` (04:00 UTC daily), `workflow_dispatch` (`dry_run`, `threshold_hours` inputs) | n/a (cron-only; sweeps this repo's stale CMS PRs/branches/fixtures via the API) | n/a |
 | `visual-regression.yml` | `pull_request` types `[opened, synchronize, reopened]` | **NO paths filter — fires on every PR.** Content-only-skip is decided INSIDE the platform's reusable workflow (`e2e/visual-regression-salient.js`), not by a caller-level `paths:` (a required-check gate can't be workflow-level path-filtered without recreating the missing-check trap) | n/a at the caller level |
+| `warm-e2e-apt-cache.yml` | `schedule` (02:37 UTC daily), `workflow_dispatch` | n/a (cron-only; re-seeds the apt `.deb` cache the e2e project jobs restore — only a default-branch run can save it, so PR runs never do) | n/a. NOT a required check; a failed run only means the next PRs fetch the Ubuntu packages from the mirror again (cms-platform v0.1.120) |
 
 When you add a new workflow, append it to this table in the same commit, and set `run-name:` per the grammar in [§ Workflow run naming](#workflow-run-naming).
 
@@ -424,6 +426,7 @@ Required status checks (current):
 | `preview-media / preview-media` | `preview-media.yml` → cms-platform reusable | Always-run + early-skip: read-only probe that a media-salient PR's preview surface serves the expected asset; auto-passes on non-media PRs |
 | `e2e / e2e` | `e2e-tests.yml` (or `e2e-stub.yml` on doc/infra-only PRs) → cms-platform reusable | The reusable fans the suite out over a `project` matrix (one job per Playwright project) behind an aggregating `e2e` gate job, so this stays the ONE required context — the per-project `e2e / project (<name>)` contexts are informational and named by no ruleset. `e2e-tests.yml` carries `paths-ignore` (README/AGENTS/CLAUDE/docs/infrastructure/oauth-proxy/LICENSE/.gitignore); `e2e-stub.yml` mirrors that list byte-for-byte and emits a trivial green `e2e` job so the required context is never MISSING on a doc/infra-only PR |
 | `visual-regression / approve-regression` | `visual-regression.yml` → cms-platform reusable | No path filter (fires on every PR); the reusable's `approve-regression` gate runs `if: always()` and enters the `regression-review` environment only when visually-different pages were found, auto-passing otherwise — so it always reports a status |
+| `site-verify / site-verify` | [`site-verify.yml`](../.github/workflows/site-verify.yml) → cms-platform reusable | Always fires with no path filter; builds the site and runs the default verifier entrypoint, which runs the full regression matrix. Matrix children use `--artifacts-only` |
 
 `prod-mutate` (`cms-publish-loop-prod.yml`) and `host-loop` (`cms-publish-loop-host.yml`)
 were historically required but are not anymore — both trigger on `push` to `main`,
@@ -541,10 +544,12 @@ matrix. There is no separate `select` / `unit` / sharded-`e2e` / `parity` /
 caller now (`parity-preview.yml`, covered under "Required status checks" above).
 
 **Inside the reusable: one job per Playwright PROJECT** (cms-platform v0.1.68).
-The reusable fans out a `project` matrix — 10 jobs, each on its own runner,
-each running one project and installing only that project's browser engine —
-behind an aggregating `e2e` gate job. So this repo still surfaces exactly one
-REQUIRED context, `e2e / e2e`, plus 10 informational `e2e / project (<name>)`
+The reusable fans out a `project` matrix — 14 jobs since v0.1.120 (one per
+project, the two admin projects as three `--shard` jobs each), each on its own
+runner and installing only that project's browser engine, from an apt `.deb`
+cache that `warm-e2e-apt-cache.yml` seeds daily — behind an aggregating `e2e`
+gate job. So this repo still surfaces exactly one REQUIRED context, `e2e / e2e`,
+plus 14 informational `e2e / project (<slot>)`
 contexts that no ruleset names. Nothing here needed changing for that, and the
 `main` ruleset was NOT touched.
 
@@ -553,14 +558,16 @@ runs at the SAME worker count (`150%` — 6 on a 4-vCPU runner). An earlier vers
 of this paragraph said the counts "differ per project on purpose" because "a
 4-vCPU runner saturates at ~2 browser workers"; both halves were wrong. That
 saturation was an artifact of measuring 8 projects in ONE job — with one project
-per job, 6 workers beat 2 almost everywhere. `--shard` is deliberately unused (it
-balances by test count, and this suite's per-test durations span 5 ms → 49 s).
+per job, 6 workers beat 2 almost everywhere. Whole-suite `--shard` stays unused (it
+balances by test count, and this suite's per-test durations span 5 ms → 90 s);
+only the two admin projects are sharded, where the tests are of similar weight.
 
 The long pole is `webkit-iphone16` at ~200 s (~40 s install + ~140 s tests): that
 is WebKit's own test speed, not CI shape — it spends 141 s on the same
 `@admin-read` specs `chromium-desktop-3k` finishes in 104 s while ALSO running
-every `@admin-write` round trip. The platform doc prices the only remaining lever
-(sharding within a project) before you try it.
+every `@admin-write` round trip. That paragraph is the v0.1.70 record: by v0.1.119 `chromium-desktop-3k` had grown
+to ~150 s too, and v0.1.120 shards both admin projects three ways (validated gate
+218 s → 158 s median with the apt cache warm).
 The measurements, the rejected alternatives, and how to re-measure live in the
 platform's [`docs/E2E-PARALLELISM.md`](https://github.com/Adam-S-Daniel/cms-platform/blob/main/docs/E2E-PARALLELISM.md).
 **Read that before re-tuning anything about e2e parallelism.** To dial workers
@@ -807,7 +814,7 @@ The three real-prod loop workflows (`cms-publish-loop-host` / `cms-publish-loop-
 
 **Two conventions this codifies (apply beyond this feature):**
 
-1. **Action dependency policy.** Prefer trusted built-ins (`git`, `node`) over a bundled marketplace action when they do the job. `tj-actions/changed-files` was rejected here on supply-chain grounds (CVE-2025-30066, Mar 2025: a stolen `@tj-actions-bot` PAT retroactively repointed *every* version tag; ~9k lines of unverifiable bundled JS into a workflow that holds `CMS_E2E_PAT`). The composite is bash + `node` only, **no transitive `uses:`** — same shape as `await-prod-deploy` / `post-failure-comment`, and clean for the SHA-pin convention. If a marketplace action is genuinely warranted, it MUST be SHA-pinned after the 7-day cooling-off — the policy is AGENTS.md's "Pinning GitHub Actions" section; see also the `github-actions-sha-pinning` skill.
+1. **Action dependency policy.** Prefer trusted built-ins (`git`, `node`) over a bundled marketplace action when they do the job. `tj-actions/changed-files` was rejected here on supply-chain grounds (CVE-2025-30066, Mar 2025: a stolen `@tj-actions-bot` PAT retroactively repointed *every* version tag; ~9k lines of unverifiable bundled JS into a workflow that holds `CMS_E2E_PAT`). The composite is bash + `node` only, **no transitive `uses:`** — same shape as `await-prod-deploy` / `post-failure-comment`, and clean for the SHA-pin convention. If a marketplace action is genuinely warranted, it MUST be pinned to a full commit SHA after the 7-day cooling-off. That is the fleet's legacy pin form, which cms-platform and its sites keep while the lockfile form is blocked here; the policy is "Pinning GitHub Actions" in the fleet guidance, and the `github-actions-sha-pinning` skill has the platform specifics.
 2. **Single source over byte-identical duplication.** When N workflows need the same logic, factor it into one composite + one data module and lint the *structural wiring*, rather than duplicating the logic into each workflow and lint-asserting byte-identical text. (The `#1101`/#1178 byte-identical `concurrency:` block — now declared on each loop's heavy job rather than the workflow — predates this and is kept as byte-identical duplication; the recursion gate is the pattern to follow for new shared logic.)
 
 ## Bootstrap infrastructure is platform-owned (moved from AGENTS.md)
@@ -831,11 +838,25 @@ exports adamdaniel.ai's site params (`APEX_DOMAIN=adamdaniel.ai`, etc., which de
 apex/www A-records are STACK-MANAGED, but the platform template gates them on
 `CreateApexDnsRecords` (default `false`, safe for fresh sites). Without that
 export a redeploy would DELETE the live apex DNS (site offline) — a
-reviewer-caught regression in the template-removal PR (#1922). Do NOT drop it. A bootstrap-infra fix
+reviewer-caught regression in the template-removal PR (#1922). Do NOT drop it. **The wrapper also exports
+`ADMIN_CSP_MODE=enforce`** (default, overridable): the admin CSP was switched to enforce on
+2026-10-05 by a redeploy with `ADMIN_CSP_MODE=enforce` passed explicitly, but the platform
+`deploy.sh` defaults it to `report-only`, so a later plain redeploy would have reverted it.
+Roll back with `ADMIN_CSP_MODE=report-only bash infrastructure/bootstrap/deploy.sh`. The wrapper
+does not source `site-params.env` (cms-platform's `docs/ADMIN-AUTH-SECURITY.md` step 4 assumes it does;
+that step does not apply to this site). `scripts/test-bootstrap-deploy-wrapper.sh` pins both
+exports. A bootstrap-infra fix
 (e.g. CloudFront `ErrorCachingMinTTL=0`) is now made **once in cms-platform** and flows here on the
 next `platform_ref` bump — never apply it locally. This mirrors jodidaniel.com, which has no local
 bootstrap template either. (`infrastructure/rum/` is **not** affected — its template is not an exact
 vendored copy of the platform's and is out of scope.)
+
+The `adamdaniel-ai-bootstrap` stack owns this account's GitHub OIDC provider. Keep
+`CREATE_OIDC_PROVIDER` at its default (`true`) on every redeploy, even when the provider
+already exists. Setting it to `false` here requests removal of the stack-owned
+`GitHubOIDCProvider` and changes to the IAM role trust; the destructive-change guard blocks
+that change set. Use `false` only for a stack that does not own the provider and reuses one
+owned elsewhere, as in [jodidaniel.com's bootstrap script](https://github.com/jodidaniel/jodidaniel.com/blob/main/infrastructure/bootstrap/deploy.sh).
 
 ## `CMS_E2E_PAT` — scope and why (moved from AGENTS.md)
 

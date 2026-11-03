@@ -9,15 +9,15 @@
 > Edit only below the `## Repo-specific additions` header.
 > Everything above it will be overwritten on the next sync.
 
+guidance-marker: fleet-stub (transcript counts use this line; keep it)
+
 ## Fleet guidance is delivered once per session — not by this file
 
 The account's full guidance — incidents, fleet policy, machine layout, the
 traps that cost real outages — is installed into **user memory**
 (`~/.claude/CLAUDE.md`) by the `fleet-memory` SessionStart hook, so it is
-loaded **once per session** no matter how many repos are attached. It used to
-be inlined here in every repo, which meant a session with 19 repos open
-carried 19 identical copies: 332.3k tokens of a 1M window, measured
-2026-08-29.
+loaded **once per session** no matter how many repos are attached
+([inlined per repo, it took 332.3k tokens](https://github.com/Adam-S-Daniel/_agent-guidance/blob/main/docs/evidence/2026-08-29-guidance-inlined-in-every-repo.md)).
 
 **Check the session-start verdict before you rely on it.** The hook prints one
 line:
@@ -37,24 +37,19 @@ line:
 
 No verdict at all means the hook never ran — treat that as DEGRADED.
 
+**Say what loaded, in your first reply to the user in a session.** The
+installed guidance ends with a line `fleet-guidance check value: <8 hex>`.
+Begin that reply with `fleet-guidance check: <the value>`, copied from that
+line, or `fleet-guidance check: none` when no such line is in your context.
+Never guess a value or copy one from anywhere else: the session's record
+compares it with what actually loaded. Only in replies to the user — never in
+commits, PR or issue text, files or prompts for other agents.
+
 ## Codex reads the same block, from `~/.codex/AGENTS.md`
 
-The hook writes the same block to `~/.codex/AGENTS.md` whenever `~/.codex`
-exists — Codex's global **user** instructions, outside its 32 KiB
-`project_doc_max_bytes` project-doc budget. Register it once per machine with
-`scripts/register-codex-hook.sh` from an `_agent-guidance` checkout, then
-trust it in `/hooks`. `codex debug prompt-input` shows exactly what a session
-loaded; no `fleet-guidance:` line there means DEGRADED.
-
-For Codex Cloud, use **Manual** environment setup with persistent
-`CODEX_HOME=/opt/codex`. Preserve the repository's dependency setup and run
-`bash .claude/hooks/fleet-memory.sh --codex-cloud` in both setup and
-maintenance; reset the cache for the first verification. Fresh setup and
-cached maintenance were verified in the `_agent-guidance` environment. See
+The hook writes the same block there whenever `~/.codex` exists. Setup for
+local Codex and Codex Cloud, and how to verify delivery:
 [`docs/codex-cloud.md`](https://github.com/Adam-S-Daniel/_agent-guidance/blob/main/docs/codex-cloud.md).
-If the Cloud shell has no `codex debug prompt-input`, the saved task response's
-raw initial instruction envelope is the echo-free proof of model-visible
-delivery.
 
 ## The floor: rules that hold even when the guidance did not load
 
@@ -64,9 +59,13 @@ session that lost the guidance must not also lose these.
 - **Branch protection is real.** Fleet repos are PR-only on their default
   branch; a direct push is rejected (GH013), even from the repo's own
   workflows. Never design a bot that pushes to a protected default branch.
-- **Every `uses:` is pinned to a full 40-character commit SHA, with no
-  trailing version comment.** The one carve-out is a ref into this account's
-  own `cms-platform`, which stays on its release tag.
+- **Every `uses:` is pinned through `.github/workflows/actions.lock`: an
+  exact tag, locked, checked by a required `gh actions-lock --verify`
+  failing on any pin finding.** A repo not yet migrated keeps the legacy
+  form, a full 40-character commit SHA with no trailing version comment,
+  until its migration PR; never mix the two in one repo. Cross-repo
+  reusable workflows take a full SHA either way. The one carve-out is a ref
+  into this account's own `cms-platform`, which stays on its release tag.
 - **Never commit secrets or `.env` files, and never print personal data to a
   CI log** — logs, artifacts and git history on a public repo are public.
 - **A successful `git push` does not mean your commit exists.** A refused
@@ -81,8 +80,10 @@ session that lost the guidance must not also lose these.
   scoped to one returns a plausible, complete-shaped, wrong answer.
 - **Anything you name gets its link** — what you hand over, what you are
   waiting on, and what you cite as already done.
-- **Merge with a merge commit** (`gh pr merge --merge`); do not amend
-  published commits or force-push shared branches.
+- **Merge with a merge commit** (`gh pr merge --merge`), except in the three
+  cms-platform-managed repos (`cms-platform`, `adamdaniel.ai`,
+  `jodidaniel.com`), which squash; do not amend published commits or
+  force-push shared branches.
 - **Keep this file under 32 KiB.** Codex truncates project instructions at
   that byte silently; the sync warns and the drift report flags
   `codex-truncated`.
@@ -94,15 +95,11 @@ session that lost the guidance must not also lose these.
 
 Personal website and blog for Adam Daniel (Freelance AI Engineer). Jekyll static site with Decap CMS, AWS OAuth proxy, and PR preview environments.
 
-## Scope & Boundaries
-
-- **Stay within the requested scope.** Only act on the explicitly requested scope (e.g. user-level vs repo-level placement). When in doubt about scope, confirm before proceeding.
-
 ## Test-Driven Design
 
 - **Red-green TDD.** Write a failing test first, then make it pass, then refactor. Always follow this cycle.
 - **Never bypass the UI in a UI test.** A spec that exists to validate what an editor's click does — Decap admin, the deploy-status pill, the publish-via-auto-merge shim from the editor's POV — MUST go through the real UI; calling the underlying API instead (`page.evaluate(fetch(...))` against the GitHub API, the shim's `__callMerge`, peeking at workflow runs / PR state rather than waiting for the user-visible signal) defeats the test's purpose and lets a broken UI silently regress. The real-network specs (`cms-publish-loop*`, `cms-delete-published`) cover the Decap-UI-driven chain end-to-end and must keep doing so; route-mocked `publish-via-auto-merge-browser.spec.js` is the one carve-out, because the shim's internal contract is its whole reason for existing.
-- **No back doors in the spec body — setup/cleanup MAY use the GitHub API for fixture LIFECYCLE.** The spec's own forward (and, where applicable, backward) leg must drive the real Decap chain — Save → Status:Ready / `cms/ready` → auto-merge → deploy — but seeding or reaping a fixture (`cms-fixture-pr.js`'s `seedFixtureViaPr` / `removeFixtureViaPr`, and the existence-only `afterAll` delete that #1771 step 4 put in place of a content-restore) is harness hygiene, not the behaviour under test. → read `docs/TESTING.md` § "Test-Driven Design and the UI-test boundary" before adding an API call to a spec.
+- **No back doors in the spec body — setup/cleanup MAY use the GitHub API for fixture LIFECYCLE.** The spec's own forward (and, where applicable, backward) leg must drive the real Decap chain — Save → Status:Ready / `cms/ready` → auto-merge → deploy — but seeding or reaping a fixture (`cms-fixture-pr.js`'s `seedFixtureViaPr` / `removeFixtureViaPr`, and the existence-only `afterAll` delete of an ephemeral post) is harness hygiene, not the behaviour under test. → read `docs/TESTING.md` § "Test-Driven Design and the UI-test boundary" before adding an API call to a spec.
 
 ## Architecture
 
@@ -119,7 +116,7 @@ CloudFront Functions maps `Host: preview-pr${N}...` to the S3 key prefix
 (no `/pr-N/` in any visible URL). → `docs/WORKFLOWS.md` § "Preview host-to-prefix
 mapping".
 
-**`admin/` is GEM-DELIVERED (do not re-vendor the machinery).** Since cms-platform v0.1.4 the Decap admin UI and its `config*.base.yml` templates ship inside the `cms-platform-theme` gem (pinned in `Gemfile` / `platform.lock`), whose render hook copies them into `_site/admin/` at build time; this repo tracks only the site-owned seam TEMPLATE `admin/collections.site.yml.example`, and the e2e harness moved to the platform too (`e2e/` is no longer tracked here). Change the admin UI in **cms-platform** and ship a release — the sync path is a gem bump landed by **`platform-bump.yml`**. A re-vendored copy would shadow the gem and silently drift; anything below that references in-repo `admin/config*.yml` or `e2e/cms-*.spec.js` describes the platform-owned source of truth, not files you edit here. → read `docs/CMS-ADMIN.md` § "`admin/` is gem-delivered" first.
+**`admin/` is GEM-DELIVERED (do not re-vendor the machinery).** The Decap admin UI and its `config*.base.yml` templates ship inside the `cms-platform-theme` gem (pinned in `Gemfile` / `platform.lock`), whose render hook copies them into `_site/admin/` at build time; this repo tracks only the site-owned seam, `admin/collections.site.yml` (with its template `admin/collections.site.yml.example`), and the e2e harness lives in the platform too (this repo tracks no `e2e/`). Change the admin UI in **cms-platform** and ship a release — the sync path is a gem bump landed by **`platform-bump.yml`**. A re-vendored copy would shadow the gem and silently drift; anything below that references in-repo `admin/config*.yml` or `e2e/cms-*.spec.js` describes the platform-owned source of truth, not files you edit here. → read `docs/CMS-ADMIN.md` § "`admin/` is gem-delivered" first.
 
 ## Deeper references
 
@@ -142,7 +139,7 @@ Progressive-disclosure docs — read the relevant one before working in that are
 
 **Check out the platform e2e harness before running any Playwright command
 locally.** This repo vendors no Node toolchain — the root `package.json` was
-removed on 2026-09-14 (see "Code quality"). The harness, and the `decap-server` /
+removed (see "Code quality"). The harness, and the `decap-server` /
 `serve` / `@playwright/test` it needs, live in cms-platform: check
 `Adam-S-Daniel/cms-platform` out at `platform.lock`'s `platform_ref` into
 `.cms-platform/` (as the CI reusables do), `npm ci` in `.cms-platform/e2e`, and
@@ -164,7 +161,7 @@ bash oauth-proxy/deploy.sh                  # deploy OAuth proxy (delegates to t
 # Tests — from the platform harness checkout, against this site
 export SITE_ROOT="$(git rev-parse --show-toplevel)"
 cd .cms-platform/e2e
-npx playwright test                               # full browser matrix (8 projects)
+npx playwright test                               # full matrix (10 projects: 8 public + 2 admin)
 npx playwright test --project chromium-desktop-1080 # single project (public lane)
 npx playwright test glow-banding.spec.js           # single test file
 ```
@@ -211,8 +208,13 @@ into `.cms-platform/`, exports this site's params and delegates. **The wrapper
 exports `CREATE_APEX_DNS_RECORDS=true`** — adamdaniel.ai's apex/www A-records are
 STACK-MANAGED but the platform template gates them on `CreateApexDnsRecords`
 (default `false`), so without that export a redeploy would DELETE the live apex
-DNS and take the site offline; a reviewer caught it in the template-removal PR
-(#1922). Do NOT drop it. A bootstrap-infra fix is made **once in cms-platform**
+DNS and take the site offline; do NOT drop it (incident record: `docs/WORKFLOWS.md`, "Bootstrap infrastructure is
+platform-owned"). **It also exports `ADMIN_CSP_MODE=enforce`** (default; the admin CSP
+is enforced) — the platform script defaults to `report-only`, so
+without that export a plain redeploy silently reverts the live CSP to warn-only; roll back
+with `ADMIN_CSP_MODE=report-only bash infrastructure/bootstrap/deploy.sh`. (The wrapper does
+not source `site-params.env`, so cms-platform's `docs/ADMIN-AUTH-SECURITY.md` step 4 does not
+apply here.) Regression test: `bash scripts/test-bootstrap-deploy-wrapper.sh`. A bootstrap-infra fix is made **once in cms-platform**
 and flows here on the next `platform_ref` bump — never apply it locally. → read
 `docs/WORKFLOWS.md` § "Bootstrap infrastructure is platform-owned".
 
@@ -226,17 +228,17 @@ The `/preview/` WYSIWYG surface, the posts-list dashboard (live-url banner, publ
 
 ## Analytics
 
-Real-user monitoring is via Amazon CloudWatch RUM, deployed as a sibling CloudFormation stack `adamdaniel-ai-rum` (see `infrastructure/rum/`). The Jekyll snippet in `_includes/analytics/cloudwatch-rum.html` is a no-op unless **both** `JEKYLL_ENV=production` AND `site.analytics.cloudwatch_rum.app_monitor_id` are set, so local `jekyll serve` and PR previews stay silent. Identity-pool / app-monitor IDs are non-sensitive (visible in the rendered page source) so they live in `_config.yml`, not GitHub secrets. End-to-end test: `e2e/analytics-cloudwatch-rum.test.js`. Full deploy + tuning notes: [`ANALYTICS_SETUP.md`](ANALYTICS_SETUP.md).
+Real-user monitoring is via Amazon CloudWatch RUM, deployed as a sibling CloudFormation stack `adamdaniel-ai-rum` (see `infrastructure/rum/`). The Jekyll snippet in `_includes/analytics/cloudwatch-rum.html` is a no-op unless **both** `JEKYLL_ENV=production` AND `site.analytics.cloudwatch_rum.app_monitor_id` are set, so local `jekyll serve` and PR previews stay silent. Identity-pool / app-monitor IDs are non-sensitive (visible in the rendered page source) so they live in `_config.yml`, not GitHub secrets. The automated check is platform-owned: cms-platform's `e2e/analytics-rum-client-vendored.test.js` hashes the vendored RUM client and runs the include's loader; nothing in this repo's tree tests it. Full deploy + tuning notes: [`ANALYTICS_SETUP.md`](ANALYTICS_SETUP.md).
 
 ## Code quality
 
-**There is no lint toolchain in this repo, by decision (2026-09-14).** The root `package.json` (eslint, prettier, stylelint, markdownlint-cli2, and a second `@playwright/test` beside the harness's), its lockfile and the matching configs were removed: every reusable's `npm ci` runs in the platform's `.cms-platform/e2e` against *its* lockfile, so nothing in CI ever installed the root one — its Dependabot security jobs could not resolve (the last, `smol-toml` pinned by `markdownlint-cli2`, is run 34793815589) and root `npx playwright` resolved a different `@playwright/test` than the harness config it was handed. Don't re-add one; the platform's **code-quality** skill is the reference if a lint is ever wanted here again.
+**There is no lint toolchain in this repo, by decision.** The root `package.json` (eslint, prettier, stylelint, markdownlint-cli2, and a second `@playwright/test` beside the harness's), its lockfile and the matching configs were removed: every reusable's `npm ci` runs in the platform's `.cms-platform/e2e` against *its* lockfile, so nothing in CI ever installed the root one — its Dependabot security jobs could not resolve (the last case is recorded in `docs/WORKFLOWS.md`) and root `npx playwright` resolved a different `@playwright/test` than the harness config it was handed. Don't re-add one; the platform's **code-quality** skill is the reference if a lint is ever wanted here again.
 
 **Line width — 100 columns, house-wide.** The formatters that reflow code are all platform-side now — Prettier (`printWidth: 100`), Ruff (`line-length = 100`), RuboCop (`Layout/LineLength: Max: 100`) — and `.editorconfig` here carries `max_line_length = 100` as the editor hint. **Markdown and YAML opt out** (prose, long URLs/tables and workflow `${{ }}` expressions run longer by nature). When adding a new code language, set its formatter's width to 100 too.
 
 **Local — pre-commit hook.** `scripts/lint-staged.sh` (platform-delivered by `dev-hooks-sync.yml`, wired into `.githooks/pre-commit` and `.gitconfig-fragment`) lints only the **staged** files of each language and **skips any linter whose tool is absent** — with no root `node_modules` that is every npm-based one here, so the hook is effectively inert on this repo and never blocks a commit. Bypass one commit with `SKIP_LINT_STAGED=1`.
 
-**Parse structured formats with a real parser — never hand-roll.** Anything that reads a workflow, an `action.yml`, or the Decap/Jekyll config YAML goes through a real parser (the [`yaml`](https://www.npmjs.com/package/yaml) library in JS, `YAML.safe_load_file(..., aliases: true)` in Ruby), never a regex or line-scanner. GitHub enabled YAML anchors in workflows on 2025-09-18, so a line-based scanner now silently mis-reads aliased values. Kept inline rather than deferred to a skill because it governs any script written here, not just the lint toolchain.
+**Parse structured formats with a real parser — never hand-roll.** Anything that reads a workflow, an `action.yml`, or the Decap/Jekyll config YAML goes through a real parser (the [`yaml`](https://www.npmjs.com/package/yaml) library in JS, `YAML.safe_load_file(..., aliases: true)` in Ruby), never a regex or line-scanner. GitHub workflows accept YAML anchors, so a line-based scanner silently mis-reads aliased values. Kept inline rather than deferred to a skill because it governs any script written here, not just the lint toolchain.
 
 → read `docs/TESTING.md` § "Code quality: lint toolchain, line width, pre-commit hook" for the full rationale behind the first three.
 
@@ -247,6 +249,8 @@ Every workflow that triggers on `pull_request` or `push` must filter on its sali
 ## CI / GitHub Actions
 
 - **Validate workflow / composite-action YAML before committing.** Quote `description` and other string values that contain special characters, and parse the file with the [`yaml`](https://www.npmjs.com/package/yaml) library or `yamllint` before committing — never eyeball it. (Complements the parser rule under Code quality, which governs how tests/scripts *read* these files at runtime.)
+
+- **No `actions.lock` in this repo — do not add one** ([ADR 0024](https://github.com/Adam-S-Daniel/_agent-guidance/blob/main/docs/decisions/0024-actions-pin-through-lockfiles.md)). The floor rule above names the lockfile form, but cms-platform and both its consumers stay on full SHAs: actionlint and `gh actions-lock --verify` both reject the platform's local-action refs, and every workflow here calls into the platform. The `github-actions-sha-pinning` skill has the detail.
 
 ## Workflows
 
@@ -268,9 +272,9 @@ The three real-prod loop workflows can re-trigger themselves (their own canary-m
 
 When a real-prod loop spec mutates a persistent fixture in place, a required check and a harness `afterAll` safety net both need to agree on the fixture's canonical state — get the loop-aware exemption or the byte-preserving derivation wrong and you either deadlock the loop or silently corrupt `main`. → read `docs/CI-INVARIANTS.md` before changing a required check that asserts a `main`-state invariant or a harness baseline-restore safety net.
 
-## CI-flakiness invariants (#1723) — read before touching the prod loops / deploy waits
+## CI-flakiness invariants — read before touching the prod loops / deploy waits
 
-Six root-caused, lint-locked flakiness classes from the 2026-05 CI audit — future-dated fixture builds, test-fixture leakage into public listings/crawls, the queue-aware deploy-lane wait, and more — each with a standing "do NOT undo this" guard. → read `docs/CI-INVARIANTS.md` before touching a prod loop, a deploy wait, or a public-content crawl exclusion; see also the **ci-watcher-loops** skill.
+Six lint-locked flakiness classes — future-dated fixture builds, test-fixture leakage into public listings/crawls, the queue-aware deploy-lane wait, and more — each with a standing "do NOT undo this" guard (the audit behind them, #1723, is written up in `docs/CI-INVARIANTS.md`). → read `docs/CI-INVARIANTS.md` before touching a prod loop, a deploy wait, or a public-content crawl exclusion; see also the **ci-watcher-loops** skill.
 
 ## Preview environment flow
 
@@ -281,14 +285,14 @@ Six root-caused, lint-locked flakiness classes from the 2026-05 CI audit — fut
 
 ## Skills
 
-**This consumer vendors no platform skills — do NOT re-vendor them.** Until
-issue #3104 it mirrored 15 of them byte-for-byte under `.claude/skills/`;
-cms-platform v0.1.83 deleted that transport and now publishes its `skills/` as
-the federated **`cms-platform` bundle** in the `agentskills` marketplace. (The
-gem is NOT the skills channel — it ships the `/admin` machinery.) Ephemeral
+**This consumer vendors no platform skills — do NOT re-vendor them.**
+cms-platform publishes its `skills/` as the federated **`cms-platform` bundle**
+in the `agentskills` marketplace (why the byte-for-byte mirror under
+`.claude/skills/` is gone: `docs/SKILLS.md`). (The gem is NOT the skills
+channel — it ships the `/admin` machinery.) Ephemeral
 sessions get skills from the committed **`skills.lock`** via the
 `skills-bootstrap` SessionStart hook in `.claude/hooks/` — two registries pinned
-at immutable commits with a per-skill sha256, 23 skills; on a durable machine the
+at immutable commits with a per-skill sha256; on a durable machine the
 hook is a deliberate no-op.
 
 - **`skills.lock` pins commits, not branches, so it does not self-update.**
@@ -302,7 +306,7 @@ hook is a deliberate no-op.
 
 → read `docs/SKILLS.md` before adding a skill pointer or regenerating the lock;
 it maps every "see also the **X** skill" pointer here to the bundle that ships it
-(including `workflow-path-audit`, which moved to `adam`).
+(including `workflow-path-audit`, which ships in the `adam` bundle).
 
 ## A green `e2e / e2e` is not proof the real e2e lane ran
 
@@ -311,10 +315,9 @@ it maps every "see also the **X** skill" pointer here to the bundle that ships i
   Two workflows emit that context: the heavy `e2e-tests.yml` and the
   instant-green `e2e-stub.yml`, whose positive `paths:` byte-mirrors the real
   caller's `paths-ignore:`, so a mixed PR fires **both**. Branch protection keys
-  on the context NAME, not on which workflow produced it — PR #1711 (merged
-  2026-05-26 20:52, older multi-context topology) merged on stub greens while the
-  real e2e was still running and went red three minutes later. Not re-reproduced
-  under today's single-context topology; no fix has shipped either.
+  on the context NAME, not on which workflow produced it, so the stub can
+  satisfy the context before the real run's check-run exists (the merge this
+  once let through, PR #1711, is recorded in `docs/CI-INVARIANTS.md`).
 - **So: when a mixed PR merges, watch the real run to completion**
   (`gh run watch <run-id>`) and fix forward on `main` if it goes red — don't walk
   away on the merge notification. → `docs/CI-INVARIANTS.md` § "A green

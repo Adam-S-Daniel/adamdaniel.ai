@@ -1,16 +1,25 @@
 name: Platform bump
 on:
-  schedule:
-    - cron: "0 7 * * 1"
   workflow_dispatch:
+    inputs:
+      # Empty: the normal bump to the latest release. A full platform commit SHA:
+      # open or re-pin the DRAFT release-candidate PR for it instead (dispatched
+      # by cms-platform's release-candidates.yml; see its docs/CONTRIBUTING.md).
+      candidate_sha:
+        description: 'Release candidate only: full 40-character cms-platform commit SHA to pin a draft candidate PR to. Leave empty for the normal bump.'
+        type: string
+        required: false
+        default: ''
 permissions:
   contents: write
   pull-requests: write
 jobs:
   bump:
-    uses: Adam-S-Daniel/cms-platform/.github/workflows/platform-bump.yml@v0.1.118
+    uses: Adam-S-Daniel/cms-platform/.github/workflows/platform-bump.yml@v0.1.170
+    with:
+      candidate_sha: ${{ inputs.candidate_sha }}
     secrets:
-      # The push credential, and the ONLY one since v0.1.118: the CMS automation
+      # The push credential, and the ONLY one since v0.1.103: the CMS automation
       # App's private key. With vars.CMS_AUTOMATION_APP_ID (set on this repo) the
       # reusable mints a ~1h installation token per run with workflows:write, so
       # there is nothing to rotate. The CMS_PLATFORM_PAT fallback is gone — this

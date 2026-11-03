@@ -66,10 +66,41 @@
 # A developer's own global instructions are theirs; everything outside the
 # markers is preserved. Normal mode orders deliveries by the payload's last
 # commit time (or its mtime when dirty) so an older checkout cannot replace a
-# newer version. The `fleet-guidance-delivered` marker records that integer
-# epoch beside the version in normal-mode blocks. A tie favors this checkout;
-# the same hash only refreshes an older stamp. Replacements are atomic and
-# follow destination symlinks.
+# newer version. A caller whose payload has no checkout passes the time of the
+# commit the payload was taken from (a plugin passes the committer time of the
+# `main` commit it downloaded base.md from) as FLEET_GUIDANCE_PAYLOAD_STAMP
+# (decimal epoch seconds) beside FLEET_GUIDANCE_PAYLOAD. A value that is not
+# decimal, has more than 10 digits, or is more than a day in the future is
+# ignored, and so is the stamp when --workspace picked another payload. The
+# `fleet-guidance-delivered` marker records that integer epoch beside the
+# version in normal-mode blocks. A tie favors this checkout; the same hash only
+# refreshes an older stamp. Replacements are atomic and follow destination
+# symlinks.
+#
+# CHECK VALUE
+# -----------
+# Every block this hook writes ends with one plain-text line just before the
+# END marker:
+#   fleet-guidance check value: <8 hex>
+# It lets a session's report of what loaded be checked. The repo stub
+# (agents-md/stub.md) asks the session to quote the value in its first reply,
+# and the guidance-load Stop hook (guidance-load-record.sh) compares that quote
+# with the value in the memory file the session actually loaded.
+#
+# Why plain text: Claude Code strips HTML comments from memory files before the
+# model sees them, so a comment such as the version id could not be quoted.
+#
+# Why the LAST 8 hex of the payload's sha256: the value rotates with every
+# payload change and needs no edit of base.md (the version id, and so the
+# verdict, is the FIRST 8 hex, which the hook prints whether or not memory
+# loaded; these are never printed). It exists only in the block this hook
+# writes. base.md and every repo copy of it lack it, so a session that only
+# read base.md by hand cannot quote it. Nothing on stdout, in the workspace line
+# or in the delivery receipt carries it. With no working digest tool the
+# version is `unknown` and no line is written. An installed block of the same
+# version that lacks the line is rewritten with it, keeping the higher of the
+# two delivery stamps. --codex-cloud mode writes the same line from the same
+# payload bytes.
 #
 # CODEX CLOUD MODE
 # ----------------
@@ -105,14 +136,269 @@
 # the one that failed.
 set -uo pipefail
 
+# Observation is optional and never participates in delivery decisions. The
+# embedded helper ships with this hook; sync needs no additional artifact.
+: <<'FLEET_RECEIPT_PY'
+import errno
+import hashlib
+import json
+import os
+import stat
+import sys
+import time
+
+RECEIPT_LIMIT = 1048576
+
+
+def receipt_source(path, begin, end, directory_fd=None):
+    # Read only a validated delivered file; hash its unique managed block.
+    options = {} if directory_fd is None else {"dir_fd": directory_fd}
+    info = os.stat(path, follow_symlinks=False, **options)
+    if not stat.S_ISREG(info.st_mode):
+        raise OSError("unsafe receipt source")
+    fd = os.open(path, os.O_RDONLY | os.O_NOFOLLOW | os.O_NONBLOCK, **options)
+    try:
+        info = os.fstat(fd)
+        if (not stat.S_ISREG(info.st_mode) or info.st_nlink != 1 or
+                info.st_uid != os.geteuid() or info.st_size > 4194304):
+            raise OSError("unsafe receipt source")
+        remaining = info.st_size
+        pieces = []
+        while remaining:
+            piece = os.read(fd, min(remaining, 65536))
+            if not piece:
+                raise OSError("short receipt source")
+            pieces.append(piece)
+            remaining -= len(piece)
+        raw = b"".join(pieces)
+    finally:
+        os.close(fd)
+    offset = 0
+    start = stop = None
+    for line in raw.splitlines(keepends=True):
+        if line.rstrip(b"\r\n") == begin.encode():
+            if start is not None:
+                raise ValueError("ambiguous receipt block")
+            start = offset
+        if line.rstrip(b"\r\n") == end.encode():
+            if start is None or stop is not None:
+                raise ValueError("ambiguous receipt block")
+            stop = offset + len(line)
+        offset += len(line)
+    if start is None or stop is None:
+        raise ValueError("missing receipt block")
+    block = raw[start:stop]
+    return hashlib.sha256(block).hexdigest(), len(block)
+
+
+class ReceiptUnsupported(Exception):
+    pass
+
+
+def receipt_capabilities():
+    required = ("O_DIRECTORY", "O_NOFOLLOW", "O_NONBLOCK", "geteuid", "fpathconf")
+    # Check platform support by name: syscall fault injectors may wrap os.open.
+    supported = {function.__name__ for function in getattr(os, "supports_dir_fd", ())}
+    if any(not hasattr(os, name) for name in required) or not {"open", "stat"} <= supported:
+        raise ReceiptUnsupported()
+    if not any(function.__name__ == "stat" for function in
+               getattr(os, "supports_follow_symlinks", ())):
+        raise ReceiptUnsupported()
+
+
+def receipt_platform(call, *args, **kwargs):
+    # Unsupported descriptor primitives silently skip best-effort observation.
+    try:
+        return call(*args, **kwargs)
+    except NotImplementedError:
+        raise ReceiptUnsupported() from None
+
+
+def receipt_directory(directory):
+    receipt_capabilities()
+    descriptors = []
+    try:
+        flags = os.O_RDONLY | os.O_DIRECTORY | os.O_NOFOLLOW | os.O_NONBLOCK
+        path = directory if os.path.isabs(directory) else os.path.join(os.getcwd(), directory)
+        parent = receipt_platform(os.open, "/", flags)
+        descriptors.append(parent)
+        for component in path.split("/")[1:]:
+            if component in ("", "."):
+                continue
+            if component == "..":
+                raise OSError("unsafe receipt directory")
+            try:
+                parent = receipt_platform(os.open, component, flags, dir_fd=parent)
+            except OSError as exc:
+                if exc.errno in (errno.ELOOP, errno.ENOTDIR) and stat.S_ISLNK(
+                        receipt_platform(os.stat, component, dir_fd=parent, follow_symlinks=False).st_mode):
+                    raise ReceiptUnsupported() from None
+                raise
+            descriptors.append(parent)
+        receipt_platform(os.fpathconf, parent, "PC_PIPE_BUF")
+        return descriptors
+    except BaseException:
+        for fd in reversed(descriptors):
+            os.close(fd)
+        raise
+
+
+def receipt_write(directory, mode, deliveries):
+    # Validate support and every parent BEFORE optional clock or digest work.
+    descriptors = receipt_directory(directory)
+    try:
+        record = {"ts": int(time.time()), "hook": "fleet-memory",
+                  "load_reason": "delivery", "mode": mode, "deliveries": deliveries}
+        line = (json.dumps(record, separators=(",", ":")) + "\n").encode()
+        parent = descriptors[-1]
+        try:
+            target = receipt_platform(os.stat, "fleet-delivery.jsonl", dir_fd=parent,
+                                      follow_symlinks=False)
+        except FileNotFoundError:
+            pass
+        else:
+            if not stat.S_ISREG(target.st_mode):
+                raise OSError("unsafe receipt")
+        fd = receipt_platform(os.open, "fleet-delivery.jsonl", os.O_WRONLY | os.O_APPEND |
+                     os.O_CREAT | os.O_NOFOLLOW | os.O_NONBLOCK, 0o600, dir_fd=parent)
+        descriptors.append(fd)
+        info = os.fstat(fd)
+        if not stat.S_ISREG(info.st_mode) or info.st_nlink != 1 or info.st_uid != os.geteuid():
+            raise OSError("unsafe receipt")
+        if info.st_size >= RECEIPT_LIMIT:
+            return
+        if len(line) >= min(4096, receipt_platform(os.fpathconf, fd, "PC_PIPE_BUF")):
+            raise OSError("oversized receipt")
+        # One append syscall, no retries, read/modify/write, locks, or rotation.
+        if os.write(fd, line) != len(line):
+            raise OSError("short receipt write")
+    finally:
+        for fd in reversed(descriptors):
+            os.close(fd)
+
+
+def receipt_delivery(label, outcome, digest=None, count=0):
+    return {"file_path": label, "memory_type": "User", "outcome": outcome,
+            "sha256": digest, "bytes": count}
+
+
+def receipt_worker(directory, mode, begin, end, *args):
+    try:
+        # Reject unsupported receipt paths before any optional digest work.
+        descriptors = receipt_directory(directory)
+        for fd in reversed(descriptors):
+            os.close(fd)
+        if mode not in ("hook", "workspace", "codex-cloud"):
+            raise ValueError("invalid receipt mode")
+        if len(args) not in (5, 10) or sum(len(os.fsencode(arg)) + 1 for arg in args) >= 4096:
+            raise ValueError("invalid receipt metadata")
+        deliveries = []
+        for i in range(0, len(args), 5):
+            label, outcome, source, digest, count = args[i:i + 5]
+            if label not in ("none", "claude/CLAUDE.md", "codex/AGENTS.md", "codex/AGENTS.override.md"):
+                raise ValueError("invalid receipt label")
+            if outcome not in ("written", "installed", "current", "kept", "skipped", "degraded"):
+                raise ValueError("invalid receipt outcome")
+            count = int(count)
+            if source:
+                source_descriptors = receipt_directory(os.path.dirname(source))
+                try:
+                    digest, count = receipt_source(os.path.basename(source), begin, end,
+                                                   source_descriptors[-1])
+                finally:
+                    for fd in reversed(source_descriptors):
+                        os.close(fd)
+            if digest and (len(digest) != 64 or any(c not in "0123456789abcdef" for c in digest)):
+                raise ValueError("invalid receipt digest")
+            if count < 0 or count > 4194304 or bool(digest) != bool(count):
+                raise ValueError("invalid receipt bytes")
+            deliveries.append(receipt_delivery(label, outcome, digest or None, count))
+        receipt_write(directory, mode, deliveries)
+    except Exception:
+        # Observation is detached, silent, and never controls delivery.
+        pass
+
+
+if __name__ == "__main__":
+    receipt_worker(*sys.argv[1:])
+FLEET_RECEIPT_PY
+RECEIPT_MODE=hook
+RECEIPT_ARGS=()
+RECEIPT_BROKEN=0
+RECEIPT_SOURCE=""
+# shellcheck disable=SC2317  # invoked by EXIT traps, including early failures
+receipt_flush() {
+    [ "${FLEET_GUIDANCE_RECEIPT:-1}" != 0 ] || return 0
+    if [ "$RECEIPT_BROKEN" -ne 0 ]; then RECEIPT_ARGS=(none degraded "" invalid 0)
+    elif [ "${#RECEIPT_ARGS[@]}" -eq 0 ]; then RECEIPT_ARGS=(none degraded "" "" 0); fi
+    local receipt_directory="${CLAUDE_CONFIG_DIR:-${HOME:-}/.claude}"
+    [ "$RECEIPT_MODE" != codex-cloud ] || receipt_directory="$CODEX_DEST_DIR"
+    # Bash 3.2 and Git Bash support this detached launch. Every stream is closed
+    # so the writer cannot retain caller output pipes or read hook events.
+    # -S defers sitecustomize until after the alarm is armed. Restoring normal
+    # site startup keeps the interpreter environment unchanged for observation.
+    (python3 -S -c '
+import _signal as signal
+try:
+    signal.signal(signal.SIGALRM, signal.SIG_DFL)
+    signal.alarm(5)
+except (AttributeError, OSError, ValueError):
+    # Platforms without a usable POSIX alarm skip optional observation.
+    raise SystemExit(0)
+try:
+    # An inherited block would defer the deadline. A Python without masks
+    # still keeps the armed alarm and writes the receipt.
+    signal.pthread_sigmask(signal.SIG_UNBLOCK, {signal.SIGALRM})
+except (AttributeError, OSError, ValueError):
+    pass
+import site
+site.main()
+import os, stat, sys
+try:
+    info = os.stat(sys.argv[1], follow_symlinks=False)
+    if not stat.S_ISREG(info.st_mode):
+        raise OSError("unsafe receipt helper")
+    fd = os.open(sys.argv[1], os.O_RDONLY | os.O_NOFOLLOW | os.O_NONBLOCK)
+    try:
+        info = os.fstat(fd)
+        # A foreign-owned helper cannot supply trusted receipt logic. Refuse
+        # silently: every writer stream is closed to preserve the hook verdict.
+        if not stat.S_ISREG(info.st_mode) or info.st_nlink != 1 or info.st_uid != os.geteuid() or info.st_size > 4194304:
+            raise OSError("unsafe receipt helper")
+        remaining, pieces = info.st_size, []
+        while remaining:
+            piece = os.read(fd, min(remaining, 65536))
+            if not piece:
+                raise OSError("short receipt helper")
+            pieces.append(piece)
+            remaining -= len(piece)
+        source = b"".join(pieces).decode("utf-8")
+    finally:
+        os.close(fd)
+    marker = ": <<" + chr(39) + "FLEET_RECEIPT_PY" + chr(39) + "\n"
+    helper = source.split(marker, 1)[1].split("\nFLEET_RECEIPT_PY\n", 1)[0]
+    namespace = {"__name__": "receipt"}
+    exec(helper, namespace)
+    namespace["receipt_worker"](*sys.argv[2:])
+except Exception:
+    pass
+' "${BASH_SOURCE[0]}" "$receipt_directory" "$RECEIPT_MODE" \
+        "${BEGIN_MARK:-}" "${END_MARK:-}" \
+        "${RECEIPT_ARGS[@]}" </dev/null >/dev/null 2>&1 &) 2>/dev/null || :
+    return 0
+}
+trap receipt_flush EXIT
+
 CODEX_CLOUD=0
 WORKSPACE_DIR=""
 if [ "$#" -eq 0 ]; then
     :
 elif [ "$#" -eq 1 ] && [ "$1" = --codex-cloud ]; then
     CODEX_CLOUD=1
+    RECEIPT_MODE=codex-cloud
 elif [ "$#" -eq 2 ] && [ "$1" = --workspace ] && [ -d "$2" ]; then
     WORKSPACE_DIR="$2"
+    RECEIPT_MODE=workspace
 else
     echo "fleet-guidance: DEGRADED — unknown argument or nonexistent workspace directory; expected no arguments, --codex-cloud, or --workspace <dir>"
     exit 2
@@ -153,7 +439,7 @@ if [ -n "$WORKSPACE_DIR" ]; then
 fi
 # shellcheck disable=SC2317  # reached through both EXIT traps below
 workspace_notice() { [ -z "$WORKSPACE_LINE" ] || printf '%s\n' "$WORKSPACE_LINE"; }
-trap workspace_notice EXIT
+trap 'workspace_notice; receipt_flush' EXIT
 
 BEGIN_MARK='<!-- BEGIN FLEET GUIDANCE (managed by _agent-guidance) — DO NOT EDIT -->'
 END_MARK='<!-- END FLEET GUIDANCE -->'
@@ -164,6 +450,14 @@ END_MARK='<!-- END FLEET GUIDANCE -->'
 HOOK_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" 2>/dev/null && pwd)" || HOOK_DIR=""
 PAYLOAD="${FLEET_GUIDANCE_PAYLOAD:-$HOOK_DIR/fleet-guidance.md}"
 CODEX_DEST_DIR="${CODEX_HOME:-$HOME/.codex}"
+
+# base.md opens with a repo-file header ("# AGENTS.md", then "Edit only below
+# the `## Repo-specific additions` header"). It is true in a full-mode repo
+# AGENTS.md, which base.md also builds, and false in user memory, which has no
+# such heading. Delivery drops exactly this prefix, trailing blank line
+# included; a payload that does not start with it is delivered verbatim. The
+# version id and byte count still describe the payload file itself.
+PAYLOAD_REPO_HEADER=$'# AGENTS.md\n\n> **Managed by [`_agent-guidance`].**\n> Edit only below the `## Repo-specific additions` header.\n> Everything above it will be overwritten on the next sync.\n\n'
 
 # The payload's bytes are an exact copy of agents-md/base.md, so an ordering
 # key cannot live inside them. Its last commit tells when this checkout
@@ -178,6 +472,9 @@ normalize_stamp() {
         NORMAL_STAMP="${NORMAL_STAMP:1}"
     done
 }
+# A payload with no checkout stamps zero here; the caller can supply the time of
+# the commit the payload was taken from as FLEET_GUIDANCE_PAYLOAD_STAMP (see
+# the normal-path use below).
 payload_stamp() {
     local source="$1" source_dir source_name git_worktree status stamp=0
     source_dir="$(dirname "$source")"
@@ -230,13 +527,17 @@ esac
 if [ "$CODEX_CLOUD" -eq 1 ]; then
     cloud_result="$(python3 - \
         "$CODEX_DEST_DIR" "$PAYLOAD" "$BEGIN_MARK" "$END_MARK" \
-        "$FLEET_GUIDANCE_SKIP_ENABLED" 2>/dev/null <<'PY'
+        "$FLEET_GUIDANCE_SKIP_ENABLED" "$PAYLOAD_REPO_HEADER" 2>/dev/null <<'PY'
 import hashlib
 import os
 import pathlib
 import stat
 import sys
 import tempfile
+
+receipt_outcome = "degraded"
+receipt_block = None
+receipt_label = "none"
 
 
 class Refusal(Exception):
@@ -283,6 +584,7 @@ try:
     begin = sys.argv[3].encode()
     end = sys.argv[4].encode()
     skip = sys.argv[5] == "1"
+    repo_header = sys.argv[6].encode()
 
     payload = b""
     if not skip:
@@ -312,6 +614,7 @@ try:
     else:
         target = agents
     label = "~/.codex/AGENTS.override.md" if target == override else "~/.codex/AGENTS.md"
+    receipt_label = "codex/AGENTS.override.md" if target == override else "codex/AGENTS.md"
 
     original = b""
     original_mode = None
@@ -332,8 +635,14 @@ try:
         )
         verdict = f"fleet-guidance: skipped (FLEET_GUIDANCE_SKIP set) — persisted in {label}"
     else:
-        version = hashlib.sha256(payload).hexdigest()[:8]
-        payload_body = payload if payload.endswith(b"\n") else payload + b"\n"
+        digest = hashlib.sha256(payload).hexdigest()
+        version = digest[:8]
+        # The check value: the LAST 8 hex of the digest, as the normal path
+        # computes it (see CHECK VALUE above). The block is always rebuilt
+        # whole and compared below, so one that lacks the line is rewritten.
+        check = digest[56:]
+        payload_body = payload[len(repo_header):] if payload.startswith(repo_header) else payload
+        payload_body = payload_body if payload_body.endswith(b"\n") else payload_body + b"\n"
         persisted = (
             f"fleet-guidance: installed (v{version}, {len(payload)} bytes) "
             "— Codex Cloud setup and maintenance"
@@ -343,6 +652,7 @@ try:
             + persisted
             + b"\n"
             + payload_body
+            + f"fleet-guidance check value: {check}\n".encode()
         )
     block = begin + b"\n" + body + end + b"\n"
 
@@ -374,6 +684,9 @@ try:
                 except OSError:
                     pass
 
+    receipt_outcome = "skipped" if skip else "installed" if changed else "current"
+    if changed and not skip:
+        receipt_block = block
     if skip:
         print(verdict)
     elif changed:
@@ -386,9 +699,27 @@ except Refusal as exc:
 except Exception:
     print("fleet-guidance: DEGRADED — unexpected Cloud setup failure")
     raise SystemExit(1)
+finally:
+    if os.environ.get("FLEET_GUIDANCE_RECEIPT", "1") != "0":
+        try:
+            digest = hashlib.sha256(receipt_block).hexdigest() if receipt_block is not None else ""
+            count = len(receipt_block) if receipt_block is not None else 0
+            # Private metadata is stripped before any verdict reaches stdout.
+            print("fleet-receipt-meta:" + "|".join((receipt_label, receipt_outcome, digest, str(count))))
+        except Exception:
+            print("fleet-receipt-meta:broken")
 PY
 )"
     cloud_status=$?
+    if [[ "$cloud_result" == *$'\n'fleet-receipt-meta:* ]]; then
+        cloud_meta="${cloud_result##*$'\n'fleet-receipt-meta:}"
+        cloud_result="${cloud_result%$'\n'fleet-receipt-meta:*}"
+        if [ "$cloud_meta" = broken ]; then RECEIPT_BROKEN=1
+        else
+            IFS='|' read -r receipt_label receipt_outcome receipt_digest receipt_bytes <<< "$cloud_meta"
+            RECEIPT_ARGS=("$receipt_label" "$receipt_outcome" "" "$receipt_digest" "$receipt_bytes")
+        fi
+    fi
     if [ -z "$cloud_result" ]; then
         cloud_result="fleet-guidance: DEGRADED — Python 3 is unavailable for Codex Cloud setup"
         cloud_status=1
@@ -459,6 +790,7 @@ TMP_FILES=()
 # shellcheck disable=SC2317  # reached through the EXIT trap below, not by a call
 cleanup_tmp() {
     workspace_notice
+    receipt_flush
     [ "${#TMP_FILES[@]}" -eq 0 ] && return 0
     local t
     for t in "${TMP_FILES[@]}"; do rm -f "$t"; done
@@ -622,6 +954,8 @@ case "$FLEET_GUIDANCE_SKIP_ENABLED" in
         else
             echo "fleet-guidance: skipped (FLEET_GUIDANCE_SKIP set)"
         fi
+        RECEIPT_ARGS=(none skipped "" "" 0)
+        [ -z "$FAILURES" ] || RECEIPT_ARGS=(none degraded "" "" 0)
         exit 0
         ;;
 esac
@@ -632,30 +966,101 @@ esac
 
 # Short content id, so the verdict names WHICH guidance landed. Any of these
 # three digest tools may be absent; a missing one is cosmetic, never fatal.
-version="$( { sha256sum "$PAYLOAD" 2>/dev/null || shasum -a 256 "$PAYLOAD" 2>/dev/null || openssl dgst -sha256 "$PAYLOAD" 2>/dev/null; } \
-            | tr ' ' '\n' | grep -oE '^[0-9a-f]{64}$' | head -1 )"
-version="${version:0:8}"
+# The full digest is kept: `version` is its first 8 hex and `check` (see CHECK
+# VALUE in the header) its last 8. Without a digest both are empty, `version`
+# reads `unknown`, and no check line is written.
+digest="$( { sha256sum "$PAYLOAD" 2>/dev/null || shasum -a 256 "$PAYLOAD" 2>/dev/null || openssl dgst -sha256 "$PAYLOAD" 2>/dev/null; } \
+           | tr ' ' '\n' | grep -oE '^[0-9a-f]{64}$' | head -1 )"
+version="${digest:0:8}"
+check="${digest:56:8}"
 [ -n "$version" ] || version="unknown"
+CHECK_PREFIX='fleet-guidance check value: '
 
 bytes="$(wc -c < "$PAYLOAD" 2>/dev/null | tr -d ' ')"
 
+# Write the payload without PAYLOAD_REPO_HEADER (see its definition). LC_ALL=C
+# makes the length a byte count, which head -c and tail -c expect.
+emit_payload() {
+    local n
+    n="$(LC_ALL=C; printf '%s' "${#PAYLOAD_REPO_HEADER}")"
+    if [ "$(head -c "$n" "$PAYLOAD"; printf x)" = "${PAYLOAD_REPO_HEADER}x" ]; then
+        tail -c "+$((n + 1))" "$PAYLOAD"
+    else
+        cat "$PAYLOAD"
+    fi
+}
+
+# The check line (see CHECK VALUE in the header), written straight after the
+# payload. A payload that does not end in a newline gets one first, so the line
+# stands alone; the ending is read with an appended x that command substitution
+# cannot strip, and with cat alone, a tool the hook needs anyway. No check, no
+# line.
+emit_check_line() {
+    local tail_probe
+    [ -n "$check" ] || return 0
+    tail_probe="$(cat "$PAYLOAD"; printf x)"
+    case "$tail_probe" in
+        *$'\n'x) ;;
+        *) printf '\n' || return 1 ;;
+    esac
+    printf '%s%s\n' "$CHECK_PREFIX" "$check"
+}
+
 # See docs/decisions/0016-the-freshest-delivery-wins-the-shared-global-block.md.
-payload_stamp "$PAYLOAD"
-delivered="$PAYLOAD_STAMP"
+# A caller whose payload has no checkout supplies the time of the commit the
+# payload was taken from. The stamp describes the caller's file, so it applies
+# only when that file is the payload in use (--workspace did not pick a child),
+# only when it is all ASCII digits, and only when it is plausible: the installed
+# stamp never decreases, so one implausible value (a millisecond epoch, a
+# YYYYMMDDhhmmss date) would keep every later delivery out. Epoch seconds are
+# 10 digits, and a stamp later than now + 86400 is not a commit time. A rejected
+# value, or a clock that cannot be read, behaves exactly as an unset stamp.
+caller_stamp="${FLEET_GUIDANCE_PAYLOAD_STAMP:-}"
+case "$caller_stamp" in ""|*[!0-9]*) caller_stamp="" ;; esac
+if [ -n "$caller_stamp" ] && [ -n "${FLEET_GUIDANCE_PAYLOAD:-}" ] &&
+    [ "$PAYLOAD" = "${FLEET_GUIDANCE_PAYLOAD:-}" ]; then
+    normalize_stamp "$caller_stamp"
+    caller_stamp="$NORMAL_STAMP"
+    stamp_now="$(date +%s 2>/dev/null)" || stamp_now=""
+    case "$stamp_now" in ""|*[!0-9]*) stamp_now="" ;; esac
+    # Both sides are at most 10 digits before any arithmetic, so it cannot
+    # overflow, and 10# keeps a padded clock value from reading as octal.
+    if [ "${#caller_stamp}" -gt 10 ] || [ -z "$stamp_now" ] ||
+        [ "${#stamp_now}" -gt 10 ] ||
+        stamp_gt "$caller_stamp" "$((10#$stamp_now + 86400))"; then
+        caller_stamp=""
+    fi
+else
+    caller_stamp=""
+fi
+if [ -n "$caller_stamp" ]; then
+    delivered="$caller_stamp"
+else
+    payload_stamp "$PAYLOAD"
+    delivered="$PAYLOAD_STAMP"
+fi
 
 # Read metadata from inside the managed block only. A developer's own prose
-# may mention either marker text without being delivery metadata.
+# may mention either marker text without being delivery metadata. The third
+# line awk prints is 1 when the block holds the exact check line for this
+# payload (see CHECK VALUE in the header), else 0; with no check to write, there
+# is no line to miss.
 read_installed_metadata() {
-    local dest="$1" raw
-    raw="$(awk -v b="$BEGIN_MARK" -v e="$END_MARK" '
+    local dest="$1" raw rest
+    raw="$(awk -v b="$BEGIN_MARK" -v e="$END_MARK" -v c="${check:+$CHECK_PREFIX$check}" '
         $0 == b { inside=1; next }
         $0 == e { inside=0 }
         inside && /^<!-- fleet-guidance-version: / && !v { v=$0 }
         inside && /^<!-- fleet-guidance-delivered: / && !d { d=$0 }
-        END { print v; print d }
+        inside && c != "" && $0 == c { k=1 }
+        END { print v; print d; print (k ? 1 : 0) }
     ' "$dest" 2>/dev/null)" || raw=""
     existing_version="${raw%%$'\n'*}"
-    existing_delivered="${raw#*$'\n'}"
+    rest="${raw#*$'\n'}"
+    existing_delivered="${rest%%$'\n'*}"
+    existing_check_present=0
+    [ "${rest#*$'\n'}" != 1 ] || existing_check_present=1
+    [ -n "$check" ] || existing_check_present=1
     if [[ "$existing_version" == '<!-- fleet-guidance-version: '*" -->" ]]; then
         existing_version="${existing_version#<!-- fleet-guidance-version: }"
         existing_version="${existing_version% -->}"
@@ -698,8 +1103,9 @@ update_stamp_only() {
 # the reason and returns non-zero, having
 # changed nothing at that destination.
 install_to() {
-    local dest="$1" label="$2" tmp dir target
+    local dest="$1" label="$2" tmp dir target block_stamp="$delivered"
     INSTALL_STATE=""
+    RECEIPT_SOURCE=""
 
     # The parent directory: created for Claude Code exactly as it always was,
     # and a no-op for Codex, whose directory had to exist for this destination
@@ -729,7 +1135,7 @@ install_to() {
             return 1
         fi
         read_installed_metadata "$target"
-        if [ "$existing_version" = "$version" ]; then
+        if [ "$existing_version" = "$version" ] && [ "$existing_check_present" -eq 1 ]; then
             if ! stamp_gt "$delivered" "$existing_delivered"; then
                 INSTALL_STATE="current"
                 return 0
@@ -743,12 +1149,19 @@ install_to() {
             fi
             if replace_file "$tmp" "$target"; then
                 INSTALL_STATE="current"
+                RECEIPT_SOURCE="$target"
                 return 0
             fi
             record_failure "could not write $dest"
             return 1
-        fi
-        if ! stamp_ge "$delivered" "$existing_delivered"; then
+        elif [ "$existing_version" = "$version" ]; then
+            # Same content, but the block lacks this payload's check line (a
+            # hook without the line wrote it). Rewrite it whole, and never lower
+            # the ordering key: the higher of the two stamps is recorded.
+            if stamp_gt "$existing_delivered" "$delivered"; then
+                block_stamp="$existing_delivered"
+            fi
+        elif ! stamp_ge "$delivered" "$existing_delivered"; then
             INSTALL_STATE="kept"
             KEPT="${KEPT:+$KEPT, }v${existing_version:-unknown} at $label"
             return 0
@@ -768,8 +1181,9 @@ install_to() {
     {
         printf '%s\n' "$BEGIN_MARK" &&
         printf '<!-- fleet-guidance-version: %s -->\n' "$version" &&
-        printf '<!-- fleet-guidance-delivered: %s -->\n' "$delivered" &&
-        cat "$PAYLOAD" &&
+        printf '<!-- fleet-guidance-delivered: %s -->\n' "$block_stamp" &&
+        emit_payload &&
+        emit_check_line &&
         printf '%s\n' "$END_MARK"
     } >> "$tmp" 2>/dev/null || {
         record_failure "could not assemble the guidance block for $dest"
@@ -783,6 +1197,7 @@ install_to() {
 
     if replace_file "$tmp" "$target"; then
         INSTALL_STATE="written"
+        RECEIPT_SOURCE="$target"
         return 0
     fi
 
@@ -795,7 +1210,12 @@ KEPT=""
 local_labels=""
 for i in "${!DEST_PATHS[@]}"; do
     dest="${DEST_PATHS[$i]}"; label="${DEST_LABELS[$i]}"
-    install_to "$dest" "$label" || continue
+    receipt_label="${label#\~/\.}"
+    if ! install_to "$dest" "$label"; then
+        RECEIPT_ARGS+=("$receipt_label" degraded "" "" 0)
+        continue
+    fi
+    RECEIPT_ARGS+=("$receipt_label" "$INSTALL_STATE" "$RECEIPT_SOURCE" "" 0)
     case "$INSTALL_STATE" in
         written)
             wrote=$((wrote + 1))
