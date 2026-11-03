@@ -1,0 +1,22 @@
+{%- comment -%}
+  Site-owned icon links; shadows the cms-platform theme's include of the same
+  name, so the theme's default layout (which already `{% include favicon.html %}`)
+  picks up the full set without being edited.
+
+  Same contract as the theme's include: `cms.favicon_url` in _config.yml, when
+  set, is honored verbatim as the one icon (no `type` hint: it may be a .ico or
+  .png, and a wrong hint is worse than none); otherwise the site's own icons
+  are linked. Unlike the theme's, the default is the full set: the SVG, plus
+  favicon.ico for browsers that ignore SVG icons (and the automatic
+  /favicon.ico probe). The Apple touch icon iOS looks for when a visitor adds
+  the site to the Home Screen is linked either way. All are rendered from
+  assets/favicon.svg by scripts/render-icons.mjs; scripts/test-favicon-include.rb
+  holds this branching.
+{%- endcomment -%}
+{%- if site.cms.favicon_url -%}
+<link rel="icon" href="{{ site.cms.favicon_url }}">
+{%- else -%}
+<link rel="icon" href="{{ '/favicon.ico' | relative_url }}" sizes="32x32">
+<link rel="icon" type="image/svg+xml" href="{{ '/assets/favicon.svg' | relative_url }}">
+{%- endif %}
+<link rel="apple-touch-icon" href="{{ '/apple-touch-icon.png' | relative_url }}">

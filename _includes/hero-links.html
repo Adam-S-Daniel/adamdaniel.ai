@@ -1,0 +1,40 @@
+{%- comment -%}
+  Homepage hero link rail, as picked in docs/design/links-playground.html
+  (variant 1 "Divided rail"): every way to read the posts, a divider, then
+  LinkedIn on its own. Profile URLs come from cross_post.profiles in
+  _config.yml; a missing one drops its link. HN renders only once
+  hero.hacker_news_id is set. Tests: scripts/test-hero-links-include.rb.
+{%- endcomment -%}
+{%- assign profiles = site.cross_post.profiles -%}
+{%- assign hn_id = site.hero.hacker_news_id -%}
+<div class="hero-links hero-links-rail">
+  <div class="hero-links-group">
+    <a class="hero-link" href="{{ '/blog/' | relative_url }}">Blog</a>
+    <a class="hero-link" href="{{ '/feed.xml' | relative_url }}">RSS</a>
+    {%- if profiles.mastodon %}
+    <a class="hero-link" href="{{ profiles.mastodon }}" target="_blank" rel="me noopener noreferrer">Mastodon</a>
+    {%- endif %}
+    {%- if profiles.substack %}
+    <a class="hero-link" href="{{ profiles.substack }}" target="_blank" rel="noopener noreferrer">Substack</a>
+    {%- endif %}
+    {%- if hn_id and hn_id != "" %}
+    <a class="hero-link" href="https://news.ycombinator.com/submitted?id={{ hn_id }}" target="_blank" rel="noopener noreferrer" aria-label="Adam Daniel on Hacker News">HN</a>
+    {%- endif %}
+  </div>
+  {%- if profiles.linkedin %}
+  <span class="hero-links-rule" aria-hidden="true"></span>
+  <div class="hero-links-group">
+    <a class="hero-link hero-link-li" href="{{ profiles.linkedin }}" target="_blank" rel="noopener noreferrer" aria-label="Adam Daniel on LinkedIn">LinkedIn<span aria-hidden="true">↗</span></a>
+  </div>
+  {%- endif %}
+</div>
+<style>
+  .hero-links-rail { gap: 0; }
+  .hero-links-group { display: flex; flex-wrap: wrap; gap: 1rem 2rem; justify-content: center; }
+  .hero-links-rule { width: 1px; align-self: stretch; min-height: 1.1rem; background: var(--border-bright); margin: 0 2.4rem; }
+  .hero-link-li { display: inline-flex; gap: .55em; color: #9db5ff; border-bottom-color: var(--accent); animation: none; }
+  @media (max-width: 520px) {
+    .hero-links-rail { flex-direction: column; }
+    .hero-links-rule { width: 48px; height: 1px; min-height: 0; align-self: center; margin: 1.4rem 0; }
+  }
+</style>
