@@ -356,6 +356,12 @@ bad("the header override drops aria-current (#4127)",
   path = File.join(d, "_includes/header.html")
   File.write(path, File.read(path).gsub(/ aria-current="(page|true)"/, ""))
 end
+bad("the header override drops aria-current with posts sorting before /blog/index.html (#4608)",
+    %r{NAV CURRENT: the /blog/ link in the main navigation has the wrong aria-current/active state.*/blog/ has aria-current=nil}) do |d|
+  %w[aa ab ac ad].each { |slug| post(d, "2026-10-05-#{slug}.md", {}) }
+  path = File.join(d, "_includes/header.html")
+  File.write(path, File.read(path).gsub(/ aria-current="(page|true)"/, ""))
+end
 bad("the header override's `contains '/blog'` substring match lights Blog on /tags/blog-x/ (#4127)",
     %r{NAV CURRENT: the /blog/ link .*/tags/blog-x/ has aria-current="true" class="active" \(expected nil, without class "active"\)}) do |d|
   post(d, "2026-10-05-blog-tagged.md", { "tags" => "[blog-x]" })

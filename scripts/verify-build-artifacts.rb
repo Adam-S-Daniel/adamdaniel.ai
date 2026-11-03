@@ -676,8 +676,12 @@ NAV_SECTIONS.each do |section_href|
       active = link["class"].to_s.split.include?("active")
       next if got == want && active == !want.nil?
 
-      wrong << "#{path} has aria-current=#{got.inspect} class=#{link['class'].inspect} " \
-               "(expected #{want.inspect}, #{want ? 'with' : 'without'} class \"active\")"
+      # The section index goes first: it is the page the message must name, and
+      # a post slug sorting before "index" would otherwise push it past the
+      # three listed (#4608).
+      wrong.public_send(path == section_href ? :unshift : :push,
+                        "#{path} has aria-current=#{got.inspect} class=#{link['class'].inspect} " \
+                        "(expected #{want.inspect}, #{want ? 'with' : 'without'} class \"active\")")
     end
     next if seen.zero? # the owner removed this link from every page: nothing to mark
 
