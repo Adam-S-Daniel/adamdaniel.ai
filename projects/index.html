@@ -23,14 +23,14 @@ published: false  # Set to true (or delete this line) to restore the Projects in
       {% endif %}
       <div class="project-card-inner">
         {% if project.technology %}
-        <p class="project-tech">{{ project.technology }}</p>
+        <p class="project-tech">{{ project.technology | escape }}</p>
         {% endif %}
-        <h3><a href="{{ project.url | relative_url }}">{{ project.title }}</a></h3>
+        <h3><a href="{{ project.url | relative_url | escape }}">{{ project.title | escape }}</a></h3>
         {% if project.description %}
-        <p class="project-description">{{ project.description | strip_html | truncatewords: 30 }}</p>
+        <p class="project-description">{{ project.description | strip_html | truncatewords: 30 | escape }}</p>
         {% endif %}
         {% if project.url_link %}
-        <a class="project-link" href="{{ project.url_link }}" target="_blank" rel="noopener noreferrer">View Project ↗</a>
+        <a class="project-link" href="{{ project.url_link | escape }}" target="_blank" rel="noopener noreferrer">View Project ↗</a>
         {% endif %}
       </div>
     </article>

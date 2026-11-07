@@ -12,19 +12,19 @@
     <a class="hero-link" href="{{ '/blog/' | relative_url }}">Blog</a>
     <a class="hero-link" href="{{ '/feed.xml' | relative_url }}">RSS</a>
     {%- if profiles.mastodon %}
-    <a class="hero-link" href="{{ profiles.mastodon }}" target="_blank" rel="me noopener noreferrer">Mastodon</a>
+    <a class="hero-link" href="{{ profiles.mastodon | escape }}" target="_blank" rel="me noopener noreferrer">Mastodon</a>
     {%- endif %}
     {%- if profiles.substack %}
-    <a class="hero-link" href="{{ profiles.substack }}" target="_blank" rel="noopener noreferrer">Substack</a>
+    <a class="hero-link" href="{{ profiles.substack | escape }}" target="_blank" rel="noopener noreferrer">Substack</a>
     {%- endif %}
     {%- if hn_id and hn_id != "" %}
-    <a class="hero-link" href="https://news.ycombinator.com/submitted?id={{ hn_id }}" target="_blank" rel="noopener noreferrer" aria-label="Adam Daniel on Hacker News">HN</a>
+    <a class="hero-link" href="https://news.ycombinator.com/submitted?id={{ hn_id | escape }}" target="_blank" rel="noopener noreferrer" aria-label="Adam Daniel on Hacker News">HN</a>
     {%- endif %}
   </div>
   {%- if profiles.linkedin %}
   <span class="hero-links-rule" aria-hidden="true"></span>
   <div class="hero-links-group">
-    <a class="hero-link hero-link-li" href="{{ profiles.linkedin }}" target="_blank" rel="noopener noreferrer" aria-label="Adam Daniel on LinkedIn">LinkedIn<span aria-hidden="true">↗</span></a>
+    <a class="hero-link hero-link-li" href="{{ profiles.linkedin | escape }}" target="_blank" rel="noopener noreferrer" aria-label="Adam Daniel on LinkedIn">LinkedIn<span aria-hidden="true">↗</span></a>
   </div>
   {%- endif %}
 </div>

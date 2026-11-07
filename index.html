@@ -38,14 +38,14 @@ layout: default
             <time class="post-date" datetime="{{ post.date | date_to_xmlschema }}">
               {{ post.date | date: "%B %-d, %Y" }}
             </time>
-            <span class="post-reading-time">{{ reading_time }} min read</span>
+            <span class="post-reading-time">{{ reading_time | escape }} min read</span>
             {% if post.tags %}
             <div class="post-tags">
               {% include tag-pills.html tags=post.tags limit=3 indent="              " %}
             </div>
             {% endif %}
           </div>
-          <h3 class="post-title"><a href="{{ post.url | relative_url }}">{{ post.title }}</a></h3>
+          <h3 class="post-title"><a href="{{ post.url | relative_url | escape }}">{{ post.title | escape }}</a></h3>
           {% if post.excerpt %}
           <p class="post-excerpt">{{ post.excerpt }}</p>
           {% endif %}
@@ -68,7 +68,7 @@ layout: default
       </div>
       <div class="tag-cloud">
         {% for tag in all_tags %}
-        <a class="tag-pill" href="{{ tag.url | relative_url }}">{{ tag.name }}<span class="tag-cloud-count" aria-hidden="true"> · {{ tag.count }}</span></a>
+        <a class="tag-pill" href="{{ tag.url | relative_url | escape }}">{{ tag.name | escape }}<span class="tag-cloud-count" aria-hidden="true"> · {{ tag.count | escape }}</span></a>
         {% endfor %}
       </div>
       <div class="mt-3">
