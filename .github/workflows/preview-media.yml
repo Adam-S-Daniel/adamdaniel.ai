@@ -22,9 +22,9 @@ permissions:
 
 jobs:
   preview-media:
-    uses: Adam-S-Daniel/cms-platform/.github/workflows/preview-media.yml@v0.1.171
+    uses: Adam-S-Daniel/cms-platform/.github/workflows/preview-media.yml@bd3dc17fd07ba109422da4a7801767baff22c21f
     with:
       pr_number: ${{ github.event.pull_request.number }}
       base_ref: ${{ github.base_ref }}
       apex: adamdaniel.ai
-      platform_ref: v0.1.171
+      platform_ref: bd3dc17fd07ba109422da4a7801767baff22c21f

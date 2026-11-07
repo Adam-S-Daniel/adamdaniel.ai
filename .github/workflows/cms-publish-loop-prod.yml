@@ -44,9 +44,9 @@ permissions:
 
 jobs:
   prod-loop:
-    uses: Adam-S-Daniel/cms-platform/.github/workflows/cms-publish-loop-prod.yml@v0.1.171
+    uses: Adam-S-Daniel/cms-platform/.github/workflows/cms-publish-loop-prod.yml@bd3dc17fd07ba109422da4a7801767baff22c21f
     with:
       # Pin to the SAME ref as the `uses:` pin above so the harness matches.
-      platform_ref: v0.1.171
+      platform_ref: bd3dc17fd07ba109422da4a7801767baff22c21f
     secrets:
       CMS_E2E_PAT: ${{ secrets.CMS_E2E_PAT }}
