@@ -37,12 +37,13 @@ permissions:
 
 jobs:
   media-discovery:
-    uses: Adam-S-Daniel/cms-platform/.github/workflows/media-discovery.yml@v0.1.172
+    uses: Adam-S-Daniel/cms-platform/.github/workflows/media-discovery.yml@v0.1.173
     with:
-      platform_ref: v0.1.172
+      platform_ref: v0.1.173
     secrets:
-      anthropic_api_key: ${{ secrets.ANTHROPIC_API_KEY }}
+      anthropic_api_key: ${{ secrets.MEDIA_DISCOVERY_ANTHROPIC_API_KEY }}
       app_private_key: ${{ secrets.CMS_AUTOMATION_APP_PRIVATE_KEY }}
       smtp_user: ${{ secrets.MEDIA_DISCOVERY_SMTP_USER }}
       smtp_password: ${{ secrets.MEDIA_DISCOVERY_SMTP_PASSWORD }}
       mail_to: ${{ secrets.MEDIA_DISCOVERY_MAIL_TO }}
+      mail_from: ${{ secrets.MEDIA_DISCOVERY_MAIL_FROM }}
