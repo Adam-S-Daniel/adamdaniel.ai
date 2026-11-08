@@ -12,5 +12,5 @@ group :jekyll_plugins do
   # render hook + the admin/ UI as of v0.1.4). Kept in lockstep with
   # platform.lock; platform-bump.yml bumps the tag (Dependabot is set to
   # ignore this gem — see .github/dependabot.yml, cms-platform#242).
-  gem "cms-platform-theme", git: "https://github.com/Adam-S-Daniel/cms-platform", glob: "theme/*.gemspec", tag: "v0.1.172"
+  gem "cms-platform-theme", git: "https://github.com/Adam-S-Daniel/cms-platform", glob: "theme/*.gemspec", ref: "1fd78b6a14f98b8d051ddad6c750f9b20a48c9e5"
 end
