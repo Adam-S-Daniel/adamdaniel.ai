@@ -22,11 +22,11 @@ permalink: /tools/
       <span class="featured-badge">Featured</span>
       {% endif %}
       <div class="project-card-inner">
-        <h3><a href="{{ tool.url | relative_url }}">{{ tool.title }}</a></h3>
+        <h3><a href="{{ tool.url | relative_url | escape }}">{{ tool.title | escape }}</a></h3>
         {% if tool.description %}
-        <p class="project-description">{{ tool.description | strip_html | truncatewords: 30 }}</p>
+        <p class="project-description">{{ tool.description | strip_html | truncatewords: 30 | escape }}</p>
         {% endif %}
-        <a class="project-link" href="{{ tool.url | relative_url }}">Open tool &rarr;</a>
+        <a class="project-link" href="{{ tool.url | relative_url | escape }}">Open tool &rarr;</a>
       </div>
     </article>
     {% endfor %}

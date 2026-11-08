@@ -32,14 +32,14 @@ permalink: /blog/
         <time class="post-date" datetime="{{ post.date | date_to_xmlschema }}">
           {{ post.date | date: "%B %-d, %Y" }}
         </time>
-        <span class="post-reading-time">{{ reading_time }} min read</span>
+        <span class="post-reading-time">{{ reading_time | escape }} min read</span>
         {% if post.tags %}
         <div class="post-tags">
           {% include tag-pills.html tags=post.tags %}
         </div>
         {% endif %}
       </div>
-      <h2 class="post-title"><a href="{{ post.url | relative_url }}">{{ post.title }}</a></h2>
+      <h2 class="post-title"><a href="{{ post.url | relative_url | escape }}">{{ post.title | escape }}</a></h2>
       {% if post.excerpt %}
       <p class="post-excerpt">{{ post.excerpt }}</p>
       {% endif %}

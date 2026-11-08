@@ -14,7 +14,7 @@
   holds this branching.
 {%- endcomment -%}
 {%- if site.cms.favicon_url -%}
-<link rel="icon" href="{{ site.cms.favicon_url }}">
+<link rel="icon" href="{{ site.cms.favicon_url | escape }}">
 {%- else -%}
 <link rel="icon" href="{{ '/favicon.ico' | relative_url }}" sizes="32x32">
 <link rel="icon" type="image/svg+xml" href="{{ '/assets/favicon.svg' | relative_url }}">

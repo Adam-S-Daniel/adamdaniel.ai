@@ -1,0 +1,5 @@
+# Liquid outputs that print markup on purpose, for cms-platform's
+# scripts/liquid-escape-lint.rb. One per line:
+# `<path> | <markup, as the finding prints it> | <reason>`.
+blog/index.html | post.excerpt | Jekyll's rendered excerpt: HTML the post's own Markdown produced
+index.html | post.excerpt | Jekyll's rendered excerpt: HTML the post's own Markdown produced

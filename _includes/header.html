@@ -1,6 +1,6 @@
 <header class="site-header">
   <div class="container">
-    <a class="site-logo" href="{{ '/' | relative_url }}">{{ site.title }}</a>
+    <a class="site-logo" href="{{ '/' | relative_url }}">{{ site.title | escape }}</a>
     <nav class="site-nav" aria-label="Main navigation">
       {%- comment -%}
         Local override of the cms-platform-theme gem's _includes/header.html,
@@ -16,13 +16,13 @@
       {%- endcomment %}
       {%- assign _nav_href = '/blog/' -%}
       {%- assign _nav_prefix = page.url | slice: 0, _nav_href.size -%}
-      <a href="{{ _nav_href | relative_url }}"
+      <a href="{{ _nav_href | relative_url | escape }}"
          {%- if page.url == _nav_href %} class="active" aria-current="page"
          {%- elsif _nav_prefix == _nav_href %} class="active" aria-current="true"
          {%- endif %}>Blog</a>
       {%- assign _nav_href = '/tools/' -%}
       {%- assign _nav_prefix = page.url | slice: 0, _nav_href.size %}
-      <a href="{{ _nav_href | relative_url }}"
+      <a href="{{ _nav_href | relative_url | escape }}"
          {%- if page.url == _nav_href %} class="active" aria-current="page"
          {%- elsif _nav_prefix == _nav_href %} class="active" aria-current="true"
          {%- endif %}>Tools</a>
