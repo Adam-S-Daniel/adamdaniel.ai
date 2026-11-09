@@ -100,9 +100,10 @@ the PR preview environment, where the page loads as a real document.
 - New `_tools/*.md` entries render at build; no Decap UI delete spec exists for
   the collection, so the `create:`/`delete:` flags in `admin/collections.site.yml`
   are informational (both are `true` in `admin/collections.site.yml`).
-- `assets/tools/claude-memory-map/index.html` is **automation-managed**: the
-  source repo's workflows sync it (PR w/ auto-merge) and mirror source-repo PRs
-  into `tool-preview/*` draft PRs for previews. Don't hand-edit the asset or
+- A tool with a `_data/tool_sources/<slug>.yml` record (today `claude-memory-map`
+  and `skills-evals`) is **automation-managed**: the source repo's workflows
+  sync `assets/tools/<slug>/` (PR w/ auto-merge) and mirror source-repo PRs
+  into `tool-preview/*` draft PRs for previews. Don't hand-edit that asset or
   its `_data/tool_sources/` record here — see "Vendored-tool sync + previews"
   in `docs/CMS-ADMIN.md`. A tool synced this way needs the same two workflows in *its*
   repo (copy `site-{sync,preview}.yml` + `scripts/sync-to-site.sh` from

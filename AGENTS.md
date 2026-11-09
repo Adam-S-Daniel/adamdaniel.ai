@@ -191,7 +191,7 @@ Every workflow that triggers on `pull_request` or `push` must filter on its sali
 
 - **Validate workflow / composite-action YAML before committing.** Quote `description` and other string values that contain special characters, and parse the file with the [`yaml`](https://www.npmjs.com/package/yaml) library or `yamllint` before committing — never eyeball it. (Complements the parser rule under Code quality, which governs how tests/scripts *read* these files at runtime.)
 
-- **No `actions.lock` in this repo — do not add one** ([ADR 0024](https://github.com/Adam-S-Daniel/_agent-guidance/blob/main/docs/decisions/0024-actions-pin-through-lockfiles.md)). The floor rule above names the lockfile form, but cms-platform and both its consumers stay on full SHAs: actionlint and `gh actions-lock --verify` both reject the platform's local-action refs, and every workflow here calls into the platform. The `github-actions-sha-pinning` skill has the detail.
+- **No `actions.lock` in this repo — do not add one** ([ADR 0024](https://github.com/Adam-S-Daniel/_agent-guidance/blob/main/docs/decisions/0024-actions-pin-through-lockfiles.md)). The fleet guidance's "Pinning GitHub Actions" section names the lockfile form, but cms-platform and both its consumers stay on full SHAs: actionlint and `gh actions-lock --verify` both reject the platform's local-action refs, and every workflow here calls into the platform. The `github-actions-sha-pinning` skill has the detail.
 
 ## Workflows
 
@@ -215,7 +215,7 @@ When a real-prod loop spec mutates a persistent fixture in place, a required che
 
 ## CI-flakiness invariants — read before touching the prod loops / deploy waits
 
-Six lint-locked flakiness classes — future-dated fixture builds, test-fixture leakage into public listings/crawls, the queue-aware deploy-lane wait, and more — each with a standing "do NOT undo this" guard (the audit behind them, #1723, is written up in `docs/CI-INVARIANTS.md`). → read `docs/CI-INVARIANTS.md` before touching a prod loop, a deploy wait, or a public-content crawl exclusion; see also the **ci-watcher-loops** skill.
+Six lint-locked flakiness classes — future-dated fixture builds, test-fixture leakage into public listings/crawls, the queue-aware deploy-lane wait, and more — each with a standing "do NOT undo this" guard (the audit behind them is written up in `docs/CI-INVARIANTS.md`). → read `docs/CI-INVARIANTS.md` before touching a prod loop, a deploy wait, or a public-content crawl exclusion; see also the **ci-watcher-loops** skill.
 
 ## Preview environment flow
 
@@ -258,7 +258,7 @@ it maps every "see also the **X** skill" pointer here to the bundle that ships i
   caller's `paths-ignore:`, so a mixed PR fires **both**. Branch protection keys
   on the context NAME, not on which workflow produced it, so the stub can
   satisfy the context before the real run's check-run exists (the merge this
-  once let through, PR #1711, is recorded in `docs/CI-INVARIANTS.md`).
+  once let through is recorded in `docs/CI-INVARIANTS.md`).
 - **So: when a mixed PR merges, watch the real run to completion**
   (`gh run watch <run-id>`) and fix forward on `main` if it goes red — don't walk
   away on the merge notification. → `docs/CI-INVARIANTS.md` § "A green
