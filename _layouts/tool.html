@@ -10,7 +10,7 @@ layout: default
       {% endif %}
       <div class="post-meta tool-links">
         {% if page.embed_src %}
-        <a class="project-link" href="{{ page.embed_src | relative_url | escape }}" target="_blank" rel="noopener">Open full screen ↗</a>
+        <a class="project-link tool-open-full" href="{{ page.embed_src | relative_url | escape }}" target="_blank" rel="noopener">Open full screen ↗</a>
         {% endif %}
         {% if page.source_url %}
         <a class="project-link" href="{{ page.source_url | escape }}" target="_blank" rel="noopener noreferrer">Source ↗</a>
@@ -26,8 +26,9 @@ layout: default
       stage breaks out of the column and is centered on the viewport, up to 1400px (#4117).
       scripts/verify-build-artifacts.rb guards these stage and iframe declarations.
       Narrow viewports still use the app's phone layout; this fixes the desktop embed.
-      Under 700px the iframe is hidden and a prominent link opens the app full screen, so a
-      phone has one scroller instead of an iframe nested in the page (UX review 21). On wider
+      Under 700px the iframe and the small header link are hidden and one prominent link opens
+      the app full screen, so a phone has one scroller instead of an iframe nested in the page
+      (UX review 21). On wider
       screens the frame fills the viewport below the sticky header, which is 3.5rem tall at
       every width (cms-platform-theme main.css `--site-header-offset` note).
     {% endcomment %}
@@ -36,6 +37,7 @@ layout: default
       .tool-embed iframe { height: calc(100vh - 3.5rem); height: calc(100dvh - 3.5rem); min-height: 480px; }
       @media (max-width: 699.98px) {
         .tool-embed { display: none; }
+        .tool-open-full { display: none; }
         .tool-open-phone { display: block; margin: 1.5rem 0; padding: 1rem 1.25rem; text-align: center; font-size: 1.1rem; font-weight: 600; border: 1px solid var(--border); border-radius: 8px; }
       }
     </style>
