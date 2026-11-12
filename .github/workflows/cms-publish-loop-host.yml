@@ -51,9 +51,9 @@ permissions:
 
 jobs:
   host-loop:
-    uses: Adam-S-Daniel/cms-platform/.github/workflows/cms-publish-loop-host.yml@v0.1.174
+    uses: Adam-S-Daniel/cms-platform/.github/workflows/cms-publish-loop-host.yml@a480a0c13c5030c8adef059924cd654288231534
     with:
       # Pin to the SAME ref as the `uses:` pin above so the harness matches.
-      platform_ref: v0.1.174
+      platform_ref: a480a0c13c5030c8adef059924cd654288231534
     secrets:
       CMS_E2E_PAT: ${{ secrets.CMS_E2E_PAT }}
