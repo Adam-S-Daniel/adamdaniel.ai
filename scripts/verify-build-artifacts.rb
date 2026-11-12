@@ -255,6 +255,42 @@ def norm(url)
   percent_decode(url).unicode_normalize(:nfc)
 end
 
+# Flat CSS rules from a <style> block: [[media-prelude or nil, selector, {prop => value}]].
+# A small brace-aware tokenizer, so a check can ask "is this rule INSIDE that @media block"
+# instead of matching text that happens to sit nearby (comments are dropped first).
+def css_rules(text)
+  css = text.gsub(%r{/\*.*?\*/}m, "")
+  rules = []
+  media = nil
+  depth = 0
+  buf = +""
+  css.each_char do |ch|
+    case ch
+    when "{"
+      head = buf.strip
+      buf = +""
+      if head.start_with?("@media")
+        media = head
+        depth = 1
+      else
+        rules << [media, head.gsub(/\s+/, " "), nil]
+      end
+    when "}"
+      if rules.last && rules.last[2].nil?
+        decls = buf.split(";").map { |d| d.split(":", 2).map(&:strip) }.select { |d| d.size == 2 }
+        rules.last[2] = decls.to_h { |k, v| [k.downcase, v] }
+      elsif depth == 1
+        media = nil
+        depth = 0
+      end
+      buf = +""
+    else
+      buf << ch
+    end
+  end
+  rules.select { |r| r[2] }
+end
+
 ENTITY_NAMES = { "amp" => "&", "lt" => "<", "gt" => ">", "quot" => '"', "apos" => "'",
                  "nbsp" => " " }.freeze
 
@@ -841,14 +877,17 @@ model.select { |e| e[:kind] == :tools }.each do |tool|
           caps.all? { |styles| styles.values.all? { |value| value.nil? || value == "none" } }
       end
       # One scroller on a phone (UX review 21): under 700px the iframe is hidden and a
-      # prominent link opens the app full screen instead. Lexical, like the stage check.
+      # prominent link opens the app full screen instead. The style block is parsed into
+      # rules (css_rules), so the hide must sit inside the phone @media block itself.
       phone_links = dom.css("a.tool-open-phone").select do |a|
         norm(site_path(a["href"].to_s)) == norm(site_path(embed))
       end
-      style_text = dom.css("style").map(&:text).join("\n")
-      phone_hide = style_text.match?(
-        /@media[^{]*max-width:\s*699(\.98)?px[^{]*\{[^@]*\.tool-embed\s*\{[^}]*display:\s*none/m
-      )
+      rules = css_rules(dom.css("style").map(&:text).join("\n"))
+      phone_hide = rules.any? do |media, selector, decls|
+        media.to_s.match?(/max-width:\s*699(\.98)?px/) && selector == ".tool-embed" &&
+          decls["display"] == "none"
+      end &&
+        rules.none? { |media, selector, decls| media.nil? && selector == ".tool-embed" && decls["display"] == "none" }
       check("#{url} swaps the iframe for an open link under 700px",
             "TOOL PHONE: #{url} (#{rel}) needs an a.tool-open-phone linking to #{embed} " \
             "(found #{phone_links.size}) and an @media (max-width: 699.98px) rule that sets " \
@@ -858,7 +897,10 @@ model.select { |e| e[:kind] == :tools }.each do |tool|
       check("#{url} sizes the desktop frame to the viewport below the header",
             "TOOL FRAME: #{url} (#{rel}) has no `.tool-embed iframe` rule with " \
             "height: calc(100vh - ...) — see _layouts/tool.html") do
-        style_text.match?(/\.tool-embed\s+iframe\s*\{[^}]*height:\s*calc\(100d?vh\s*-/m)
+        rules.any? do |media, selector, decls|
+          media.nil? && selector == ".tool-embed iframe" &&
+            decls["height"].to_s.match?(/\Acalc\(100d?vh\s*-/)
+        end
       end
     end
     next if embed.match?(%r{\A([a-z][a-z0-9+.-]*:|//)}i) # external app: nothing to look up

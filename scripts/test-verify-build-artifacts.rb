@@ -520,6 +520,19 @@ bad("the tool layout stops hiding the iframe under 700px (UX 21)",
       path = File.join(d, "_site/tools/evals/index.html")
       File.write(path, File.read(path).gsub("max-width: 699.98px", "max-width: 99px"))
     }) { |_d| }
+bad("the tool layout hides the iframe at every width, outside the phone block (UX 21)",
+    /TOOL PHONE: \/tools\/evals\/.*found false/,
+    site: lambda { |d|
+      path = File.join(d, "_site/tools/evals/index.html")
+      File.write(path, File.read(path).sub("</style>", ".tool-embed { display: none; }\n</style>"))
+    }) { |_d| }
+bad("a comment that mentions the phone hide does not count as the rule (UX 21)",
+    /TOOL PHONE: \/tools\/evals\/.*found false/,
+    site: lambda { |d|
+      path = File.join(d, "_site/tools/evals/index.html")
+      html = File.read(path).sub(/(\.tool-embed \{ )display: none;( \})/, "\\1display: block;\\2 /* .tool-embed { display: none } */")
+      File.write(path, html)
+    }) { |_d| }
 bad("the tool layout goes back to a fixed 85vh frame (UX 21)",
     /TOOL FRAME: \/tools\/evals\//,
     site: lambda { |d|
