@@ -508,6 +508,25 @@ bad("the tool layout pins the embed stage to the content column (#4117)",
   File.write(path, stripped)
 end
 
+bad("the tool layout loses the phone open link (UX 21)",
+    /TOOL PHONE: \/tools\/claude-memory-map\/.*found 0/,
+    site: lambda { |d|
+      path = File.join(d, "_site/tools/claude-memory-map/index.html")
+      File.write(path, File.read(path).gsub("tool-open-phone", "tool-open-gone"))
+    }) { |_d| }
+bad("the tool layout stops hiding the iframe under 700px (UX 21)",
+    /TOOL PHONE: \/tools\/evals\/.*found false/,
+    site: lambda { |d|
+      path = File.join(d, "_site/tools/evals/index.html")
+      File.write(path, File.read(path).gsub("max-width: 699.98px", "max-width: 99px"))
+    }) { |_d| }
+bad("the tool layout goes back to a fixed 85vh frame (UX 21)",
+    /TOOL FRAME: \/tools\/evals\//,
+    site: lambda { |d|
+      path = File.join(d, "_site/tools/evals/index.html")
+      File.write(path, File.read(path).gsub(/height:\s*calc\(100d?vh[^;]*;/, "height: 85vh;"))
+    }) { |_d| }
+
 bad("a matching iframe detached from its embed stage (#4117)",
     /TOOL EMBED:.*does not preserve the viewport-centered embed stage/,
     site: lambda { |d|

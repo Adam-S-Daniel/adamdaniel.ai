@@ -840,6 +840,26 @@ model.select { |e| e[:kind] == :tools }.each do |tool|
           !iframe_widths.empty? && iframe_widths.all? { |width| width == "100%" } &&
           caps.all? { |styles| styles.values.all? { |value| value.nil? || value == "none" } }
       end
+      # One scroller on a phone (UX review 21): under 700px the iframe is hidden and a
+      # prominent link opens the app full screen instead. Lexical, like the stage check.
+      phone_links = dom.css("a.tool-open-phone").select do |a|
+        norm(site_path(a["href"].to_s)) == norm(site_path(embed))
+      end
+      style_text = dom.css("style").map(&:text).join("\n")
+      phone_hide = style_text.match?(
+        /@media[^{]*max-width:\s*699(\.98)?px[^{]*\{[^@]*\.tool-embed\s*\{[^}]*display:\s*none/m
+      )
+      check("#{url} swaps the iframe for an open link under 700px",
+            "TOOL PHONE: #{url} (#{rel}) needs an a.tool-open-phone linking to #{embed} " \
+            "(found #{phone_links.size}) and an @media (max-width: 699.98px) rule that sets " \
+            ".tool-embed to display: none (found #{phone_hide}) — see _layouts/tool.html") do
+        !phone_links.empty? && phone_hide
+      end
+      check("#{url} sizes the desktop frame to the viewport below the header",
+            "TOOL FRAME: #{url} (#{rel}) has no `.tool-embed iframe` rule with " \
+            "height: calc(100vh - ...) — see _layouts/tool.html") do
+        style_text.match?(/\.tool-embed\s+iframe\s*\{[^}]*height:\s*calc\(100d?vh\s*-/m)
+      end
     end
     next if embed.match?(%r{\A([a-z][a-z0-9+.-]*:|//)}i) # external app: nothing to look up
 
