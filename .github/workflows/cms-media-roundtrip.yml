@@ -37,9 +37,9 @@ permissions:
 
 jobs:
   media-roundtrip:
-    uses: Adam-S-Daniel/cms-platform/.github/workflows/cms-media-roundtrip.yml@v0.1.175
+    uses: Adam-S-Daniel/cms-platform/.github/workflows/cms-media-roundtrip.yml@3db2117ef497cd02715ed68b8c8cd34fa7af5c01
     with:
       # Pin to the SAME ref as the `uses:` pin above so the harness matches.
-      platform_ref: v0.1.175
+      platform_ref: 3db2117ef497cd02715ed68b8c8cd34fa7af5c01
     secrets:
       CMS_E2E_PAT: ${{ secrets.CMS_E2E_PAT }}

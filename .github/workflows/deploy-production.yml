@@ -36,7 +36,7 @@ permissions:
 
 jobs:
   deploy:
-    uses: Adam-S-Daniel/cms-platform/.github/workflows/deploy-production.yml@v0.1.175
+    uses: Adam-S-Daniel/cms-platform/.github/workflows/deploy-production.yml@3db2117ef497cd02715ed68b8c8cd34fa7af5c01
     with:
       apex_domain: adamdaniel.ai
       prod_bucket: adamdaniel-ai-production
