@@ -26,7 +26,7 @@ jobs:
     # Pinned to the same cms-platform release as the other callers
     # (single-version lockstep; see platform.lock). The reusable declares the
     # CMS_E2E_PAT workflow_call secret, so we map it explicitly like every other caller.
-    uses: Adam-S-Daniel/cms-platform/.github/workflows/sweep-stale-cms-prs.yml@v0.1.176
+    uses: Adam-S-Daniel/cms-platform/.github/workflows/sweep-stale-cms-prs.yml@ce253c97f8578e147444679aca9ad9f68b0126f8
     secrets:
       CMS_E2E_PAT: ${{ secrets.CMS_E2E_PAT }}
     with:

@@ -98,6 +98,6 @@ permissions:
 
 jobs:
   pin-consistency:
-    uses: Adam-S-Daniel/cms-platform/.github/workflows/platform-pin-consistency.yml@v0.1.176
+    uses: Adam-S-Daniel/cms-platform/.github/workflows/platform-pin-consistency.yml@ce253c97f8578e147444679aca9ad9f68b0126f8
     with:
-      platform_ref: v0.1.176
+      platform_ref: ce253c97f8578e147444679aca9ad9f68b0126f8
