@@ -79,8 +79,8 @@ Progressive-disclosure docs — read the relevant one before working in that are
 ## Key commands
 
 **Check out the platform e2e harness before running any Playwright command
-locally.** This repo vendors no Node toolchain — the root `package.json` was
-removed (see "Code quality"). The harness, and the `decap-server` /
+locally.** This repo vendors no Node toolchain — there is no root `package.json`
+(see "Code quality"). The harness, and the `decap-server` /
 `serve` / `@playwright/test` it needs, live in cms-platform: check
 `Adam-S-Daniel/cms-platform` out at `platform.lock`'s `platform_ref` into
 `.cms-platform/` (as the CI reusables do), `npm ci` in `.cms-platform/e2e`, and
@@ -123,7 +123,7 @@ gotchas for the admin e2e lane" for the exact commands.
 | `PRODUCTION_CLOUDFRONT_ID` | bootstrap stack output | deploy-production.yml |
 | `PREVIEW_CLOUDFRONT_ID` | bootstrap stack output | deploy-preview.yml |
 | `CMS_E2E_PAT` | fine-grained PAT, host repo only | the real-network CMS loop specs (`e2e/cms-publish-loop*.spec.js`, `e2e/cms-delete-published.spec.js`, `e2e/cms-delete-published-preview.spec.js`), which drive the full Decap → cms PR → auto-merge → deploy → public-URL loop. Token permissions and why each one is needed: `docs/WORKFLOWS.md` § "`CMS_E2E_PAT` — scope and why" |
-| `MASTODON_ACCESS_TOKEN` | hachyderm.io → Preferences → Development → New application, scopes `profile` + `read:statuses` + `write:statuses` (`read:statuses` is what the duplicate check needs; without it the leg fails with an `::error::` since cms-platform v0.1.111) | the platform's `cross-post.yml` reusable, via this repo's thin caller of the same name. Optional: unset prints a `::warning::` and skips the Mastodon leg (exit 0) rather than failing the run; the Substack Markdown artifact is still produced |
+| `MASTODON_ACCESS_TOKEN` | hachyderm.io → Preferences → Development → New application, scopes `profile` + `read:statuses` + `write:statuses` (`read:statuses` is what the duplicate check needs; without it the leg fails with an `::error::`) | the platform's `cross-post.yml` reusable, via this repo's thin caller of the same name. Optional: unset prints a `::warning::` and skips the Mastodon leg (exit 0) rather than failing the run; the Substack Markdown artifact is still produced |
 | `LINKEDIN_ACCESS_TOKEN` | LinkedIn developer portal token generator (app on a Company Page, products Share on LinkedIn + Sign In with LinkedIn using OpenID Connect), scopes `openid profile w_member_social`; lives 60 days, no refresh | the same `cross-post.yml` caller's LinkedIn leg. Optional: unset skips the leg with a `::warning::`. Record its mint date in the repo **variable** `LINKEDIN_TOKEN_MINTED` (YYYY-MM-DD); the weekly scheduled run goes red from day 50. Rotation: the platform's `docs/CROSS-POSTING.md` § "Rotating the LinkedIn token" |
 
 ## AWS resources (us-east-1)
@@ -161,7 +161,7 @@ and flows here on the next `platform_ref` bump — never apply it locally. → r
 
 ## Content model
 
-Posts, Tags, Projects, Tools, Pages, and the `_e2e/` canary system collection are all Decap folder collections with their own field sets and gotchas (the `test_fixture` flag, the posts-list summary date-format contract, the Tools section's static-asset + iframe embed pattern, vendored-tool sync). → read `docs/CMS-ADMIN.md` before adding a field, changing a collection, or touching the Tools section; see also the **embeddable-tool-pages** skill for adding a new tool.
+Posts, Tags, Tools, Pages, and the `_e2e/` canary system collection are all Decap folder collections with their own field sets and gotchas (the `test_fixture` flag, the posts-list summary date-format contract, the Tools section's static-asset + iframe embed pattern, vendored-tool sync). Projects is switched off (`base_collections` in `_config.yml` leaves it out), so an editor cannot reach it. → read `docs/CMS-ADMIN.md` before adding a field, changing a collection, or touching the Tools section; see also the **embeddable-tool-pages** skill for adding a new tool.
 
 ## Live preview
 
