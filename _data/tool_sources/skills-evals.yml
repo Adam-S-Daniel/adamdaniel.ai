@@ -2,6 +2,7 @@
 # Maintained by the source repo's site-sync/site-preview workflows
 # (github.com/Adam-S-Daniel/skills-evals): don't hand-edit.
 repo: Adam-S-Daniel/skills-evals
-ref: main
-commit: 8a993cdc06de504b82b103bdf5a152047bfe9674
-source_committed_at: 2026-11-13T09:02:45-05:00
+ref: pr-1010
+commit: 5fbf4437d371a55e5001b3fac8d21a0cc52a7c15
+source_committed_at: 2026-11-13T19:48:29Z
+source_pr: 1010
