@@ -210,6 +210,10 @@ through the default verifier entrypoint; each matrix child uses
 network). The header of the verifier lists the theme-gem couplings a platform
 bump can trip.
 
+The tool layout also swaps the iframe for an "Open <title>" link under 700px (one
+scroller on a phone) and sizes the desktop frame to `100vh` minus the 3.5rem header; the
+verifier's `TOOL PHONE` and `TOOL FRAME` checks guard both (cases tagged `UX 21`).
+
 The tool embed-stage declaration guard runs in the required
 [`site-verify / site-verify` job](../.github/workflows/site-verify.yml), whose
 default verifier entrypoint runs the full regression matrix. Its cases
