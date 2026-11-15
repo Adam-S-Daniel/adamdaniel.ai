@@ -2,6 +2,7 @@
 # Maintained by the source repo's site-sync/site-preview workflows
 # (github.com/Adam-S-Daniel/claude-memory-map) — don't hand-edit.
 repo: Adam-S-Daniel/claude-memory-map
-ref: main
-commit: b5718b3b38c83f430786a0835a16b06b60898de1
-source_committed_at: 2026-10-04T12:41:41-04:00
+ref: pr-90
+commit: 11fad36ec5f4ab42700d83d6b7dd98d924ccff1e
+source_committed_at: 2026-11-15T11:08:53-05:00
+source_pr: 90
