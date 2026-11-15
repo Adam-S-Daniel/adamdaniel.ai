@@ -1,8 +1,9 @@
 ---
 title: Improvement Loop Explorer
 slug: evals
-description: Do the skills and rules I give my AI coding agents actually help?
-  Each one tested with and without, in plain language.
+description: "Git hook checks, skills, and rules for my AI coding agents:
+  lessons harvested from real work, codified by the agents themselves, then
+  measured, improved, and kept or cut."
 featured: false
 embed_src: /assets/tools/skills-evals/
 source_url: https://github.com/Adam-S-Daniel/skills-evals
