@@ -7,15 +7,28 @@ featured: false
 embed_src: /assets/tools/skills-evals/
 source_url: https://github.com/Adam-S-Daniel/skills-evals
 ---
-My AI coding agents read two kinds of instructions. A skill is a page of
-instructions an agent reads before a particular kind of task. The guidance is
-one page of rules every agent reads at the start of every session — nearly
-every rule on it was learned from a real mistake. This page shows, for each
-skill and each section of the guidance, how the agent does on the same task
-with it and without it, scored by fixed pass/fail checks and by a second model
-acting as judge. Switch between skills and guidance at the top of the page.
+My AI coding agents work from three kinds of standing instructions. A skill is a
+page of instructions an agent reads before a particular kind of task. The
+guidance is one page of rules every agent reads at the start of every session —
+nearly every rule on it was learned from a real mistake. A git hook check is a
+rule the computer enforces by refusing a commit or push that breaks it.
 
-The numbers update on their own: every new test run lands on the
+An automated loop looks after all three, kept in one place and delivered to
+every project. It harvests lessons from my real work sessions and turns them
+into new skills, guidance sections, and checks. It tests each skill and each
+guidance section on the same task with it and without it, scored by fixed
+pass/fail checks and by a second model acting as judge, and it counts how often
+each hook check actually stops something. Then it revises what could work
+better and removes what doesn't earn its place.
+
+This page shows all of it: each keep-or-cut verdict and the evidence behind it,
+what the loop changed, how often each item gets used in real work, and what the
+testing costs.
+
+The numbers update on their own: the page reads the latest data from the
 [results branch](https://github.com/Adam-S-Daniel/skills-evals/tree/persistent/eval-results)
-and the page reads it fresh each time it loads. How the tests work is written
-down in [How it works](https://github.com/Adam-S-Daniel/skills-evals/blob/main/docs/how-it-works.md).
+each time it loads, and that data is rebuilt after every test run. How the
+tests work is written down in
+[How it works](https://github.com/Adam-S-Daniel/skills-evals/blob/main/docs/how-it-works.md),
+and the keep-or-cut rules in
+[the rules](https://github.com/Adam-S-Daniel/skills-evals/blob/main/docs/rules.md).
