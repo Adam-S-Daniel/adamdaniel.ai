@@ -1,5 +1,5 @@
 ---
-title: Evals Explorer
+title: Improvement Loop Explorer
 slug: evals
 description: Do the skills and rules I give my AI coding agents actually help? Each one tested with and without, in plain language.
 featured: false
