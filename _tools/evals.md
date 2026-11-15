@@ -4,7 +4,7 @@ slug: evals
 description: "Git hook checks, skills, and rules for my AI coding agents:
   lessons harvested from real work, codified by the agents themselves, then
   measured, improved, and kept or cut."
-featured: false
+featured: true
 embed_src: /assets/tools/skills-evals/
 source_url: https://github.com/Adam-S-Daniel/skills-evals
 ---
@@ -19,13 +19,13 @@ corrected, or has to work out a procedure that could come up again, it writes
 the lesson down before it finishes: as a git hook check if a commit can show the
 problem, otherwise as a skill, otherwise as a new section of the guidance.
 
-An automated loop does the rest. It harvests more lessons from my past work
-sessions, keeps all three mechanisms in one place, and delivers them to every
-project. It counts how often each git hook check actually stops something, and
-it tests each skill and each guidance section on the same task with it and
-without it, scored by fixed pass/fail checks and by a second model acting as
-judge. Then it revises what could work better and removes what doesn't earn its
-place.
+An automated loop does the rest. It centralizes the lessons that are widely
+applicable, delivers them to every project, and creates additional ones by
+analyzing past work sessions itself. It counts how often each git hook check
+actually stops something, and it tests each skill and each guidance section on
+the same task with it and without it, scored by fixed pass/fail checks and by a
+second model acting as judge. Then it revises what could work better and
+removes what doesn't earn its place.
 
 This page shows all of it: each keep-or-cut verdict and the evidence behind it,
 what the loop changed, how often each item gets used in real work, and what the
