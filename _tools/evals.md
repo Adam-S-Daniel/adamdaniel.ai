@@ -1,10 +1,9 @@
 ---
-title: Evals Explorer
+title: Improvement Loop Explorer
 slug: evals
-description: Do the skills and rules I give my AI coding agents actually help? Each one tested with and without, in plain language.
+description: Do the skills and rules I give my AI coding agents actually help?
+  Each one tested with and without, in plain language.
 featured: false
-# The asset is owned by skills-evals' site-sync workflow (tool-sync/skills-evals
-# PRs); don't hand-edit assets/tools/skills-evals/ or its _data/tool_sources record.
 embed_src: /assets/tools/skills-evals/
 source_url: https://github.com/Adam-S-Daniel/skills-evals
 ---
