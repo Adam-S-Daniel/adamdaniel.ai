@@ -8,19 +8,24 @@ featured: false
 embed_src: /assets/tools/skills-evals/
 source_url: https://github.com/Adam-S-Daniel/skills-evals
 ---
-My AI coding agents work from three kinds of standing instructions. A skill is a
-page of instructions an agent reads before a particular kind of task. The
-guidance is one page of rules every agent reads at the start of every session —
-nearly every rule on it was learned from a real mistake. A git hook check is a
-rule the computer enforces by refusing a commit or push that breaks it.
+Three mechanisms help guide my AI coding agents. A git hook check is a rule the
+computer enforces by refusing a commit or push that breaks it. A skill is a page
+of instructions an agent reads before a particular kind of task. The guidance is
+one page of rules every agent reads at the start of every session — nearly
+every rule on it was learned from a real mistake.
 
-An automated loop looks after all three, kept in one place and delivered to
-every project. It harvests lessons from my real work sessions and turns them
-into new skills, guidance sections, and checks. It tests each skill and each
-guidance section on the same task with it and without it, scored by fixed
-pass/fail checks and by a second model acting as judge, and it counts how often
-each hook check actually stops something. Then it revises what could work
-better and removes what doesn't earn its place.
+One of those rules keeps the rest growing. When an agent makes a mistake, gets
+corrected, or has to work out a procedure that could come up again, it writes
+the lesson down before it finishes: as a git hook check if a commit can show the
+problem, otherwise as a skill, otherwise as a new section of the guidance.
+
+An automated loop does the rest. It harvests more lessons from my past work
+sessions, keeps all three mechanisms in one place, and delivers them to every
+project. It counts how often each git hook check actually stops something, and
+it tests each skill and each guidance section on the same task with it and
+without it, scored by fixed pass/fail checks and by a second model acting as
+judge. Then it revises what could work better and removes what doesn't earn its
+place.
 
 This page shows all of it: each keep-or-cut verdict and the evidence behind it,
 what the loop changed, how often each item gets used in real work, and what the
