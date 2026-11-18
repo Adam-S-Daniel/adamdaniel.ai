@@ -1,8 +1,9 @@
 ---
 title: "Must-Read: Dean Ball Speaks Out About The AI “Silent Consensus”"
 slug: quoting-dean-ball
-date: 2026-11-18 17:36:00 -0500
+date: 2026-11-18 17:52:00 -0500
 featured_image: /assets/images/uploads/img_2020.jpeg
+featured_image_alt: "Dean Ball, from "
 published: true
 test_fixture: false
 ---
