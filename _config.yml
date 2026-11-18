@@ -28,7 +28,7 @@ theme: cms-platform-theme
 # platform's admin tooling; keep them in sync with the live OAuth proxy.
 cms:
   repository: Adam-S-Daniel/adamdaniel.ai
-  oauth_base_url: https://sq8d4876v8.execute-api.us-east-1.amazonaws.com
+  oauth_base_url: https://ae4omrv8df.execute-api.us-east-1.amazonaws.com
   # Keep-list of the platform's built-in admin collections. Projects is left out
   # on purpose: the site has Projects switched off (collections.projects.output
   # is false below, projects/index.html is published: false), so a project an
