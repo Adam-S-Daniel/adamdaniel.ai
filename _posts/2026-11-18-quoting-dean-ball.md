@@ -1,5 +1,5 @@
 ---
-title: Quoting Dean Ball
+title: Dean Ball “Silent Consensus” Throw-down
 slug: quoting-dean-ball
 date: 2026-11-18 17:36:00 -0500
 published: true
