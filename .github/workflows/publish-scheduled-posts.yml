@@ -25,8 +25,8 @@ permissions:
   contents: read
 jobs:
   publish:
-    uses: Adam-S-Daniel/cms-platform/.github/workflows/publish-scheduled-posts.yml@v0.1.178
+    uses: Adam-S-Daniel/cms-platform/.github/workflows/publish-scheduled-posts.yml@e35791b431ee106464769a610600ba2d8cd179af
     with:
-      platform_ref: v0.1.178
+      platform_ref: e35791b431ee106464769a610600ba2d8cd179af
     secrets:
       CMS_E2E_PAT: ${{ secrets.CMS_E2E_PAT }}
