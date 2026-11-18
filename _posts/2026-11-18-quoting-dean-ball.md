@@ -6,3 +6,4 @@ published: true
 test_fixture: false
 ---
 https://openai.com/index/the-silent-consensus/
+Head of Strategic Futures at OpenAI
