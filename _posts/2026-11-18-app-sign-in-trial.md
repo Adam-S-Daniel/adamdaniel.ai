@@ -6,3 +6,5 @@ published: false
 test_fixture: false
 ---
 This is a test
+
+![](/assets/images/uploads/download.jpg)
