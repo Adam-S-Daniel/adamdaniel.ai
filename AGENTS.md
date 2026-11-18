@@ -162,7 +162,11 @@ DNS and take the site offline; do NOT drop it (incident record: `docs/WORKFLOWS.
 platform-owned"). **It also exports `ADMIN_CSP_MODE=enforce`** (default; the admin CSP
 is enforced) — the platform script defaults to `report-only`, so
 without that export a plain redeploy silently reverts the live CSP to warn-only; roll back
-with `ADMIN_CSP_MODE=report-only bash infrastructure/bootstrap/deploy.sh`. (The wrapper does
+with `ADMIN_CSP_MODE=report-only bash infrastructure/bootstrap/deploy.sh`. **And it defaults
+`ADMIN_DOMAIN` to `admin.<apex>`**, the editor's own host (`cms.admin_origin` in `_config.yml`):
+the first redeploy with it creates that host and turns `<apex>/admin` into a redirect, so the
+OAuth proxy must already list the admin origin; without the default a redeploy would ask to
+remove the host. Roll back with `ADMIN_DOMAIN= bash infrastructure/bootstrap/deploy.sh`. (The wrapper does
 not source `site-params.env`, so cms-platform's `docs/ADMIN-AUTH-SECURITY.md` step 4 does not
 apply here.) Regression test: `bash scripts/test-bootstrap-deploy-wrapper.sh`. A bootstrap-infra fix is made **once in cms-platform**
 and flows here on the next `platform_ref` bump — never apply it locally. → read

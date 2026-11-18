@@ -46,6 +46,9 @@
 # To roll the admin CSP back to warn-only (it is enforced by default):
 #   ADMIN_CSP_MODE=report-only bash infrastructure/bootstrap/deploy.sh
 #
+# To take the editor back off its own host, admin.<apex> (the default):
+#   ADMIN_DOMAIN= bash infrastructure/bootstrap/deploy.sh
+#
 # This script is idempotent — safe to re-run at any time.
 # =============================================================================
 
@@ -129,6 +132,16 @@ export CREATE_APEX_DNS_RECORDS="${CREATE_APEX_DNS_RECORDS:-true}"
 # site-params.env, so the default lives here. Roll back with
 # `ADMIN_CSP_MODE=report-only bash infrastructure/bootstrap/deploy.sh`.
 export ADMIN_CSP_MODE="${ADMIN_CSP_MODE:-enforce}"
+# The editor's own host (cms-platform#517; runbook: cms-platform
+# docs/ADMIN-AUTH-SECURITY.md, "Runbook, per site"). Defaulted here because the
+# platform script re-sends every parameter: a redeploy without it would ask
+# CloudFormation to REMOVE the admin distribution, certificate and record.
+# `-` and not `:-` on purpose: an explicitly empty ADMIN_DOMAIN is the rollback
+# (`ADMIN_DOMAIN= bash infrastructure/bootstrap/deploy.sh`). The first run with
+# this default CREATES the admin host and turns <apex>/admin into a redirect to
+# it, so deploy the OAuth proxy with the admin origin in ALLOWED_ORIGINS first
+# (runbook step 2).
+export ADMIN_DOMAIN="${ADMIN_DOMAIN-admin.${APEX_DOMAIN}}"
 # HOSTED_ZONE_ID passes through if the caller exported it; otherwise the
 # platform script auto-detects it from Route53 (same as the old behavior).
 
