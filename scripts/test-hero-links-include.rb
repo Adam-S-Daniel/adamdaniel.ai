@@ -90,14 +90,16 @@ test "LinkedIn sits after an aria-hidden divider, apart from the reading links" 
   expect(kids.index(rule) == 1, "divider must sit between the two groups")
 end
 
-test "external links open in a new tab with noopener noreferrer; site links do not" do
+# One rule for every link on the site: it opens in the same tab, like the
+# theme footer's profile links (cms-platform#737, owner decision 2026-11-17).
+test "no link opens a new tab; external ones keep noopener noreferrer" do
   html = render(hn: "someone")
+  links(html).each { |a| expect(a.attributes["target"].nil?, a.to_s) }
   %w[Mastodon Substack HN LinkedIn].each do |l|
-    a = link(html, l)
-    expect(a.attributes["target"] == "_blank", "#{l}: #{a}")
-    expect(a.attributes["rel"].to_s.split.include?("noopener") && a.attributes["rel"].to_s.split.include?("noreferrer"), "#{l}: #{a}")
+    rel = link(html, l).attributes["rel"].to_s.split
+    expect(rel.include?("noopener") && rel.include?("noreferrer"), "#{l}: #{link(html, l)}")
   end
-  %w[Blog RSS].each { |l| expect(link(html, l).attributes["target"].nil?, "#{l}: #{link(html, l)}") }
+  expect(link(html, "Mastodon").attributes["rel"].to_s.split.include?("me"), link(html, "Mastodon").to_s)
 end
 
 test "LinkedIn keeps its accessible name" do
