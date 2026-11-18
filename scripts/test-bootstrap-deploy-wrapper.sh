@@ -46,6 +46,7 @@ cat >"$dest/infrastructure/bootstrap/deploy.sh" <<'PLATFORM'
 #!/usr/bin/env bash
 echo "ADMIN_CSP_MODE=${ADMIN_CSP_MODE-<unset>}"
 echo "CREATE_APEX_DNS_RECORDS=${CREATE_APEX_DNS_RECORDS-<unset>}"
+echo "ADMIN_DOMAIN=${ADMIN_DOMAIN-<unset>}"
 PLATFORM
 STUB
 chmod +x "$SCRATCH/bin/aws" "$SCRATCH/bin/git"
@@ -55,7 +56,7 @@ FAILED=0
 
 # run_wrapper [VAR=value ...] -> stdout of the stub platform deploy.sh
 run_wrapper() {
-  env -u ADMIN_CSP_MODE -u CREATE_APEX_DNS_RECORDS "$@" PATH="$SCRATCH/bin:$PATH" \
+  env -u ADMIN_CSP_MODE -u CREATE_APEX_DNS_RECORDS -u ADMIN_DOMAIN -u APEX_DOMAIN "$@" PATH="$SCRATCH/bin:$PATH" \
     bash "$SCRATCH/repo/infrastructure/bootstrap/deploy.sh" 2>"$SCRATCH/stderr"
 }
 
@@ -79,6 +80,18 @@ expect "ADMIN_CSP_MODE=report-only rolls back" "ADMIN_CSP_MODE=report-only" "$ou
 
 out="$(run_wrapper ADMIN_CSP_MODE=enforce)" || out="wrapper exited non-zero: $(cat "$SCRATCH/stderr")"
 expect "explicit ADMIN_CSP_MODE=enforce passes through" "ADMIN_CSP_MODE=enforce" "$out"
+
+# The editor's own host (cms-platform#517). Defaulted so a plain redeploy keeps
+# the admin host: the platform script re-sends every parameter, and a missing
+# ADMIN_DOMAIN asks CloudFormation to remove it. Explicitly empty rolls back.
+out="$(run_wrapper)" || out="wrapper exited non-zero: $(cat "$SCRATCH/stderr")"
+expect "admin host defaults to admin.<apex>" "ADMIN_DOMAIN=admin.adamdaniel.ai" "$out"
+
+out="$(run_wrapper ADMIN_DOMAIN=)" || out="wrapper exited non-zero: $(cat "$SCRATCH/stderr")"
+expect "an explicitly empty ADMIN_DOMAIN rolls back" "ADMIN_DOMAIN=" "$out"
+
+out="$(run_wrapper ADMIN_DOMAIN=edit.example.com)" || out="wrapper exited non-zero: $(cat "$SCRATCH/stderr")"
+expect "an explicit ADMIN_DOMAIN passes through" "ADMIN_DOMAIN=edit.example.com" "$out"
 
 echo "$PASS passed, $FAILED failed"
 [[ "$FAILED" -eq 0 ]]

@@ -35,6 +35,11 @@ cms:
   # editor published would render nowhere (#4082). Add `projects` back here when
   # you switch Projects on. e2e stays: the e2e specs use it.
   base_collections: [posts, tags, pages, e2e]
+  # The origin the editor is served from once the admin host exists
+  # (cms-platform#517; runbook in cms-platform docs/ADMIN-AUTH-SECURITY.md).
+  # Inert while /admin is still served from the apex: the admin scripts act on
+  # it only when the page's own origin equals it.
+  admin_origin: https://admin.adamdaniel.ai
 
 # Profiles this site cross-posts to (.github/workflows/cross-post.yml). The
 # cms-platform theme renders each as <link rel="me"> in <head> (v0.1.116), which
