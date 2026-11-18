@@ -99,7 +99,7 @@ layout: default
             <p class="project-description">{{ project.description | strip_html | truncatewords: 30 }}</p>
             {% endif %}
             {% if project.url_link %}
-            <a class="project-link" href="{{ project.url_link }}" target="_blank" rel="noopener noreferrer">View ↗</a>
+            <a class="project-link" href="{{ project.url_link }}" rel="noopener noreferrer">View ↗</a>
             {% endif %}
           </div>
         </article>
