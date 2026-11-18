@@ -1,12 +1,12 @@
 ---
-title: "Dean Ball: Speak Out About The AI “Silent Consensus”"
+title: "Must-Read: Dean Ball Speaks Out About The AI “Silent Consensus”"
 slug: quoting-dean-ball
 date: 2026-11-18 17:36:00 -0500
 featured_image: /assets/images/uploads/img_2020.jpeg
 published: true
 test_fixture: false
 ---
-> “what I see a lot of times is people hit rate limits when they're doing this sort of, oh, it did a lot of work, and you're like: Oh, I don't like this. Can you undo this and redo it? And then you're iterating on this thing that the model could have done if you had spent more upfront time or given it better context”
+> “I reject the forfeiture of human primacy. […] I believe the time has come to speak openly about the silent consensus, to shake ourselves out of our mostly unwitting acceptance of this vision.”
 
 From [The Silent Consensus](https://openai.com/index/the-silent-consensus/) by Dean Ball, Head of Strategic Futures at OpenAI, Nov 18, 2026
 
