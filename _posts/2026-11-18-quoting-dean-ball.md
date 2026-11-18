@@ -1,5 +1,5 @@
 ---
-title: Dean Ball “Silent Consensus” Throw-down
+title: "Dean Ball: Speak Out About The AI “Silent Consensus”"
 slug: quoting-dean-ball
 date: 2026-11-18 17:36:00 -0500
 published: true
