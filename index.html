@@ -47,7 +47,7 @@ layout: default
           </div>
           <h3 class="post-title"><a href="{{ post.url | relative_url | escape }}">{{ post.title | escape }}</a></h3>
           {% if post.excerpt %}
-          <p class="post-excerpt">{{ post.excerpt }}</p>
+          <p class="post-excerpt">{{ post | listing_excerpt }}</p>
           {% endif %}
         </li>
         {% endfor %}

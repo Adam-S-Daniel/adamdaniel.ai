@@ -2,7 +2,6 @@ source "https://rubygems.org"
 
 gem "jekyll", "~> 4.3"
 gem "webrick"
-gem "nokogiri", "1.19.7"
 
 group :jekyll_plugins do
   gem "jekyll-seo-tag"
