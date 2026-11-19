@@ -34,4 +34,4 @@ permissions:
 
 jobs:
   e2e:
-    uses: Adam-S-Daniel/cms-platform/.github/workflows/e2e-required-stub.yml@v0.1.184
+    uses: Adam-S-Daniel/cms-platform/.github/workflows/e2e-required-stub.yml@e68941a26fd722d643b9d539f4c0d712eeb8dde0
