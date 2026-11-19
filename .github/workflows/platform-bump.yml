@@ -15,7 +15,7 @@ permissions:
   pull-requests: write
 jobs:
   bump:
-    uses: Adam-S-Daniel/cms-platform/.github/workflows/platform-bump.yml@v0.1.180
+    uses: Adam-S-Daniel/cms-platform/.github/workflows/platform-bump.yml@cd86299ffcca2f1270df5cfc4d94b83afcf27329
     with:
       candidate_sha: ${{ inputs.candidate_sha }}
     secrets:
