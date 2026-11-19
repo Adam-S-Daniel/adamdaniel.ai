@@ -10,7 +10,9 @@
 #   ruby scripts/verify-build-artifacts.rb --artifacts-only
 #
 # The default entrypoint runs the regression matrix; matrix child runs use
-# `--artifacts-only` to prevent recursion.
+# `--artifacts-only` to prevent recursion. In CI the workflow runs the matrix
+# in its own step and sets SITE_VERIFY_SELF_TESTS_HANDLED=true here, so it is
+# not run twice (see the block at the end of this file).
 #
 # The required `site-verify / site-verify` check runs exactly this, through
 # cms-platform's reusable `site-verify.yml`: it builds the site under
@@ -1560,7 +1562,18 @@ public_posts.each do |post|
 end
 
 # --------------------------------------------------------------------------
-unless ARGV.include?("--artifacts-only")
+# The regression matrix runs from this entrypoint so that a bare local run
+# proves both the build and the verifier. cms-platform's `site-verify.yml`
+# runs the same matrix in its own "self-tests" step, and skips it on a pull
+# request that changes CMS content only (a post cannot change the verifier);
+# it sets SITE_VERIFY_SELF_TESTS_HANDLED=true on this script's step to say the
+# matrix is dealt with. Without that signal this script ran the matrix a
+# second time on every pull request, about 3.6 minutes each, and would run it
+# on every post. Only the exact value "true" skips: anything else runs it.
+matrix_handled = ENV["SITE_VERIFY_SELF_TESTS_HANDLED"] == "true"
+puts "  note the regression matrix is left to the workflow (SITE_VERIFY_SELF_TESTS_HANDLED=true)" if
+  matrix_handled && !ARGV.include?("--artifacts-only")
+unless ARGV.include?("--artifacts-only") || matrix_handled
   matrix_path = File.join(ROOT, "scripts", "test-verify-build-artifacts.rb")
   matrix_available = check("REGRESSION MATRIX is present") do
     raise CheckError, "REGRESSION MATRIX: scripts/test-verify-build-artifacts.rb is missing" unless
