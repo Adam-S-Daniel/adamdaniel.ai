@@ -142,6 +142,17 @@ export ADMIN_CSP_MODE="${ADMIN_CSP_MODE:-enforce}"
 # it, so deploy the OAuth proxy with the admin origin in ALLOWED_ORIGINS first
 # (runbook step 2).
 export ADMIN_DOMAIN="${ADMIN_DOMAIN-admin.${APEX_DOMAIN}}"
+# The public pages' Content-Security-Policy (cms-platform v0.1.184; runbook:
+# cms-platform docs/ADMIN-AUTH-SECURITY.md, "The public pages' policy"). The
+# platform script keeps the deployed stack's values when these are unset, so
+# they are recorded here as this site's settings, not as something a redeploy
+# needs. `-` and not `:-`: an explicitly empty value clears the deployed one.
+# connect-src: where the CloudWatch RUM client reports from the browser.
+export PUBLIC_CSP_CONNECT_SRC="${PUBLIC_CSP_CONNECT_SRC-https://dataplane.rum.us-east-1.amazonaws.com https://cognito-identity.us-east-1.amazonaws.com}"
+# The policy for /assets/tools/* (the embedded tool apps), measured by loading
+# both apps under it: the memory map loads a diagram library from cdnjs; the
+# evals explorer loads Google Fonts and reads its results from GitHub.
+export TOOL_APPS_CSP="${TOOL_APPS_CSP-default-src 'self'; script-src 'self' 'unsafe-inline' https://cdnjs.cloudflare.com; style-src 'self' 'unsafe-inline' https://fonts.googleapis.com; img-src 'self' data: blob:; font-src 'self' data: https://fonts.gstatic.com; connect-src 'self' https://raw.githubusercontent.com; frame-src 'self'; object-src 'none'; base-uri 'none'; form-action 'self'}"
 # HOSTED_ZONE_ID passes through if the caller exported it; otherwise the
 # platform script auto-detects it from Route53 (same as the old behavior).
 
