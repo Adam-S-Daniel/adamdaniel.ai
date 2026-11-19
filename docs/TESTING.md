@@ -189,7 +189,9 @@ and lets Jekyll read the source tree in-process), never predicted or
 hardcoded; no assertion compares rendered text with source text. An
 assertion may fail only on a genuinely broken build, never on a legitimate
 authoring choice. The default verifier entrypoint also runs the regression
-matrix; matrix children pass `--artifacts-only` to avoid recursion. Run it locally
+matrix, unless `SITE_VERIFY_SELF_TESTS_HANDLED=true` says the workflow has
+dealt with it (CI sets that; see below); matrix children pass
+`--artifacts-only` to avoid recursion. Run it locally
 with `bundle exec jekyll build && bundle exec ruby scripts/verify-build-artifacts.rb`.
 Before spawning the matrix, the verifier clears `JEKYLL_NO_BUNDLER_REQUIRE` from
 the child environment: Jekyll's plugin manager sets that variable in its current
@@ -204,8 +206,11 @@ copy, builds it, and requires the verifier to stay green; it also applies
 real defects (missing sitemap, broken link, unresolved Liquid from a layout,
 corrupt feed XML, ...) and requires a plain-English FAIL with no Ruby
 backtrace. The required `site-verify / site-verify` check runs this matrix
-through the default verifier entrypoint; each matrix child uses
-`--artifacts-only`. Run a focused subset locally with
+once, in the platform reusable's own self-test step, and sets
+`SITE_VERIFY_SELF_TESTS_HANDLED=true` on the verifier step so the default
+entrypoint does not run it a second time. A pull request that changes CMS
+content only skips the matrix (a post cannot change the verifier) and still
+runs the verifier. Each matrix child uses `--artifacts-only`. Run a focused subset locally with
 `bundle exec ruby scripts/test-verify-build-artifacts.rb [name-substring]` (no
 network). The header of the verifier lists the theme-gem couplings a platform
 bump can trip.
@@ -215,8 +220,8 @@ scroller on a phone) and sizes the desktop frame to `100vh` minus the 3.5rem hea
 verifier's `TOOL PHONE` and `TOOL FRAME` checks guard both (cases tagged `UX 21`).
 
 The tool embed-stage declaration guard runs in the required
-[`site-verify / site-verify` job](../.github/workflows/site-verify.yml), whose
-default verifier entrypoint runs the full regression matrix. Its cases
+[`site-verify / site-verify` job](../.github/workflows/site-verify.yml), which
+runs the full regression matrix on every pull request that is not content-only. Its cases
 (`bundle exec ruby scripts/test-verify-build-artifacts.rb '#4117'`)
 cover missing or narrow widths, invalid pixel tokens, centering declarations,
 matching iframe width, whitespace/final-declaration handling, and an author-selected

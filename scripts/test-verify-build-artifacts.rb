@@ -31,7 +31,11 @@ VERIFIER = ENV.fetch("VERIFY_SCRIPT", File.join(ROOT, "scripts", "verify-build-a
 COPY = %w[_config.yml _data _includes _layouts _posts _tags _tools _e2e admin assets blog pages
           projects tags tools index.html 404.html robots.txt feed.xml preview.md Gemfile
           Gemfile.lock platform.lock favicon.ico apple-touch-icon.png].freeze
-BUNDLE_ENV = { "BUNDLE_GEMFILE" => File.join(ROOT, "Gemfile"), "JEKYLL_ENV" => "production" }.freeze
+# SITE_VERIFY_SELF_TESTS_HANDLED is cleared for every child: a case sets it
+# itself when it is the thing under test, and a value exported in the shell
+# running this matrix must not change what the entrypoint cases prove.
+BUNDLE_ENV = { "BUNDLE_GEMFILE" => File.join(ROOT, "Gemfile"), "JEKYLL_ENV" => "production",
+               "SITE_VERIFY_SELF_TESTS_HANDLED" => nil }.freeze
 
 CASES = []
 
@@ -74,8 +78,8 @@ def ok(name, env: {}, site: nil, verifier_args: ["--artifacts-only"], expect: []
 end
 
 # `expect` is a Regexp (or Array of them) every one of which must match the output.
-def bad(name, expect, site: nil, verifier_args: ["--artifacts-only"], &edit)
-  CASES << { name: name, kind: :bad, edit: edit, expect: Array(expect), site: site,
+def bad(name, expect, env: {}, site: nil, verifier_args: ["--artifacts-only"], &edit)
+  CASES << { name: name, kind: :bad, edit: edit, expect: Array(expect), env: env, site: site,
              verifier_args: verifier_args }
 end
 
@@ -97,6 +101,19 @@ bad("site-verify entrypoint reports a failing regression matrix",
 end
 bad("site-verify entrypoint fails when its regression matrix is missing",
     /REGRESSION MATRIX:.*missing/, verifier_args: []) { |_d| }
+# In CI the workflow runs this matrix in its own step and tells the verifier
+# so. The stand-in matrix below would fail the verifier if it ran, so these
+# pass only when it is left alone.
+ok("site-verify entrypoint leaves the matrix to the workflow when told it is handled",
+   env: { "SITE_VERIFY_SELF_TESTS_HANDLED" => "true" }, verifier_args: [],
+   expect: /regression matrix is left to the workflow/) do |d|
+  write(d, "scripts/test-verify-build-artifacts.rb", "puts 'REGRESSION_ENTRY_RAN'\nexit 17\n")
+end
+bad("site-verify entrypoint still runs the matrix for any other value of the signal",
+    [/REGRESSION_ENTRY_RAN/, /REGRESSION MATRIX:.*17/],
+    env: { "SITE_VERIFY_SELF_TESTS_HANDLED" => "1" }, verifier_args: []) do |d|
+  write(d, "scripts/test-verify-build-artifacts.rb", "puts 'REGRESSION_ENTRY_RAN'\nexit 17\n")
+end
 ok("a post with no tags") { |d| post(d, "2026-10-05-no-tags.md", {}) }
 ok("a future-dated published post (future: true)") do |d|
   post(d, "2099-01-01-from-the-future.md", { "title" => "Future" })
