@@ -69,9 +69,17 @@ updates:
     # above anyway; the exclude keeps them exempt if that ignore is ever lifted.
     cooldown:
       default-days: 7
-      exclude: ["Adam-S-Daniel/cms-platform/*"]
+      exclude: ["Adam-S-Daniel/cms-platform/*", "Adam-S-Daniel/*", "jodidaniel/*"]
     ignore:
       - dependency-name: "Adam-S-Daniel/cms-platform/*"
+    groups:
+      actions:
+        applies-to: version-updates
+        patterns: ["*"]
+        exclude-patterns: ["Adam-S-Daniel/*", "jodidaniel/*"]
+      actions-security:
+        applies-to: security-updates
+        patterns: ["*"]
   # The site's own gems (jekyll, webrick, any jekyll-* plugins) — NOT the
   # platform theme gem, see the ignore below.
   - package-ecosystem: bundler
@@ -103,3 +111,20 @@ updates:
       #
       # See cms-platform#242.
       - dependency-name: "cms-platform-theme"
+    groups:
+      bundler-minor-patch:
+        applies-to: version-updates
+        patterns: ["*"]
+        update-types: ["minor", "patch"]
+      bundler-security:
+        applies-to: security-updates
+        patterns: ["*"]
+  - package-ecosystem: npm
+    directory: "/.githooks/dated-phrasing"
+    schedule:
+      interval: weekly
+    ignore:
+      - dependency-name: "*"
+    cooldown:
+      default-days: 7
+      semver-major-days: 30
