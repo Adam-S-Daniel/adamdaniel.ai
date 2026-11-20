@@ -47,6 +47,6 @@ jobs:
   # prerelease-guard`). Renaming it silently orphans the ruleset entry, which
   # then hangs every PR waiting on a context nothing publishes.
   prerelease-guard:
-    uses: Adam-S-Daniel/cms-platform/.github/workflows/platform-prerelease-guard.yml@v0.1.187
+    uses: Adam-S-Daniel/cms-platform/.github/workflows/platform-prerelease-guard.yml@ac60a532228c77118a583c502768ac0bd0e2de36
     with:
-      platform_ref: v0.1.187
+      platform_ref: ac60a532228c77118a583c502768ac0bd0e2de36

@@ -45,9 +45,13 @@ concurrency:
 
 jobs:
   sweep:
-    uses: Adam-S-Daniel/cms-platform/.github/workflows/publish-watchdog.yml@v0.1.187
+    uses: Adam-S-Daniel/cms-platform/.github/workflows/publish-watchdog.yml@ac60a532228c77118a583c502768ac0bd0e2de36
     with:
       # A repository variable (comma-separated logins), so this caller carries no
       # site-specific value. Empty means issues are not assigned.
       assignees: ${{ vars.PUBLISH_ALERT_ASSIGNEES }}
       dry_run: ${{ github.event_name == 'workflow_dispatch' && fromJSON(inputs.dry_run) || false }}
+    secrets:
+      # Optional: the key of the GitHub App that may start the email workflow.
+      # Unset means issues are opened without an email.
+      self_alert_app_private_key: ${{ secrets.SELF_ALERT_APP_PRIVATE_KEY }}
