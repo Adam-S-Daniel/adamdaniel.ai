@@ -5,4 +5,4 @@
 # (cms-platform#244) alike (see .github/dependabot.yml). See the platform's
 # docs/SYNC.md.
 platform_repo: Adam-S-Daniel/cms-platform
-platform_ref: v0.1.185
+platform_ref: d5541bbe914ccb615824e61504415223b0b41bf6
