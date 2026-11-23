@@ -3,7 +3,7 @@
 <head>
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
-<title>Which ways do you use Claude?</title>
+<title>Claude Memory Map — Adam Daniel</title>
 <script src="https://cdnjs.cloudflare.com/ajax/libs/mermaid/11.17.2/mermaid.min.js" integrity="sha384-EOXBFmc3gx5mb+vn0vPvvGqACToJD24hhacX5Yx+8NUUQrHIle/Qi5Bg9o3zKwW2" crossorigin="anonymous"></script>
 <style>
   :root { --paper:#FDFBF7; --ink:#3D3A34; --muted:#6B675E; --line:#E4DFD4;
@@ -586,12 +586,26 @@ async function renderNow(){
     const { svg } = await mermaid.render('m'+(++renderCount), code);
     if (seq !== renderSeq) return;            // a newer selection superseded this render
     d.innerHTML = svg;
+    if (!userScrolled) centerDiagram();
   }catch(err){
     if (seq !== renderSeq) return;
     d.innerHTML = '<p class="err">Could not render: '+err.message+'</p><pre style="white-space:pre-wrap;font-size:11px">'+code.replace(/&/g,'&amp;').replace(/</g,'&lt;')+'</pre>';
   }
   d.classList.remove('dim');
 }
+
+// At actual size the map is wider than its frame and its content sits mid-canvas, so
+// opening at the top-left shows blank space and clips the diagram. Center it instead,
+// until the reader scrolls it themselves.
+let userScrolled = false;
+function centerDiagram(){
+  const d = $('diagram');
+  if (d.classList.contains('fit')) return;
+  d.scrollLeft = Math.max(0, (d.scrollWidth - d.clientWidth) / 2);
+  d.scrollTop = Math.max(0, (d.scrollHeight - d.clientHeight) / 2);
+}
+['wheel','touchstart','pointerdown','keydown'].forEach(ev =>
+  $('diagram').addEventListener(ev, () => { userScrolled = true; }, { passive:true }));
 
 function scheduleRender(){
   updateChrome();
@@ -714,7 +728,8 @@ function updateSync(){
     + (labelMode === 'brief' ? 'Full labels' : 'Brief labels') + '</button></div>';
   const legend = labelMode === 'brief' ? LEGEND_HTML : '';
   $('syncdesk').innerHTML = controls + html + legend;
-  $('syncmob').innerHTML = html + legend;
+  // the phone layout hides #syncdesk, so it needs its own (class-keyed, not duplicate-id) toggle
+  $('syncmob').innerHTML = controls.replace('id="labelmode"', 'class="labelmode-m"') + html + legend;
 
 }
 
@@ -726,10 +741,11 @@ $('clearall').addEventListener('click', () => {
 $('fitbtn').addEventListener('click', () => {
   const fit = $('diagram').classList.toggle('fit');
   $('fitbtn').textContent = fit ? 'Actual size' : 'Fit width';
+  if (!fit){ userScrolled = false; centerDiagram(); }
 });
 $('scope').addEventListener('change', () => { updateScopeUI(); updateSync(); });
 document.addEventListener('click', e => {
-  if (e.target && e.target.id === 'labelmode'){
+  if (e.target && e.target.closest && e.target.closest('#labelmode, .labelmode-m')){
     labelMode = labelMode === 'brief' ? 'full' : 'brief';
     updateSync();
   }
