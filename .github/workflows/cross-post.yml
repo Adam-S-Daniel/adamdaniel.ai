@@ -73,7 +73,7 @@ permissions:
 
 jobs:
   cross-post:
-    uses: Adam-S-Daniel/cms-platform/.github/workflows/cross-post.yml@v0.1.189
+    uses: Adam-S-Daniel/cms-platform/.github/workflows/cross-post.yml@c120db5cdd40181b50a2f029874546cc50e90733
     with:
       prod_url: https://adamdaniel.ai
       mastodon_instance: https://hachyderm.io
@@ -84,7 +84,7 @@ jobs:
       dry_run: ${{ inputs.dry_run || false }}
       visibility: ${{ inputs.visibility || 'public' }}
       targets: ${{ inputs.targets || 'all' }}
-      platform_ref: v0.1.189
+      platform_ref: c120db5cdd40181b50a2f029874546cc50e90733
     secrets:
       MASTODON_ACCESS_TOKEN: ${{ secrets.MASTODON_ACCESS_TOKEN }}
       LINKEDIN_ACCESS_TOKEN: ${{ secrets.LINKEDIN_ACCESS_TOKEN }}

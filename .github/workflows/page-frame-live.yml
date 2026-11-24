@@ -37,7 +37,7 @@ permissions:
 
 jobs:
   check:
-    uses: Adam-S-Daniel/cms-platform/.github/workflows/page-frame-live.yml@v0.1.189
+    uses: Adam-S-Daniel/cms-platform/.github/workflows/page-frame-live.yml@c120db5cdd40181b50a2f029874546cc50e90733
     with:
       # A repository variable (comma-separated logins), shared with the publish
       # watchdog, so this caller carries no site-specific value.
