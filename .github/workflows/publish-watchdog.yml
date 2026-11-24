@@ -36,6 +36,7 @@ permissions:
   contents: read
   pull-requests: read
   checks: read
+  statuses: read
   issues: write
 
 # A queued sweep runs after the current one; never cancel a sweep mid-write.
@@ -45,7 +46,7 @@ concurrency:
 
 jobs:
   sweep:
-    uses: Adam-S-Daniel/cms-platform/.github/workflows/publish-watchdog.yml@v0.1.188
+    uses: Adam-S-Daniel/cms-platform/.github/workflows/publish-watchdog.yml@de728f4fce24f1545f6f81b3e6dfcda54699795f
     with:
       # A repository variable (comma-separated logins), so this caller carries no
       # site-specific value. Empty means issues are not assigned.
