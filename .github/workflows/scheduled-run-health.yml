@@ -38,7 +38,7 @@ permissions:
 
 jobs:
   audit:
-    uses: Adam-S-Daniel/cms-platform/.github/workflows/scheduled-run-health.yml@v0.1.190
+    uses: Adam-S-Daniel/cms-platform/.github/workflows/scheduled-run-health.yml@76bfec9823b61e6a2b819f52c01050533cdb262e
     with:
-      platform_ref: v0.1.190
+      platform_ref: 76bfec9823b61e6a2b819f52c01050533cdb262e
       dry_run: ${{ github.event_name == 'workflow_dispatch' && fromJSON(inputs.dry_run) || false }}
