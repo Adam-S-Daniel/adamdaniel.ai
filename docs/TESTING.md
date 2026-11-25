@@ -553,18 +553,18 @@ If these are blocked, `npx playwright install` hangs or fails with a 403 / DNS-r
 
 ##### Claude cloud environment egress list ("My Whitelist")
 
-The network setting of the Claude cloud environment these sessions run in. A host not on it answers `Forbidden (agent proxy: no rule or network setting allows this host)`. Only the owner can edit it; this is the copy as of 2026-11-25, so update it here in the same change that edits the environment.
+The network setting of the Claude cloud environment these sessions run in. A host not on it answers `Forbidden (agent proxy: no rule or network setting allows this host)`. Only the owner can edit it; this is the copy as of 2026-11-25 (saved again that evening), so update it here in the same change that edits the environment.
 
 - Claude: `claude.ai`, `claude.com`, `*.claude.ai`, `*.claude.com`, `*.frame.claudeusercontent.com`, `*.frame.staging.claudeusercontent.com`
 - GitHub: `github.com`, `*.github.com`, `githubassets.com`, `*.githubassets.com`, `githubstatus.com`, `*.githubstatus.com`
-- Actions artifact downloads: `productionresultssa14.blob.core.windows.net`, `productionresultssa16.blob.core.windows.net`
+- Actions artifact downloads: `*.blob.core.windows.net`
 - Our sites: `adamdaniel.ai`, `*.adamdaniel.ai`, `jodidaniel.com`, `*.jodidaniel.com`
 - Decap: `decapcms.org`, `*.decapcms.org`
 - Playwright browser downloads: `playwright.dev`, `*.playwright.dev`, `playwright.azureedge.net`, `*.playwright.azureedge.net`, `*.download.prss.microsoft.com`
 - Docs: `docs.microsoft.com`, `*.docs.microsoft.com`, `learn.microsoft.com`, `*.learn.microsoft.com`, `developers.openai.com`, `*.developers.openai.com`, `learn.chatgpt.com`, `agents.md`, `*.agents.md`, `agentskills.io`, `*.agentskills.io`
 - Other: `unpkg.com`, `substack.com`, `adam-usage-sink-2026-11.s3.us-east-1.amazonaws.com`
 
-**Known gap:** the Actions artifact host is one of a numbered pool (`productionresultssa5` was refused on 2026-11-12, `productionresultssa16` on 2026-11-25), so each new number is a fresh refusal until `*.blob.core.windows.net` or that number is added. Without it a cloud session cannot read a failed e2e run's artifacts.
+**Why the wildcard:** the Actions artifact host is one of a numbered pool (`productionresultssa5` was refused on 2026-11-12, `productionresultssa16` on 2026-11-25), so a single numbered host would be refused again when the pool rotates. Without access a cloud session cannot read a failed e2e run's artifacts.
 
 **CI hits these CDNs — and apt — on EVERY job.** This section used to say the opposite ("CI does NOT hit these CDNs … all run inside `mcr.microsoft.com/playwright:v<version>-noble`, which ships the browsers + apt deps prebaked"), and that has been false since the platform port: the GHCR prebaked runner image, the `container:` blocks, and the `select`/`finalize` jobs it referenced were all deliberately NOT ported (cms-platform's "Deliberately NOT ported" notes). Every platform-delivered harness lane installs its browser inline instead — `npx playwright install --with-deps <engine>` — so both the CDN download and an `apt-get install` of ~90 system packages are on every job's critical path.
 
