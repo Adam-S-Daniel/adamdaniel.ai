@@ -551,6 +551,21 @@ Playwright fetches its browser binaries from a small set of CDNs the first time 
 
 If these are blocked, `npx playwright install` hangs or fails with a 403 / DNS-resolution error.
 
+##### Claude cloud environment egress list ("My Whitelist")
+
+The network setting of the Claude cloud environment these sessions run in. A host not on it answers `Forbidden (agent proxy: no rule or network setting allows this host)`. Only the owner can edit it; this is the copy as of 2026-11-25, so update it here in the same change that edits the environment.
+
+- Claude: `claude.ai`, `claude.com`, `*.claude.ai`, `*.claude.com`, `*.frame.claudeusercontent.com`, `*.frame.staging.claudeusercontent.com`
+- GitHub: `github.com`, `*.github.com`, `githubassets.com`, `*.githubassets.com`, `githubstatus.com`, `*.githubstatus.com`
+- Actions artifact downloads: `productionresultssa14.blob.core.windows.net`, `productionresultssa16.blob.core.windows.net`
+- Our sites: `adamdaniel.ai`, `*.adamdaniel.ai`, `jodidaniel.com`, `*.jodidaniel.com`
+- Decap: `decapcms.org`, `*.decapcms.org`
+- Playwright browser downloads: `playwright.dev`, `*.playwright.dev`, `playwright.azureedge.net`, `*.playwright.azureedge.net`, `*.download.prss.microsoft.com`
+- Docs: `docs.microsoft.com`, `*.docs.microsoft.com`, `learn.microsoft.com`, `*.learn.microsoft.com`, `developers.openai.com`, `*.developers.openai.com`, `learn.chatgpt.com`, `agents.md`, `*.agents.md`, `agentskills.io`, `*.agentskills.io`
+- Other: `unpkg.com`, `substack.com`, `adam-usage-sink-2026-11.s3.us-east-1.amazonaws.com`
+
+**Known gap:** the Actions artifact host is one of a numbered pool (`productionresultssa5` was refused on 2026-11-12, `productionresultssa16` on 2026-11-25), so each new number is a fresh refusal until `*.blob.core.windows.net` or that number is added. Without it a cloud session cannot read a failed e2e run's artifacts.
+
 **CI hits these CDNs — and apt — on EVERY job.** This section used to say the opposite ("CI does NOT hit these CDNs … all run inside `mcr.microsoft.com/playwright:v<version>-noble`, which ships the browsers + apt deps prebaked"), and that has been false since the platform port: the GHCR prebaked runner image, the `container:` blocks, and the `select`/`finalize` jobs it referenced were all deliberately NOT ported (cms-platform's "Deliberately NOT ported" notes). Every platform-delivered harness lane installs its browser inline instead — `npx playwright install --with-deps <engine>` — so both the CDN download and an `apt-get install` of ~90 system packages are on every job's critical path.
 
 That is not academic: on 2026-08-07 the Ubuntu mirror served one `webkit-tablet` job at ~35 KB/s and its install took **39 minutes** (its tests took 41.6 s), which held a delete-recovery PR open for 40 minutes and failed a `cms-media-roundtrip` run — and a second lane did the same 67 minutes later. Since cms-platform v0.1.70 the install goes through the platform's `install-playwright-browsers` composite, which splits into two phases: the browser download is bounded (`timeout 420`, escalating to 1200s on the last of 3 attempts) and retried, while the apt half (`install-deps`) is retried but never bounded — bounding it once orphaned a root-owned `apt-get` that starved every retry on the dpkg lock (job 92989057569), so an unprivileged `timeout` can't safely kill it. A slow mirror now costs minutes on the download side and, on the apt side, is caught only by the job's own `timeout-minutes`. Details + measurements: cms-platform's `docs/E2E-PARALLELISM.md`.
