@@ -8,7 +8,7 @@
   "sources": [
     {
       "registry": "Adam-S-Daniel/cms-platform",
-      "ref": "76bfec9823b61e6a2b819f52c01050533cdb262e",
+      "ref": "58c00bdcc7ff7da998ba3f2f05ad0b6444e43bfb",
       "bundles": [
         "cms-platform"
       ],
@@ -31,7 +31,7 @@
     "cms-platform/aws-bootstrap": "sha256:125dd0a42679c948e84a6fdfc49329ae0031083b8249f6d766da828d288e8132",
     "cms-platform/browser-testing": "sha256:bd83a3c89ab0331ee86621d81d8cceb61412eec800ae7cd43f5620c50507b309",
     "cms-platform/ci-watcher-loops": "sha256:74f41e45207e092bc5533e49f67b43a9accc8444abe6191f0fdf6f2a35dc0b33",
-    "cms-platform/cms-stuck-pr-triage": "sha256:cf987a60e341f8efc658a52e26946bc981a2fb683f4f5b1448f3c624e33e67b0",
+    "cms-platform/cms-stuck-pr-triage": "sha256:55e2aa20a879d06041551c5fd8198817eae6a0b5f92f10adc5ac7fece6f0b990",
     "cms-platform/code-quality": "sha256:f86209a55d3a74ac00e294ebdef68ee58695f29ccb15208dd29ce6c6620e4cf8",
     "cms-platform/editorial-label-audit": "sha256:82971d4f8ae9a2c336a951e715c1ef72b916a40309434b44c810afd924aa8ed0",
     "cms-platform/platform-release-and-bump": "sha256:d7a0c2ed2f9885f3eaf20a6dcb21002941ddf6a8fd54227d459c283de0e293ad",
