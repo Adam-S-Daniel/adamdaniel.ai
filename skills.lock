@@ -1,6 +1,6 @@
 {
   "registry": "Adam-S-Daniel/adam-agentskills",
-  "ref": "e2069029fb3feb26bf78668f277b646c9f2c10fe",
+  "ref": "eeeb02f27120c0bd40e80ffe9e1d96000bdc3cea",
   "bundles": [
     "adam-anything-anywhere",
     "adam-coding-anywhere"
@@ -8,7 +8,7 @@
   "sources": [
     {
       "registry": "Adam-S-Daniel/cms-platform",
-      "ref": "fe2290a1c4e009c5dadc146dd86edafe0f0a27e2",
+      "ref": "76bfec9823b61e6a2b819f52c01050533cdb262e",
       "bundles": [
         "cms-platform"
       ],
@@ -17,29 +17,27 @@
   ],
   "skills": {
     "adam-anything-anywhere/finding-unknowns": "sha256:de8ba4767b859db1109a6b866de913674f0d876205bd5293a55cdc55600f6a36",
-    "adam-anything-anywhere/writing-adrs": "sha256:88722a1b11d7def8b6927c81e99a2774e9f2748174bf9d7d3116f1091a26b7e3",
-    "adam-coding-anywhere/ci-job-performance": "sha256:626243e258879e440f2973af362808534445492feb44e609368db2468945c3f3",
+    "adam-anything-anywhere/writing-adrs": "sha256:9dd694d2e39318ec5b3ff763c475a0ea2de3dc4eb1323ca9fdb4bd85fccbdb02",
+    "adam-coding-anywhere/ci-job-performance": "sha256:83c331183416eeca814fc5608a93439d29e37d12580e3d32be7330cb3491a48d",
     "adam-coding-anywhere/disarm-inherited-reach": "sha256:0be479e716d574d8b2ef9868ad9a9d8c4b67413b98d5cf0ae331c79efc511ce2",
     "adam-coding-anywhere/fan-out-triage": "sha256:fa2be3d544133f9ddbb4f801807365fed66dbf9885650985c5b2e8337cf19af7",
     "adam-coding-anywhere/github-actions-repo-settings": "sha256:b8d280f4811efcb5a95536272263a635299f8665e86ca9295eb94f7a9b5e130a",
     "adam-coding-anywhere/red-ci-adamdaniel-ai": "sha256:5ec63e5f61b3df9b9acb12eeb20d864f63cc283b27635ac9978269f30817b04c",
     "adam-coding-anywhere/review-bash-ci-reliability": "sha256:fc025b6ccc11282445b6ce1a465b1e80e2fbcbca3cbb66fc9ee1cdfce04dfe2c",
-    "adam-coding-anywhere/skills-doctor": "sha256:95292c14bc03e2bfe9eb438c6b4b1ba5fb19e88fcc42d238f7be229bc6fd8c01",
+    "adam-coding-anywhere/skills-doctor": "sha256:ff81475d0f03394819baef5ff4ece5c47aadada40b3a1737c7b325a6a86d39ec",
     "adam-coding-anywhere/vendor-release-impact-issues": "sha256:7c29bc5f0dc5f34ce510d9a98381d97eb6aa5528e28d903dbd8c304a12b10af1",
     "adam-coding-anywhere/workflow-path-audit": "sha256:0670bcc52f90c9ce2d22bf13acfcaccdc0c7953e5a4fa3406ffe8703611c9f34",
     "cms-platform/admin-config-render": "sha256:51699965a19a6f7c218033041f8a27d5195a38183b1243b1da53a9676dfc28da",
-    "cms-platform/aws-bootstrap": "sha256:0e47fa91bcdea907935828d32457b4e2940e2d64a6fd1a0dc97ff539d6bbef7e",
-    "cms-platform/browser-testing": "sha256:e581767d6022469d9f988584fddd745c3ef6154301b910c960be21e6df206124",
+    "cms-platform/aws-bootstrap": "sha256:125dd0a42679c948e84a6fdfc49329ae0031083b8249f6d766da828d288e8132",
+    "cms-platform/browser-testing": "sha256:bd83a3c89ab0331ee86621d81d8cceb61412eec800ae7cd43f5620c50507b309",
     "cms-platform/ci-watcher-loops": "sha256:74f41e45207e092bc5533e49f67b43a9accc8444abe6191f0fdf6f2a35dc0b33",
     "cms-platform/cms-stuck-pr-triage": "sha256:cf987a60e341f8efc658a52e26946bc981a2fb683f4f5b1448f3c624e33e67b0",
-    "cms-platform/code-quality": "sha256:00feb6dc9faaa857e7e949484405c9540a8ff51b0c7e034fc866c9d7be5ae33b",
-    "cms-platform/consumer-repo-provisioning": "sha256:20f3c3341dcf8296df88b5dd45381f7ba745f1178fec2b8a7f3d23a12b8c6e54",
+    "cms-platform/code-quality": "sha256:f86209a55d3a74ac00e294ebdef68ee58695f29ccb15208dd29ce6c6620e4cf8",
     "cms-platform/editorial-label-audit": "sha256:82971d4f8ae9a2c336a951e715c1ef72b916a40309434b44c810afd924aa8ed0",
-    "cms-platform/github-actions-sha-pinning": "sha256:258fce200ce90b6a493af80833ec9afd8a71be8f2497d1705671512352a4672c",
-    "cms-platform/platform-release-and-bump": "sha256:6cb45ea01fbf07f5a577768f573c499a1b8c62e51ad01944490f469197ee7ca9",
+    "cms-platform/platform-release-and-bump": "sha256:d7a0c2ed2f9885f3eaf20a6dcb21002941ddf6a8fd54227d459c283de0e293ad",
     "cms-platform/post-failure-comment": "sha256:c4fd98edccd36946b9be3b7d2d0665d35a5291ba1a18ff110e3d0aa025d692d8",
     "cms-platform/preview-environments": "sha256:fcac14b6c503d1149845b3f8a91f59cbff58fe9193892f0b71d1afd016c841e8",
     "cms-platform/test-canary": "sha256:01f8e865ec9033b44672f2dcbb201d75b8be1f044f308976706144e251e00709"
   },
-  "generated_from": "e2069029fb3feb26bf78668f277b646c9f2c10fe"
+  "generated_from": "eeeb02f27120c0bd40e80ffe9e1d96000bdc3cea"
 }
