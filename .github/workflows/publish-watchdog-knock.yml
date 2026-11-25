@@ -40,7 +40,7 @@ jobs:
   # workflow sees the caller's `github.event`). When it decides no, that job is
   # skipped before a runner is allocated.
   signal:
-    uses: Adam-S-Daniel/cms-platform/.github/workflows/publish-watchdog-signal.yml@v0.1.191
+    uses: Adam-S-Daniel/cms-platform/.github/workflows/publish-watchdog-signal.yml@247f937e475f27c2f91b1615db81dfee4d329bc9
     secrets:
       # The CMS automation App's private key, with vars.CMS_AUTOMATION_APP_ID
       # set on this repo. Named explicitly, never a blanket secrets pass-through.

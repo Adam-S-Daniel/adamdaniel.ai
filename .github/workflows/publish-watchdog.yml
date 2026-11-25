@@ -46,7 +46,7 @@ concurrency:
 
 jobs:
   sweep:
-    uses: Adam-S-Daniel/cms-platform/.github/workflows/publish-watchdog.yml@v0.1.191
+    uses: Adam-S-Daniel/cms-platform/.github/workflows/publish-watchdog.yml@247f937e475f27c2f91b1615db81dfee4d329bc9
     with:
       # A repository variable (comma-separated logins), so this caller carries no
       # site-specific value. Empty means issues are not assigned.

@@ -33,4 +33,4 @@ jobs:
   # The job name is the first half of the published context —
   # `agent-checks / agent-checks` — so it must stay `agent-checks`.
   agent-checks:
-    uses: Adam-S-Daniel/cms-platform/.github/workflows/site-agent-checks.yml@v0.1.191
+    uses: Adam-S-Daniel/cms-platform/.github/workflows/site-agent-checks.yml@247f937e475f27c2f91b1615db81dfee4d329bc9
