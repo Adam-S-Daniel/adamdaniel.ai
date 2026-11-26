@@ -21,10 +21,10 @@ permissions:
 
 jobs:
   preview-delete:
-    uses: Adam-S-Daniel/cms-platform/.github/workflows/cms-delete-published-preview.yml@v0.1.192
+    uses: Adam-S-Daniel/cms-platform/.github/workflows/cms-delete-published-preview.yml@848fbea79f1e1282c6562faab0d8a9df500eccea
     with:
       pr_number: ${{ inputs.pr_number }}
       apex: adamdaniel.ai
-      platform_ref: v0.1.192
+      platform_ref: 848fbea79f1e1282c6562faab0d8a9df500eccea
     secrets:
       CMS_E2E_PAT: ${{ secrets.CMS_E2E_PAT }}
